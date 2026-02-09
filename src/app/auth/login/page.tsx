@@ -163,7 +163,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {status && <p className="mt-4 text-xs text-amber-400">{status}</p>}
+        {status && <p className="mt-4 text-xs text-red-500">{status}</p>}
 
         <p className="mt-4 text-xs text-[rgb(var(--muted2))]">
           Don&apos;t have an account?{" "}

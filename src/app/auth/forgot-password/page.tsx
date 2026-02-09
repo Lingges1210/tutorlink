@@ -28,7 +28,7 @@ export default function ForgotPasswordPage() {
       }
 
       setStatus(
-        "If an account exists with this email, a reset link has been sent."
+        "A reset link has been sent."
       );
       setEmail("");
     } catch (err: any) {
@@ -94,7 +94,7 @@ export default function ForgotPasswordPage() {
         </form>
 
         {status && (
-          <p className="mt-4 text-xs text-amber-400">{status}</p>
+          <p className="mt-4 text-xs text-red-500">{status}</p>
         )}
 
         <p className="mt-4 text-xs text-[rgb(var(--muted2))]">

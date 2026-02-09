@@ -280,6 +280,14 @@ export default function RegisterPage() {
             )}
           </div>
 
+          {/* Captcha */}
+          <InputBlock
+            label="Captcha"
+            helper='Please type "USM" below.'
+            value={captcha}
+            onChange={setCaptcha}
+          />
+
           <button
             type="submit"
             disabled={loading}
