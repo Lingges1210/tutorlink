@@ -81,70 +81,6 @@ export default function HomePage() {
       </div>
 
       {/* Nav */}
-      <header
-        className="
-          sticky top-0 z-50 border-b backdrop-blur
-          border-[rgb(var(--border))]
-          bg-[rgb(var(--bg) / 0.75)]
-        "
-      >
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-[rgb(var(--primary))] to-[rgb(var(--primary2))]" />
-            <div className="leading-tight">
-              <div className="text-sm font-semibold">TutorLink</div>
-              <div className="text-[11px] text-[rgb(var(--muted2))]">
-                USM Peer Tutoring
-              </div>
-            </div>
-          </Link>
-
-          <nav className="hidden items-center gap-6 text-sm text-[rgb(var(--muted))] md:flex">
-            <a href="#why" className="hover:text-[rgb(var(--fg))]">
-              Why TutorLink
-            </a>
-            <a href="#community" className="hover:text-[rgb(var(--fg))]">
-              Community
-            </a>
-            <a href="#trust" className="hover:text-[rgb(var(--fg))]">
-              Trust
-            </a>
-            <a href="#faq" className="hover:text-[rgb(var(--fg))]">
-              FAQ
-            </a>
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-
-            {/* ✅ correct path */}
-            <Link
-              href="/auth/login"
-              className="
-                rounded-xl border px-3 py-2 text-sm
-                border-[rgb(var(--border))]
-                bg-[rgb(var(--card) / 0.65)]
-                text-[rgb(var(--fg))]
-                hover:bg-[rgb(var(--card) / 0.9)]
-              "
-            >
-              Log in
-            </Link>
-
-            {/* ✅ correct path */}
-            <Link
-              href="/auth/register"
-              className="
-                rounded-xl px-3 py-2 text-sm font-semibold text-white
-                bg-[rgb(var(--primary))]
-                hover:opacity-90
-              "
-            >
-              Join with USM Email
-            </Link>
-          </div>
-        </div>
-      </header>
 
       <main className="relative">
         {/* ✅ HERO (layout unchanged, tokenized colors + gradient visible) */}
@@ -304,11 +240,15 @@ export default function HomePage() {
               <div
                 key={o.title}
                 className="
-                  fade-up-4 rounded-3xl border p-6 transition
-                  border-[rgb(var(--border))]
-                  bg-[rgb(var(--card) / 0.6)]
-                  hover:bg-[rgb(var(--card) / 0.9)]
+                fade-up-4 rounded-3xl border p-6
+                border-[rgb(var(--border))]
+                bg-[rgb(var(--card) / 0.6)]
+                transition-all duration-300 ease-out
+                hover:-translate-y-1
+                hover:shadow-[0_12px_40px_rgb(var(--shadow) / 0.25)]
+                hover:bg-[rgb(var(--card) / 0.9)]
                 "
+
               >
                 <div className="text-base font-semibold">{o.title}</div>
                 <p className="mt-2 text-sm leading-relaxed text-[rgb(var(--muted))]">
@@ -323,9 +263,12 @@ export default function HomePage() {
               <div
                 key={s.label}
                 className="
-                  fade-up-5 rounded-3xl border p-5
-                  border-[rgb(var(--border))]
-                  bg-[rgb(var(--card2) / 0.5)]
+                fade-up-5 rounded-3xl border p-5
+                border-[rgb(var(--border))]
+                bg-[rgb(var(--card2) / 0.5)]
+                transition-all duration-300 ease-out
+                hover:-translate-y-1
+                hover:shadow-[0_10px_30px_rgb(var(--shadow) / 0.2)]
                 "
               >
                 <div className="text-xs text-[rgb(var(--muted2))]">{s.label}</div>
@@ -361,10 +304,14 @@ export default function HomePage() {
                 <div
                   key={t.name}
                   className="
-                    rounded-3xl border p-6
-                    border-[rgb(var(--border))]
-                    bg-[rgb(var(--card) / 0.6)]
+                  rounded-3xl border p-6
+                  border-[rgb(var(--border))]
+                  bg-[rgb(var(--card) / 0.6)]
+                  transition-all duration-300 ease-out
+                  hover:-translate-y-1
+                  hover:shadow-[0_12px_36px_rgb(var(--shadow) / 0.22)]
                   "
+
                 >
                   <p className="text-sm leading-relaxed text-[rgb(var(--fg))]">
                     “{t.quote}”
@@ -393,10 +340,14 @@ export default function HomePage() {
               <div
                 key={t}
                 className="
-                  rounded-3xl border p-6
-                  border-[rgb(var(--border))]
-                  bg-[rgb(var(--card) / 0.6)]
-                "
+                rounded-3xl border p-6
+                border-[rgb(var(--border))]
+                bg-[rgb(var(--card) / 0.6)]
+                transition-all duration-300 ease-out
+                hover:-translate-y-1
+                hover:shadow-[0_12px_36px_rgb(var(--shadow) / 0.22)]
+              "
+
               >
                 <div className="text-sm font-semibold">{t}</div>
                 <p className="mt-2 text-sm text-[rgb(var(--muted))]">{d}</p>
@@ -414,10 +365,15 @@ export default function HomePage() {
               <div
                 key={f.q}
                 className="
-                  rounded-3xl border p-6
-                  border-[rgb(var(--border))]
-                  bg-[rgb(var(--card) / 0.6)]
-                "
+                rounded-3xl border p-6
+                border-[rgb(var(--border))]
+                bg-[rgb(var(--card) / 0.6)]
+                transition-all duration-300 ease-out
+                hover:-translate-y-1
+                hover:shadow-[0_12px_36px_rgb(var(--shadow) / 0.22)]
+              "
+
+
               >
                 <div className="text-sm font-semibold">{f.q}</div>
                 <p className="mt-2 text-sm text-[rgb(var(--muted))]">{f.a}</p>
@@ -465,27 +421,6 @@ export default function HomePage() {
             </div>
           </div>
 
-          <footer
-            className="
-              mt-10 flex flex-col gap-2 border-t pt-6 text-xs
-              border-[rgb(var(--border))]
-              text-[rgb(var(--muted2))]
-              md:flex-row md:items-center md:justify-between
-            "
-          >
-            <div>© {new Date().getFullYear()} TutorLink • Built for USM</div>
-            <div className="flex gap-4">
-              <a className="hover:text-[rgb(var(--fg))]" href="/privacy">
-                Privacy
-              </a>
-              <a className="hover:text-[rgb(var(--fg))]" href="/terms">
-                Terms
-              </a>
-              <a className="hover:text-[rgb(var(--fg))]" href="/contact">
-                Contact
-              </a>
-            </div>
-          </footer>
         </section>
       </main>
     </div>
