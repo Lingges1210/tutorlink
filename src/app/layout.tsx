@@ -16,11 +16,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))] transition-colors">
         <div className="relative flex min-h-screen flex-col">
           {/* Navbar */}
-          <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/70 backdrop-blur dark:border-slate-800 dark:bg-slate-950/75">
+          <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/80 backdrop-blur dark:border-slate-800/70 dark:bg-slate-950/70">
             <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
               {/* Brand */}
               <Link href="/" className="flex items-center gap-2">
@@ -37,9 +37,8 @@ export default function RootLayout({
                 </div>
               </Link>
 
-              {/* Right side (single toggle only) */}
+              {/* Right */}
               <div className="flex items-center gap-3">
-                {/* Links (desktop only) */}
                 <div className="hidden items-center gap-6 text-xs font-medium text-slate-600 dark:text-slate-300 md:flex">
                   <Link
                     href="/"
@@ -69,13 +68,13 @@ export default function RootLayout({
 
           {/* Page content */}
           <main className="flex-1">
-            <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
               {children}
             </div>
           </main>
 
           {/* Footer */}
-          <footer className="border-t border-slate-200 bg-white/70 dark:border-slate-800 dark:bg-slate-950/80">
+          <footer className="border-t border-slate-200 bg-white/70 dark:border-slate-800 dark:bg-slate-950/70">
             <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 text-[0.7rem] text-slate-600 dark:text-slate-500 sm:px-6 lg:px-8">
               <span>© {new Date().getFullYear()} TutorLink</span>
               <span>Campus-exclusive peer tutoring</span>

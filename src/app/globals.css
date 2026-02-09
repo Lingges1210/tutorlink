@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Theme variables (used by layout body) */
+/* Theme tokens (ONE system only) */
 :root {
   --bg: 248 250 252; /* slate-50 */
   --fg: 15 23 42; /* slate-900 */
@@ -11,7 +11,68 @@
   --fg: 248 250 252; /* slate-50 */
 }
 
+/* Apply tokens globally */
 html,
 body {
   height: 100%;
+}
+
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
+}
+
+/* Fade-up animation (safe, no styled-jsx) */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.fade-up-1,
+.fade-up-2,
+.fade-up-3,
+.fade-up-4,
+.fade-up-5,
+.fade-up-6 {
+  opacity: 0;
+  animation: fadeUp 700ms ease forwards;
+}
+
+.fade-up-1 {
+  animation-delay: 80ms;
+}
+.fade-up-2 {
+  animation-delay: 160ms;
+}
+.fade-up-3 {
+  animation-delay: 240ms;
+}
+.fade-up-4 {
+  animation-delay: 320ms;
+}
+.fade-up-5 {
+  animation-delay: 400ms;
+}
+.fade-up-6 {
+  animation-delay: 480ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up-1,
+  .fade-up-2,
+  .fade-up-3,
+  .fade-up-4,
+  .fade-up-5,
+  .fade-up-6 {
+    opacity: 1 !important;
+    animation: none !important;
+  }
 }
