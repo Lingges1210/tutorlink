@@ -1,17 +1,55 @@
 @import "tailwindcss";
 
-/* Theme tokens (ONE system only) */
+/* =========================================================
+   TutorLink Theme Tokens (LIGHT + DARK)
+   - Use these vars everywhere so light mode is NOT ugly
+   ========================================================= */
+
 :root {
+  /* Base */
   --bg: 248 250 252; /* slate-50 */
   --fg: 15 23 42; /* slate-900 */
+
+  /* Surfaces */
+  --card: 255 255 255; /* white */
+  --card2: 241 245 249; /* slate-100 */
+  --soft: 245 247 255; /* slight violet tint */
+
+  /* Borders */
+  --border: 226 232 240; /* slate-200 */
+
+  /* Text */
+  --muted: 71 85 105; /* slate-600 */
+  --muted2: 100 116 139; /* slate-500 */
+
+  /* Accent */
+  --primary: 124 58 237; /* violet-600 */
+  --primary2: 99 102 241; /* indigo-500 */
+
+  /* Shadow tint */
+  --shadow: 124 58 237;
 }
 
 .dark {
   --bg: 2 6 23; /* slate-950 */
   --fg: 248 250 252; /* slate-50 */
+
+  --card: 3 7 18; /* deep slate */
+  --card2: 2 6 23; /* slate-950 */
+  --soft: 5 10 25;
+
+  --border: 30 41 59; /* slate-800 */
+
+  --muted: 148 163 184; /* slate-400 */
+  --muted2: 100 116 139; /* slate-500 */
+
+  --primary: 139 92 246; /* violet-500 */
+  --primary2: 96 165 250; /* blue-400 */
+
+  --shadow: 139 92 246;
 }
 
-/* Apply tokens globally */
+/* Base */
 html,
 body {
   height: 100%;
@@ -22,7 +60,12 @@ body {
   color: rgb(var(--fg));
 }
 
-/* Fade-up animation (safe, no styled-jsx) */
+/* Nice selection */
+::selection {
+  background: rgb(var(--primary) / 0.25);
+}
+
+/* Fade-up animation (safe) */
 @keyframes fadeUp {
   from {
     opacity: 0;
@@ -76,3 +119,16 @@ body {
     animation: none !important;
   }
 }
+
+.gradient-text {
+  background-image: linear-gradient(
+    90deg,
+    rgb(var(--primary)),
+    rgb(var(--primary2))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  display: inline-block;
+}
+

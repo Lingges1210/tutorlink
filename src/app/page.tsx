@@ -1,494 +1,485 @@
-"use client";
-
+// src/app/page.tsx
 import Link from "next/link";
-import {
-  ShieldCheck,
-  Target,
-  CalendarCheck,
-  LineChart,
-  CheckCircle2,
-  Sparkles,
-  GraduationCap,
-  Users,
-  ArrowRight,
-} from "lucide-react";
+import ThemeToggle from "@/components/ThemeToggle";
 
-const features = [
+const outcomes = [
   {
-    title: "Verified campus community",
-    desc: "Sign up with a USM email so everyone follows the same campus context and standards.",
-    icon: ShieldCheck,
+    title: "Less stress during peak weeks",
+    desc: "When assignments pile up, you can reach the right people faster — without begging in random groups.",
   },
   {
-    title: "Find tutors by course code",
-    desc: "Search seniors and peers who have completed the exact subject you need support with.",
-    icon: Target,
+    title: "More consistent study progress",
+    desc: "Get structured help that actually moves you forward instead of one-off answers that don’t stick.",
   },
   {
-    title: "Structured sessions",
-    desc: "Keep everything organised with bookings, notes, reminders, and session history.",
-    icon: CalendarCheck,
-  },
-  {
-    title: "Progress & accountability",
-    desc: "Track consistency and stay motivated with milestones and performance insights.",
-    icon: LineChart,
+    title: "Fair access for everyone",
+    desc: "No more ‘you must know seniors’. Everyone gets a chance to ask and learn with equal access.",
   },
 ];
 
-const steps = [
+const stats = [
+  { label: "Campus-exclusive", value: "USM only" },
+  { label: "Fast coordination", value: "Book in minutes" },
+  { label: "Built for students", value: "Peer-first" },
+  { label: "Community trust", value: "Verified users" },
+];
+
+const testimonials = [
   {
-    step: "1 · Sign up",
-    desc: "Register with your USM email to unlock a secure campus-only environment.",
-    icon: ShieldCheck,
+    name: "Year 2 Student",
+    quote:
+      "I stopped wasting time asking around. I found someone who actually explains properly.",
   },
   {
-    step: "2 · Find a tutor",
-    desc: "Search by faculty, course code, or skill and filter to match what you need.",
-    icon: Target,
+    name: "Tutor",
+    quote:
+      "It’s easier to help people when everything is organized and sessions are clear.",
   },
   {
-    step: "3 · Book a session",
-    desc: "Confirm a time, share details, and keep your learning organised in one place.",
-    icon: CalendarCheck,
-  },
-  {
-    step: "4 · Track progress",
-    desc: "Review session history and stay consistent with goals and progress tracking.",
-    icon: LineChart,
+    name: "New Intake",
+    quote:
+      "I didn’t know many seniors yet, so this made getting help feel less intimidating.",
   },
 ];
 
 const faqs = [
   {
-    q: "Is TutorLink only for USM students?",
-    a: "Yes. Access is campus-exclusive so it stays trusted and relevant to USM courses.",
+    q: "Who can join TutorLink?",
+    a: "USM students using verified USM email authentication.",
   },
   {
-    q: "Can I join as a tutor?",
-    a: "Yes. You can learn as a student and also tutor subjects you’re confident in.",
+    q: "Is TutorLink paid?",
+    a: "For MVP you can keep it free. Later you can add optional paid sessions or token-based support if needed.",
   },
   {
-    q: "Is it free?",
-    a: "Core features are available without charge. Additional options can be introduced later.",
+    q: "Is this like tuition?",
+    a: "It’s peer support — short, focused help between students, designed to be affordable and accessible.",
   },
   {
-    q: "How is this different from WhatsApp groups?",
-    a: "TutorLink is searchable, structured, and trackable—so support doesn’t get buried in chat threads.",
+    q: "Can I be a tutor?",
+    a: "Yes. You can apply as a tutor, then your profile can be reviewed/approved before tutoring begins.",
   },
 ];
 
 export default function HomePage() {
   return (
-    <div className="space-y-16 sm:space-y-20">
-      {/* HERO */}
-      <section className="relative -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
+      {/* subtle background glow (works in light + dark) */}
+      <div className="pointer-events-none fixed inset-0">
         <div
           className="
-            relative overflow-hidden rounded-3xl border
-            border-slate-200 bg-white shadow-xl
-            dark:border-slate-800/80 dark:bg-slate-950/40 dark:shadow-violet-900/15
+            absolute -top-24 left-1/2 h-72 w-[42rem] -translate-x-1/2 rounded-full blur-3xl
+            bg-[rgb(var(--shadow)/0.22)]
           "
-        >
-          {/* Background (light + dark) */}
+        />
+        <div
+          className="
+            absolute top-40 right-[-6rem] h-72 w-72 rounded-full blur-3xl
+            bg-[rgb(var(--primary2)/0.18)]
+          "
+        />
+      </div>
+
+      {/* Nav */}
+      <header
+        className="
+          sticky top-0 z-50 border-b backdrop-blur
+          border-[rgb(var(--border))]
+          bg-[rgb(var(--bg)/0.75)]
+        "
+      >
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-[rgb(var(--primary))] to-[rgb(var(--primary2))]" />
+            <div className="leading-tight">
+              <div className="text-sm font-semibold">TutorLink</div>
+              <div className="text-[11px] text-[rgb(var(--muted2))]">
+                USM Peer Tutoring
+              </div>
+            </div>
+          </Link>
+
+          <nav className="hidden items-center gap-6 text-sm text-[rgb(var(--muted))] md:flex">
+            <a href="#why" className="hover:text-[rgb(var(--fg))]">
+              Why TutorLink
+            </a>
+            <a href="#community" className="hover:text-[rgb(var(--fg))]">
+              Community
+            </a>
+            <a href="#trust" className="hover:text-[rgb(var(--fg))]">
+              Trust
+            </a>
+            <a href="#faq" className="hover:text-[rgb(var(--fg))]">
+              FAQ
+            </a>
+          </nav>
+
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+
+            <Link
+              href="/login"
+              className="
+                rounded-xl border px-3 py-2 text-sm
+                border-[rgb(var(--border))]
+                bg-[rgb(var(--card)/0.65)]
+                text-[rgb(var(--fg))]
+                hover:bg-[rgb(var(--card)/0.9)]
+              "
+            >
+              Log in
+            </Link>
+
+            <Link
+              href="/register"
+              className="
+                rounded-xl px-3 py-2 text-sm font-semibold text-white
+                bg-[rgb(var(--primary))]
+                hover:opacity-90
+              "
+            >
+              Join with USM Email
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <main className="relative">
+        {/* ✅ HERO (layout unchanged, only tokenized colors) */}
+        <section className="mx-auto max-w-6xl px-4 pb-16 pt-14 md:pt-20">
+          <div className="grid items-center gap-10 md:grid-cols-2">
+            <div className="fade-up-1">
+              <p
+                className="
+                  inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs
+                  border-[rgb(var(--border))]
+                  bg-[rgb(var(--card)/0.6)]
+                  text-[rgb(var(--fg))]
+                "
+              >
+                Campus-exclusive • Verified USM accounts
+              </p>
+
+              <h1 className="mt-4 text-4xl font-semibold tracking-tight md:text-5xl">
+                Get help faster.{" "}
+               <span className="gradient-text">Study smarter.</span>{" "}
+                Together at USM.
+              </h1>
+
+              <p className="mt-4 text-base leading-relaxed text-[rgb(var(--muted))]">
+                TutorLink connects USM students with peer tutors through smart matching,
+                easy booking, real-time chat, SOS academic help, progress analytics,
+                and gamified rewards.
+              </p>
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link
+                  href="/register"
+                  className="
+                    rounded-2xl px-5 py-3 text-sm font-semibold text-white
+                    bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary2))]
+                    hover:opacity-90
+                  "
+                >
+                  Join with USM Email
+                </Link>
+
+                <Link
+                  href="/apply-tutor"
+                  className="
+                    rounded-2xl border px-5 py-3 text-sm font-semibold
+                    border-[rgb(var(--border))]
+                    bg-[rgb(var(--card)/0.6)]
+                    text-[rgb(var(--fg))]
+                    hover:bg-[rgb(var(--card)/0.9)]
+                  "
+                >
+                  Become a Tutor
+                </Link>
+              </div>
+
+              <div className="mt-6 flex flex-wrap gap-2 text-xs text-[rgb(var(--muted))]">
+                {["Smart Matching", "SOS Academic Help", "Progress Analytics", "Points & Badges"].map(
+                  (chip) => (
+                    <span
+                      key={chip}
+                      className="
+                        rounded-full border px-3 py-1
+                        border-[rgb(var(--border))]
+                        bg-[rgb(var(--card)/0.55)]
+                      "
+                    >
+                      {chip}
+                    </span>
+                  )
+                )}
+              </div>
+            </div>
+
+            {/* Right mock card */}
+            <div
+              className="
+                fade-up-2 rounded-3xl border p-6
+                border-[rgb(var(--border))]
+                bg-[rgb(var(--card)/0.6)]
+                shadow-[0_0_60px_rgba(124,58,237,0.18)]
+              "
+            >
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold">Find a tutor</div>
+                <span
+                  className="
+                    rounded-full border px-2 py-1 text-[11px]
+                    border-[rgb(var(--border))]
+                    bg-[rgb(var(--card)/0.55)]
+                    text-[rgb(var(--muted))]
+                  "
+                >
+                  CPT113 • Tonight
+                </span>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {[
+                  "Aina (4.9) • Available 9–11pm",
+                  "Kumar (4.8) • Available 8–10pm",
+                  "Syafiq (4.7) • Available 10–12am",
+                ].map((row) => (
+                  <div
+                    key={row}
+                    className="
+                      flex items-center justify-between rounded-2xl border px-4 py-3
+                      border-[rgb(var(--border))]
+                      bg-[rgb(var(--card2)/0.55)]
+                    "
+                  >
+                    <div className="text-sm text-[rgb(var(--fg))]">{row}</div>
+                    <button
+                      className="
+                        rounded-xl px-3 py-2 text-xs font-semibold text-white
+                        bg-[rgb(var(--primary))]
+                        hover:opacity-90
+                      "
+                      type="button"
+                    >
+                      Request
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div
+                className="
+                  mt-4 rounded-2xl border p-4
+                  border-[rgb(var(--border))]
+                  bg-gradient-to-r from-[rgb(var(--primary)/0.15)] to-[rgb(var(--primary2)/0.12)]
+                "
+              >
+                <div className="text-xs text-[rgb(var(--muted))]">Need urgent help?</div>
+                <div className="mt-1 text-sm font-semibold">Use SOS Academic Help</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Why TutorLink (benefits, not modules) */}
+        <section id="why" className="mx-auto max-w-6xl px-4 pb-16">
+          <div className="fade-up-3 flex items-end justify-between gap-6">
+            <div>
+              <h2 className="text-2xl font-semibold">Why students use TutorLink</h2>
+              <p className="mt-2 text-sm text-[rgb(var(--muted))]">
+                Not a feature list — just the real outcomes you want during the semester.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {outcomes.map((o) => (
+              <div
+                key={o.title}
+                className="
+                  fade-up-4 rounded-3xl border p-6 transition
+                  border-[rgb(var(--border))]
+                  bg-[rgb(var(--card)/0.6)]
+                  hover:bg-[rgb(var(--card)/0.9)]
+                "
+              >
+                <div className="text-base font-semibold">{o.title}</div>
+                <p className="mt-2 text-sm leading-relaxed text-[rgb(var(--muted))]">
+                  {o.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 grid gap-3 md:grid-cols-4">
+            {stats.map((s) => (
+              <div
+                key={s.label}
+                className="
+                  fade-up-5 rounded-3xl border p-5
+                  border-[rgb(var(--border))]
+                  bg-[rgb(var(--card2)/0.5)]
+                "
+              >
+                <div className="text-xs text-[rgb(var(--muted2))]">{s.label}</div>
+                <div className="mt-1 text-sm font-semibold">{s.value}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Community proof */}
+        <section id="community" className="mx-auto max-w-6xl px-4 pb-16">
           <div
             className="
-              absolute inset-0 -z-10
-              bg-[radial-gradient(circle_at_top,#EDE9FE_0%,#FFFFFF_55%,#F8FAFC_100%)]
-              dark:bg-[radial-gradient(circle_at_top,#312E81_0%,#1E1B4B_42%,#0B1220_100%)]
+              rounded-3xl border p-8
+              border-[rgb(var(--border))]
+              bg-[rgb(var(--card2)/0.45)]
             "
-          />
-          <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-violet-500/10 blur-3xl -z-10 dark:bg-violet-700/18" />
-          <div className="absolute -bottom-28 -left-24 h-80 w-80 rounded-full bg-indigo-500/10 blur-3xl -z-10" />
-
-          <div className="px-6 sm:px-10 lg:px-12 pt-8 sm:pt-10 lg:pt-12 pb-12 sm:pb-14">
-            <div className="grid gap-10 lg:gap-12 md:grid-cols-[1.05fr,0.95fr] items-start">
-              {/* Left */}
-              <div className="max-w-2xl">
-                <div className="fade-up-1">
-                  <span
-                    className="
-                      inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[0.7rem] font-medium
-                      border-violet-200 bg-violet-50 text-violet-700
-                      dark:border-violet-500/35 dark:bg-violet-950/35 dark:text-violet-200
-                    "
-                  >
-                    <ShieldCheck size={14} />
-                    Campus-exclusive — Verified USM students only
-                  </span>
-                </div>
-
-                <h1 className="fade-up-2 mt-4 text-4xl font-bold sm:text-5xl leading-[1.05] tracking-tight">
-                  <span
-                    className="
-                      bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900
-                      bg-clip-text text-transparent
-                      dark:from-violet-200 dark:via-indigo-200 dark:to-slate-100
-                    "
-                  >
-                    Peer tutoring that actually
-                  </span>{" "}
-                  <span
-                    className="
-                      bg-gradient-to-r from-violet-700 to-indigo-600
-                      bg-clip-text text-transparent
-                      dark:from-blue-400 dark:to-violet-400
-                    "
-                  >
-                    feels organised.
-                  </span>
-                </h1>
-
-                <p
-                  className="
-                    fade-up-3 mt-4 text-sm sm:text-base leading-relaxed max-w-xl
-                    text-slate-600
-                    dark:text-slate-300
-                  "
-                >
-                  TutorLink helps USM students connect with seniors and peers for
-                  the exact courses they need — with bookings, notes, reminders,
-                  and progress tracking.
-                </p>
-
-                <div className="fade-up-4 mt-6 grid gap-2 text-xs sm:text-sm max-w-xl">
-                  {[
-                    "Search tutors by course code, not guesswork",
-                    "Keep sessions structured with history and notes",
-                    "Build momentum with milestones and rankings",
-                  ].map((text) => (
-                    <div key={text} className="flex items-start gap-2">
-                      <CheckCircle2
-                        size={16}
-                        className="mt-0.5 text-violet-600 dark:text-violet-300"
-                      />
-                      <span className="text-slate-700 dark:text-slate-300">
-                        {text}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="fade-up-5 mt-8 flex flex-wrap gap-3 sm:gap-4 text-sm">
-                  <Link
-                    href="/find-tutor"
-                    className="
-                      inline-flex items-center gap-2 rounded-md px-5 py-2.5 font-semibold shadow transition
-                      bg-gradient-to-r from-violet-600 via-violet-500 to-indigo-500 text-white hover:opacity-90
-                    "
-                  >
-                    Find a Tutor
-                    <ArrowRight size={16} />
-                  </Link>
-
-                  <Link
-                    href="/auth/register"
-                    className="
-                      rounded-md px-5 py-2.5 font-semibold transition
-                      border border-slate-300 bg-white text-slate-900 hover:border-violet-300
-                      dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-200 dark:hover:border-violet-400
-                    "
-                  >
-                    Create Account
-                  </Link>
-                </div>
-
-                <p className="fade-up-6 mt-4 text-[0.72rem] text-slate-500 dark:text-slate-400">
-                  Secure by design • Built for USM coursework • Structured peer learning
+          >
+            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold">Built around USM student culture</h2>
+                <p className="mt-2 text-sm text-[rgb(var(--muted))]">
+                  Short, focused help. Friendly peer learning. Less awkward asking around.
                 </p>
               </div>
-
-              {/* Right: Feature card */}
-              <div className="fade-up-3">
-                <div
-                  className="
-                    rounded-2xl border p-6 sm:p-7 shadow-lg backdrop-blur
-                    border-slate-200 bg-white/80
-                    dark:border-slate-800 dark:bg-slate-950/35 dark:shadow-violet-900/15
-                  "
-                >
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                      Platform highlights
-                    </h2>
-                    <span className="text-[0.7rem] text-slate-500 dark:text-slate-400">
-                      Core features
-                    </span>
-                  </div>
-
-                  <div className="mt-5 grid gap-3 text-xs">
-                    {features.map((f) => {
-                      const Icon = f.icon;
-                      return (
-                        <div
-                          key={f.title}
-                          className="
-                            rounded-xl border p-4 transition
-                            border-slate-200 bg-white hover:border-violet-200
-                            dark:border-slate-800 dark:bg-slate-950/35 dark:hover:border-violet-500/35
-                          "
-                        >
-                          <div className="flex items-start gap-3">
-                            <Icon
-                              size={18}
-                              className="mt-0.5 text-violet-700 dark:text-violet-300"
-                            />
-                            <div>
-                              <div className="font-semibold text-slate-900 dark:text-slate-100">
-                                {f.title}
-                              </div>
-                              <div className="mt-1 leading-relaxed text-slate-600 dark:text-slate-300">
-                                {f.desc}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div
-                    className="
-                      mt-5 rounded-xl border p-4 text-xs
-                      border-violet-200 bg-violet-50 text-violet-800
-                      dark:border-violet-500/18 dark:bg-violet-950/25 dark:text-violet-200
-                    "
-                  >
-                    <div className="flex items-start gap-2">
-                      <Sparkles size={16} className="mt-0.5" />
-                      <div>
-                        <span className="font-semibold">Note:</span>{" "}
-                        Tutoring can help seniors build leadership experience and strengthen academic confidence.
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <div className="text-xs text-[rgb(var(--muted2))]">
+                (Replace these later with real pilot feedback.)
               </div>
             </div>
 
-            <div className="mt-10 h-px w-full bg-gradient-to-r from-transparent via-slate-200 to-transparent dark:via-slate-700/60" />
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              {testimonials.map((t) => (
+                <div
+                  key={t.name}
+                  className="
+                    rounded-3xl border p-6
+                    border-[rgb(var(--border))]
+                    bg-[rgb(var(--card)/0.6)]
+                  "
+                >
+                  <p className="text-sm leading-relaxed text-[rgb(var(--fg))]">
+                    “{t.quote}”
+                  </p>
+                  <div className="mt-3 text-xs text-[rgb(var(--muted2))]">— {t.name}</div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* STATS STRIP */}
-      <section
-        className="
-          rounded-2xl border p-6
-          border-slate-200 bg-white
-          dark:border-slate-800 dark:bg-slate-900/45
-        "
-      >
-        <div className="grid gap-4 sm:grid-cols-3 text-center">
-          {[
-            {
-              title: "Course-first",
-              desc: "Search by course code and subject focus",
-              icon: GraduationCap,
-            },
-            {
-              title: "Structured",
-              desc: "Bookings, notes, reminders, and history",
-              icon: CalendarCheck,
-            },
-            {
-              title: "Community",
-              desc: "Peer learning with trusted campus access",
-              icon: Users,
-            },
-          ].map((item) => {
-            const Icon = item.icon;
-            return (
-              <div
-                key={item.title}
-                className="
-                  rounded-xl border p-4
-                  border-slate-200 bg-slate-50
-                  dark:border-slate-800 dark:bg-slate-950/25
-                "
-              >
-                <div
-                  className="
-                    mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-lg border
-                    border-slate-200 bg-white
-                    dark:border-slate-800 dark:bg-slate-900/50
-                  "
-                >
-                  <Icon size={18} className="text-violet-700 dark:text-violet-300" />
-                </div>
-                <div className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                  {item.title}
-                </div>
-                <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                  {item.desc}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* HOW IT WORKS */}
-      <section>
-        <h2 className="text-center text-xl font-semibold text-slate-900 dark:bg-gradient-to-r dark:from-violet-300 dark:to-indigo-300 dark:bg-clip-text dark:text-transparent">
-          How TutorLink Works
-        </h2>
-
-        <div className="mt-8 grid gap-6 md:grid-cols-4 text-xs">
-          {steps.map((item) => {
-            const Icon = item.icon;
-            return (
-              <div
-                key={item.step}
-                className="
-                  rounded-xl border p-5 shadow-sm transition
-                  border-slate-200 bg-white hover:border-violet-200
-                  dark:border-slate-800 dark:bg-slate-900/65 dark:hover:shadow-violet-700/25
-                "
-              >
-                <div className="flex items-center gap-2">
-                  <div
-                    className="
-                      flex h-8 w-8 items-center justify-center rounded-lg border
-                      border-slate-200 bg-slate-50
-                      dark:border-slate-800 dark:bg-slate-950/35
-                    "
-                  >
-                    <Icon size={16} className="text-violet-700 dark:text-violet-300" />
-                  </div>
-                  <h3 className="font-semibold text-slate-900 dark:text-violet-300">
-                    {item.step}
-                  </h3>
-                </div>
-                <p className="mt-3 leading-relaxed text-slate-600 dark:text-slate-300">
-                  {item.desc}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* TESTIMONIALS */}
-      <section>
-        <h2 className="text-center text-xl font-semibold text-slate-900 dark:bg-gradient-to-r dark:from-indigo-300 dark:to-violet-300 dark:bg-clip-text dark:text-transparent">
-          What Students Say
-        </h2>
-
-        <div className="mt-8 grid gap-6 md:grid-cols-3 text-xs">
-          {[
-            {
-              quote:
-                "Instead of spamming course WhatsApp groups, I can find 1-to-1 help from seniors who took the subject.",
-              user: "Year 2 CS Student",
-            },
-            {
-              quote:
-                "Sessions feel more serious here—everything is organised, and progress is easy to track.",
-              user: "Final Year Tutor",
-            },
-            {
-              quote:
-                "A focused platform like this helps students get support earlier and learn more consistently.",
-              user: "USM Student",
-            },
-          ].map((r) => (
-            <div
-              key={r.user}
-              className="
-                rounded-xl border p-5 shadow-sm transition
-                border-slate-200 bg-white hover:border-violet-200
-                dark:border-slate-800 dark:bg-slate-900/80 dark:hover:border-violet-500/35
-              "
-            >
-              <p className="leading-relaxed text-slate-700 dark:text-slate-200">
-                “{r.quote}”
-              </p>
-              <p className="mt-3 text-[0.7rem] text-slate-500 dark:text-slate-400">
-                – {r.user}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section
-        className="
-          rounded-2xl border p-7
-          border-slate-200 bg-white
-          dark:border-slate-800 dark:bg-slate-900/50
-        "
-      >
-        <h2 className="text-center text-xl font-semibold text-slate-900 dark:bg-gradient-to-r dark:from-violet-300 dark:to-indigo-300 dark:bg-clip-text dark:text-transparent">
-          FAQ
-        </h2>
-
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
-          {faqs.map((f) => (
-            <div
-              key={f.q}
-              className="
-                rounded-xl border p-5
-                border-slate-200 bg-slate-50
-                dark:border-slate-800 dark:bg-slate-950/25
-              "
-            >
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                {f.q}
-              </div>
-              <div className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-                {f.a}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* FINAL CTA */}
-      <section
-        className="
-          relative overflow-hidden rounded-2xl border p-8
-          border-slate-200 bg-white
-          dark:border-slate-800 dark:bg-slate-900/60
-        "
-      >
-        <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-violet-500/10 blur-3xl -z-10 dark:bg-violet-700/20" />
-        <div className="absolute -bottom-28 -left-24 h-80 w-80 rounded-full bg-indigo-500/10 blur-3xl -z-10" />
-
-        <div className="flex flex-col items-center text-center">
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-            Ready to learn with the right support?
-          </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-            Find tutors for your exact course, book properly, track progress, and stay consistent.
+        {/* Trust */}
+        <section id="trust" className="mx-auto max-w-6xl px-4 pb-16">
+          <h2 className="text-2xl font-semibold">Trust & safety by design</h2>
+          <p className="mt-2 text-sm text-[rgb(var(--muted))]">
+            A campus-only platform needs strong identity, clear boundaries, and accountability.
           </p>
 
-          <div className="mt-6 flex flex-wrap justify-center gap-4 text-sm">
-            <Link
-              href="/auth/register"
-              className="
-                inline-flex items-center gap-2 rounded-md px-6 py-2.5 font-semibold shadow transition
-                bg-gradient-to-r from-violet-600 via-violet-500 to-indigo-500 text-white hover:opacity-90
-              "
-            >
-              Create Account
-              <ArrowRight size={16} />
-            </Link>
-
-            <Link
-              href="/find-tutor"
-              className="
-                rounded-md border px-6 py-2.5 font-semibold transition
-                border-slate-300 bg-white text-slate-900 hover:border-violet-300
-                dark:border-slate-700 dark:bg-slate-950/35 dark:text-slate-200 dark:hover:border-violet-400
-              "
-            >
-              Browse Tutors
-            </Link>
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {[
+              ["USM verification", "Only verified university accounts can access the platform."],
+              ["Tutor accountability", "Profiles, feedback, and reporting help keep the community safe."],
+              ["Clear roles", "Students and tutors have separate permissions and experiences."],
+              ["Privacy-first mindset", "Keep personal data minimal — only what’s needed for the service."],
+            ].map(([t, d]) => (
+              <div
+                key={t}
+                className="
+                  rounded-3xl border p-6
+                  border-[rgb(var(--border))]
+                  bg-[rgb(var(--card)/0.6)]
+                "
+              >
+                <div className="text-sm font-semibold">{t}</div>
+                <p className="mt-2 text-sm text-[rgb(var(--muted))]">{d}</p>
+              </div>
+            ))}
           </div>
-        </div>
-      </section>
+        </section>
+
+        {/* FAQ + Final CTA */}
+        <section id="faq" className="mx-auto max-w-6xl px-4 pb-20">
+          <h2 className="text-2xl font-semibold">FAQ</h2>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {faqs.map((f) => (
+              <div
+                key={f.q}
+                className="
+                  rounded-3xl border p-6
+                  border-[rgb(var(--border))]
+                  bg-[rgb(var(--card)/0.6)]
+                "
+              >
+                <div className="text-sm font-semibold">{f.q}</div>
+                <p className="mt-2 text-sm text-[rgb(var(--muted))]">{f.a}</p>
+              </div>
+            ))}
+          </div>
+
+          <div
+            className="
+              mt-10 rounded-3xl border p-8
+              border-[rgb(var(--border))]
+              bg-gradient-to-r from-[rgb(var(--primary)/0.16)] to-[rgb(var(--primary2)/0.12)]
+            "
+          >
+            <h3 className="text-xl font-semibold">Ready to make academic help feel easy?</h3>
+            <p className="mt-2 text-sm text-[rgb(var(--muted))]">
+              Join TutorLink with your USM email and start learning with peers today.
+            </p>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Link
+                href="/register"
+                className="
+                  rounded-2xl px-5 py-3 text-sm font-semibold text-white
+                  bg-[rgb(var(--primary))]
+                  hover:opacity-90
+                "
+              >
+                Join with USM Email
+              </Link>
+              <Link
+                href="/apply-tutor"
+                className="
+                  rounded-2xl border px-5 py-3 text-sm font-semibold
+                  border-[rgb(var(--border))]
+                  bg-[rgb(var(--card)/0.6)]
+                  text-[rgb(var(--fg))]
+                  hover:bg-[rgb(var(--card)/0.9)]
+                "
+              >
+                Become a Tutor
+              </Link>
+            </div>
+          </div>
+
+          <footer
+            className="
+              mt-10 flex flex-col gap-2 border-t pt-6 text-xs
+              border-[rgb(var(--border))]
+              text-[rgb(var(--muted2))]
+              md:flex-row md:items-center md:justify-between
+            "
+          >
+            <div>© {new Date().getFullYear()} TutorLink • Built for USM</div>
+            <div className="flex gap-4">
+              <a className="hover:text-[rgb(var(--fg))]" href="/privacy">
+                Privacy
+              </a>
+              <a className="hover:text-[rgb(var(--fg))]" href="/terms">
+                Terms
+              </a>
+              <a className="hover:text-[rgb(var(--fg))]" href="/contact">
+                Contact
+              </a>
+            </div>
+          </footer>
+        </section>
+      </main>
     </div>
   );
 }
