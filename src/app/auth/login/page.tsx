@@ -1,9 +1,10 @@
-// src/app/auth/login/page.tsx
 "use client";
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import AuthSplitLayout from "@/components/AuthSplitLayout";
+import { LoginAnimationHandle } from "@/components/LoginAnimation";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,8 +17,13 @@ export default function LoginPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(
+    e: FormEvent,
+    animation: LoginAnimationHandle | null
+  ) {
     e.preventDefault();
+    if (loading) return;
+
     setStatus(null);
     setLoading(true);
 
@@ -28,46 +34,48 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {}
 
-      if (!res.ok || !data.success) {
-        setStatus(data.message || "Login failed");
+      if (!res.ok || !data?.success) {
+        setStatus(data?.message || "Login failed");
+        animation?.fail();
         return;
       }
 
       const user = data.user;
+      const role = String(user?.role || "").toUpperCase();
 
       let targetPath = "/dashboard/student";
-      if (user?.role === "ADMIN") targetPath = "/admin";
-      // later: else if (user?.role === "TUTOR") targetPath = "/dashboard/tutor";
+      if (role === "ADMIN") targetPath = "/admin";
+      // later: if (role === "TUTOR") targetPath = "/dashboard/tutor";
 
       setStatus("Login successful. Redirecting...");
-      router.push(targetPath);
+      animation?.success();
+
+      setTimeout(() => {
+        router.push(targetPath);
+      }, 800);
     } catch (err: any) {
       setStatus(err?.message ?? "Unexpected error");
+      animation?.fail();
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="mx-auto mt-10 max-w-md px-4">
-      <div
-        className="
-          rounded-3xl border p-6
-          border-[rgb(var(--border))]
-          bg-[rgb(var(--card) / 0.7)]
-          shadow-[0_20px_60px_rgb(var(--shadow)/0.15)]
-        "
-      >
-        <h1 className="text-xl font-semibold text-[rgb(var(--fg))]">
-          Sign in to TutorLink
-        </h1>
-        <p className="mt-2 text-sm text-[rgb(var(--muted))]">
-          Use your registered USM email & password to continue.
-        </p>
-
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+    <AuthSplitLayout
+      title="Sign in to TutorLink"
+      subtitle="Use your registered USM email & password to continue."
+    >
+      {(animation) => (
+        <form
+          onSubmit={(e) => handleSubmit(e, animation)}
+          className="space-y-4"
+        >
           {/* Email */}
           <div>
             <label className="mb-1 block text-xs font-medium text-[rgb(var(--muted))]">
@@ -75,6 +83,7 @@ export default function LoginPage() {
             </label>
             <input
               type="email"
+              autoComplete="email"
               className="
                 w-full rounded-md border px-3 py-2 text-sm outline-none
                 border-[rgb(var(--border))]
@@ -85,6 +94,8 @@ export default function LoginPage() {
               placeholder="yourid@student.usm.my"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onFocus={() => animation?.setChecking(true)}
+              onBlur={() => animation?.setChecking(false)}
               required
             />
           </div>
@@ -98,6 +109,7 @@ export default function LoginPage() {
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
                 className="
                   w-full rounded-md border px-3 py-2 pr-10 text-sm outline-none
                   border-[rgb(var(--border))]
@@ -107,7 +119,14 @@ export default function LoginPage() {
                 "
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                onKeyUp={(e) => setCapsLockOn(e.getModifierState("CapsLock"))}
+                onFocus={() => animation?.setHandsUp(true)}
+                onBlur={() => animation?.setHandsUp(false)}
+                onKeyDown={(e) =>
+                  setCapsLockOn(e.getModifierState("CapsLock"))
+                }
+                onKeyUp={(e) =>
+                  setCapsLockOn(e.getModifierState("CapsLock"))
+                }
                 required
               />
 
@@ -145,7 +164,7 @@ export default function LoginPage() {
           {/* Submit */}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !email || !password}
             className="
               flex items-center justify-center gap-2
               w-full rounded-md py-2 text-sm font-medium text-white
@@ -161,20 +180,31 @@ export default function LoginPage() {
             )}
             {loading ? "Signing in..." : "Continue"}
           </button>
+
+          {/* Status */}
+          {status && (
+            <p
+              className={`text-xs ${
+                status.toLowerCase().includes("successful")
+                  ? "text-emerald-400"
+                  : "text-red-400"
+              }`}
+            >
+              {status}
+            </p>
+          )}
+
+          <p className="pt-2 text-xs text-[rgb(var(--muted2))]">
+            Don&apos;t have an account?{" "}
+            <Link
+              href="/auth/register"
+              className="text-[rgb(var(--primary))] hover:underline"
+            >
+              Register here
+            </Link>
+          </p>
         </form>
-
-        {status && <p className="mt-4 text-xs text-red-500">{status}</p>}
-
-        <p className="mt-4 text-xs text-[rgb(var(--muted2))]">
-          Don&apos;t have an account?{" "}
-          <Link
-            href="/auth/register"
-            className="text-[rgb(var(--primary))] hover:underline"
-          >
-            Register here
-          </Link>
-        </p>
-      </div>
-    </div>
+      )}
+    </AuthSplitLayout>
   );
 }
