@@ -19,36 +19,46 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <div className="relative flex min-h-screen flex-col">
             {/* GLOBAL HEADER */}
-            <header className="sticky top-0 z-50 border-b border-[rgb(var(--border))] bg-[rgb(var(--bg) / 0.75)] backdrop-blur">
-              <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-                <Link href="/" className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-[rgb(var(--primary))] to-[rgb(var(--primary2))]" />
-                  <div className="leading-tight">
-                    <div className="text-sm font-semibold">TutorLink</div>
-                    <div className="text-[11px] text-[rgb(var(--muted2))]">
-                      USM Peer Tutoring
-                    </div>
-                  </div>
-                </Link>
+<header className="sticky top-0 z-50 border-b border-[rgb(var(--border))] bg-[rgb(var(--bg) / 0.75)] backdrop-blur">
+  <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
+    {/* Brand */}
+    <Link href="/" className="flex items-center gap-2">
+      <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-[rgb(var(--primary))] to-[rgb(var(--primary2))]" />
+      <div className="leading-tight">
+        <div className="text-sm font-semibold">TutorLink</div>
+        <div className="text-[11px] text-[rgb(var(--muted2))]">
+          USM Peer Tutoring
+        </div>
+      </div>
+    </Link>
 
-                <div className="flex items-center gap-2">
-                  <div className="hidden items-center gap-6 text-sm text-[rgb(var(--muted))] md:flex">
-                    <Link href="/" className="hover:text-[rgb(var(--fg))]">
-                      Home
-                    </Link>
-                    <Link
-                      href="/find-tutor"
-                      className="hover:text-[rgb(var(--fg))]"
-                    >
-                      Find Tutor
-                    </Link>
-                  </div>
+    {/* Right side */}
+    <div className="flex items-center gap-2">
+      {/* ✅ Theme toggle FIRST (moved to "Home" position area) */}
+      <ThemeToggle />
 
-                  <ThemeToggle />
-                  <NavbarActions />
-                </div>
-              </nav>
-            </header>
+      {/* ✅ Make Home & Find Tutor look like Dashboard (same pill style) */}
+      <div className="hidden items-center gap-2 md:flex">
+        <Link
+          href="/"
+          className="rounded-xl px-3 py-2 text-sm font-medium hover:bg-[rgb(var(--card)/0.9)]"
+        >
+          Home
+        </Link>
+
+        <Link
+          href="/find-tutor"
+          className="rounded-xl px-3 py-2 text-sm font-medium hover:bg-[rgb(var(--card)/0.9)]"
+        >
+          Find Tutor
+        </Link>
+      </div>
+
+      {/* Auth actions (will show Dashboard + Logout OR Login + Join) */}
+      <NavbarActions />
+    </div>
+  </nav>
+</header>
 
             {/* PAGE CONTENT */}
             <main className="flex-1">{children}</main>

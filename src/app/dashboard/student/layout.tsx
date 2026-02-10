@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
-import LogoutClient from "./LogoutClient";
 
 function NavItem({ href, label }: { href: string; label: string }) {
   return (
