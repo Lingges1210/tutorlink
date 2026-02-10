@@ -26,6 +26,7 @@ model User {
   role            UserRole @default(STUDENT)
   isTutorApproved Boolean  @default(false)
   createdAt       DateTime @default(now())
+  avatarUrl String?
 
   tutorApplications TutorApplication[]
   studentSessions   Session[]        @relation("StudentSessions")

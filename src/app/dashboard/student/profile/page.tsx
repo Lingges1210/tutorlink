@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
@@ -21,10 +22,19 @@ export default async function StudentProfilePage() {
       verificationStatus: true,
       role: true,
       createdAt: true,
+      avatarUrl: true,
     },
   });
 
   if (!dbUser) redirect("/auth/login");
+
+  const initials =
+    (dbUser.name ?? dbUser.email)
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((s) => s[0]?.toUpperCase())
+      .join("") || "U";
 
   return (
     <div
@@ -36,11 +46,30 @@ export default async function StudentProfilePage() {
       "
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-[rgb(var(--fg))]">My Profile</h1>
-          <p className="mt-1 text-sm text-[rgb(var(--muted))]">
-            View your details. Matric info is locked for verification.
-          </p>
+        <div className="flex items-center gap-4">
+          <div className="relative h-14 w-14 overflow-hidden rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))]">
+            {dbUser.avatarUrl ? (
+              <Image
+                src={dbUser.avatarUrl}
+                alt="Profile picture"
+                fill
+                className="object-cover"
+                sizes="56px"
+                priority
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-sm font-bold text-[rgb(var(--fg))]">
+                {initials}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h1 className="text-xl font-semibold text-[rgb(var(--fg))]">My Profile</h1>
+            <p className="mt-1 text-sm text-[rgb(var(--muted))]">
+              View your details. Matric info is locked for verification.
+            </p>
+          </div>
         </div>
 
         <Link
