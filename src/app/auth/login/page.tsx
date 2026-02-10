@@ -56,7 +56,7 @@ export default function LoginPage() {
       animation?.success();
 
       setTimeout(() => {
-        router.push(targetPath);
+        window.location.href = targetPath;
       }, 800);
     } catch (err: any) {
       setStatus(err?.message ?? "Unexpected error");

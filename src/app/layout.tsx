@@ -4,6 +4,7 @@ import "./globals.css";
 import Link from "next/link";
 import ThemeProvider from "@/components/ThemeProvider";
 import ThemeToggle from "@/components/ThemeToggle";
+import NavbarActions from "@/components/NavbarActions";
 
 export const metadata: Metadata = {
   title: "TutorLink – USM Peer Tutoring",
@@ -35,43 +36,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     <Link href="/" className="hover:text-[rgb(var(--fg))]">
                       Home
                     </Link>
-                    <Link href="/find-tutor" className="hover:text-[rgb(var(--fg))]">
+                    <Link
+                      href="/find-tutor"
+                      className="hover:text-[rgb(var(--fg))]"
+                    >
                       Find Tutor
                     </Link>
                   </div>
 
                   <ThemeToggle />
-
-                  <Link
-                    href="/auth/login"
-                    className="
-                      rounded-xl border px-3 py-2 text-sm
-                      border-[rgb(var(--border))]
-                      bg-[rgb(var(--card) / 0.65)]
-                      hover:bg-[rgb(var(--card) / 0.9)]
-                    "
-                  >
-                    Log in
-                  </Link>
-
-                  <Link
-                    href="/auth/register"
-                    className="
-                      rounded-xl px-3 py-2 text-sm font-semibold text-white
-                      bg-[rgb(var(--primary))]
-                      hover:opacity-90
-                    "
-                  >
-                    Join
-                  </Link>
+                  <NavbarActions />
                 </div>
               </nav>
             </header>
 
             {/* PAGE CONTENT */}
-            <main className="flex-1">
-              {children}
-            </main>
+            <main className="flex-1">{children}</main>
 
             {/* GLOBAL FOOTER */}
             <footer className="border-t border-[rgb(var(--border))] bg-[rgb(var(--bg) / 0.6)]">

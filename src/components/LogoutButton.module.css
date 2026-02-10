@@ -1,0 +1,116 @@
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 14px;
+
+  border: 1px solid rgb(var(--border));
+  background: rgb(var(--card) / 0.65);
+  color: rgb(var(--fg));
+
+  transition: background 200ms ease, transform 120ms ease;
+}
+
+.btn:hover {
+  background: rgb(var(--card) / 0.9);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.text {
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.95;
+}
+
+.scene {
+  position: relative;
+  width: 44px;
+  height: 22px;
+}
+
+/* Door */
+.door {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 16px;
+  height: 22px;
+  transform: translateY(-50%);
+  border-radius: 6px;
+
+  background: rgb(var(--primary));
+  box-shadow: 0 10px 30px rgb(var(--shadow) / 0.25);
+}
+
+/* Person */
+.person {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+
+  background: rgb(var(--fg) / 0.9);
+  opacity: 0.9;
+}
+
+/* ===== Animation (on click) ===== */
+.play .door {
+  animation: doorPulse 900ms ease both;
+}
+
+.play .person {
+  animation: walkOut 900ms ease both;
+}
+
+.play .text {
+  animation: textFade 900ms ease both;
+}
+
+@keyframes doorPulse {
+  0% {
+    transform: translateY(-50%) scale(1);
+  }
+  25% {
+    transform: translateY(-50%) scale(1.05);
+  }
+  100% {
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+@keyframes walkOut {
+  0% {
+    transform: translateY(-50%) translateX(0);
+    opacity: 0.9;
+  }
+  40% {
+    transform: translateY(-50%) translateX(14px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-50%) translateX(28px);
+    opacity: 0;
+  }
+}
+
+@keyframes textFade {
+  0% {
+    opacity: 0.95;
+  }
+  55% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0.55;
+  }
+}
