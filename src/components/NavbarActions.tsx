@@ -37,7 +37,7 @@ export default async function NavbarActions() {
 
   const dbUser = await prisma.user.findUnique({
     where: { email: user.email.toLowerCase() },
-    select: { role: true, name: true, email: true },
+    select: { role: true, name: true, email: true, avatarUrl: true },
   });
 
   const dashboardHref =
@@ -47,6 +47,7 @@ export default async function NavbarActions() {
     <UserMenuClient
       name={dbUser?.name ?? null}
       email={dbUser?.email ?? user.email}
+      avatarUrl={dbUser?.avatarUrl ?? null}
       dashboardHref={dashboardHref}
     />
   );
