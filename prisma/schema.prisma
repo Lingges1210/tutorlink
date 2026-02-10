@@ -30,6 +30,12 @@ model User {
   tutorApplications TutorApplication[]
   studentSessions   Session[]        @relation("StudentSessions")
   tutorSessions     Session[]        @relation("TutorSessions")
+
+  // ✅ ADD THESE (OCR verification)
+  verificationStatus String  @default("PENDING_REVIEW")
+  ocrText            String? // store OCR result (optional)
+  ocrMatchedMatric   Boolean @default(false)
+  ocrMatchedName     Boolean @default(false)
 }
 
 

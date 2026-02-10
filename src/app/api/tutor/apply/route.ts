@@ -38,6 +38,9 @@ export async function POST(request: Request) {
           email,
           name,
           programme,
+          // passwordHash is required by the Prisma User schema; provide a placeholder
+          // for accounts created via email-only flow (adjust to generate a real hash if needed).
+          passwordHash: "",
         },
       });
     }

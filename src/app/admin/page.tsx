@@ -1,7 +1,19 @@
 // src/app/admin/page.tsx
 "use client";
 
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
+
+type QueueUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  matricNo: string | null;
+  matricCardUrl: string | null;
+  verificationStatus: string;
+  createdAt?: string;
+  ocrMatchedMatric?: boolean;
+  ocrMatchedName?: boolean;
+};
 
 const statCards = [
   {
@@ -44,8 +56,116 @@ const subjectDemand = [
   { name: "Circuit Theory", value: 38 },
 ];
 
+function StatusBadge({ status }: { status: string }) {
+  if (status === "AUTO_VERIFIED") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-300">
+        ✅ Verified
+      </span>
+    );
+  }
+  if (status === "REJECTED") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-3 py-1 text-xs font-medium text-rose-300">
+        ❌ Rejected
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-3 py-1 text-xs font-medium text-amber-300">
+      ⏳ Pending
+    </span>
+  );
+}
+
 export default function AdminPage() {
   const maxSessions = Math.max(...weeklySessions.map((s) => s.value));
+
+  // --- Verification queue state ---
+  const [queue, setQueue] = useState<QueueUser[]>([]);
+  const [queueLoading, setQueueLoading] = useState(true);
+  const [queueError, setQueueError] = useState<string | null>(null);
+
+  const [actionUserId, setActionUserId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const pendingCount = useMemo(
+    () => queue.filter((u) => u.verificationStatus === "PENDING_REVIEW").length,
+    [queue]
+  );
+
+  async function loadQueue() {
+    setQueueLoading(true);
+    setQueueError(null);
+
+    try {
+      const res = await fetch("/api/admin/verification-queue", { method: "GET" });
+      const data = await res.json();
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.message || "Failed to load verification queue");
+      }
+
+      setQueue(Array.isArray(data.users) ? data.users : []);
+    } catch (err: any) {
+      setQueueError(err?.message ?? "Failed to load queue");
+    } finally {
+      setQueueLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadQueue();
+  }, []);
+
+  async function verifyUser(userId: string, action: "APPROVE" | "REJECT") {
+    setNotice(null);
+    setActionUserId(userId);
+
+    let reason: string | undefined = undefined;
+
+    if (action === "REJECT") {
+      const input = window.prompt(
+        "Reject reason (optional). Example: Matric card unclear / name not visible"
+      );
+      reason = input?.trim() ? input.trim() : undefined;
+    }
+
+    try {
+      const res = await fetch("/api/admin/verify-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, action, reason }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.message || "Action failed");
+      }
+
+      // Update UI instantly (remove from pending list OR update status)
+      setQueue((prev) =>
+        prev.map((u) =>
+          u.id === userId
+            ? {
+                ...u,
+                verificationStatus: action === "APPROVE" ? "AUTO_VERIFIED" : "REJECTED",
+              }
+            : u
+        )
+      );
+
+      setNotice({
+        type: "success",
+        text: action === "APPROVE" ? "User approved + email sent ✅" : "User rejected + email sent ✅",
+      });
+    } catch (err: any) {
+      setNotice({ type: "error", text: err?.message ?? "Something went wrong" });
+    } finally {
+      setActionUserId(null);
+    }
+  }
 
   return (
     <div className="space-y-6 pb-10">
@@ -58,6 +178,166 @@ export default function AdminPage() {
           can monitor the platform.
         </p>
       </header>
+
+      {/* ✅ Verification Queue */}
+      <section className="rounded-xl border border-slate-800 bg-slate-950/70 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.85)]">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Verification Queue</h2>
+            <p className="mt-1 text-xs text-slate-400">
+              Review matric card uploads. Approve to unlock features; reject to request re-upload.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[0.65rem] font-medium text-amber-300">
+              {pendingCount} pending
+            </span>
+            <button
+              onClick={loadQueue}
+              className="rounded-md border border-slate-700 px-3 py-2 text-xs font-medium text-slate-200 hover:border-violet-400 hover:text-violet-300"
+              type="button"
+              disabled={queueLoading}
+            >
+              {queueLoading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+        </div>
+
+        {notice && (
+          <div
+            className={`mt-4 rounded-lg border p-3 text-xs ${
+              notice.type === "success"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                : "border-rose-500/30 bg-rose-500/10 text-rose-200"
+            }`}
+          >
+            {notice.text}
+          </div>
+        )}
+
+        {queueLoading && (
+          <div className="mt-4 text-xs text-slate-400">Loading queue…</div>
+        )}
+
+        {queueError && (
+          <div className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-200">
+            {queueError}
+          </div>
+        )}
+
+        {!queueLoading && !queueError && queue.length === 0 && (
+          <div className="mt-4 text-xs text-slate-400">No users in queue.</div>
+        )}
+
+        {!queueLoading && !queueError && queue.length > 0 && (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[820px] border-separate border-spacing-y-2 text-left">
+              <thead>
+                <tr className="text-[0.7rem] uppercase tracking-wide text-slate-500">
+                  <th className="px-3">User</th>
+                  <th className="px-3">Matric</th>
+                  <th className="px-3">OCR</th>
+                  <th className="px-3">Status</th>
+                  <th className="px-3 text-right">Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {queue.map((u) => {
+                  const busy = actionUserId === u.id;
+                  const isPending = u.verificationStatus === "PENDING_REVIEW";
+
+                  return (
+                    <tr
+                      key={u.id}
+                      className="rounded-xl border border-slate-800 bg-slate-900/60"
+                    >
+                      <td className="px-3 py-3">
+                        <div className="text-sm font-medium text-slate-100">
+                          {u.name ?? "—"}
+                        </div>
+                        <div className="text-xs text-slate-400">{u.email}</div>
+                      </td>
+
+                      <td className="px-3 py-3">
+                        <div className="text-xs text-slate-200">
+                          {u.matricNo ?? "—"}
+                        </div>
+                        {u.matricCardUrl ? (
+                          <a
+                            href={u.matricCardUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-violet-300 hover:underline"
+                          >
+                            View matric card
+                          </a>
+                        ) : (
+                          <div className="text-xs text-slate-500">No file</div>
+                        )}
+                      </td>
+
+                      <td className="px-3 py-3">
+                        <div className="text-xs text-slate-300">
+                          Matric:{" "}
+                          <span className={u.ocrMatchedMatric ? "text-emerald-300" : "text-slate-400"}>
+                            {u.ocrMatchedMatric ? "match" : "no match"}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-300">
+                          Name:{" "}
+                          <span className={u.ocrMatchedName ? "text-emerald-300" : "text-slate-400"}>
+                            {u.ocrMatchedName ? "match" : "no match"}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="px-3 py-3">
+                        <StatusBadge status={u.verificationStatus} />
+                      </td>
+
+                      <td className="px-3 py-3">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => verifyUser(u.id, "APPROVE")}
+                            disabled={!isPending || busy}
+                            className="
+                              inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-medium
+                              bg-emerald-600 text-white hover:bg-emerald-500
+                              disabled:cursor-not-allowed disabled:opacity-40
+                            "
+                          >
+                            {busy ? "Working..." : "Approve"}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => verifyUser(u.id, "REJECT")}
+                            disabled={!isPending || busy}
+                            className="
+                              inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-medium
+                              border border-rose-500/40 text-rose-200 hover:bg-rose-500/10
+                              disabled:cursor-not-allowed disabled:opacity-40
+                            "
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            <p className="mt-2 text-[0.7rem] text-slate-500">
+              Tip: Approve unlocks student features. Reject asks user to re-upload (email sent).
+            </p>
+          </div>
+        )}
+      </section>
 
       {/* Top stats */}
       <section>

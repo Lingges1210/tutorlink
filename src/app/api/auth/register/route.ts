@@ -1,9 +1,13 @@
-// src/app/api/auth/register/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { supabaseServer } from "@/lib/supabase"; // service-role storage client (server only)
-import { supabaseServerAnon } from "@/lib/supabaseServerAnon"; // anon client for auth.signUp
+import { supabaseServer } from "@/lib/supabase";
+import { supabaseServerAnon } from "@/lib/supabaseServerAnon";
+
+import {
+  extractTextFromImage,
+  matchMatricAndName,
+} from "@/lib/googleVision";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,10 +21,12 @@ export async function POST(req: NextRequest) {
     const captcha = String(formData.get("captcha") || "").trim();
     const matricCard = formData.get("matricCard") as File | null;
 
-    // Optional role coming from your register form
-    const roleRaw = String(formData.get("role") || "STUDENT").trim().toUpperCase();
+    const roleRaw = String(formData.get("role") || "STUDENT").toUpperCase();
     const role = roleRaw === "TUTOR" ? "TUTOR" : "STUDENT";
 
+    // --------------------------
+    // Basic validation
+    // --------------------------
     if (!email || !fullName || !programme || !matricNo || !password) {
       return NextResponse.json(
         { success: false, message: "Please fill in all required fields." },
@@ -42,7 +48,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Enforce USM email
     if (!email.endsWith("@student.usm.my") && !email.endsWith("@usm.my")) {
       return NextResponse.json(
         { success: false, message: "Please use a valid USM email." },
@@ -50,7 +55,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if already registered in Prisma DB
+    // --------------------------
+    // Prisma uniqueness checks
+    // --------------------------
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return NextResponse.json(
@@ -59,20 +66,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check matricNo uniqueness in Prisma DB
     const existingMatric = await prisma.user.findFirst({ where: { matricNo } });
     if (existingMatric) {
       return NextResponse.json(
-        { success: false, message: "This matric number is already linked to another account." },
+        {
+          success: false,
+          message: "This matric number is already linked to another account.",
+        },
         { status: 400 }
       );
     }
 
-    // Hash password for your local DB (you can remove later if you fully migrate auth to Supabase)
+    // --------------------------
+    // Hash password (local DB)
+    // --------------------------
     const passwordHash = await bcrypt.hash(password, 10);
 
     // --------------------------
-    // 1) Upload matric card to Supabase Storage (service role client)
+    // Upload matric card to Supabase Storage
     // --------------------------
     const bucket = process.env.SUPABASE_STORAGE_BUCKET!;
     const timestamp = Date.now();
@@ -80,20 +91,17 @@ export async function POST(req: NextRequest) {
     const safeMatric = matricNo.replace(/[^a-zA-Z0-9_-]/g, "");
     const objectPath = `matric-cards/${safeMatric}-${timestamp}.${fileExt}`;
 
-    const arrayBuffer = await matricCard.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const buffer = Buffer.from(await matricCard.arrayBuffer());
 
-    const { data: uploadData, error: uploadError } = await supabaseServer.storage
-      .from(bucket)
-      .upload(objectPath, buffer, {
+    const { data: uploadData, error: uploadError } =
+      await supabaseServer.storage.from(bucket).upload(objectPath, buffer, {
         contentType: matricCard.type || "application/octet-stream",
         upsert: false,
       });
 
     if (uploadError || !uploadData?.path) {
-      console.error("Supabase upload error:", uploadError);
       return NextResponse.json(
-        { success: false, message: "Failed to upload matric card. Please try again." },
+        { success: false, message: "Failed to upload matric card." },
         { status: 500 }
       );
     }
@@ -105,34 +113,68 @@ export async function POST(req: NextRequest) {
     const matricCardUrl = publicUrlData.publicUrl;
 
     // --------------------------
-    // 2) Create Supabase Auth user (THIS makes it show in Supabase → Auth → Users)
+    // OCR verification (non-blocking)
     // --------------------------
-  const supabaseAnon = supabaseServerAnon();
+    let ocrText = "";
+    let ocrMatchedMatric = false;
+    let ocrMatchedName = false;
+    let verificationStatus: "AUTO_VERIFIED" | "PENDING_REVIEW" =
+      "PENDING_REVIEW";
 
-const { data: authData, error: authError } = await supabaseAnon.auth.signUp({
-  email,
-  password,
-  options: {
-    emailRedirectTo: "http://localhost:3000/auth/callback",
-    data: {
-      role: role === "TUTOR" ? "tutor" : "student",
-      full_name: fullName,
-      programme,
-      matricNo,
-      matricCardUrl,
-    },
-  },
-});
+    try {
+      ocrText = await extractTextFromImage(buffer);
 
+      const match = matchMatricAndName({
+        ocrText,
+        matricNo,
+        fullName,
+      });
 
-    if (authError) {
-      // Optional cleanup: delete uploaded file if signUp fails
-      try {
-        await supabaseServer.storage.from(bucket).remove([uploadData.path]);
-      } catch (cleanupErr) {
-        console.warn("Cleanup warning (could not remove uploaded file):", cleanupErr);
+      ocrMatchedMatric = match.matricMatch;
+      ocrMatchedName = match.nameMatch;
+
+      const hasUSM =
+        ocrText.toLowerCase().includes("usm") ||
+        ocrText.toLowerCase().includes("universiti sains malaysia");
+
+      if (ocrMatchedMatric && ocrMatchedName && hasUSM) {
+        verificationStatus = "AUTO_VERIFIED";
       }
 
+      console.log("OCR RESULT:", {
+        ocrMatchedMatric,
+        ocrMatchedName,
+        hasUSM,
+        verificationStatus,
+      });
+    } catch (err) {
+      console.warn("OCR failed → manual review:", err);
+    }
+
+    // --------------------------
+    // Create Supabase Auth user
+    // --------------------------
+    const supabaseAnon = supabaseServerAnon();
+
+    const { data: authData, error: authError } =
+      await (await supabaseAnon).auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+          data: {
+            role: role.toLowerCase(),
+            full_name: fullName,
+            programme,
+            matricNo,
+            matricCardUrl,
+            verificationStatus,
+          },
+        },
+      });
+
+    if (authError) {
+      await supabaseServer.storage.from(bucket).remove([uploadData.path]);
       return NextResponse.json(
         { success: false, message: authError.message },
         { status: 400 }
@@ -140,7 +182,7 @@ const { data: authData, error: authError } = await supabaseAnon.auth.signUp({
     }
 
     // --------------------------
-    // 3) Create user in Prisma DB (local DB)
+    // Create Prisma user
     // --------------------------
     const user = await prisma.user.create({
       data: {
@@ -151,15 +193,17 @@ const { data: authData, error: authError } = await supabaseAnon.auth.signUp({
         passwordHash,
         matricCardUrl,
         role,
+        verificationStatus,
+        ocrText: ocrText.slice(0, 5000),
+        ocrMatchedMatric,
+        ocrMatchedName,
       },
       select: {
         id: true,
         email: true,
         name: true,
-        programme: true,
-        matricNo: true,
-        matricCardUrl: true,
         role: true,
+        verificationStatus: true,
         createdAt: true,
       },
     });
@@ -167,10 +211,12 @@ const { data: authData, error: authError } = await supabaseAnon.auth.signUp({
     return NextResponse.json(
       {
         success: true,
-        message: "Registration successful. You can now log in.",
+        message:
+          verificationStatus === "AUTO_VERIFIED"
+            ? "Registration successful and verified."
+            : "Registration submitted. Pending admin verification.",
         user,
         supabaseUserId: authData.user?.id ?? null,
-        sessionCreated: Boolean(authData.session),
       },
       { status: 201 }
     );
