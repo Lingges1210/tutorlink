@@ -2,36 +2,55 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { LayoutDashboard, User, Search, Calendar, GraduationCap, Lock, ShieldOff } from "lucide-react";
 
-function NavItem({ href, label }: { href: string; label: string }) {
+function NavItem({
+  href,
+  label,
+  icon: Icon,
+}: {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+}) {
   return (
     <Link
       href={href}
       className="
-        block rounded-xl px-3 py-2 text-sm font-medium
+        flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
         text-[rgb(var(--fg))]
         hover:bg-[rgb(var(--card2))]
         transition
       "
     >
-      {label}
+      <Icon size={16} className="text-[rgb(var(--muted))]" />
+      <span>{label}</span>
     </Link>
   );
 }
 
-function NavDisabled({ label }: { label: string }) {
+
+function NavDisabled({
+  label,
+  icon: Icon,
+}: {
+  label: string;
+  icon: React.ElementType;
+}) {
   return (
     <div
       className="
-        block cursor-not-allowed rounded-xl px-3 py-2 text-sm font-medium
-        text-[rgb(var(--muted2))] opacity-70
+        flex items-center gap-3 cursor-not-allowed rounded-xl px-3 py-2
+        text-sm font-medium text-[rgb(var(--muted2))] opacity-70
       "
       title="Unlocks after verification"
     >
-      {label}
+      <Icon size={16} />
+      <span>{label}</span>
     </div>
   );
 }
+
 
 export default async function StudentLayout({
   children,
@@ -43,24 +62,38 @@ export default async function StudentLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user?.email) redirect("/auth/login");
+  if (!user?.email) {
+  redirect("/auth/login");
+  return null;
+}
 
-  const dbUser = await prisma.user.findUnique({
-    where: { email: user.email.toLowerCase() },
-    select: {
-      name: true,
-      email: true,
-      role: true,
-      verificationStatus: true,
-    },
-  });
+const dbUser = await prisma.user.findUnique({
+  where: { email: user.email.toLowerCase() },
+  select: {
+    name: true,
+    email: true,
+    role: true,
+    verificationStatus: true,
+    isDeactivated: true,
+  },
+});
 
-  if (!dbUser) redirect("/auth/login");
+if (!dbUser) {
+  redirect("/auth/login");
+  return null;
+}
 
-  // If you want to strictly keep this for STUDENT role only:
-  if (dbUser.role !== "STUDENT") redirect("/dashboard/tutor");
+if (dbUser.isDeactivated) {
+  redirect("/auth/deactivated");
+  return null;
+}
 
-  const verified = dbUser.verificationStatus === "AUTO_VERIFIED";
+// If you want to strictly keep this for STUDENT role only:
+if (dbUser.role !== "STUDENT") {
+  redirect("/dashboard/tutor");
+  return null;
+}
+const verified = dbUser.verificationStatus === "AUTO_VERIFIED";
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -91,45 +124,61 @@ export default async function StudentLayout({
           </div>
 
           <div className="space-y-1">
-            <NavItem href="/dashboard/student" label="🏠 Dashboard" />
-            <NavItem href="/dashboard/student/profile" label="👤 Profile" />
+  <NavItem
+    href="/dashboard/student"
+    label="Dashboard"
+    icon={LayoutDashboard}
+  />
 
-            <div className="my-3 border-t border-[rgb(var(--border))]" />
+  <NavItem
+    href="/dashboard/student/profile"
+    label="Profile"
+    icon={User}
+  />
 
-            {verified ? (
-              <>
-                <NavItem
-                  href="/dashboard/student/find-tutor"
-                  label="🔍 Find Tutor (later)"
-                />
-                <NavItem
-                  href="/dashboard/student/sessions"
-                  label="📅 My Bookings (later)"
-                />
-                <NavItem
-                  href="/dashboard/student/tutor/apply"
-                  label="🧑‍🏫 Apply Tutor (later)"
-                />
-              </>
-            ) : (
-              <>
-                <NavDisabled label="🔍 Find Tutor (locked)" />
-                <NavDisabled label="📅 My Bookings (locked)" />
-                <NavDisabled label="🧑‍🏫 Apply Tutor (locked)" />
-              </>
-            )}
+  <div className="my-3 border-t border-[rgb(var(--border))]" />
 
-            <div className="my-3 border-t border-[rgb(var(--border))]" />
+  {verified ? (
+    <>
+      <NavItem
+        href="/dashboard/student/find-tutor"
+        label="Find Tutor (later)"
+        icon={Search}
+      />
+      <NavItem
+        href="/dashboard/student/sessions"
+        label="My Bookings (later)"
+        icon={Calendar}
+      />
+      <NavItem
+        href="/dashboard/student/tutor/apply"
+        label="Apply as Tutor (later)"
+        icon={GraduationCap}
+      />
+    </>
+  ) : (
+    <>
+      <NavDisabled label="Find Tutor (locked)" icon={Search} />
+      <NavDisabled label="My Bookings (locked)" icon={Calendar} />
+      <NavDisabled label="Apply as Tutor (locked)" icon={GraduationCap} />
+    </>
+  )}
 
-            <NavItem
-              href="/dashboard/student/security/change-password"
-              label="🔐 Change Password"
-            />
-            <NavItem
-              href="/dashboard/student/security/deactivate"
-              label="🛑 Deactivate Account"
-            />
-          </div>
+  <div className="my-3 border-t border-[rgb(var(--border))]" />
+
+  <NavItem
+    href="/dashboard/student/security/change-password"
+    label="Change Password"
+    icon={Lock}
+  />
+
+  <NavItem
+    href="/dashboard/student/security/deactivate"
+    label="Deactivate Account"
+    icon={ShieldOff}
+  />
+</div>
+
         </aside>
 
         {/* Main */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AuthSplitLayout from "@/components/AuthSplitLayout";
@@ -16,6 +16,16 @@ export default function LoginPage() {
 
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  
+  useEffect(() => {
+  if (!status) return;
+
+  const timer = setTimeout(() => {
+    setStatus(null);
+  }, 10_000); // 10 seconds
+
+  return () => clearTimeout(timer);
+}, [status]);
 
   async function handleSubmit(
     e: FormEvent,
@@ -39,11 +49,14 @@ export default function LoginPage() {
         data = await res.json();
       } catch {}
 
-      if (!res.ok || !data?.success) {
-        setStatus(data?.message || "Login failed");
-        animation?.fail();
-        return;
-      }
+     if (!res.ok || !data?.success) {
+  const msg = data?.message || "Login failed";
+  setStatus(msg);
+  animation?.fail();
+  return;
+}
+
+
 
       const user = data.user;
       const role = String(user?.role || "").toUpperCase();
@@ -183,16 +196,20 @@ export default function LoginPage() {
 
           {/* Status */}
           {status && (
-            <p
-              className={`text-xs ${
-                status.toLowerCase().includes("successful")
-                  ? "text-emerald-400"
-                  : "text-red-400"
-              }`}
-            >
-              {status}
-            </p>
-          )}
+  <div
+    className={[
+      "rounded-xl border px-3 py-2 text-xs",
+      status.toLowerCase().includes("successful")
+        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
+        : "border-red-500/30 bg-red-500/10 text-red-500",
+    ].join(" ")}
+    role="alert"
+    aria-live="polite"
+  >
+    {status}
+  </div>
+)}
+
 
           <p className="pt-2 text-xs text-[rgb(var(--muted2))]">
             Don&apos;t have an account?{" "}

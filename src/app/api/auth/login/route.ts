@@ -56,8 +56,10 @@ export async function POST(request: Request) {
 
     // 2) Load Prisma user
     const user = await prisma.user.findUnique({
-      where: { email: data.user.email! },
-    });
+  where: { email: data.user.email!.toLowerCase() },
+});
+
+    
 
     if (!user) {
       return NextResponse.json(
@@ -69,6 +71,20 @@ export async function POST(request: Request) {
         { status: 409 }
       );
     }
+
+    if (user.isDeactivated) {
+  await (await supabase).auth.signOut(); // clears cookies
+
+  return NextResponse.json(
+    {
+      success: false,
+      code: "ACCOUNT_DEACTIVATED",
+      message: "Your account has been deactivated. Please contact support.",
+    },
+    { status: 403 }
+  );
+}
+
 
     // ✅ Cookies are already written by Supabase
     return NextResponse.json({

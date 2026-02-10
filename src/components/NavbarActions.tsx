@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { prisma } from "@/lib/prisma";
-import LogoutClient from "@/components/LogoutClient";
+import UserMenuClient from "@/components/UserMenuClient";
 
 export default async function NavbarActions() {
   const supabase = await supabaseServerComponent();
@@ -9,7 +9,7 @@ export default async function NavbarActions() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // ❌ Not logged in
+  // Logged out
   if (!user?.email) {
     return (
       <>
@@ -35,28 +35,19 @@ export default async function NavbarActions() {
     );
   }
 
-  // ✅ Logged in → get role
   const dbUser = await prisma.user.findUnique({
     where: { email: user.email.toLowerCase() },
-    select: { role: true },
+    select: { role: true, name: true, email: true },
   });
 
   const dashboardHref =
-    dbUser?.role === "TUTOR"
-      ? "/dashboard/tutor"
-      : "/dashboard/student";
+    dbUser?.role === "TUTOR" ? "/dashboard/tutor" : "/dashboard/student";
 
   return (
-    <>
-      <Link
-        href={dashboardHref}
-        className="rounded-xl px-3 py-2 text-sm font-medium
-                   hover:bg-[rgb(var(--card)/0.9)]"
-      >
-        Dashboard
-      </Link>
-
-      <LogoutClient />
-    </>
+    <UserMenuClient
+      name={dbUser?.name ?? null}
+      email={dbUser?.email ?? user.email}
+      dashboardHref={dashboardHref}
+    />
   );
 }

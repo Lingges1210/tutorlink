@@ -36,6 +36,11 @@ model User {
   ocrText            String? // store OCR result (optional)
   ocrMatchedMatric   Boolean @default(false)
   ocrMatchedName     Boolean @default(false)
+
+  isDeactivated Boolean   @default(false)
+  deactivatedAt DateTime?
+  deactivationReason String?
+  deactivationReasonOther String?
 }
 
 
