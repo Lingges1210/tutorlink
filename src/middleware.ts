@@ -37,14 +37,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // 🔁 Logged in → prevent access to auth pages
-  if (isLoggedIn && pathname.startsWith("/auth")) {
-    return NextResponse.redirect(new URL("/dashboard/student", request.url));
-  }
-
   return response;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/auth/:path*"],
+  matcher: ["/dashboard/:path*"],
 };

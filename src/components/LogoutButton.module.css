@@ -13,6 +13,9 @@
   color: rgb(var(--fg));
 
   transition: background 200ms ease, transform 120ms ease;
+
+  flex-shrink: 0;      /* ⬅️ prevents disappearing in flex header */
+  white-space: nowrap; /* ⬅️ keeps it on one line */
 }
 
 .btn:hover {
@@ -114,3 +117,4 @@
     opacity: 0.55;
   }
 }
+

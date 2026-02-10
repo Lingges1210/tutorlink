@@ -101,7 +101,11 @@ export default function StudentDashboardClient({ user }: Props) {
             </p>
           </div>
 
-          <VerificationBadge status={user.verificationStatus} />
+          <div className="flex items-center gap-2">
+  <PrimaryLinkButton href="/dashboard/student/profile">Profile</PrimaryLinkButton>
+  <VerificationBadge status={user.verificationStatus} />
+</div>
+
         </div>
       </div>
 
@@ -148,7 +152,7 @@ export default function StudentDashboardClient({ user }: Props) {
 
           <div className="mt-4 flex flex-wrap gap-3">
             {isVerified ? (
-              <PrimaryLinkButton href="/find-tutor">Find a Tutor</PrimaryLinkButton>
+              <PrimaryLinkButton href="/dashboard/student/find-tutor">Find a Tutor</PrimaryLinkButton>
             ) : (
               <DisabledButton>Find a Tutor</DisabledButton>
             )}
@@ -182,9 +186,10 @@ export default function StudentDashboardClient({ user }: Props) {
 
           <div className="mt-4">
             {isVerified ? (
-              <PrimaryLinkButton href="/dashboard/tutor">
+              <PrimaryLinkButton href="/dashboard/student/tutor/apply">
                 Apply as Tutor
               </PrimaryLinkButton>
+
             ) : (
               <DisabledButton>Apply as Tutor</DisabledButton>
             )}
