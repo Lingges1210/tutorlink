@@ -63,7 +63,7 @@ function StatusBadge({ status }: { status: string }) {
 
   if (s === "AUTO_VERIFIED") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-300">
+      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
         ✅ Verified
       </span>
     );
@@ -71,18 +71,19 @@ function StatusBadge({ status }: { status: string }) {
 
   if (s === "REJECTED") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/25 bg-rose-500/10 px-3 py-1 text-xs font-medium text-rose-700 dark:text-rose-300">
+      <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/15 px-3 py-1 text-xs font-medium text-rose-700 dark:text-rose-400">
         ❌ Rejected
       </span>
     );
   }
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+    <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/15 px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
       ⏳ Pending
     </span>
   );
 }
+
 
 export default function AdminPage() {
   const maxSessions = Math.max(...weeklySessions.map((s) => s.value));
@@ -278,10 +279,10 @@ export default function AdminPage() {
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <ActionLink href="#verification-queue">
+            <ActionLink href="/admin/verification-queue">
               Verification Queue
               {pendingVerificationCount > 0 && (
-                <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-400">
+<span className="ml-2 rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-400">
                   {pendingVerificationCount}
                 </span>
               )}
@@ -293,7 +294,7 @@ export default function AdminPage() {
             >
               Tutor Applications
               {pendingTutorCount > 0 && (
-                <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-400">
+<span className="ml-2 rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-400">
                   {pendingTutorCount}
                 </span>
               )}
@@ -303,16 +304,17 @@ export default function AdminPage() {
 
         {/* Notice */}
         {notice && (
-          <div
-            className={`rounded-2xl border px-4 py-3 text-xs ${
-              notice.type === "success"
-                ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"
-                : "border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-200"
-            }`}
-          >
-            {notice.text}
-          </div>
-        )}
+  <div
+    className={`rounded-2xl border px-4 py-3 text-xs ${
+      notice.type === "success"
+        ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+        : "border-rose-500/30 bg-rose-500/15 text-rose-700 dark:text-rose-400"
+    }`}
+  >
+    {notice.text}
+  </div>
+)}
+
 
         {/* Top stats */}
         <section className="space-y-3">
@@ -400,9 +402,9 @@ export default function AdminPage() {
               </div>
 
               <div className="mt-4 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2">
-                <p className="text-[0.7rem] font-semibold text-emerald-700 dark:text-emerald-200">
-                  Insight (mock)
-                </p>
+                <p className="text-[0.7rem] font-semibold text-emerald-700 dark:text-emerald-300">
+  Insight (mock)
+</p>
                 <p className="mt-1 text-[0.7rem] leading-5 text-[rgb(var(--muted))]">
                   CS fundamentals (Programming, DSA, Discrete Math) contribute to the majority of tutor
                   requests, suggesting these areas should have higher tutor allocation.

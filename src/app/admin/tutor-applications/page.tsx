@@ -32,20 +32,20 @@ function StatusPill({ status }: { status: string }) {
   const s = (status || "").toUpperCase();
 
   const cls =
-    s === "APPROVED"
-      ? `
-        border-emerald-300 bg-emerald-100 text-emerald-950
-        dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400
-      `
-      : s === "REJECTED"
-      ? `
-        border-rose-300 bg-rose-100 text-rose-950
-        dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-400
-      `
-      : `
-        border-amber-300 bg-amber-100 text-amber-950
-        dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400
-      `;
+  s === "AUTO_VERIFIED" || s === "APPROVED"
+    ? `
+      border-emerald-500/30 bg-emerald-500/15 text-emerald-700
+      dark:text-emerald-400
+    `
+    : s === "REJECTED"
+    ? `
+      border-rose-500/30 bg-rose-500/15 text-rose-700
+      dark:text-rose-400
+    `
+    : `
+      border-amber-500/30 bg-amber-500/15 text-amber-700
+      dark:text-amber-400
+    `;
 
   return (
     <span className={`inline-flex rounded-full border px-3 py-1 text-[0.7rem] font-semibold ${cls}`}>
@@ -121,10 +121,10 @@ function RejectModal({
               dark:border-rose-500/25 dark:bg-rose-500/10
             "
           >
-            <div className="text-xs font-semibold text-rose-950 dark:text-rose-300">
+            <div className="text-xs font-semibold text-rose-700 dark:text-rose-400">
               Optional rejection reason
             </div>
-            <div className="mt-1 text-[0.72rem] text-rose-900/90 dark:text-rose-300">
+            <div className="mt-1 text-[0.72rem] text-rose-700/90 dark:text-rose-400">
               This reason will be shown to the student so they can fix and resubmit.
             </div>
           </div>
@@ -306,9 +306,10 @@ export default function AdminTutorApplicationsPage() {
 
               <div className="flex items-center gap-2">
                 {/* ✅ readable, still amber */}
-                <span className="rounded-full border border-amber-500 bg-amber-300 px-2 py-1 text-[0.65rem] font-semibold text-amber-950 dark:border-amber-500 dark:bg-amber-500 dark:text-amber-400">
-                  {pendingCount} pending
-                </span>
+                <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-1 text-[0.65rem] font-semibold text-amber-700 dark:text-amber-400">
+  {pendingCount} pending
+</span>
+
 
                 <button onClick={load} type="button" className={softBtn} disabled={loading}>
                   {loading ? "Refreshing..." : "Refresh"}
@@ -457,12 +458,10 @@ export default function AdminTutorApplicationsPage() {
                               onClick={() => openReject(a.id)}
                               disabled={!pending || busy}
                               className="
-                                inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold
-                                border border-rose-300 bg-rose-300 text-rose-950
-                                hover:bg-rose-300
-                                dark:border-rose-400 dark:bg-transparent dark:text-rose-300 dark:hover:bg-rose-400
-                                disabled:cursor-not-allowed disabled:opacity-40
-                              "
+  inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold
+  bg-rose-600 text-white hover:bg-rose-500
+  disabled:cursor-not-allowed disabled:opacity-40
+"
                             >
                               Reject
                             </button>
