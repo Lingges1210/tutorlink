@@ -24,13 +24,9 @@ model User {
   matricCardUrl   String?
   passwordHash    String
 
-  // ✅ keep single role as "primary"
   role            UserRole @default(STUDENT)
-
-  // ✅ multi-role via join table
   roleAssignments UserRoleAssignment[]
 
-  // keep your existing fields
   isTutorApproved Boolean  @default(false)
   createdAt       DateTime @default(now())
   avatarUrl       String?
@@ -70,6 +66,7 @@ model TutorApplication {
   status       String   @default("PENDING") // PENDING | APPROVED | REJECTED
   createdAt    DateTime @default(now())
   reviewedAt   DateTime? 
+  rejectionReason String? 
 }
 
 model Session {

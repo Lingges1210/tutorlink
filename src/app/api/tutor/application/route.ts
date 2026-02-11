@@ -4,9 +4,11 @@ import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
 export async function GET() {
   const supabase = await supabaseServerComponent();
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (error || !user?.email) {
+  if (!user?.email) {
     return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
   }
 
@@ -16,13 +18,23 @@ export async function GET() {
   });
 
   if (!dbUser) {
-    return NextResponse.json({ success: false, message: "Profile not found" }, { status: 404 });
+    return NextResponse.json({ success: false, message: "User not found" }, { status: 404 });
   }
 
   const application = await prisma.tutorApplication.findFirst({
-    where: { userId: dbUser.id },
-    orderBy: { createdAt: "desc" },
-  });
+  where: { userId: dbUser.id },
+  orderBy: { createdAt: "desc" },
+  select: {
+    id: true,
+    status: true,
+    subjects: true,
+    cgpa: true,
+    availability: true,
+    createdAt: true,
+    reviewedAt: true,
+    rejectionReason: true, // ✅ ADD
+  },
+});
 
-  return NextResponse.json({ success: true, application });
+return NextResponse.json({ success: true, application });
 }

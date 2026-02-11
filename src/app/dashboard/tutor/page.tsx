@@ -14,20 +14,22 @@ export default function TutorDashboardPage() {
           Manage tutoring requests, sessions, and your availability.
         </p>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Link
-            href="/dashboard/student"
-            className="
-              inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold
-              border border-[rgb(var(--border))]
-              bg-[rgb(var(--card2))]
-              text-[rgb(var(--fg))]
-              hover:border-[rgb(var(--primary))]
-            "
-          >
-            Back to Student Dashboard
-          </Link>
-        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+  <div className="inline-flex overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))]">
+    <Link
+      href="/dashboard/student"
+      className="px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]"
+    >
+      Student
+    </Link>
+    <Link
+      href="/dashboard/tutor"
+      className="px-3 py-2 text-xs font-semibold bg-[rgb(var(--primary)/0.14)] text-[rgb(var(--primary))] border-l border-[rgb(var(--border))]"
+    >
+      Tutor
+    </Link>
+  </div>
+</div>
       </header>
 
       {/* Quick cards */}

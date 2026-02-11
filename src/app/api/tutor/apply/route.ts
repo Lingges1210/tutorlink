@@ -6,10 +6,9 @@ export async function POST(req: Request) {
   const supabase = await supabaseServerComponent();
   const {
     data: { user },
-    error,
   } = await supabase.auth.getUser();
 
-  if (error || !user?.email) {
+  if (!user?.email) {
     return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
   }
 
@@ -24,31 +23,48 @@ export async function POST(req: Request) {
 
   const dbUser = await prisma.user.findUnique({
     where: { email: user.email.toLowerCase() },
-    select: { id: true },
+    select: { id: true, verificationStatus: true, isDeactivated: true, isTutorApproved: true },
   });
 
   if (!dbUser) {
-    return NextResponse.json({ success: false, message: "Profile not found" }, { status: 404 });
+    return NextResponse.json({ success: false, message: "User not found" }, { status: 404 });
   }
 
-  // prevent duplicate pending applications
-  const existing = await prisma.tutorApplication.findFirst({
+  if (dbUser.isDeactivated) {
+    return NextResponse.json({ success: false, message: "Account deactivated" }, { status: 403 });
+  }
+
+  if (dbUser.verificationStatus !== "AUTO_VERIFIED") {
+    return NextResponse.json({ success: false, message: "Please complete verification first" }, { status: 403 });
+  }
+
+  if (dbUser.isTutorApproved) {
+    return NextResponse.json({ success: false, message: "You are already an approved tutor" }, { status: 409 });
+  }
+
+  // Block duplicate pending applications
+  const existingPending = await prisma.tutorApplication.findFirst({
     where: { userId: dbUser.id, status: "PENDING" },
+    orderBy: { createdAt: "desc" },
   });
 
-  if (existing) {
-    return NextResponse.json({ success: false, message: "You already have a pending application." }, { status: 409 });
+  if (existingPending) {
+    return NextResponse.json(
+      { success: false, message: "You already have a pending application" },
+      { status: 409 }
+    );
   }
 
-  const app = await prisma.tutorApplication.create({
+  // ✅ Create application (allow resubmit if last was REJECTED)
+  const application = await prisma.tutorApplication.create({
     data: {
       userId: dbUser.id,
       subjects,
-      cgpa: cgpa ?? undefined,
-      availability: availability ?? undefined,
+      cgpa,
+      availability,
       status: "PENDING",
     },
   });
 
-  return NextResponse.json({ success: true, application: app });
+  return NextResponse.json({ success: true, application });
 }

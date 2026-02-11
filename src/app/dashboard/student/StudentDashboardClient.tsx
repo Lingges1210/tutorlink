@@ -14,6 +14,43 @@ type Props = {
   isTutor: boolean;
 };
 
+function DashboardSwitcher({
+  isTutor,
+  active,
+}: {
+  isTutor: boolean;
+  active: "student" | "tutor";
+}) {
+  if (!isTutor) return null;
+
+  return (
+    <div className="inline-flex overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))]">
+      <Link
+        href="/dashboard/student"
+        className={[
+          "px-3 py-2 text-xs font-semibold transition",
+          active === "student"
+            ? "bg-[rgb(var(--primary)/0.14)] text-[rgb(var(--primary))]"
+            : "text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
+        ].join(" ")}
+      >
+        Student
+      </Link>
+
+      <Link
+        href="/dashboard/tutor"
+        className={[
+          "px-3 py-2 text-xs font-semibold transition border-l border-[rgb(var(--border))]",
+          active === "tutor"
+            ? "bg-[rgb(var(--primary)/0.14)] text-[rgb(var(--primary))]"
+            : "text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
+        ].join(" ")}
+      >
+        Tutor
+      </Link>
+    </div>
+  );
+}
 
 function VerificationBadge({ status }: { status: VerificationStatus | string }) {
   const verified = status === "AUTO_VERIFIED";
@@ -104,9 +141,10 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
           </div>
 
           <div className="flex items-center gap-2">
-  <PrimaryLinkButton href="/dashboard/student/profile">Profile</PrimaryLinkButton>
-  <VerificationBadge status={user.verificationStatus} />
-</div>
+          <DashboardSwitcher isTutor={isTutor} active="student" />
+          <VerificationBadge status={user.verificationStatus} />
+          </div>
+
 
         </div>
       </div>
@@ -167,43 +205,41 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
           )}
         </div>
 
-        {/* Apply tutor */}
-        <div
-          className="
-            rounded-3xl border p-6
-            border-[rgb(var(--border))]
-            bg-[rgb(var(--card) / 0.7)]
-            shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]
-            transition-all duration-200
-            hover:-translate-y-0.5
-            hover:shadow-[0_28px_80px_rgb(var(--shadow)/0.14)]
-          "
-        >
-          <h2 className="text-sm font-semibold text-[rgb(var(--fg))]">
-            Want to become a tutor?
-          </h2>
-          <p className="mt-1 text-xs text-[rgb(var(--muted))]">
-            Apply and admins will review your application.
-          </p>
+        {/* Apply tutor card (hide if already tutor) */}
+{!isTutor && (
+  <div
+    className="
+      rounded-3xl border p-6
+      border-[rgb(var(--border))]
+      bg-[rgb(var(--card) / 0.7)]
+      shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]
+      transition-all duration-200
+      hover:-translate-y-0.5
+      hover:shadow-[0_28px_80px_rgb(var(--shadow)/0.14)]
+    "
+  >
+    <h2 className="text-sm font-semibold text-[rgb(var(--fg))]">
+      Want to become a tutor?
+    </h2>
+    <p className="mt-1 text-xs text-[rgb(var(--muted))]">
+      Apply and admins will review your application.
+    </p>
 
-          <div className="mt-4">
-  {isVerified ? (
-    isTutor ? (
-      <PrimaryLinkButton href="/dashboard/tutor">Tutor Dashboard</PrimaryLinkButton>
-    ) : (
-      <PrimaryLinkButton href="/dashboard/student/apply-tutor">
-        Apply as Tutor
-      </PrimaryLinkButton>
-    )
-  ) : (
-    <DisabledButton>{isTutor ? "Tutor Dashboard" : "Apply as Tutor"}</DisabledButton>
-  )}
-</div>
+    <div className="mt-4">
+      {isVerified ? (
+        <PrimaryLinkButton href="/dashboard/student/apply-tutor">
+          Apply as Tutor
+        </PrimaryLinkButton>
+      ) : (
+        <DisabledButton>Apply as Tutor</DisabledButton>
+      )}
+    </div>
 
-          <p className="mt-3 text-[0.7rem] text-[rgb(var(--muted2))]">
-            Requires verification.
-          </p>
-        </div>
+    <p className="mt-3 text-[0.7rem] text-[rgb(var(--muted2))]">
+      Requires verification.
+    </p>
+  </div>
+)}
       </section>
     </div>
   );
