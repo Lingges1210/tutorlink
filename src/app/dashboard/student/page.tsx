@@ -17,19 +17,26 @@ export default async function StudentDashboardPage() {
 
   // ✅ Read verificationStatus from Prisma using email
   const dbUser = await prisma.user.findUnique({
-    where: { email: user.email.toLowerCase() },
-    select: {
-      email: true,
-      name: true,
-      role: true,
-      verificationStatus: true,
-    },
-  });
+  where: { email: user.email.toLowerCase() },
+  select: {
+    email: true,
+    name: true,
+    role: true,
+    verificationStatus: true,
+    isTutorApproved: true,
+    roleAssignments: { select: { role: true } },
+  },
+});
 
   if (!dbUser) {
     // user exists in Supabase but not in Prisma (edge case)
     redirect("/auth/login");
   }
 
-  return <StudentDashboardClient user={dbUser} />;
+  const isTutor =
+  dbUser.isTutorApproved ||
+  dbUser.role === "TUTOR" ||
+  dbUser.roleAssignments.some((r) => r.role === "TUTOR");
+
+return <StudentDashboardClient user={dbUser} isTutor={isTutor} />;
 }

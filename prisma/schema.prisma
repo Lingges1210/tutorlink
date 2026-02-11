@@ -20,21 +20,27 @@ model User {
   email           String   @unique
   name            String?
   programme       String?
-  matricNo        String?  @unique   // this must exist
-  matricCardUrl   String?           // this must exist
+  matricNo        String?  @unique
+  matricCardUrl   String?
   passwordHash    String
+
+  // ✅ keep single role as "primary"
   role            UserRole @default(STUDENT)
+
+  // ✅ multi-role via join table
+  roleAssignments UserRoleAssignment[]
+
+  // keep your existing fields
   isTutorApproved Boolean  @default(false)
   createdAt       DateTime @default(now())
-  avatarUrl String?
+  avatarUrl       String?
 
   tutorApplications TutorApplication[]
-  studentSessions   Session[]        @relation("StudentSessions")
-  tutorSessions     Session[]        @relation("TutorSessions")
+  studentSessions   Session[] @relation("StudentSessions")
+  tutorSessions     Session[] @relation("TutorSessions")
 
-  // ✅ ADD THESE (OCR verification)
   verificationStatus String  @default("PENDING_REVIEW")
-  ocrText            String? // store OCR result (optional)
+  ocrText            String?
   ocrMatchedMatric   Boolean @default(false)
   ocrMatchedName     Boolean @default(false)
 
@@ -44,6 +50,15 @@ model User {
   deactivationReasonOther String?
 }
 
+model UserRoleAssignment {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  role      UserRole
+  createdAt DateTime @default(now())
+
+  @@unique([userId, role]) // prevents duplicates
+}
 
 model TutorApplication {
   id           String   @id @default(cuid())

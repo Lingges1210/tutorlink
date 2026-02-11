@@ -16,21 +16,29 @@ export default async function StudentLayout({
   if (!user?.email) redirect("/auth/login");
 
   const dbUser = await prisma.user.findUnique({
-    where: { email: user.email.toLowerCase() },
-    select: {
-      name: true,
-      email: true,
-      role: true,
-      verificationStatus: true,
-      isDeactivated: true,
-    },
-  });
+  where: { email: user.email.toLowerCase() },
+  select: {
+    name: true,
+    email: true,
+    role: true,
+    verificationStatus: true,
+    isDeactivated: true,
+    isTutorApproved: true,
+    roleAssignments: { select: { role: true } },
+  },
+});
+
 
   if (!dbUser) redirect("/auth/login");
   if (dbUser.isDeactivated) redirect("/auth/deactivated");
-  if (dbUser.role !== "STUDENT") redirect("/dashboard/tutor");
 
   const verified = dbUser.verificationStatus === "AUTO_VERIFIED";
+
+  const isTutor =
+  dbUser.isTutorApproved ||
+  dbUser.role === "TUTOR" ||
+  dbUser.roleAssignments.some((r) => r.role === "TUTOR");
+
 
   const sidebarItems: SidebarItem[] = [
     {
@@ -48,35 +56,43 @@ export default async function StudentLayout({
     { type: "divider" },
 
     ...(verified
-      ? ([
-          {
+  ? ([
+      {
+        type: "link",
+        href: "/dashboard/student/find-tutor",
+        label: "Find Tutor (later)",
+        icon: "search",
+      },
+      {
+        type: "link",
+        href: "/dashboard/student/sessions",
+        label: "My Bookings (later)",
+        icon: "calendar",
+      },
+      !isTutor
+        ? {
             type: "link",
-            href: "/dashboard/student/find-tutor",
-            label: "Find Tutor (later)",
-            icon: "search",
-          },
-          {
+            href: "/dashboard/student/apply-tutor",
+            label: "Apply as Tutor",
+            icon: "graduation",
+          }
+        : {
             type: "link",
-            href: "/dashboard/student/sessions",
-            label: "My Bookings (later)",
-            icon: "calendar",
-          },
-          {
-            type: "link",
-            href: "/dashboard/student/tutor/apply",
-            label: "Apply as Tutor (later)",
+            href: "/dashboard/tutor",
+            label: "Tutor Dashboard",
             icon: "graduation",
           },
-        ] as SidebarItem[])
-      : ([
-          { type: "disabled", label: "Find Tutor (locked)", icon: "search" },
-          { type: "disabled", label: "My Bookings (locked)", icon: "calendar" },
-          {
-            type: "disabled",
-            label: "Apply as Tutor (locked)",
-            icon: "graduation",
-          },
-        ] as SidebarItem[])),
+    ] as SidebarItem[])
+  : ([
+      { type: "disabled", label: "Find Tutor (locked)", icon: "search" },
+      { type: "disabled", label: "My Bookings (locked)", icon: "calendar" },
+      {
+        type: "disabled",
+        label: "Apply as Tutor (locked)",
+        icon: "graduation",
+      },
+    ] as SidebarItem[])),
+
 
     { type: "divider" },
     {

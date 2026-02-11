@@ -11,7 +11,9 @@ type Props = {
     role: string;
     verificationStatus: VerificationStatus | string;
   };
+  isTutor: boolean;
 };
+
 
 function VerificationBadge({ status }: { status: VerificationStatus | string }) {
   const verified = status === "AUTO_VERIFIED";
@@ -73,7 +75,7 @@ function DisabledButton({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function StudentDashboardClient({ user }: Props) {
+export default function StudentDashboardClient({ user, isTutor }: Props) {
   const isVerified = user.verificationStatus === "AUTO_VERIFIED";
 
   return (
@@ -185,15 +187,18 @@ export default function StudentDashboardClient({ user }: Props) {
           </p>
 
           <div className="mt-4">
-            {isVerified ? (
-              <PrimaryLinkButton href="/dashboard/student/tutor/apply">
-                Apply as Tutor
-              </PrimaryLinkButton>
-
-            ) : (
-              <DisabledButton>Apply as Tutor</DisabledButton>
-            )}
-          </div>
+  {isVerified ? (
+    isTutor ? (
+      <PrimaryLinkButton href="/dashboard/tutor">Tutor Dashboard</PrimaryLinkButton>
+    ) : (
+      <PrimaryLinkButton href="/dashboard/student/apply-tutor">
+        Apply as Tutor
+      </PrimaryLinkButton>
+    )
+  ) : (
+    <DisabledButton>{isTutor ? "Tutor Dashboard" : "Apply as Tutor"}</DisabledButton>
+  )}
+</div>
 
           <p className="mt-3 text-[0.7rem] text-[rgb(var(--muted2))]">
             Requires verification.

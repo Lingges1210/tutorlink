@@ -58,12 +58,26 @@ export default function LoginPage() {
 
 
 
-      const user = data.user;
-      const role = String(user?.role || "").toUpperCase();
-
+            // ✅ Decide redirect based on computed roles from DB
       let targetPath = "/dashboard/student";
-      if (role === "ADMIN") targetPath = "/admin";
-      // later: if (role === "TUTOR") targetPath = "/dashboard/tutor";
+
+      try {
+        const rolesRes = await fetch("/api/me/roles", { cache: "no-store" });
+        const rolesData = await rolesRes.json().catch(() => null);
+        const roles: string[] = rolesData?.roles ?? [];
+
+        if (roles.includes("ADMIN")) {
+          targetPath = "/admin";
+        } else {
+          // Keep them in student dashboard even if tutor
+          targetPath = "/dashboard/student";
+
+          // Optional: if you want tutors to land directly on tutor dashboard
+          // if (roles.includes("TUTOR")) targetPath = "/dashboard/tutor";
+        }
+      } catch {
+        // fallback stays /dashboard/student
+      }
 
       setStatus("Login successful. Redirecting...");
       animation?.success();

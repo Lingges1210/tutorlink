@@ -1,92 +1,34 @@
-// src/app/api/admin/tutor-applications/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
-// GET: list tutor applications (optionally filter by status)
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const status = searchParams.get("status") ?? "PENDING";
+export async function GET() {
+  const supabase = await supabaseServerComponent();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  try {
-    const applications = await prisma.tutorApplication.findMany({
-      where: { status },
-      include: {
-        user: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    return NextResponse.json({ success: true, applications });
-  } catch (err) {
-    console.error("GET tutor applications error:", err);
-    return NextResponse.json(
-      { success: false, message: "Failed to fetch tutor applications" },
-      { status: 500 }
-    );
+  if (!user?.email) {
+    return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
   }
-}
 
-// PATCH: approve or reject an application
-export async function PATCH(request: Request) {
-  try {
-    const body = await request.json();
-    const { applicationId, action } = body as {
-      applicationId?: string;
-      action?: "APPROVE" | "REJECT";
-    };
+  const dbUser = await prisma.user.findUnique({
+    where: { email: user.email.toLowerCase() },
+    select: { role: true, roleAssignments: { select: { role: true } } },
+  });
 
-    if (!applicationId || !action) {
-      return NextResponse.json(
-        { success: false, message: "applicationId and action are required" },
-        { status: 400 }
-      );
-    }
+  const roles = new Set<string>();
+  if (dbUser?.role) roles.add(dbUser.role);
+  for (const r of dbUser?.roleAssignments ?? []) roles.add(r.role);
 
-    const application = await prisma.tutorApplication.findUnique({
-      where: { id: applicationId },
-      include: { user: true },
-    });
-
-    if (!application) {
-      return NextResponse.json(
-        { success: false, message: "Application not found" },
-        { status: 404 }
-      );
-    }
-
-    const newStatus = action === "APPROVE" ? "APPROVED" : "REJECTED";
-
-    // Update application
-    await prisma.tutorApplication.update({
-      where: { id: applicationId },
-      data: {
-        status: newStatus,
-        reviewedAt: new Date(),
-      },
-    });
-
-    // If approved → upgrade user
-    if (action === "APPROVE") {
-      await prisma.user.update({
-        where: { id: application.userId },
-        data: {
-          role: "TUTOR",
-          isTutorApproved: true,
-        },
-      });
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: `Application ${newStatus.toLowerCase()}`,
-    });
-  } catch (err) {
-    console.error("PATCH tutor application error:", err);
-    return NextResponse.json(
-      { success: false, message: "Failed to update application" },
-      { status: 500 }
-    );
+  if (!roles.has("ADMIN")) {
+    return NextResponse.json({ success: false, message: "Forbidden" }, { status: 403 });
   }
+
+  const applications = await prisma.tutorApplication.findMany({
+    orderBy: { createdAt: "desc" },
+    include: { user: { select: { id: true, name: true, email: true, matricNo: true } } },
+  });
+
+  return NextResponse.json({ success: true, applications });
 }
