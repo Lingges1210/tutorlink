@@ -281,7 +281,7 @@ export default function AdminPage() {
             <ActionLink href="#verification-queue">
               Verification Queue
               {pendingVerificationCount > 0 && (
-                <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-200">
+                <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-400">
                   {pendingVerificationCount}
                 </span>
               )}
@@ -293,7 +293,7 @@ export default function AdminPage() {
             >
               Tutor Applications
               {pendingTutorCount > 0 && (
-                <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-200">
+                <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-400">
                   {pendingTutorCount}
                 </span>
               )}
@@ -348,7 +348,7 @@ export default function AdminPage() {
                   </p>
                 </div>
 
-                <span className="shrink-0 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[0.65rem] font-semibold text-emerald-700 dark:text-emerald-200">
+                <span className="shrink-0 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[0.65rem] font-semibold text-emerald-700 dark:text-emerald-300">
                   +12% vs last week (mock)
                 </span>
               </div>

@@ -13,12 +13,37 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => ({}));
+
   const subjects = typeof body.subjects === "string" ? body.subjects.trim() : "";
   const cgpa = typeof body.cgpa === "number" ? body.cgpa : null;
-  const availability = typeof body.availability === "string" ? body.availability.trim() : null;
+  const availability =
+    typeof body.availability === "string" ? body.availability.trim() : "";
 
+  // ✅ NEW: transcriptPath from body
+  const transcriptPath =
+    typeof body.transcriptPath === "string" ? body.transcriptPath.trim() : "";
+
+  // ✅ Required fields (your latest requirement)
   if (!subjects) {
     return NextResponse.json({ success: false, message: "Subjects are required" }, { status: 400 });
+  }
+
+  if (cgpa === null || !Number.isFinite(cgpa)) {
+    return NextResponse.json({ success: false, message: "CGPA is required" }, { status: 400 });
+  }
+
+  if (!availability) {
+    return NextResponse.json(
+      { success: false, message: "Availability is required" },
+      { status: 400 }
+    );
+  }
+
+  if (!transcriptPath) {
+    return NextResponse.json(
+      { success: false, message: "Academic transcript is required" },
+      { status: 400 }
+    );
   }
 
   const dbUser = await prisma.user.findUnique({
@@ -35,11 +60,17 @@ export async function POST(req: Request) {
   }
 
   if (dbUser.verificationStatus !== "AUTO_VERIFIED") {
-    return NextResponse.json({ success: false, message: "Please complete verification first" }, { status: 403 });
+    return NextResponse.json(
+      { success: false, message: "Please complete verification first" },
+      { status: 403 }
+    );
   }
 
   if (dbUser.isTutorApproved) {
-    return NextResponse.json({ success: false, message: "You are already an approved tutor" }, { status: 409 });
+    return NextResponse.json(
+      { success: false, message: "You are already an approved tutor" },
+      { status: 409 }
+    );
   }
 
   // Block duplicate pending applications
@@ -55,13 +86,14 @@ export async function POST(req: Request) {
     );
   }
 
-  // ✅ Create application (allow resubmit if last was REJECTED)
+  // ✅ Create application
   const application = await prisma.tutorApplication.create({
     data: {
       userId: dbUser.id,
       subjects,
       cgpa,
       availability,
+      transcriptPath, // ✅ now defined
       status: "PENDING",
     },
   });

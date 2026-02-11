@@ -9,6 +9,7 @@ type AppRow = {
   subjects: string;
   cgpa: number | null;
   availability: string | null;
+  transcriptPath?: string | null;
   status: "PENDING" | "APPROVED" | "REJECTED" | string;
   createdAt: string;
   reviewedAt: string | null;
@@ -21,20 +22,33 @@ type AppRow = {
   };
 };
 
+const cardShell =
+  "rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] dark:bg-[rgb(var(--card)/0.7)] shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]";
+
+const softBtn =
+  "rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.65)] disabled:opacity-60 disabled:cursor-not-allowed";
+
 function StatusPill({ status }: { status: string }) {
   const s = (status || "").toUpperCase();
 
   const cls =
     s === "APPROVED"
-      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      ? `
+        border-emerald-300 bg-emerald-100 text-emerald-950
+        dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400
+      `
       : s === "REJECTED"
-      ? "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
-      : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+      ? `
+        border-rose-300 bg-rose-100 text-rose-950
+        dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-400
+      `
+      : `
+        border-amber-300 bg-amber-100 text-amber-950
+        dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400
+      `;
 
   return (
-    <span
-      className={`inline-flex rounded-full border px-3 py-1 text-[0.7rem] font-medium ${cls}`}
-    >
+    <span className={`inline-flex rounded-full border px-3 py-1 text-[0.7rem] font-semibold ${cls}`}>
       {s === "APPROVED" ? "✅ APPROVED" : s === "REJECTED" ? "❌ REJECTED" : "⏳ PENDING"}
     </span>
   );
@@ -61,7 +75,6 @@ function RejectModal({
     if (open) setReason(defaultReason ?? "");
   }, [open, defaultReason]);
 
-  // ESC to close
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -74,45 +87,44 @@ function RejectModal({
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      aria-modal="true"
-      role="dialog"
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" aria-modal="true" role="dialog">
       {/* Backdrop */}
       <button
         type="button"
         onClick={onClose}
-        className="absolute inset-0 bg-black/60"
+        className="absolute inset-0 bg-black/20 dark:bg-black/70"
         aria-label="Close modal"
         disabled={submitting}
       />
 
-      {/* Panel */}
       <div
         className="
           relative w-full max-w-lg overflow-hidden rounded-3xl
           border border-[rgb(var(--border))]
-          bg-[rgb(var(--card) / 0.95)]
+          bg-[rgb(var(--card))] dark:bg-[rgb(var(--card)/0.95)]
           shadow-[0_30px_90px_rgb(var(--shadow)/0.45)]
         "
       >
         <div className="border-b border-[rgb(var(--border))] px-5 py-4">
-          <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-            Reject tutor application
-          </div>
+          <div className="text-sm font-semibold text-[rgb(var(--fg))]">Reject tutor application</div>
           <div className="mt-1 text-xs text-[rgb(var(--muted))]">
-            Applicant:{" "}
-            <span className="font-medium text-[rgb(var(--fg))]">{applicantLabel}</span>
+            Applicant: <span className="font-medium text-[rgb(var(--fg))]">{applicantLabel}</span>
           </div>
         </div>
 
-        <div className="px-5 py-4 space-y-3">
-          <div className="rounded-2xl border border-rose-500/25 bg-rose-500/10 px-4 py-3">
-            <div className="text-xs font-semibold text-rose-700 dark:text-rose-200">
+        <div className="space-y-3 px-5 py-4">
+          {/* ✅ Make it super readable in light mode */}
+          <div
+            className="
+              rounded-2xl border px-4 py-3
+              border-rose-300 bg-rose-100
+              dark:border-rose-500/25 dark:bg-rose-500/10
+            "
+          >
+            <div className="text-xs font-semibold text-rose-950 dark:text-rose-300">
               Optional rejection reason
             </div>
-            <div className="mt-1 text-[0.72rem] text-rose-700/80 dark:text-rose-200/80">
+            <div className="mt-1 text-[0.72rem] text-rose-900/90 dark:text-rose-300">
               This reason will be shown to the student so they can fix and resubmit.
             </div>
           </div>
@@ -126,25 +138,14 @@ function RejectModal({
               w-full rounded-2xl border border-[rgb(var(--border))]
               bg-[rgb(var(--card2))]
               px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none
+              placeholder:text-[rgb(var(--muted2))]
               focus:border-rose-400 focus:ring-1 focus:ring-rose-400/30
             "
             disabled={submitting}
           />
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              className="
-                rounded-md px-3 py-2 text-xs font-semibold
-                border border-[rgb(var(--border))]
-                bg-[rgb(var(--card2))]
-                text-[rgb(var(--fg))]
-                hover:bg-[rgb(var(--card)/0.65)]
-                disabled:opacity-50
-              "
-            >
+            <button type="button" onClick={onClose} disabled={submitting} className={softBtn}>
               Cancel
             </button>
 
@@ -154,7 +155,7 @@ function RejectModal({
               disabled={submitting}
               className="
                 rounded-md bg-rose-600 px-4 py-2 text-xs font-semibold text-white
-                hover:bg-rose-500 disabled:opacity-60
+                hover:bg-rose-500 disabled:opacity-60 disabled:cursor-not-allowed
               "
             >
               {submitting ? "Rejecting..." : "Reject application"}
@@ -172,11 +173,8 @@ export default function AdminTutorApplicationsPage() {
   const [err, setErr] = useState<string | null>(null);
 
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(
-    null
-  );
+  const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Modal state
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectId, setRejectId] = useState<string | null>(null);
 
@@ -191,8 +189,7 @@ export default function AdminTutorApplicationsPage() {
     try {
       const res = await fetch("/api/admin/tutor-applications", { cache: "no-store" });
       const data = await res.json();
-      if (!res.ok || !data?.success)
-        throw new Error(data?.message || "Failed to load applications");
+      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to load applications");
       setApps(Array.isArray(data.applications) ? data.applications : []);
     } catch (e: any) {
       setErr(e?.message ?? "Failed to load applications");
@@ -232,12 +229,7 @@ export default function AdminTutorApplicationsPage() {
       setApps((prev) =>
         prev.map((a) =>
           a.id === id
-            ? {
-                ...a,
-                status: "APPROVED",
-                reviewedAt: new Date().toISOString(),
-                rejectionReason: null,
-              }
+            ? { ...a, status: "APPROVED", reviewedAt: new Date().toISOString(), rejectionReason: null }
             : a
         )
       );
@@ -267,12 +259,7 @@ export default function AdminTutorApplicationsPage() {
       setApps((prev) =>
         prev.map((a) =>
           a.id === id
-            ? {
-                ...a,
-                status: "REJECTED",
-                reviewedAt: new Date().toISOString(),
-                rejectionReason: reason,
-              }
+            ? { ...a, status: "REJECTED", reviewedAt: new Date().toISOString(), rejectionReason: reason }
             : a
         )
       );
@@ -293,209 +280,203 @@ export default function AdminTutorApplicationsPage() {
     : "—";
 
   return (
-    <div className="space-y-6 pb-10">
-      <RejectModal
-        open={rejectOpen}
-        applicantLabel={rejectApplicantLabel}
-        defaultReason={rejectTarget?.rejectionReason ?? ""}
-        submitting={!!busyId && busyId === rejectId}
-        onClose={closeReject}
-        onConfirm={(reason) => {
-          if (!rejectId) return;
-          actReject(rejectId, reason);
-        }}
-      />
+    <div className="min-h-[calc(100vh-56px)] bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
+      <div className="mx-auto max-w-6xl space-y-6 px-4 pb-10 pt-6 sm:px-6 lg:px-8">
+        <RejectModal
+          open={rejectOpen}
+          applicantLabel={rejectApplicantLabel}
+          defaultReason={rejectTarget?.rejectionReason ?? ""}
+          submitting={!!busyId && busyId === rejectId}
+          onClose={closeReject}
+          onConfirm={(reason) => {
+            if (!rejectId) return;
+            actReject(rejectId, reason);
+          }}
+        />
 
-      {/* Header card (same vibe as student layout) */}
-      <header
-        className="
-          rounded-3xl border p-6
-          border-[rgb(var(--border))]
-          bg-[rgb(var(--card) / 0.7)]
-          shadow-[0_20px_60px_rgb(var(--shadow)/0.10)]
-        "
-      >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">
-              Tutor Applications
-            </h1>
-            <p className="mt-1 text-sm text-[rgb(var(--muted))]">
-              Review tutor applications. Approve to unlock Tutor dashboard & role.
-            </p>
-          </div>
+        <div className={`${cardShell} p-4 sm:p-6`}>
+          <header className="mb-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">Tutor Applications</h1>
+                <p className="mt-1 text-sm text-[rgb(var(--muted))]">
+                  Review tutor applications. Approve to unlock Tutor dashboard & role
+                </p>
+              </div>
 
-          <div className="flex items-center gap-2">
-            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[0.65rem] font-medium text-amber-700 dark:text-amber-300">
-              {pendingCount} pending
-            </span>
+              <div className="flex items-center gap-2">
+                {/* ✅ readable, still amber */}
+                <span className="rounded-full border border-amber-500 bg-amber-300 px-2 py-1 text-[0.65rem] font-semibold text-amber-950 dark:border-amber-500 dark:bg-amber-500 dark:text-amber-400">
+                  {pendingCount} pending
+                </span>
 
-            <button
-              onClick={load}
-              type="button"
-              className="
-                rounded-md px-3 py-2 text-xs font-semibold
-                border border-[rgb(var(--border))]
-                bg-[rgb(var(--card2))]
-                text-[rgb(var(--fg))]
-                hover:bg-[rgb(var(--card)/0.65)]
-              "
-              disabled={loading}
+                <button onClick={load} type="button" className={softBtn} disabled={loading}>
+                  {loading ? "Refreshing..." : "Refresh"}
+                </button>
+
+                <Link href="/admin" className={softBtn}>
+                  Back to Admin
+                </Link>
+              </div>
+            </div>
+          </header>
+
+          {notice && (
+            <div
+              className={`mb-4 rounded-2xl border px-3 py-3 text-xs ${
+                notice.type === "success"
+                  ? "border-emerald-300 bg-emerald-100 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
+                  : "border-rose-300 bg-rose-100 text-rose-950 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200"
+              }`}
             >
-              {loading ? "Refreshing..." : "Refresh"}
-            </button>
+              {notice.text}
+            </div>
+          )}
 
-            <Link
-              href="/admin"
-              className="
-                rounded-md px-3 py-2 text-xs font-semibold
-                border border-[rgb(var(--border))]
-                bg-[rgb(var(--card2))]
-                text-[rgb(var(--fg))]
-                hover:bg-[rgb(var(--card)/0.65)]
-              "
-            >
-              Back to Admin
-            </Link>
-          </div>
-        </div>
-      </header>
+          {err && (
+            <div className="mb-4 rounded-2xl border border-rose-300 bg-rose-100 px-3 py-3 text-xs text-rose-950 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
+              {err}
+            </div>
+          )}
 
-      {notice && (
-        <div
-          className={`rounded-2xl border px-3 py-3 text-xs ${
-            notice.type === "success"
-              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"
-              : "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200"
-          }`}
-        >
-          {notice.text}
-        </div>
-      )}
+          {loading && <div className="text-xs text-[rgb(var(--muted2))]">Loading applications…</div>}
 
-      {err && (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-3 py-3 text-xs text-rose-700 dark:text-rose-200">
-          {err}
-        </div>
-      )}
+          {!loading && !err && apps.length === 0 && (
+            <div className="text-xs text-[rgb(var(--muted2))]">No tutor applications yet.</div>
+          )}
 
-      {loading && <div className="text-xs text-[rgb(var(--muted2))]">Loading applications…</div>}
-
-      {!loading && !err && apps.length === 0 && (
-        <div className="text-xs text-[rgb(var(--muted2))]">No tutor applications yet.</div>
-      )}
-
-      {!loading && !err && apps.length > 0 && (
-        <div
-          className="
-            overflow-x-auto rounded-3xl border
-            border-[rgb(var(--border))]
-            bg-[rgb(var(--card) / 0.7)]
-            shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]
-          "
-        >
-          <table className="min-w-[980px] w-full text-left">
-            <thead>
-              <tr className="text-[0.7rem] uppercase tracking-wide text-[rgb(var(--muted2))]">
-                <th className="px-4 py-3">Applicant</th>
-                <th className="px-4 py-3">Subjects</th>
-                <th className="px-4 py-3">CGPA</th>
-                <th className="px-4 py-3">Availability</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Action</th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-[rgb(var(--border))]">
-              {apps.map((a) => {
-                const busy = busyId === a.id;
-                const pending = (a.status || "").toUpperCase() === "PENDING";
-
-                return (
-                  <tr key={a.id} className="align-top">
-                    <td className="px-4 py-4">
-                      <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                        {a.user?.name ?? "—"}
-                      </div>
-                      <div className="text-xs text-[rgb(var(--muted2))]">{a.user?.email}</div>
-                      <div className="mt-1 text-[0.7rem] text-[rgb(var(--muted))]">
-                        Matric: {a.user?.matricNo ?? "—"}
-                      </div>
-                      <div className="mt-1 text-[0.7rem] text-[rgb(var(--muted2))]">
-                        Submitted: {new Date(a.createdAt).toLocaleString()}
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-4">
-                      <div className="text-xs text-[rgb(var(--fg))] whitespace-pre-wrap">
-                        {a.subjects || "—"}
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-4">
-                      <div className="text-xs text-[rgb(var(--fg))]">{a.cgpa ?? "—"}</div>
-                    </td>
-
-                    <td className="px-4 py-4">
-                      <div className="text-xs text-[rgb(var(--fg))] whitespace-pre-wrap">
-                        {a.availability ?? "—"}
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-4">
-                      <StatusPill status={a.status} />
-
-                      {a.reviewedAt && (
-                        <div className="mt-2 text-[0.7rem] text-[rgb(var(--muted2))]">
-                          Reviewed: {new Date(a.reviewedAt).toLocaleString()}
-                        </div>
-                      )}
-
-                      {(a.status || "").toUpperCase() === "REJECTED" && (
-                        <div className="mt-2 text-[0.7rem] text-rose-700 dark:text-rose-200/80">
-                          Reason: {a.rejectionReason?.trim() ? a.rejectionReason : "—"}
-                        </div>
-                      )}
-                    </td>
-
-                    <td className="px-4 py-4">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => actApprove(a.id)}
-                          disabled={!pending || busy}
-                          className="
-                            inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold
-                            bg-emerald-600 text-white hover:bg-emerald-500
-                            disabled:cursor-not-allowed disabled:opacity-40
-                          "
-                        >
-                          {busy ? "Working..." : "Approve"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => openReject(a.id)}
-                          disabled={!pending || busy}
-                          className="
-                            inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold
-                            border border-rose-500/40
-                            text-rose-700 dark:text-rose-200
-                            hover:bg-rose-500/10
-                            disabled:cursor-not-allowed disabled:opacity-40
-                          "
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    </td>
+          {!loading && !err && apps.length > 0 && (
+            <div className="overflow-x-auto rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] dark:bg-[rgb(var(--card)/0.55)]">
+              <table className="min-w-[980px] w-full text-left">
+                <thead>
+                  <tr className="text-[0.7rem] uppercase tracking-wide text-[rgb(var(--muted2))] bg-[rgb(var(--card2))] dark:bg-transparent">
+                    <th className="px-4 py-3">Applicant</th>
+                    <th className="px-4 py-3">Subjects</th>
+                    <th className="px-4 py-3">CGPA</th>
+                    <th className="px-4 py-3">Transcript</th>
+                    <th className="px-4 py-3">Availability</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Action</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                </thead>
+
+                <tbody className="divide-y divide-[rgb(var(--border))]">
+                  {apps.map((a, idx) => {
+                    const busy = busyId === a.id;
+                    const pending = (a.status || "").toUpperCase() === "PENDING";
+
+                    return (
+                      <tr
+                        key={a.id}
+                        className={`
+                          align-top
+                          hover:bg-[rgb(var(--soft))] dark:hover:bg-white/5
+                          ${idx % 2 === 1 ? "bg-[rgb(var(--card))]" : ""}
+                          ${idx % 2 === 1 ? "dark:bg-transparent" : ""}
+                        `}
+                      >
+                        <td className="px-4 py-4">
+                          <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                            {a.user?.name ?? "—"}
+                          </div>
+                          <div className="text-xs text-[rgb(var(--muted2))]">{a.user?.email}</div>
+                          <div className="mt-1 text-[0.7rem] text-[rgb(var(--muted))]">
+                            Matric: {a.user?.matricNo ?? "—"}
+                          </div>
+                          <div className="mt-1 text-[0.7rem] text-[rgb(var(--muted2))]">
+                            Submitted: {new Date(a.createdAt).toLocaleString()}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <div className="text-xs text-[rgb(var(--fg))] whitespace-pre-wrap">
+                            {a.subjects || "—"}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <div className="text-xs text-[rgb(var(--fg))]">{a.cgpa ?? "—"}</div>
+                        </td>
+
+                        <td className="px-4 py-4">
+                          {a.transcriptPath ? (
+                            <a
+                              href={`/api/admin/tutor-applications/${a.id}/transcript`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={softBtn}
+                            >
+                              View
+                            </a>
+                          ) : (
+                            <span className="text-[0.7rem] text-rose-900 dark:text-rose-200">
+                              Missing
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <div className="text-xs text-[rgb(var(--fg))] whitespace-pre-wrap">
+                            {a.availability ?? "—"}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <StatusPill status={a.status} />
+
+                          {a.reviewedAt && (
+                            <div className="mt-2 text-[0.7rem] text-[rgb(var(--muted2))]">
+                              Reviewed: {new Date(a.reviewedAt).toLocaleString()}
+                            </div>
+                          )}
+
+                          {(a.status || "").toUpperCase() === "REJECTED" && (
+                            <div className="mt-2 text-[0.7rem] text-rose-900/90 dark:text-rose-200/80">
+                              Reason: {a.rejectionReason?.trim() ? a.rejectionReason : "—"}
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => actApprove(a.id)}
+                              disabled={!pending || busy}
+                              className="
+                                inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold
+                                bg-emerald-600 text-white hover:bg-emerald-500
+                                disabled:cursor-not-allowed disabled:opacity-40
+                              "
+                            >
+                              {busy ? "Working..." : "Approve"}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => openReject(a.id)}
+                              disabled={!pending || busy}
+                              className="
+                                inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold
+                                border border-rose-300 bg-rose-300 text-rose-950
+                                hover:bg-rose-300
+                                dark:border-rose-400 dark:bg-transparent dark:text-rose-300 dark:hover:bg-rose-400
+                                disabled:cursor-not-allowed disabled:opacity-40
+                              "
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

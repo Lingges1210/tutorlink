@@ -67,6 +67,7 @@ model TutorApplication {
   createdAt    DateTime @default(now())
   reviewedAt   DateTime? 
   rejectionReason String? 
+  transcriptPath  String?
 }
 
 model Session {
