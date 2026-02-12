@@ -43,13 +43,13 @@ export default async function TutorLayout({
 
   const tutorItems: SidebarItem[] = [
     { type: "link", href: "/dashboard/tutor", label: "Tutor Home", icon: "dashboard" },
+    { type: "link", href: "/dashboard/tutor/profile", label: "Tutor Profile", icon: "profile" },
+    { type: "link", href: "/dashboard/tutor/availability", label: "Availability", icon: "calendar" },
     { type: "link", href: "/dashboard/tutor/requests", label: "Requests", icon: "calendar" },
     { type: "link", href: "/dashboard/tutor/sessions", label: "Sessions", icon: "calendar" },
-    { type: "link", href: "/dashboard/tutor/profile", label: "Tutor Profile", icon: "profile" },
+
     { type: "divider" },
     { type: "link", href: "/dashboard/student", label: "Student Dashboard", icon: "dashboard" },
-    { type: "link", href: "/dashboard/student/security/change-password", label: "Change Password", icon: "lock" },
-    { type: "link", href: "/dashboard/student/security/deactivate", label: "Deactivate Account", icon: "shieldoff" },
   ];
 
   const mobileItems: SidebarItem[] = [

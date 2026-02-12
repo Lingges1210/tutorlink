@@ -28,6 +28,94 @@ const cardShell =
 const softBtn =
   "rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.65)] disabled:opacity-60 disabled:cursor-not-allowed";
 
+type DayKey = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
+type TimeSlot = { start: string; end: string };
+type DayAvailability = { day: DayKey; off: boolean; slots: TimeSlot[] };
+type AvailabilityState = DayAvailability[];
+
+const DAY_LABEL: Record<DayKey, string> = {
+  MON: "Mon",
+  TUE: "Tue",
+  WED: "Wed",
+  THU: "Thu",
+  FRI: "Fri",
+  SAT: "Sat",
+  SUN: "Sun",
+};
+
+function tryParseAvailability(value: string): AvailabilityState | null {
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return null;
+
+    const ok = parsed.every(
+      (d: any) =>
+        d &&
+        typeof d.day === "string" &&
+        typeof d.off === "boolean" &&
+        Array.isArray(d.slots)
+    );
+
+    return ok ? (parsed as AvailabilityState) : null;
+  } catch {
+    return null;
+  }
+}
+
+type AvLine = { day: string; off: boolean; slotsText: string; hasSlots: boolean };
+
+function buildAvailabilityLines(raw: string | null | undefined): AvLine[] {
+  if (!raw?.trim()) return [];
+
+  const parsed = tryParseAvailability(raw);
+
+  // If NOT JSON (old textarea), keep simple: show each line as-is
+  if (!parsed) {
+    return raw
+      .split("\n")
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((t) => ({ day: "", off: false, slotsText: t, hasSlots: true }));
+  }
+
+  return parsed.map((d) => {
+    const dayLabel = DAY_LABEL[d.day as DayKey] ?? d.day;
+
+    if (d.off) {
+      return { day: dayLabel, off: true, slotsText: "Off", hasSlots: false };
+    }
+
+    const slotsText = d.slots
+      .filter((s) => s.start && s.end)
+      .map((s) => `${s.start}–${s.end}`)
+      .join(", ");
+
+    const hasSlots = !!slotsText;
+    return { day: dayLabel, off: false, slotsText: slotsText || "—", hasSlots };
+  });
+}
+
+function formatAvailabilityLines(raw: string | null | undefined): string[] {
+  if (!raw?.trim()) return [];
+
+  const parsed = tryParseAvailability(raw);
+  if (!parsed) {
+    // fallback for old textarea format
+    return raw.split("\n");
+  }
+
+  return parsed.map((d) => {
+    if (d.off) return `${DAY_LABEL[d.day as DayKey] ?? d.day}: Off`;
+
+    const slots = d.slots
+      .filter((s) => s.start && s.end)
+      .map((s) => `${s.start}–${s.end}`)
+      .join(", ");
+
+    return `${DAY_LABEL[d.day as DayKey] ?? d.day}: ${slots || "—"}`;
+  });
+}
+
 function StatusPill({ status }: { status: string }) {
   const s = (status || "").toUpperCase();
 
@@ -167,6 +255,77 @@ function RejectModal({
   );
 }
 
+function AvailabilityCell({ raw }: { raw: string | null }) {
+  const lines = useMemo(() => buildAvailabilityLines(raw), [raw]);
+
+  // collapsed by default: only show days with real slots
+  const active = useMemo(
+    () => lines.filter((l) => l.hasSlots && !l.off),
+    [lines]
+  );
+
+  const [expanded, setExpanded] = useState(false);
+
+  if (lines.length === 0) {
+    return <div className="text-[0.7rem] text-[rgb(var(--muted2))]">—</div>;
+  }
+
+  const shown = expanded ? lines : active;
+
+  return (
+    <div className="space-y-1">
+      {/* rows */}
+      {shown.length > 0 ? (
+        shown.map((l, i) => (
+          <div key={i} className="text-[0.72rem] leading-relaxed">
+            {l.day ? (
+              <>
+                <span
+                  className={
+                    l.hasSlots && !l.off
+                      ? "font-semibold text-[rgb(var(--fg))]"
+                      : "font-medium text-[rgb(var(--muted2))]"
+                  }
+                >
+                  {l.day}:
+                </span>{" "}
+                <span
+                  className={
+                    l.off || !l.hasSlots
+                      ? "text-[rgb(var(--muted2))]"
+                      : "text-[rgb(var(--fg))]"
+                  }
+                >
+                  {l.slotsText}
+                </span>
+              </>
+            ) : (
+              // fallback plain text lines
+              <span className="text-[rgb(var(--fg))]">{l.slotsText}</span>
+            )}
+          </div>
+        ))
+      ) : (
+        <div className="text-[0.7rem] text-[rgb(var(--muted2))]">No active slots</div>
+      )}
+
+      {/* toggle */}
+      {lines.length > active.length && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 inline-flex items-center gap-1 text-[0.7rem] font-semibold text-[rgb(var(--primary))] hover:underline"
+        >
+          {expanded ? "Hide" : "Show all"}
+          <span className="text-[rgb(var(--muted2))]">
+            ({expanded ? active.length : lines.length}/{lines.length})
+          </span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function AdminTutorApplicationsPage() {
   const [apps, setApps] = useState<AppRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -201,6 +360,12 @@ export default function AdminTutorApplicationsPage() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+  if (!notice) return;
+  const t = setTimeout(() => setNotice(null), 4000);
+  return () => clearTimeout(t);
+}, [notice]);
 
   function openReject(id: string) {
     setNotice(null);
@@ -323,16 +488,16 @@ export default function AdminTutorApplicationsPage() {
           </header>
 
           {notice && (
-            <div
-              className={`mb-4 rounded-2xl border px-3 py-3 text-xs ${
-                notice.type === "success"
-                  ? "border-emerald-300 bg-emerald-100 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200"
-                  : "border-rose-300 bg-rose-100 text-rose-950 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200"
-              }`}
-            >
-              {notice.text}
-            </div>
-          )}
+  <div
+    className={`mb-4 rounded-2xl border px-3 py-3 text-xs ${
+      notice.type === "success"
+        ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+        : "border-rose-500/30 bg-rose-500/15 text-rose-700 dark:text-rose-400"
+    }`}
+  >
+    {notice.text}
+  </div>
+)}
 
           {err && (
             <div className="mb-4 rounded-2xl border border-rose-300 bg-rose-100 px-3 py-3 text-xs text-rose-950 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
@@ -417,10 +582,10 @@ export default function AdminTutorApplicationsPage() {
                         </td>
 
                         <td className="px-4 py-4">
-                          <div className="text-xs text-[rgb(var(--fg))] whitespace-pre-wrap">
-                            {a.availability ?? "—"}
-                          </div>
-                        </td>
+  <AvailabilityCell raw={a.availability} />
+</td>
+
+
 
                         <td className="px-4 py-4">
                           <StatusPill status={a.status} />

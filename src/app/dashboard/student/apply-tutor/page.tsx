@@ -2,14 +2,228 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 type AppStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+type DayKey = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
+
+const DAY_LABEL: Record<DayKey, string> = {
+  MON: "Monday",
+  TUE: "Tuesday",
+  WED: "Wednesday",
+  THU: "Thursday",
+  FRI: "Friday",
+  SAT: "Saturday",
+  SUN: "Sunday",
+};
+
+type TimeSlot = { start: string; end: string };
+type DayAvailability = { day: DayKey; off: boolean; slots: TimeSlot[] };
+type AvailabilityState = DayAvailability[];
+
+function makeDefaultAvailability(): AvailabilityState {
+  return (Object.keys(DAY_LABEL) as DayKey[]).map((day) => ({
+    day,
+    off: false,
+    slots: [{ start: "20:00", end: "22:00" }], // default example
+  }));
+}
+
+function isValidSlot(slot: TimeSlot) {
+  // requires both and start < end
+  if (!slot.start || !slot.end) return false;
+  return slot.start < slot.end;
+}
+
+function validateAvailability(av: AvailabilityState): { ok: boolean; message?: string } {
+  // Must have at least one valid slot across the week (unless all off)
+  const anyDayOpen = av.some((d) => !d.off);
+  if (!anyDayOpen) return { ok: false, message: "Please keep at least one day available (not Off)." };
+
+  const anyValid = av.some((d) => !d.off && d.slots.some(isValidSlot));
+  if (!anyValid) return { ok: false, message: "Please add at least one valid time slot (start < end)." };
+
+  // (Optional) you can add overlap checks per day here
+  return { ok: true };
+}
+
+function availabilityToPrettyText(av: AvailabilityState) {
+  return av
+    .map((d) => {
+      if (d.off) return `${DAY_LABEL[d.day]}: Off`;
+      const slots = d.slots
+        .filter((s) => s.start && s.end)
+        .map((s) => `${s.start}–${s.end}`)
+        .join(", ");
+      return `${DAY_LABEL[d.day]}: ${slots || "—"}`;
+    })
+    .join(" • ");
+}
+
+function tryParseAvailability(value: string): AvailabilityState | null {
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return null;
+    // very light shape check
+    const ok = parsed.every(
+      (d: any) =>
+        d &&
+        typeof d.day === "string" &&
+        typeof d.off === "boolean" &&
+        Array.isArray(d.slots)
+    );
+    return ok ? (parsed as AvailabilityState) : null;
+  } catch {
+    return null;
+  }
+}
+
+function AvailabilityPicker({
+  value,
+  onChange,
+}: {
+  value: AvailabilityState;
+  onChange: (next: AvailabilityState) => void;
+}) {
+  function setDayOff(day: DayKey, off: boolean) {
+    const next = value.map((d) => {
+      if (d.day !== day) return d;
+      return {
+        ...d,
+        off,
+        // if turning off, keep slots but they won't be used; or you can clear them:
+        // slots: off ? [] : d.slots.length ? d.slots : [{ start: "", end: "" }],
+      };
+    });
+    onChange(next);
+  }
+
+  function setSlot(day: DayKey, idx: number, patch: Partial<TimeSlot>) {
+    const next = value.map((d) => {
+      if (d.day !== day) return d;
+      const slots = d.slots.map((s, i) => (i === idx ? { ...s, ...patch } : s));
+      return { ...d, slots };
+    });
+    onChange(next);
+  }
+
+  function addSlot(day: DayKey) {
+    const next = value.map((d) => {
+      if (d.day !== day) return d;
+      return { ...d, slots: [...d.slots, { start: "", end: "" }] };
+    });
+    onChange(next);
+  }
+
+  function removeSlot(day: DayKey, idx: number) {
+    const next = value.map((d) => {
+      if (d.day !== day) return d;
+      const slots = d.slots.filter((_, i) => i !== idx);
+      return { ...d, slots: slots.length ? slots : [{ start: "", end: "" }] };
+    });
+    onChange(next);
+  }
+
+  return (
+    <div className="space-y-3">
+      {(Object.keys(DAY_LABEL) as DayKey[]).map((day) => {
+        const d = value.find((x) => x.day === day)!;
+
+        return (
+          <div
+            key={day}
+            className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                {DAY_LABEL[day]}
+              </div>
+
+              <label className="flex items-center gap-2 text-xs text-[rgb(var(--muted))]">
+                <input
+                  type="checkbox"
+                  checked={d.off}
+                  onChange={(e) => setDayOff(day, e.target.checked)}
+                />
+                Off day
+              </label>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {d.off ? (
+                <div className="text-xs text-[rgb(var(--muted))]">Marked as Off.</div>
+              ) : (
+                d.slots.map((slot, idx) => {
+                  const invalid = slot.start && slot.end ? slot.start >= slot.end : false;
+
+                  return (
+                    <div key={idx} className="flex items-center gap-2">
+                      <div className="flex-1 grid grid-cols-2 gap-2">
+                        <div>
+                          <div className="mb-1 text-[11px] text-[rgb(var(--muted))]">
+                            Start
+                          </div>
+                          <input
+                            type="time"
+                            value={slot.start}
+                            onChange={(e) => setSlot(day, idx, { start: e.target.value })}
+                            className="w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2 py-2 text-xs text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary))]"
+                          />
+                        </div>
+                        <div>
+                          <div className="mb-1 text-[11px] text-[rgb(var(--muted))]">
+                            End
+                          </div>
+                          <input
+                            type="time"
+                            value={slot.end}
+                            onChange={(e) => setSlot(day, idx, { end: e.target.value })}
+                            className="w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2 py-2 text-xs text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary))]"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeSlot(day, idx)}
+                        className="rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2 py-2 text-xs text-[rgb(var(--fg))] hover:opacity-80"
+                        title="Remove slot"
+                      >
+                        ✕
+                      </button>
+
+                      {invalid && (
+                        <div className="text-[11px] text-rose-500/90">
+                          End must be after start
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+
+              {!d.off && (
+                <button
+                  type="button"
+                  onClick={() => addSlot(day)}
+                  className="mt-1 inline-flex items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:opacity-90"
+                >
+                  + Add time slot
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function ApplyTutorPage() {
   const [subjects, setSubjects] = useState("");
   const [cgpa, setCgpa] = useState("");
-  const [availability, setAvailability] = useState("");
+  const [availability, setAvailability] = useState<AvailabilityState>(makeDefaultAvailability());
+
 
   // ✅ transcript (REQUIRED)
   const [transcriptFile, setTranscriptFile] = useState<File | null>(null);
@@ -62,7 +276,10 @@ export default function ApplyTutorPage() {
       if (normalizedStatus === "REJECTED") {
         setSubjects(app.subjects ?? "");
         setCgpa(typeof app.cgpa === "number" ? String(app.cgpa) : "");
-        setAvailability(app.availability ?? "");
+        const raw = String(app.availability ?? "");
+        const parsed = raw ? tryParseAvailability(raw) : null;
+        setAvailability(parsed ?? makeDefaultAvailability());
+
         setTranscriptPath(app.transcriptPath ?? null); // if stored
       }
     } catch {
@@ -121,7 +338,9 @@ export default function ApplyTutorPage() {
       // ✅ REQUIRED checks
       if (!subjects.trim()) throw new Error("Subjects is required.");
       if (cgpaNumber === null) throw new Error("CGPA is required.");
-      if (!availability.trim()) throw new Error("Availability is required.");
+      const v = validateAvailability(availability);
+      if (!v.ok) throw new Error(v.message || "Availability is required.");
+
 
       // ✅ transcript required
       const uploadedPath = await uploadTranscript();
@@ -132,7 +351,7 @@ export default function ApplyTutorPage() {
         body: JSON.stringify({
           subjects,
           cgpa: cgpaNumber,
-          availability: availability.trim(),
+          availability: JSON.stringify(availability), 
           transcriptPath: uploadedPath,
         }),
       });
@@ -147,7 +366,7 @@ export default function ApplyTutorPage() {
       setRejectionReason(null);
       setSubjects("");
       setCgpa("");
-      setAvailability("");
+      setAvailability(makeDefaultAvailability());
       setTranscriptFile(null);
       setTranscriptPath(null);
 
@@ -281,16 +500,17 @@ export default function ApplyTutorPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-[rgb(var(--muted))]">
-              Availability (required)
-            </label>
-            <textarea
-              value={availability}
-              onChange={(e) => setAvailability(e.target.value)}
-              placeholder="Mon/Wed 8–10pm, Sat 2–5pm..."
-              className="min-h-[90px] w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary))]"
-            />
-          </div>
+  <label className="mb-1 block text-xs text-[rgb(var(--muted))]">
+    Availability (required)
+  </label>
+
+  <AvailabilityPicker value={availability} onChange={setAvailability} />
+
+  <div className="mt-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs text-[rgb(var(--muted))]">
+    <div className="font-semibold text-[rgb(var(--fg))]">Preview:</div>
+    <div className="mt-1">{availabilityToPrettyText(availability)}</div>
+  </div>
+</div>
 
           <button
             type="button"
@@ -299,7 +519,7 @@ export default function ApplyTutorPage() {
               uploadingTranscript ||
               !subjects.trim() ||
               cgpaNumber === null ||
-              !availability.trim() ||
+              !validateAvailability(availability).ok ||
               (!transcriptPath && !transcriptFile)
             }
             onClick={submit}
