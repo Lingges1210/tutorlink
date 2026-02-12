@@ -249,6 +249,28 @@ useEffect(() => {
   return () => document.removeEventListener("click", onDocClick);
 }, []);
 
+// dropdown animation mount/unmount
+const [dropdownMounted, setDropdownMounted] = useState(false);
+const [dropdownShow, setDropdownShow] = useState(false);
+
+const query = subjectInput.trim();
+const dropdownOpen = suggestOpen && query.length > 0;
+
+// animate open/close
+useEffect(() => {
+  if (dropdownOpen) {
+    setDropdownMounted(true);
+    // next frame so transition triggers
+    requestAnimationFrame(() => setDropdownShow(true));
+    return;
+  }
+
+  // closing
+  setDropdownShow(false);
+  const t = setTimeout(() => setDropdownMounted(false), 150); // match duration-150
+  return () => clearTimeout(t);
+}, [dropdownOpen]);
+
 
 function formatSubjectStrict(raw: string) {
   const s = raw.trim();
@@ -626,75 +648,147 @@ setSubjects(parsedSubjects);
         if (e.key === "Escape") setSuggestOpen(false);
       }}
       placeholder="Type subject (e.g. CPT112 : Discrete Structures)"
-      className={
-        "w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] " +
-        "px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none " +
-        (suggestOpen && filteredSuggestions.length > 0
-          ? "focus:border-[rgb(var(--primary))] rounded-b-none"
-          : "focus:border-[rgb(var(--primary))]")
-      }
+      className={[
+  "w-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2",
+  "text-sm text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary))]",
+  dropdownMounted
+    ? "rounded-t-md rounded-b-none border-b-0"
+    : "rounded-md",
+].join(" ")}
+
+
     />
 
     {/* dropdown (attached) */}
-    {suggestOpen && filteredSuggestions.length > 0 && (
+    {/* dropdown (animated + attached + no results) */}
+{/* dropdown (animated + attached + no results) */}
+{dropdownMounted && (
   <div
-    className="
-      absolute top-full z-50
-      w-full
-      -mt-[1px]
-      overflow-hidden
-      rounded-b-md
-      border border-[rgb(var(--border))]
-      bg-[rgb(var(--card))]
-      shadow-[0_20px_50px_rgb(var(--shadow)/0.12)]
-    "
+    style={{
+      position: "absolute",
+      left: 0,
+      right: 0,
+      top: "100%",
+      zIndex: 50,
+      overflow: "hidden",
+      borderBottomLeftRadius: 6,
+      borderBottomRightRadius: 6,
+      border: "1px solid rgb(var(--border))",
+      borderTop: "0px",
+      background: "rgb(var(--card))",
+      boxShadow: "0 20px 50px rgb(var(--shadow) / 0.12)",
+      transformOrigin: "top",
+      transition: "opacity 150ms ease-out, transform 150ms ease-out",
+      opacity: dropdownShow ? 1 : 0,
+      transform: dropdownShow ? "translateY(0px)" : "translateY(-4px)",
+      pointerEvents: dropdownShow ? "auto" : "none",
+    }}
   >
-    <div className="max-h-56 overflow-auto py-1">
-      {filteredSuggestions.map((raw) => {
-        const formatted = formatSubjectStrict(raw) || raw;
-        const [codeRaw, titleRaw] = formatted.split(":");
-        const code = (codeRaw ?? "").trim().toUpperCase();
-        const title = (titleRaw ?? "").trim();
+    {/* ✅ SCROLLABLE AFTER 3 ROWS (3 x 44px = 132px) */}
+    <div
+      style={{
+        maxHeight: 132,
+        overflowY: "auto",
+        overscrollBehavior: "contain",
+      }}
+    >
+      {filteredSuggestions.length > 0 ? (
+        filteredSuggestions.map((raw) => {
+          const formatted = formatSubjectStrict(raw) || raw;
+          const [codeRaw, titleRaw] = formatted.split(":");
+          const code = (codeRaw ?? "").trim().toUpperCase();
+          const title = (titleRaw ?? "").trim();
 
-        return (
-          <button
-            key={raw}
-            type="button"
-            onClick={() => addSubject(formatted)}
-            className="
-              w-full px-3 py-2 text-left
-              transition
-              hover:bg-[rgb(var(--card2))]
-            "
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              {/* ✅ wider pill */}
-              <span
-                className="
-                  shrink-0
-                  min-w-[72px]
-                  text-center
-                  rounded-md
-                  border border-[rgb(var(--primary)/0.25)]
-                  bg-[rgb(var(--primary)/0.12)]
-                  px-3 py-1
-                  text-[11px] font-semibold tracking-wide
-                  text-[rgb(var(--primary))]
-                "
+          return (
+            <button
+              key={raw}
+              type="button"
+              onClick={() => addSubject(formatted)}
+              style={{
+                width: "100%",
+                height: 44, // ✅ fixed row height
+                padding: "0 12px",
+                textAlign: "left",
+                display: "flex",
+                alignItems: "center",
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "rgb(var(--card2))";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "transparent";
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  minWidth: 0,
+                  width: "100%",
+                }}
               >
-                {code}
-              </span>
+                {/* ✅ code pill */}
+                <span
+                  style={{
+                    minWidth: 84,
+                    textAlign: "center",
+                    borderRadius: 6,
+                    border: "1px solid rgb(var(--primary) / 0.25)",
+                    background: "rgb(var(--primary) / 0.12)",
+                    padding: "6px 12px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: "0.06em",
+                    color: "rgb(var(--primary))",
+                    flexShrink: 0,
+                  }}
+                >
+                  {code}
+                </span>
 
-              <span className="truncate text-sm font-medium text-[rgb(var(--fg))]">
-                {title || formatted}
-              </span>
-            </div>
-          </button>
-        );
-      })}
+                {/* ✅ title */}
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "rgb(var(--fg))",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    minWidth: 0,
+                  }}
+                >
+                  {title || formatted}
+                </span>
+              </div>
+            </button>
+          );
+        })
+      ) : (
+        <div
+          style={{
+            height: 44, // ✅ same row height
+            padding: "0 12px",
+            display: "flex",
+            alignItems: "center",
+            fontSize: 14,
+            color: "rgb(var(--muted))",
+          }}
+        >
+          No results found
+        </div>
+      )}
     </div>
   </div>
 )}
+
+
 
   </div>
 
