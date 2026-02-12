@@ -565,77 +565,145 @@ setSubjects(parsedSubjects);
     Subjects (required)
   </label>
 
-  {/* tags */}
+  {/* chips */}
   {subjects.length > 0 && (
     <div className="mb-2 flex flex-wrap gap-2">
       {subjects.map((s) => (
         <span
           key={s}
-          className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1 text-xs text-[rgb(var(--fg))]"
+          className="
+            group inline-flex items-center gap-2
+            rounded-full px-4 py-1.5
+            text-xs font-medium
+            transition-all duration-200
+            bg-gradient-to-r
+            from-[rgb(var(--primary)/0.18)]
+            to-[rgb(var(--primary)/0.10)]
+            text-[rgb(var(--fg))]
+            border border-[rgb(var(--primary)/0.25)]
+            hover:scale-[1.03]
+            hover:shadow-md
+          "
         >
-          {s}
+          <span className="tracking-tight">{s}</span>
+
           <button
             type="button"
             onClick={() => removeSubject(s)}
-            className="text-[rgb(var(--muted2))] hover:text-[rgb(var(--fg))]"
+            className="
+              flex items-center justify-center
+              w-4 h-4 rounded-full
+              bg-[rgb(var(--primary)/0.15)]
+              text-[rgb(var(--primary))]
+              transition
+              group-hover:bg-[rgb(var(--primary))]
+              group-hover:text-white
+            "
             title="Remove"
           >
-            ✕
+            ×
           </button>
         </span>
       ))}
     </div>
   )}
 
-  {/* ✅ input + dropdown MUST be together */}
-  <div className="relative" data-subject-wrap>
-
+  {/* input + dropdown together */}
+  <div className="relative w-full" data-subject-wrap>
     <input
-  value={subjectInput}
-  onChange={(e) => {
-    const v = e.target.value;
-    setSubjectInput(v);
-    setSuggestOpen(v.trim().length > 0); // ✅ only open when typing
-  }}
-  onFocus={() => {
-    setSuggestOpen(subjectInput.trim().length > 0); // ✅ only if already has text
-  }}
-  onKeyDown={(e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addSubject(subjectInput);
-    }
-    if (e.key === "Escape") setSuggestOpen(false);
-  }}
-  placeholder="Type subject (e.g. CPT112 : Discrete Structures)"
-  className="w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary))]"
-/>
+      value={subjectInput}
+      onChange={(e) => {
+        const v = e.target.value;
+        setSubjectInput(v);
+        setSuggestOpen(v.trim().length > 0);
+      }}
+      onFocus={() => setSuggestOpen(subjectInput.trim().length > 0)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          addSubject(subjectInput);
+        }
+        if (e.key === "Escape") setSuggestOpen(false);
+      }}
+      placeholder="Type subject (e.g. CPT112 : Discrete Structures)"
+      className={
+        "w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] " +
+        "px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none " +
+        (suggestOpen && filteredSuggestions.length > 0
+          ? "focus:border-[rgb(var(--primary))] rounded-b-none"
+          : "focus:border-[rgb(var(--primary))]")
+      }
+    />
 
-    {/* ✅ dropdown attached right under input */}
+    {/* dropdown (attached) */}
     {suggestOpen && filteredSuggestions.length > 0 && (
-  <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_20px_60px_rgb(var(--shadow)/0.12)]">
-    {filteredSuggestions.map((s) => (
-      <button
-        key={s}
-        type="button"
-        onClick={() => addSubject(s)}
-        className="w-full px-3 py-2 text-left text-sm text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]"
-      >
-        {s}
-      </button>
-    ))}
+  <div
+    className="
+      absolute top-full z-50
+      w-full
+      -mt-[1px]
+      overflow-hidden
+      rounded-b-md
+      border border-[rgb(var(--border))]
+      bg-[rgb(var(--card))]
+      shadow-[0_20px_50px_rgb(var(--shadow)/0.12)]
+    "
+  >
+    <div className="max-h-56 overflow-auto py-1">
+      {filteredSuggestions.map((raw) => {
+        const formatted = formatSubjectStrict(raw) || raw;
+        const [codeRaw, titleRaw] = formatted.split(":");
+        const code = (codeRaw ?? "").trim().toUpperCase();
+        const title = (titleRaw ?? "").trim();
+
+        return (
+          <button
+            key={raw}
+            type="button"
+            onClick={() => addSubject(formatted)}
+            className="
+              w-full px-3 py-2 text-left
+              transition
+              hover:bg-[rgb(var(--card2))]
+            "
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              {/* ✅ wider pill */}
+              <span
+                className="
+                  shrink-0
+                  min-w-[72px]
+                  text-center
+                  rounded-md
+                  border border-[rgb(var(--primary)/0.25)]
+                  bg-[rgb(var(--primary)/0.12)]
+                  px-3 py-1
+                  text-[11px] font-semibold tracking-wide
+                  text-[rgb(var(--primary))]
+                "
+              >
+                {code}
+              </span>
+
+              <span className="truncate text-sm font-medium text-[rgb(var(--fg))]">
+                {title || formatted}
+              </span>
+            </div>
+          </button>
+        );
+      })}
+    </div>
   </div>
 )}
 
   </div>
 
-  {/* tip BELOW input+dropdown (so dropdown doesn't look detached) */}
+  {/* tip */}
   <div className="mt-1 text-[11px] text-[rgb(var(--muted2))]">
     Tip: Use <b>CPT112 : Discrete Structures</b> then press <b>Enter</b>.
   </div>
 
-  {/* optional: show strict error if you added it */}
-  {typeof subjectError !== "undefined" && subjectError && (
+  {subjectError && (
     <div className="mt-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-600">
       {subjectError}
     </div>
