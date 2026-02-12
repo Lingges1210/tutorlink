@@ -124,6 +124,8 @@ function AvailabilityPicker({
     onChange(next);
   }
 
+  
+
   return (
     <div className="space-y-3">
       {(Object.keys(DAY_LABEL) as DayKey[]).map((day) => {
@@ -220,10 +222,108 @@ function AvailabilityPicker({
 }
 
 export default function ApplyTutorPage() {
-  const [subjects, setSubjects] = useState("");
+  const [subjects, setSubjects] = useState<string[]>([]);
+const [subjectInput, setSubjectInput] = useState("");
+const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
+const [suggestOpen, setSuggestOpen] = useState(false);
   const [cgpa, setCgpa] = useState("");
   const [availability, setAvailability] = useState<AvailabilityState>(makeDefaultAvailability());
 
+function normalizeSubject(s: string) {
+  return s.replace(/\s+/g, " ").trim();
+}
+
+function subjectKey(raw: string) {
+  // take part before ":" or "-" as the main code (CPT112)
+  const s = normalizeSubject(raw);
+  const head = s.split(/[:\-]/)[0] ?? s;
+  return head.replace(/\s+/g, "").toLowerCase(); // "CPT112" => "cpt112"
+}
+
+useEffect(() => {
+  function onDocClick(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    if (!target.closest("[data-subject-wrap]")) setSuggestOpen(false);
+  }
+  document.addEventListener("click", onDocClick);
+  return () => document.removeEventListener("click", onDocClick);
+}, []);
+
+
+function formatSubjectStrict(raw: string) {
+  const s = raw.trim();
+  if (!s) return "";
+
+  // allow ":" or "-" as separator
+  const parts = s.split(/[:\-]/);
+
+  const code = (parts[0] ?? "").trim().toUpperCase();
+  const titleRaw = (parts[1] ?? "").trim();
+
+  // ✅ MUST have BOTH code + title
+  if (!code || !titleRaw) return "";
+
+  // Basic title formatting (capitalize words)
+  const title = titleRaw
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+
+  return `${code} : ${title}`;
+}
+
+const [subjectError, setSubjectError] = useState<string | null>(null);
+
+
+function addSubject(raw: string) {
+  const formatted = formatSubjectStrict(raw);
+
+  if (!formatted) {
+    setSubjectError("Please enter subject in this format: CPT112 : Discrete Structures");
+    return;
+  }
+
+  setSubjects((prev) => {
+    const exists = prev.some((x) => x.toLowerCase() === formatted.toLowerCase());
+    return exists ? prev : [...prev, formatted];
+  });
+
+  setSubjectInput("");
+  setSuggestOpen(false);
+  setSubjectError(null);
+}
+
+
+function removeSubject(s: string) {
+  setSubjects((prev) => prev.filter((x) => x !== s));
+}
+
+const filteredSuggestions = useMemo(() => {
+  const q = subjectInput.trim().toLowerCase();
+  if (!q) return []; // ✅ don’t show anything until typing
+
+  return subjectSuggestions
+    .filter((s) => s.toLowerCase().includes(q))
+    .filter((s) => !subjects.some((x) => x.toLowerCase() === s.toLowerCase()))
+    .slice(0, 8);
+}, [subjectInput, subjectSuggestions, subjects]);
+
+
+useEffect(() => {
+  (async () => {
+    try {
+      const res = await fetch("/api/tutor/subject-suggestions", { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success && Array.isArray(data.suggestions)) {
+        setSubjectSuggestions(data.suggestions);
+      }
+    } catch {
+      // ignore
+    }
+  })();
+}, []);
 
   // ✅ transcript (REQUIRED)
   const [transcriptFile, setTranscriptFile] = useState<File | null>(null);
@@ -274,7 +374,18 @@ export default function ApplyTutorPage() {
 
       // Prefill fields ONLY for rejected (so they can edit & resubmit)
       if (normalizedStatus === "REJECTED") {
-        setSubjects(app.subjects ?? "");
+        const rawSubjects = String(app.subjects ?? "");
+
+// ✅ normalize bullets into newlines first (avoid unicode inside regex literal)
+const normalized = rawSubjects.replace(/•/g, "\n");
+
+const parsedSubjects = normalized
+  .split(/,|\r?\n|;/g)
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+setSubjects(parsedSubjects);
+
         setCgpa(typeof app.cgpa === "number" ? String(app.cgpa) : "");
         const raw = String(app.availability ?? "");
         const parsed = raw ? tryParseAvailability(raw) : null;
@@ -336,7 +447,7 @@ export default function ApplyTutorPage() {
 
     try {
       // ✅ REQUIRED checks
-      if (!subjects.trim()) throw new Error("Subjects is required.");
+      if (subjects.length === 0) throw new Error("Subjects is required.");
       if (cgpaNumber === null) throw new Error("CGPA is required.");
       const v = validateAvailability(availability);
       if (!v.ok) throw new Error(v.message || "Availability is required.");
@@ -364,7 +475,7 @@ export default function ApplyTutorPage() {
 
       setExistingStatus("PENDING");
       setRejectionReason(null);
-      setSubjects("");
+      setSubjects([]);
       setCgpa("");
       setAvailability(makeDefaultAvailability());
       setTranscriptFile(null);
@@ -421,127 +532,204 @@ export default function ApplyTutorPage() {
   }
 
   return (
-    <div className="max-w-xl space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold text-[rgb(var(--fg))]">Apply as Tutor</h1>
-        <p className="mt-1 text-xs text-[rgb(var(--muted))]">
-          Fill in all required details. Admin will review your request.
-        </p>
-      </div>
+  <div className="max-w-xl space-y-5">
+    <div>
+      <h1 className="text-xl font-semibold text-[rgb(var(--fg))]">Apply as Tutor</h1>
+      <p className="mt-1 text-xs text-[rgb(var(--muted))]">
+        Fill in all required details. Admin will review your request.
+      </p>
+    </div>
 
-      {existingStatus === "REJECTED" && (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-[rgb(var(--fg))]">
-          ❌ Your previous application was <b>rejected</b>.
-          <div className="mt-1 text-xs text-[rgb(var(--muted))]">
-            You may edit your details below and resubmit.
-          </div>
-
-          <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-[rgb(var(--fg))]">
-            <span className="font-semibold">Reason:</span>{" "}
-            {rejectionReason?.trim()
-              ? rejectionReason
-              : "No reason provided. Please improve your details and resubmit."}
-          </div>
+    {existingStatus === "REJECTED" && (
+      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-[rgb(var(--fg))]">
+        ❌ Your previous application was <b>rejected</b>.
+        <div className="mt-1 text-xs text-[rgb(var(--muted))]">
+          You may edit your details below and resubmit.
         </div>
-      )}
 
-      <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card) / 0.7)] p-5">
-        <div className="space-y-4">
-          <div>
-            <label className="mb-1 block text-xs text-[rgb(var(--muted))]">
-              Subjects (required)
-            </label>
-            <input
-              value={subjects}
-              onChange={(e) => setSubjects(e.target.value)}
-              placeholder="e.g. Discrete Math, Programming II"
-              className="w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary))]"
-            />
-          </div>
+        <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-[rgb(var(--fg))]">
+          <span className="font-semibold">Reason:</span>{" "}
+          {rejectionReason?.trim()
+            ? rejectionReason
+            : "No reason provided. Please improve your details and resubmit."}
+        </div>
+      </div>
+    )}
 
-          <div>
-            <label className="mb-1 block text-xs text-[rgb(var(--muted))]">
-              CGPA (required)
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              value={cgpa}
-              onChange={(e) => setCgpa(e.target.value)}
-              placeholder="3.80"
-              className="w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary))]"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs text-[rgb(var(--muted))]">
-              Academic Transcript (required)
-            </label>
-            <input
-              type="file"
-              accept=".pdf,image/png,image/jpeg,image/jpg"
-              onChange={(e) => onPickTranscript(e.target.files?.[0] ?? null)}
-              className="w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs text-[rgb(var(--fg))] outline-none"
-            />
-
-            <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-[rgb(var(--muted))]">
-              <div className="truncate">
-                {transcriptPath
-                  ? `✅ Uploaded: ${transcriptPath}`
-                  : transcriptFile
-                  ? `Selected: ${transcriptFile.name}`
-                  : "PDF/PNG/JPG • Max 8MB"}
-              </div>
-
-              {uploadingTranscript && (
-                <div className="shrink-0 text-amber-500/90">Uploading…</div>
-              )}
-            </div>
-          </div>
-
-          <div>
+    {/* ✅ PUT YOUR FORM BACK INSIDE THIS CARD */}
+    <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card) / 0.7)] p-5">
+      <div className="space-y-4">
+        {/* SUBJECTS */}
+<div>
   <label className="mb-1 block text-xs text-[rgb(var(--muted))]">
-    Availability (required)
+    Subjects (required)
   </label>
 
-  <AvailabilityPicker value={availability} onChange={setAvailability} />
-
-  <div className="mt-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs text-[rgb(var(--muted))]">
-    <div className="font-semibold text-[rgb(var(--fg))]">Preview:</div>
-    <div className="mt-1">{availabilityToPrettyText(availability)}</div>
-  </div>
-</div>
-
+  {/* tags */}
+  {subjects.length > 0 && (
+    <div className="mb-2 flex flex-wrap gap-2">
+      {subjects.map((s) => (
+        <span
+          key={s}
+          className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1 text-xs text-[rgb(var(--fg))]"
+        >
+          {s}
           <button
             type="button"
-            disabled={
-              loading ||
-              uploadingTranscript ||
-              !subjects.trim() ||
-              cgpaNumber === null ||
-              !validateAvailability(availability).ok ||
-              (!transcriptPath && !transcriptFile)
-            }
-            onClick={submit}
-            className="w-full rounded-md bg-[rgb(var(--primary))] py-2 text-sm font-semibold text-white disabled:opacity-60"
+            onClick={() => removeSubject(s)}
+            className="text-[rgb(var(--muted2))] hover:text-[rgb(var(--fg))]"
+            title="Remove"
           >
-            {loading ? "Submitting..." : "Submit Application"}
+            ✕
           </button>
+        </span>
+      ))}
+    </div>
+  )}
 
-          {statusMsg && (
-            <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs text-[rgb(var(--fg))]">
-              {statusMsg}
-            </div>
-          )}
+  {/* ✅ input + dropdown MUST be together */}
+  <div className="relative" data-subject-wrap>
 
-          <Link
-            href="/dashboard/student"
-            className="block text-center text-xs text-[rgb(var(--primary))] hover:underline"
-          >
-            Back to dashboard
-          </Link>
+    <input
+  value={subjectInput}
+  onChange={(e) => {
+    const v = e.target.value;
+    setSubjectInput(v);
+    setSuggestOpen(v.trim().length > 0); // ✅ only open when typing
+  }}
+  onFocus={() => {
+    setSuggestOpen(subjectInput.trim().length > 0); // ✅ only if already has text
+  }}
+  onKeyDown={(e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addSubject(subjectInput);
+    }
+    if (e.key === "Escape") setSuggestOpen(false);
+  }}
+  placeholder="Type subject (e.g. CPT112 : Discrete Structures)"
+  className="w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary))]"
+/>
+
+    {/* ✅ dropdown attached right under input */}
+    {suggestOpen && filteredSuggestions.length > 0 && (
+  <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_20px_60px_rgb(var(--shadow)/0.12)]">
+    {filteredSuggestions.map((s) => (
+      <button
+        key={s}
+        type="button"
+        onClick={() => addSubject(s)}
+        className="w-full px-3 py-2 text-left text-sm text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]"
+      >
+        {s}
+      </button>
+    ))}
+  </div>
+)}
+
+  </div>
+
+  {/* tip BELOW input+dropdown (so dropdown doesn't look detached) */}
+  <div className="mt-1 text-[11px] text-[rgb(var(--muted2))]">
+    Tip: Use <b>CPT112 : Discrete Structures</b> then press <b>Enter</b>.
+  </div>
+
+  {/* optional: show strict error if you added it */}
+  {typeof subjectError !== "undefined" && subjectError && (
+    <div className="mt-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-600">
+      {subjectError}
+    </div>
+  )}
+</div>
+
+
+        {/* CGPA */}
+        <div>
+          <label className="mb-1 block text-xs text-[rgb(var(--muted))]">
+            CGPA (required)
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            value={cgpa}
+            onChange={(e) => setCgpa(e.target.value)}
+            placeholder="3.80"
+            className="w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary))]"
+          />
         </div>
+
+        {/* TRANSCRIPT */}
+        <div>
+          <label className="mb-1 block text-xs text-[rgb(var(--muted))]">
+            Academic Transcript (required)
+          </label>
+          <input
+            type="file"
+            accept=".pdf,image/png,image/jpeg,image/jpg"
+            onChange={(e) => onPickTranscript(e.target.files?.[0] ?? null)}
+            className="w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs text-[rgb(var(--fg))] outline-none"
+          />
+
+          <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-[rgb(var(--muted))]">
+            <div className="truncate">
+              {transcriptPath
+                ? `✅ Uploaded: ${transcriptPath}`
+                : transcriptFile
+                ? `Selected: ${transcriptFile.name}`
+                : "PDF/PNG/JPG • Max 8MB"}
+            </div>
+
+            {uploadingTranscript && (
+              <div className="shrink-0 text-amber-500/90">Uploading…</div>
+            )}
+          </div>
+        </div>
+
+        {/* AVAILABILITY */}
+        <div>
+          <label className="mb-1 block text-xs text-[rgb(var(--muted))]">
+            Availability (required)
+          </label>
+
+          <AvailabilityPicker value={availability} onChange={setAvailability} />
+
+          <div className="mt-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs text-[rgb(var(--muted))]">
+            <div className="font-semibold text-[rgb(var(--fg))]">Preview:</div>
+            <div className="mt-1">{availabilityToPrettyText(availability)}</div>
+          </div>
+        </div>
+
+        {/* SUBMIT */}
+        <button
+          type="button"
+          disabled={
+            loading ||
+            uploadingTranscript ||
+            subjects.length === 0 ||
+            cgpaNumber === null ||
+            !validateAvailability(availability).ok ||
+            (!transcriptPath && !transcriptFile)
+          }
+          onClick={submit}
+          className="w-full rounded-md bg-[rgb(var(--primary))] py-2 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {loading ? "Submitting..." : "Submit Application"}
+        </button>
+
+        {statusMsg && (
+          <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs text-[rgb(var(--fg))]">
+            {statusMsg}
+          </div>
+        )}
+
+        <Link
+          href="/dashboard/student"
+          className="block text-center text-xs text-[rgb(var(--primary))] hover:underline"
+        >
+          Back to dashboard
+        </Link>
       </div>
     </div>
-  );
+  </div>
+);
 }
