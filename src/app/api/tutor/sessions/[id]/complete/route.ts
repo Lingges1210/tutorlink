@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
-export async function POST(_: Request, { params }: { params: { id: string } }) {
+export async function POST(
+  req: Request,
+  ctx: { params: Promise<{ id: string }> }
+) {
+  const { id } = await ctx.params;
+
   const supabase = await supabaseServerComponent();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user?.email) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
@@ -33,7 +38,7 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
   }
 
   const session = await prisma.session.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: {
       id: true,
       tutorId: true,

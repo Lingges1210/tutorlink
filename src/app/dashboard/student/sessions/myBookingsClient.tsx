@@ -108,19 +108,39 @@ export default function MyBookingsClient() {
 
   return (
     <div className="space-y-6">
-      <div
-        className="
-          rounded-3xl border p-6
-          border-[rgb(var(--border))]
-          bg-[rgb(var(--card) / 0.7)]
-          shadow-[0_20px_60px_rgb(var(--shadow)/0.10)]
-        "
-      >
-        <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">My Bookings</h1>
-        <p className="mt-1 text-sm text-[rgb(var(--muted))]">
-          Track your session requests and manage reschedules/cancellations.
-        </p>
-      </div>
+     <div
+  className="
+    rounded-3xl border p-6
+    border-[rgb(var(--border))]
+    bg-[rgb(var(--card) / 0.7)]
+    shadow-[0_20px_60px_rgb(var(--shadow)/0.10)]
+  "
+>
+  <div className="flex items-center justify-between gap-4">
+    <div>
+      <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">
+        My Bookings
+      </h1>
+      <p className="mt-1 text-sm text-[rgb(var(--muted))]">
+        Track your session requests and manage reschedules/cancellations.
+      </p>
+    </div>
+
+    <a
+      href="/dashboard/student/sessions/calendar"
+      className="
+        inline-flex items-center justify-center
+        rounded-md px-4 py-2 text-xs font-semibold
+        text-white bg-[rgb(var(--primary))]
+        transition-all duration-200
+        hover:-translate-y-0.5
+        hover:shadow-[0_8px_24px_rgb(var(--shadow)/0.35)]
+      "
+    >
+      📅 Open Calendar
+    </a>
+  </div>
+</div>
 
       {msg && (
         <div className="rounded-2xl border p-4 border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] text-sm text-[rgb(var(--fg))]">

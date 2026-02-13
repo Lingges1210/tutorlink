@@ -3,9 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
 export async function POST(
-  _: Request,
-  { params }: { params: { id: string } }
+  req: Request,
+  ctx: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await ctx.params;
+
   const supabase = await supabaseServerComponent();
   const {
     data: { user },
@@ -42,7 +44,7 @@ export async function POST(
 
   // ✅ Need scheduledAt + endsAt for conflict checks
   const session = await prisma.session.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: {
       id: true,
       tutorId: true,
