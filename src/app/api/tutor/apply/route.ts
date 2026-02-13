@@ -23,10 +23,6 @@ export async function POST(req: Request) {
   const transcriptPath =
     typeof body.transcriptPath === "string" ? body.transcriptPath.trim() : "";
 
-  // ✅ Required fields (your latest requirement)
-  if (!subjects) {
-    return NextResponse.json({ success: false, message: "Subjects are required" }, { status: 400 });
-  }
 
   if (cgpa === null || !Number.isFinite(cgpa)) {
     return NextResponse.json({ success: false, message: "CGPA is required" }, { status: 400 });

@@ -33,13 +33,6 @@ type TutorAppRow = {
   };
 };
 
-const statCards = [
-  { label: "Total Users", value: "1,248", subtitle: "Registered students & tutors in TutorLink" },
-  { label: "Active Tutors", value: "74", subtitle: "Verified tutors with at least 1 session" },
-  { label: "Sessions This Week", value: "132", subtitle: "Completed peer tutoring sessions" },
-  { label: "SOS Requests", value: "9", subtitle: "Urgent academic help requests" },
-];
-
 const weeklySessions = [
   { day: "Mon", value: 18 },
   { day: "Tue", value: 24 },
@@ -120,6 +113,34 @@ export default function AdminPage() {
     () => tutorApps.filter((a) => String(a.status || "").toUpperCase() === "PENDING").slice(0, 5),
     [tutorApps]
   );
+
+  const [totalUsers, setTotalUsers] = useState<number>(0);
+  const [activeTutors, setActiveTutors] = useState<number>(0);
+
+  useEffect(() => {
+  const fetchStats = async () => {
+    try {
+      const res = await fetch("/api/admin/stats");
+      const data = await res.json();
+
+      if (data.success) {
+        setTotalUsers(data.totalUsers);
+        setActiveTutors(data.activeTutors);
+      }
+    } catch (err) {
+      console.error("Failed to load stats");
+    }
+  };
+
+  fetchStats();
+}, []);
+
+const statCards = [
+  { label: "Total Users", value: totalUsers },
+  { label: "Active Tutors", value: activeTutors },
+  { label: "Sessions This Week", value: "132", subtitle: "Completed peer tutoring sessions" },
+  { label: "SOS Requests", value: "9", subtitle: "Urgent academic help requests" },
+];
 
   async function loadQueue() {
     setQueueLoading(true);
