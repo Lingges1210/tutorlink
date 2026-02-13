@@ -14,7 +14,16 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}));
 
-  const subjects = typeof body.subjects === "string" ? body.subjects.trim() : "";
+  const subjects =
+  Array.isArray(body.subjects)
+    ? body.subjects
+        .map((s: unknown) => (typeof s === "string" ? s.trim() : ""))
+        .filter(Boolean)
+        .join("\n")
+    : typeof body.subjects === "string"
+    ? body.subjects.trim()
+    : "";
+
   const cgpa = typeof body.cgpa === "number" ? body.cgpa : null;
   const availability =
     typeof body.availability === "string" ? body.availability.trim() : "";
