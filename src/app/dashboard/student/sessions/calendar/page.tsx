@@ -419,52 +419,142 @@ export default function StudentSessionCalendarPage() {
                 font-size: 12px;
               }
 
-              /* ================= DARK MODE CALENDAR ================= */
+             /* ================= DARK MODE CALENDAR ================= */
 
 .dark .rbc-calendar {
   background: rgb(var(--card));
 }
 
+/* Main container */
 .dark .rbc-time-view,
 .dark .rbc-month-view {
   background: rgb(var(--card));
-  border: 1px solid rgb(var(--border));
+  border: 1px solid rgb(60 75 100 / 0.55) !important;
 }
 
+/* Header row */
 .dark .rbc-header,
 .dark .rbc-time-header {
   background: rgb(var(--card2));
   color: rgb(var(--muted));
-  border-bottom: 1px solid rgb(var(--border));
+  border-bottom: 1px solid rgb(60 75 100 / 0.55) !important;
 }
 
+/* Top separator (time grid) */
 .dark .rbc-time-content {
-  border-top: 1px solid rgb(var(--border));
+  border-top: 1px solid rgb(60 75 100 / 0.55) !important;
+  border-left: 0 !important; /* kill accidental bright left edge */
 }
 
+/* Horizontal grid lines */
 .dark .rbc-timeslot-group {
-  border-bottom: 1px solid rgb(var(--border));
+  border-bottom: 1px solid rgb(60 75 100 / 0.45) !important;
 }
 
+/* Smaller inner slot lines */
+.dark .rbc-time-slot {
+  border-top: 1px solid rgb(60 75 100 / 0.35) !important;
+}
+
+/* Vertical grid lines (day columns) */
+.dark .rbc-day-bg + .rbc-day-bg {
+  border-left: 1px solid rgb(60 75 100 / 0.45) !important;
+}
+
+/* FIX bright vertical column line (deep wrapper) */
+.dark .rbc-time-content > * + * > * {
+  border-left: 1px solid rgb(60 75 100 / 0.45) !important;
+}
+
+/* Header vertical separators */
+.dark .rbc-time-header-content > * + * {
+  border-left: 1px solid rgb(60 75 100 / 0.45) !important;
+}
+
+/* Left divider (time gutter → day columns) */
+.dark .rbc-time-gutter,
+.dark .rbc-time-header-gutter {
+  border-right: 1px solid rgb(60 75 100 / 0.45) !important;
+  border-left: 0 !important;
+}
+
+/* Sometimes header wrapper draws its own left line */
+.dark .rbc-time-header-content {
+  border-left: 1px solid rgb(60 75 100 / 0.45) !important;
+  border-top: 0 !important; /* prevent top-left “L” seam */
+}
+
+/* kill the last bright top-left seam (double borders) */
+.dark .rbc-time-header,
+.dark .rbc-time-header-gutter {
+  border-top: 0 !important;
+}
+
+/* Extra guard for the seam between gutter and grid */
+.dark .rbc-time-header-gutter + .rbc-time-header-content,
+.dark .rbc-time-gutter + .rbc-day-slot {
+  border-left: 1px solid rgb(60 75 100 / 0.45) !important;
+}
+
+/* Off range background */
+.dark .rbc-off-range-bg {
+  background: rgb(30 40 60 / 0.35);
+}
+
+/* Today column highlight */
+.dark .rbc-today {
+  background: rgb(var(--primary) / 0.08);
+}
+
+/* Time labels */
 .dark .rbc-time-gutter,
 .dark .rbc-label {
   color: rgb(var(--muted2));
 }
 
-.dark .rbc-off-range-bg {
-  background: rgb(var(--card2) / 0.5);
+/* IMPORTANT: force any leftover default borders (the “still got” issue) */
+.dark .rbc-time-view,
+.dark .rbc-time-view .rbc-time-header,
+.dark .rbc-time-view .rbc-time-header-content,
+.dark .rbc-time-view .rbc-time-header-gutter,
+.dark .rbc-time-view .rbc-time-content,
+.dark .rbc-time-view .rbc-header,
+.dark .rbc-time-view .rbc-timeslot-group,
+.dark .rbc-time-view .rbc-day-bg,
+.dark .rbc-time-view .rbc-day-slot,
+.dark .rbc-time-view .rbc-time-gutter {
+  border-color: rgb(60 75 100 / 0.45) !important;
 }
 
-.dark .rbc-day-bg + .rbc-day-bg {
-  border-left: 1px solid rgb(var(--border));
+/* FIX: the last “right edge” bright seam (before scrollbar) */
+.dark .rbc-time-view .rbc-time-header-content,
+.dark .rbc-time-view .rbc-time-content {
+  box-shadow: inset -1px 0 0 rgb(60 75 100 / 0.45) !important;
 }
 
-.dark .rbc-today {
-  background: rgb(var(--primary) / 0.08);
+/* If the header last column still shows a bright line */
+.dark .rbc-time-header-content .rbc-header:last-child {
+  border-right: 0 !important;
+  box-shadow: inset -1px 0 0 rgb(60 75 100 / 0.45) !important;
 }
 
-.dark .rbc-event {
-  backdrop-filter: blur(8px);
+/* ================= AGENDA VIEW DARK FIX ================= */
+
+.dark .rbc-agenda-view table,
+.dark .rbc-agenda-view th,
+.dark .rbc-agenda-view td {
+  border-color: rgb(60 75 100 / 0.45) !important;
+}
+
+/* Remove bright vertical divider between columns */
+.dark .rbc-agenda-view th + th,
+.dark .rbc-agenda-view td + td {
+  border-left: 1px solid rgb(60 75 100 / 0.45) !important;
+}
+
+/* Make entire agenda background consistent */
+.dark .rbc-agenda-view table {
+  background: rgb(var(--card)) !important;
 }
 
             `}</style>
