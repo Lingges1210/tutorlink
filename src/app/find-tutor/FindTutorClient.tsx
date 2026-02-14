@@ -101,6 +101,15 @@ function prettyDayLabel(day: string) {
   }
 }
 
+type ToastState =
+  | null
+  | {
+      text: string;
+      kind: "success" | "error" | "info";
+      actionHref?: string;
+      actionLabel?: string;
+    };
+
 export default function FindTutorClient({
   authed,
   verified,
@@ -128,9 +137,20 @@ export default function FindTutorClient({
   // ✅ duration filter
   const [durationMin, setDurationMin] = useState<number>(60);
 
-  // ✅ NEW (A + C): day strip selection + show-more for selected day
+  // ✅ A + C: day strip selection + show-more for selected day
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [dayLimit, setDayLimit] = useState<number>(9);
+
+  // ✅ Toast
+  const [toast, setToast] = useState<ToastState>(null);
+  function showToast(t: NonNullable<ToastState>) {
+    setToast(t);
+  }
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 4200);
+    return () => window.clearTimeout(t);
+  }, [toast]);
 
   const debounceRef = useRef<number | null>(null);
 
@@ -207,9 +227,23 @@ export default function FindTutorClient({
         );
       }
 
-      // ✅ A+C: if user didn't pick a day yet, default to earliest day
-      if (!selectedDay && normalized.length > 0) {
-        setSelectedDay(dayKey(normalized[0].start));
+      // ✅ Auto-jump day:
+      // - If user never chose a day => pick earliest day
+      // - If user chose a day but it became empty => jump to earliest day
+      if (normalized.length > 0) {
+        const earliestDay = dayKey(normalized[0].start);
+
+        setSelectedDay((prevDay) => {
+          if (!prevDay) return earliestDay;
+
+          const stillHasSlots = normalized.some(
+            (s) => dayKey(s.start) === prevDay
+          );
+          if (stillHasSlots) return prevDay;
+
+          return earliestDay;
+        });
+
         setDayLimit(9);
       }
     } catch {
@@ -255,14 +289,24 @@ export default function FindTutorClient({
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setBookingMsg(data?.message ?? "Failed to book slot.");
+        const msg = data?.message ?? "Failed to book slot.";
+        setBookingMsg(msg);
+        showToast({ text: msg, kind: "error" });
         return;
       }
 
       setBookingMsg("✅ Booked! Tutor assigned instantly. Check My Bookings →");
+      showToast({
+        text: "✅ Booked! Tutor assigned instantly.",
+        kind: "success",
+        actionHref: "/dashboard/student/sessions",
+        actionLabel: "My Bookings →",
+      });
+
       await loadSlots(selected.id, durationMin);
     } catch {
       setBookingMsg("Failed to book slot.");
+      showToast({ text: "Failed to book slot.", kind: "error" });
     } finally {
       setBookingSlotId(null);
     }
@@ -330,6 +374,71 @@ export default function FindTutorClient({
 
   return (
     <div className="space-y-6">
+      {/* Toast */}
+      {toast && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="
+            fixed z-50 bottom-5 right-5
+            w-[calc(100vw-2.5rem)] sm:w-[380px]
+            rounded-2xl border p-4
+            border-[rgb(var(--border))]
+            bg-[rgb(var(--card) / 0.9)]
+            backdrop-blur
+            shadow-[0_20px_60px_rgb(var(--shadow)/0.18)]
+          "
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className={[
+                "mt-0.5 h-2.5 w-2.5 rounded-full",
+                toast.kind === "success"
+                  ? "bg-emerald-500"
+                  : toast.kind === "error"
+                  ? "bg-rose-500"
+                  : "bg-slate-400",
+              ].join(" ")}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                {toast.text}
+              </div>
+
+              <div className="mt-2 flex items-center gap-2">
+                {toast.actionHref && toast.actionLabel && (
+                  <Link
+                    href={toast.actionHref}
+                    className="
+                      rounded-md px-3 py-2 text-xs font-semibold
+                      bg-[rgb(var(--primary))]
+                      text-white
+                      hover:opacity-95
+                    "
+                  >
+                    {toast.actionLabel}
+                  </Link>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setToast(null)}
+                  className="
+                    rounded-md px-3 py-2 text-xs font-semibold
+                    border border-[rgb(var(--border))]
+                    bg-[rgb(var(--card2))]
+                    text-[rgb(var(--fg))]
+                    hover:bg-[rgb(var(--card)/0.6)]
+                  "
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Header */}
       <div
         className="
