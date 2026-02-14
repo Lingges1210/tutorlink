@@ -1,12 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
 
 type SubjectItem = { id: string; code: string; title: string };
-type TutorItem = { id: string; name: string | null; programme: string | null; avatarUrl: string | null };
 
-function PrimaryButtonLink({ href, children }: { href: string; children: React.ReactNode }) {
+// returned by GET /api/subjects/[id]/slots?durationMin=60
+type SlotItem = {
+  id: string; // stable key (we'll use start ISO)
+  start: string; // ISO
+  end: string; // ISO
+  tutorCount?: number; // optional
+};
+
+function PrimaryButtonLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
   return (
     <Link
       href={href}
@@ -43,17 +57,57 @@ function DisabledButton({ children }: { children: React.ReactNode }) {
   );
 }
 
-function formatLocalInputValue(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  const mm = pad(d.getMonth() + 1);
-  const dd = pad(d.getDate());
-  const hh = pad(d.getHours());
-  const mi = pad(d.getMinutes());
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+function prettyDateTime(iso: string) {
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
 }
 
-export default function FindTutorClient({ authed, verified }: { authed: boolean; verified: boolean }) {
+function prettyTime(iso: string) {
+  try {
+    return new Date(iso).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function dayKey(iso: string) {
+  const d = new Date(iso);
+  // "YYYY-MM-DD" in local time
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function prettyDayLabel(day: string) {
+  try {
+    // day is "YYYY-MM-DD"
+    const [y, m, d] = day.split("-").map((x) => parseInt(x, 10));
+    const date = new Date(y, m - 1, d);
+    return date.toLocaleDateString([], {
+      weekday: "short",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return day;
+  }
+}
+
+export default function FindTutorClient({
+  authed,
+  verified,
+}: {
+  authed: boolean;
+  verified: boolean;
+}) {
   const canUse = authed && verified;
 
   const [q, setQ] = useState("");
@@ -62,20 +116,27 @@ export default function FindTutorClient({ authed, verified }: { authed: boolean;
 
   const [selected, setSelected] = useState<SubjectItem | null>(null);
 
-  const [tutors, setTutors] = useState<TutorItem[]>([]);
-  const [loadingTutors, setLoadingTutors] = useState(false);
+  // ✅ Slots UI
+  const [slots, setSlots] = useState<SlotItem[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsMsg, setSlotsMsg] = useState<string | null>(null);
 
-  const [bookingTutor, setBookingTutor] = useState<TutorItem | null>(null);
-  const [scheduledAt, setScheduledAt] = useState(() => formatLocalInputValue(new Date(Date.now() + 60 * 60 * 1000)));
-  const [durationMin, setDurationMin] = useState(60);
+  // ✅ booking feedback
   const [bookingMsg, setBookingMsg] = useState<string | null>(null);
-  const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookingSlotId, setBookingSlotId] = useState<string | null>(null);
+
+  // ✅ duration filter
+  const [durationMin, setDurationMin] = useState<number>(60);
+
+  // ✅ NEW (A + C): day strip selection + show-more for selected day
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [dayLimit, setDayLimit] = useState<number>(9);
 
   const debounceRef = useRef<number | null>(null);
 
-  // suggestions (debounced)
   useEffect(() => {
     if (!canUse) return;
+
     const term = q.trim();
     if (!term) {
       setSuggestions([]);
@@ -86,8 +147,11 @@ export default function FindTutorClient({ authed, verified }: { authed: boolean;
     debounceRef.current = window.setTimeout(async () => {
       setLoadingSuggest(true);
       try {
-        const res = await fetch(`/api/subjects/suggest?q=${encodeURIComponent(term)}`);
-        const data = await res.json();
+        const res = await fetch(
+          `/api/subjects/suggest?q=${encodeURIComponent(term)}`,
+          { cache: "no-store" }
+        );
+        const data = await res.json().catch(() => ({}));
         setSuggestions(Array.isArray(data.items) ? data.items : []);
       } catch {
         setSuggestions([]);
@@ -101,61 +165,114 @@ export default function FindTutorClient({ authed, verified }: { authed: boolean;
     };
   }, [q, canUse]);
 
-  async function loadTutors(subject: SubjectItem) {
-    setSelected(subject);
-    setSuggestions([]);
-    setTutors([]);
-    setBookingMsg(null);
+  async function loadSlots(subjectId: string, dur: number) {
+    setSlots([]);
+    setSlotsMsg(null);
+    setSlotsLoading(true);
 
-    setLoadingTutors(true);
     try {
-      const res = await fetch(`/api/tutors/match?subjectId=${encodeURIComponent(subject.id)}`);
-      const data = await res.json();
-      setTutors(Array.isArray(data.items) ? data.items : []);
+      const res = await fetch(
+        `/api/subjects/${subjectId}/slots?durationMin=${encodeURIComponent(
+          String(dur)
+        )}`,
+        { cache: "no-store" }
+      );
+      const data = await res.json().catch(() => ({}));
+
+      const list: unknown[] = Array.isArray(data.items) ? data.items : [];
+
+      const normalized: SlotItem[] = list
+        .filter(Boolean)
+        .map((x: unknown) => {
+          const obj = x as Record<string, unknown>;
+
+          const id = String((obj.id ?? obj.start ?? "") as string);
+          const start = String((obj.start ?? "") as string);
+          const end = String((obj.end ?? "") as string);
+
+          const tutorCount =
+            typeof obj.tutorCount === "number"
+              ? (obj.tutorCount as number)
+              : undefined;
+
+          return { id, start, end, tutorCount };
+        })
+        .filter((s: SlotItem) => !!s.id && !!s.start && !!s.end);
+
+      setSlots(normalized);
+
+      if (normalized.length === 0) {
+        setSlotsMsg(
+          "No free slots found (try a different duration or check later)."
+        );
+      }
+
+      // ✅ A+C: if user didn't pick a day yet, default to earliest day
+      if (!selectedDay && normalized.length > 0) {
+        setSelectedDay(dayKey(normalized[0].start));
+        setDayLimit(9);
+      }
     } catch {
-      setTutors([]);
+      setSlotsMsg("Failed to load available slots.");
     } finally {
-      setLoadingTutors(false);
+      setSlotsLoading(false);
     }
   }
 
-  async function requestSession() {
-    if (!selected || !bookingTutor) return;
+  async function pickSubject(s: SubjectItem) {
+    setSelected(s);
+    setSuggestions([]);
+    setBookingMsg(null);
+    setSlots([]);
+    setSlotsMsg(null);
 
-    setBookingLoading(true);
+    // reset A+C UI
+    setSelectedDay(null);
+    setDayLimit(9);
+
+    if (canUse) {
+      await loadSlots(s.id, durationMin);
+    }
+  }
+
+  async function bookSlot(slot: SlotItem) {
+    if (!selected) return;
+    if (!canUse) return;
+
+    setBookingSlotId(slot.id);
     setBookingMsg(null);
 
     try {
-      const res = await fetch("/api/sessions/create", {
+      const res = await fetch("/api/sessions/book", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tutorId: bookingTutor.id,
           subjectId: selected.id,
-          scheduledAt: new Date(scheduledAt).toISOString(),
+          scheduledAt: slot.start,
           durationMin,
         }),
       });
 
       const data = await res.json().catch(() => ({}));
-
       if (!res.ok) {
-        setBookingMsg(data?.message ?? "Failed to request session.");
+        setBookingMsg(data?.message ?? "Failed to book slot.");
         return;
       }
 
-      setBookingMsg("✅ Session requested! Check My Bookings for status.");
-      setBookingTutor(null);
+      setBookingMsg("✅ Booked! Tutor assigned instantly. Check My Bookings →");
+      await loadSlots(selected.id, durationMin);
     } catch {
-      setBookingMsg("Failed to request session.");
+      setBookingMsg("Failed to book slot.");
     } finally {
-      setBookingLoading(false);
+      setBookingSlotId(null);
     }
   }
 
   const headerBadge = useMemo(() => {
     if (!authed) {
-      return <PrimaryButtonLink href="/auth/login">Login to search</PrimaryButtonLink>;
+      return (
+        <PrimaryButtonLink href="/auth/login">Login to search</PrimaryButtonLink>
+      );
     }
     if (!verified) {
       return (
@@ -165,11 +282,51 @@ export default function FindTutorClient({ authed, verified }: { authed: boolean;
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium border border-emerald-500/30 bg-emerald-500/15 text-emerald-500">
+      <span className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium border border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
         ✅ Verified
       </span>
     );
   }, [authed, verified]);
+
+  // ✅ A+C: sorted slots, earliest, next 3
+  const sortedAll = useMemo(() => {
+    return [...slots].sort(
+      (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+    );
+  }, [slots]);
+
+  const earliest = sortedAll[0] ?? null;
+  const next3 = useMemo(() => sortedAll.slice(1, 4), [sortedAll]);
+
+  // ✅ A+C: day counts for strip
+  const dayCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of slots) {
+      const k = dayKey(s.start);
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return m;
+  }, [slots]);
+
+  // ✅ A+C: next 7 days (strip)
+  const sevenDayKeys = useMemo(() => {
+    const out: string[] = [];
+    const now = new Date();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now);
+      d.setDate(now.getDate() + i);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      out.push(`${y}-${m}-${dd}`);
+    }
+    return out;
+  }, []);
+
+  const selectedDaySlots = useMemo(() => {
+    if (!selectedDay) return [];
+    return sortedAll.filter((s) => dayKey(s.start) === selectedDay);
+  }, [sortedAll, selectedDay]);
 
   return (
     <div className="space-y-6">
@@ -184,13 +341,17 @@ export default function FindTutorClient({ authed, verified }: { authed: boolean;
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">Find a Tutor</h1>
+            <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">
+              Find a Tutor
+            </h1>
             <p className="mt-1 text-sm text-[rgb(var(--muted))] max-w-2xl">
-              Search by subject/course, view matching tutors, then request a session.
+              Search by subject/course, then book the earliest available time —
+              or pick a day.
             </p>
             {!authed && (
               <p className="mt-2 text-xs text-[rgb(var(--muted2))]">
-                You can view this page, but searching and booking require login + verification.
+                You can view this page, but searching and booking require login +
+                verification.
               </p>
             )}
           </div>
@@ -205,7 +366,7 @@ export default function FindTutorClient({ authed, verified }: { authed: boolean;
             ⚠️ Search is locked until verification
           </div>
           <p className="mt-1 text-sm text-[rgb(var(--muted))]">
-            Once verified, you can search subjects and request sessions.
+            Once verified, you can search subjects and book available slots.
           </p>
         </div>
       )}
@@ -229,8 +390,13 @@ export default function FindTutorClient({ authed, verified }: { authed: boolean;
             onChange={(e) => {
               setQ(e.target.value);
               setSelected(null);
-              setTutors([]);
               setBookingMsg(null);
+              setSlots([]);
+              setSlotsMsg(null);
+
+              // reset A+C UI
+              setSelectedDay(null);
+              setDayLimit(9);
             }}
             disabled={!canUse}
             placeholder="e.g. WIA2003, Data Structures"
@@ -242,35 +408,76 @@ export default function FindTutorClient({ authed, verified }: { authed: boolean;
             ].join(" ")}
           />
 
-          <div className="mt-2 flex gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             {!authed ? (
               <PrimaryButtonLink href="/auth/login">Login</PrimaryButtonLink>
             ) : !verified ? (
               <DisabledButton>Search Locked</DisabledButton>
             ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setQ("");
-                  setSelected(null);
-                  setSuggestions([]);
-                  setTutors([]);
-                  setBookingMsg(null);
-                }}
-                className="
-                  rounded-md px-3 py-2 text-xs font-semibold
-                  border border-[rgb(var(--border))]
-                  bg-[rgb(var(--card2))]
-                  text-[rgb(var(--fg))]
-                  hover:bg-[rgb(var(--card)/0.6)]
-                "
-              >
-                Clear
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQ("");
+                    setSelected(null);
+                    setSuggestions([]);
+                    setBookingMsg(null);
+                    setSlots([]);
+                    setSlotsMsg(null);
+
+                    // reset A+C UI
+                    setSelectedDay(null);
+                    setDayLimit(9);
+                  }}
+                  className="
+                    rounded-md px-3 py-2 text-xs font-semibold
+                    border border-[rgb(var(--border))]
+                    bg-[rgb(var(--card2))]
+                    text-[rgb(var(--fg))]
+                    hover:bg-[rgb(var(--card)/0.6)]
+                  "
+                >
+                  Clear
+                </button>
+
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-[0.7rem] text-[rgb(var(--muted2))]">
+                    Duration
+                  </span>
+                  <select
+                    value={durationMin}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setDurationMin(v);
+                      setBookingMsg(null);
+
+                      // reset day selection on duration change
+                      setSelectedDay(null);
+                      setDayLimit(9);
+
+                      if (selected?.id) loadSlots(selected.id, v);
+                    }}
+                    disabled={!selected || slotsLoading}
+                    className="
+                      rounded-md border px-2 py-2 text-xs outline-none
+                      border-[rgb(var(--border))]
+                      bg-[rgb(var(--card2))]
+                      text-[rgb(var(--fg))]
+                      disabled:opacity-60
+                    "
+                  >
+                    <option value={30}>30 min</option>
+                    <option value={45}>45 min</option>
+                    <option value={60}>60 min</option>
+                    <option value={90}>90 min</option>
+                    <option value={120}>120 min</option>
+                  </select>
+                </div>
+              </>
             )}
           </div>
 
-          {/* Suggestions dropdown */}
+          {/* Suggestions */}
           {canUse && (loadingSuggest || suggestions.length > 0) && (
             <div
               className="
@@ -281,11 +488,15 @@ export default function FindTutorClient({ authed, verified }: { authed: boolean;
               "
             >
               {loadingSuggest && (
-                <div className="px-3 py-3 text-xs text-[rgb(var(--muted2))]">Searching…</div>
+                <div className="px-3 py-3 text-xs text-[rgb(var(--muted2))]">
+                  Searching…
+                </div>
               )}
 
               {!loadingSuggest && suggestions.length === 0 && (
-                <div className="px-3 py-3 text-xs text-[rgb(var(--muted2))]">No matches</div>
+                <div className="px-3 py-3 text-xs text-[rgb(var(--muted2))]">
+                  No matches
+                </div>
               )}
 
               {!loadingSuggest &&
@@ -293,7 +504,7 @@ export default function FindTutorClient({ authed, verified }: { authed: boolean;
                   <button
                     key={s.id}
                     type="button"
-                    onClick={() => loadTutors(s)}
+                    onClick={() => pickSubject(s)}
                     className="
                       w-full text-left px-3 py-3
                       hover:bg-[rgb(var(--card)/0.6)]
@@ -304,7 +515,9 @@ export default function FindTutorClient({ authed, verified }: { authed: boolean;
                     <div className="text-xs font-semibold text-[rgb(var(--fg))]">
                       {s.code} — {s.title}
                     </div>
-                    <div className="text-[0.7rem] text-[rgb(var(--muted2))]">Click to see tutors</div>
+                    <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
+                      Click to view booking options
+                    </div>
                   </button>
                 ))}
             </div>
@@ -312,204 +525,307 @@ export default function FindTutorClient({ authed, verified }: { authed: boolean;
         </div>
       </section>
 
-      {/* Selected subject + tutors */}
+      {/* Booking message */}
+      {bookingMsg && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="
+            rounded-2xl border p-4
+            border-[rgb(var(--border))]
+            bg-[rgb(var(--card) / 0.7)]
+            text-sm text-[rgb(var(--fg))]
+          "
+        >
+          {bookingMsg}
+        </motion.div>
+      )}
+
+      {/* Selected */}
       {selected && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-xs text-[rgb(var(--muted2))]">
+            Selected:{" "}
+            <span className="font-semibold text-[rgb(var(--fg))]">
+              {selected.code} — {selected.title}
+            </span>
+          </div>
+          <Link
+            href="/dashboard/student/sessions"
+            className="text-xs font-medium text-[rgb(var(--primary))] hover:underline"
+          >
+            My Bookings →
+          </Link>
+        </div>
+      )}
+
+      {/* ✅ Slots section (A + C) */}
+      {selected && (
+        <section
+          className="
+            rounded-3xl border p-5
+            border-[rgb(var(--border))]
+            bg-[rgb(var(--card) / 0.7)]
+            shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]
+          "
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                {selected.code} {selected.title}
+                Book a slot
               </div>
-              <div className="text-xs text-[rgb(var(--muted2))]">Matching tutors</div>
+              <div className="mt-1 text-xs text-[rgb(var(--muted2))]">
+                1 click: book earliest. Or pick a day to choose.
+              </div>
             </div>
 
-            <Link href="/dashboard/student/sessions" className="text-xs font-medium text-[rgb(var(--primary))] hover:underline">
-              My Bookings →
-            </Link>
+            <button
+              type="button"
+              disabled={slotsLoading || !!bookingSlotId}
+              onClick={() => selected && loadSlots(selected.id, durationMin)}
+              className="
+                rounded-md px-3 py-2 text-xs font-semibold
+                border border-[rgb(var(--border))]
+                bg-[rgb(var(--card2))]
+                text-[rgb(var(--fg))]
+                hover:bg-[rgb(var(--card)/0.6)]
+                disabled:opacity-60
+              "
+            >
+              {slotsLoading ? "Refreshing…" : "Refresh"}
+            </button>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            {loadingTutors ? (
-              <div className="text-xs text-[rgb(var(--muted2))]">Loading tutors…</div>
-            ) : tutors.length === 0 ? (
-              <div className="text-xs text-[rgb(var(--muted2))]">No approved tutors found for this subject yet.</div>
-            ) : (
-              tutors.map((t) => (
-                <div
-                  key={t.id}
-                  className="
-                    flex flex-col rounded-3xl border p-5
-                    border-[rgb(var(--border))]
-                    bg-[rgb(var(--card) / 0.7)]
-                    shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]
-                  "
-                >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className="
-                        h-10 w-10 shrink-0 overflow-hidden rounded-xl
-                        border border-[rgb(var(--border))]
-                        bg-[rgb(var(--card2))]
-                      "
-                    >
-                      {t.avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={t.avatarUrl} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="h-full w-full grid place-items-center text-xs text-[rgb(var(--muted2))]">
-                          👤
-                        </div>
-                      )}
-                    </div>
+          {slotsLoading ? (
+            <div className="mt-4 text-sm text-[rgb(var(--muted2))]">
+              Loading slots…
+            </div>
+          ) : slots.length === 0 ? (
+            <div className="mt-4 text-sm text-[rgb(var(--muted2))]">
+              {slotsMsg ?? "No slots yet."}
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4">
+              {/* ✅ A: Earliest + next 3 */}
+              <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-xs font-semibold text-[rgb(var(--fg))]">
+                    Earliest available
+                  </div>
+                  <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
+                    {durationMin} min
+                  </div>
+                </div>
 
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-[rgb(var(--fg))] truncate">
-                        {t.name ?? "Tutor"}
-                      </div>
-                      <div className="text-[0.7rem] text-[rgb(var(--muted))] truncate">
-                        {t.programme ?? "Programme not set"}
-                      </div>
+                {earliest && (
+                  <button
+                    type="button"
+                    disabled={!!bookingSlotId}
+                    onClick={() => bookSlot(earliest)}
+                    className="
+                      mt-3 w-full text-left rounded-2xl border px-4 py-4 transition
+                      border-[rgb(var(--border))]
+                      bg-[rgb(var(--primary))]
+                      text-white
+                      hover:opacity-95
+                      disabled:opacity-60
+                    "
+                    title={`${prettyDateTime(
+                      earliest.start
+                    )} → ${prettyDateTime(earliest.end)}`}
+                  >
+                    <div className="text-sm font-bold">
+                      Book earliest: {prettyDayLabel(dayKey(earliest.start))} ·{" "}
+                      {prettyTime(earliest.start)}
+                    </div>
+                    <div className="mt-1 text-[0.75rem] opacity-90">
+                      ends {prettyTime(earliest.end)}
+                      {typeof earliest.tutorCount === "number"
+                        ? ` · ${earliest.tutorCount} tutor${
+                            earliest.tutorCount === 1 ? "" : "s"
+                          }`
+                        : ""}
+                    </div>
+                  </button>
+                )}
+
+                {next3.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-[0.7rem] text-[rgb(var(--muted2))] mb-2">
+                      Next available
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {next3.map((s) => {
+                        const busy = bookingSlotId === s.id;
+                        const disabled = !!bookingSlotId && !busy;
+
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => bookSlot(s)}
+                            className={[
+                              "rounded-full px-3 py-2 text-xs font-semibold border transition",
+                              "border-[rgb(var(--border))]",
+                              "bg-[rgb(var(--card) / 0.8)] text-[rgb(var(--fg))]",
+                              "hover:bg-[rgb(var(--card) / 1)]",
+                              busy ? "opacity-80" : "",
+                              disabled ? "opacity-60 cursor-not-allowed" : "",
+                            ].join(" ")}
+                            title={`${prettyDateTime(
+                              s.start
+                            )} → ${prettyDateTime(s.end)}`}
+                          >
+                            {prettyDayLabel(dayKey(s.start)).split(",")[0]} ·{" "}
+                            {prettyTime(s.start)}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
+                )}
+              </div>
 
+              {/* ✅ C: 7-day strip */}
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-semibold text-[rgb(var(--fg))]">
+                    Pick a day
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
-                      setBookingTutor(t);
-                      setBookingMsg(null);
+                      setSelectedDay(null);
+                      setDayLimit(9);
                     }}
-                    className="
-                      mt-4 w-full rounded-md px-3 py-2 text-xs font-semibold text-white
-                      bg-[rgb(var(--primary))]
-                      transition-all duration-200
-                      hover:-translate-y-0.5
-                      hover:shadow-[0_8px_24px_rgb(var(--shadow)/0.35)]
-                    "
+                    className="text-[0.7rem] font-medium text-[rgb(var(--primary))] hover:underline"
                   >
-                    Request Session
+                    Clear day
                   </button>
                 </div>
-              ))
-            )}
-          </div>
 
-          {bookingMsg && (
-            <div
-              className="
-                rounded-2xl border p-4
-                border-[rgb(var(--border))]
-                bg-[rgb(var(--card) / 0.7)]
-                text-sm text-[rgb(var(--fg))]
-              "
-            >
-              {bookingMsg}
+                <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                  {sevenDayKeys.map((d) => {
+                    const count = dayCounts.get(d) ?? 0;
+                    const active = selectedDay === d;
+                    const disabled = count === 0;
+
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => {
+                          setSelectedDay(d);
+                          setDayLimit(9);
+                        }}
+                        className={[
+                          "shrink-0 rounded-2xl border px-3 py-2 text-left transition",
+                          "border-[rgb(var(--border))]",
+                          active
+                            ? "bg-[rgb(var(--primary))] text-white"
+                            : "bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
+                          disabled ? "opacity-50 cursor-not-allowed" : "",
+                        ].join(" ")}
+                      >
+                        <div className="text-xs font-semibold">
+                          {prettyDayLabel(d).split(",")[0]}
+                        </div>
+                        <div className="mt-0.5 text-[0.7rem] opacity-80">
+                          {count} slot{count === 1 ? "" : "s"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ✅ Day times */}
+              {selectedDay && (
+                <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-xs font-semibold text-[rgb(var(--fg))]">
+                      {prettyDayLabel(selectedDay)}
+                    </div>
+                    <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
+                      {selectedDaySlots.length} slots
+                    </div>
+                  </div>
+
+                  {selectedDaySlots.length === 0 ? (
+                    <div className="mt-3 text-sm text-[rgb(var(--muted2))]">
+                      No slots on this day.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {selectedDaySlots.slice(0, dayLimit).map((slot) => {
+                          const busy = bookingSlotId === slot.id;
+                          const disabled = !!bookingSlotId && !busy;
+
+                          return (
+                            <button
+                              key={slot.id}
+                              type="button"
+                              disabled={disabled}
+                              onClick={() => bookSlot(slot)}
+                              className={[
+                                "w-full text-left rounded-xl border px-4 py-3 transition",
+                                "border-[rgb(var(--border))] bg-[rgb(var(--card) / 0.65)] text-[rgb(var(--fg))]",
+                                "hover:bg-[rgb(var(--card) / 0.9)]",
+                                busy ? "opacity-80" : "",
+                                disabled ? "opacity-60 cursor-not-allowed" : "",
+                              ].join(" ")}
+                              title={`${prettyDateTime(
+                                slot.start
+                              )} → ${prettyDateTime(slot.end)}`}
+                            >
+                              <div className="text-xs font-semibold">
+                                {busy ? "Booking…" : prettyTime(slot.start)}
+                              </div>
+                              <div className="mt-1 text-[0.7rem] text-[rgb(var(--muted2))]">
+                                ends {prettyTime(slot.end)} · {durationMin} min
+                                {typeof slot.tutorCount === "number"
+                                  ? ` · ${slot.tutorCount} tutor${
+                                      slot.tutorCount === 1 ? "" : "s"
+                                    }`
+                                  : ""}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {selectedDaySlots.length > dayLimit && (
+                        <div className="mt-3">
+                          <button
+                            type="button"
+                            onClick={() => setDayLimit((v) => v + 9)}
+                            className="
+                              rounded-md px-3 py-2 text-xs font-semibold
+                              border border-[rgb(var(--border))]
+                              bg-[rgb(var(--card))]
+                              text-[rgb(var(--fg))]
+                              hover:bg-[rgb(var(--card)/0.8)]
+                            "
+                          >
+                            Show more times
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
+                If a slot disappears, someone else booked it — hit{" "}
+                <span className="font-semibold">Refresh</span>.
+              </div>
             </div>
           )}
         </section>
-      )}
-
-      {/* Booking modal */}
-      {bookingTutor && (
-        <div
-          className="
-            fixed inset-0 z-50 grid place-items-center
-            bg-black/40 p-4
-          "
-          onMouseDown={() => setBookingTutor(null)}
-        >
-          <div
-            className="
-              w-full max-w-md rounded-3xl border p-5
-              border-[rgb(var(--border))]
-              bg-[rgb(var(--card2))]
-              shadow-[0_30px_120px_rgb(var(--shadow)/0.35)]
-            "
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-              Request session with {bookingTutor.name ?? "Tutor"}
-            </div>
-            <div className="mt-1 text-xs text-[rgb(var(--muted2))]">
-              {selected?.code} — {selected?.title}
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <div>
-                <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
-                  Date & time
-                </label>
-                <input
-                  type="datetime-local"
-                  value={scheduledAt}
-                  onChange={(e) => setScheduledAt(e.target.value)}
-                  className="
-                    w-full rounded-md border px-3 py-2 text-sm outline-none
-                    border-[rgb(var(--border))]
-                    bg-[rgb(var(--card))]
-                    text-[rgb(var(--fg))]
-                    focus:border-[rgb(var(--primary))]
-                  "
-                />
-              </div>
-
-              <div>
-                <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
-                  Duration (minutes)
-                </label>
-                <select
-                  value={durationMin}
-                  onChange={(e) => setDurationMin(Number(e.target.value))}
-                  className="
-                    w-full rounded-md border px-3 py-2 text-sm outline-none
-                    border-[rgb(var(--border))]
-                    bg-[rgb(var(--card))]
-                    text-[rgb(var(--fg))]
-                    focus:border-[rgb(var(--primary))]
-                  "
-                >
-                  <option value={30}>30</option>
-                  <option value={45}>45</option>
-                  <option value={60}>60</option>
-                  <option value={90}>90</option>
-                  <option value={120}>120</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="mt-5 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setBookingTutor(null)}
-                className="
-                  flex-1 rounded-md px-3 py-2 text-xs font-semibold
-                  border border-[rgb(var(--border))]
-                  bg-[rgb(var(--card))]
-                  text-[rgb(var(--fg))]
-                  hover:bg-[rgb(var(--card)/0.6)]
-                "
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={requestSession}
-                disabled={bookingLoading}
-                className={[
-                  "flex-1 rounded-md px-3 py-2 text-xs font-semibold text-white",
-                  "bg-[rgb(var(--primary))] transition-all duration-200",
-                  bookingLoading ? "opacity-70 cursor-not-allowed" : "hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgb(var(--shadow)/0.35)]",
-                ].join(" ")}
-              >
-                {bookingLoading ? "Requesting…" : "Request"}
-              </button>
-            </div>
-
-            <p className="mt-3 text-[0.7rem] text-[rgb(var(--muted2))]">
-              After requesting, check <span className="font-medium">My Bookings</span> for status updates.
-            </p>
-          </div>
-        </div>
       )}
     </div>
   );

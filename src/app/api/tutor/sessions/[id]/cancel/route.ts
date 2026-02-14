@@ -2,22 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
-async function triggerAllocator() {
-  const appUrl = process.env.APP_URL;
-  const secret = process.env.ALLOCATOR_SECRET;
-  if (!appUrl || !secret) return;
-
-  try {
-    await fetch(`${appUrl}/api/sessions/allocate`, {
-      method: "POST",
-      headers: { "x-allocator-secret": secret },
-      cache: "no-store",
-    });
-  } catch {
-    // ignore - cron will still catch up
-  }
-}
-
 export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> }
@@ -25,8 +9,13 @@ export async function POST(
   const { id } = await ctx.params;
 
   const supabase = await supabaseServerComponent();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user?.email) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.email) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
 
   const tutor = await prisma.user.findUnique({
     where: { email: user.email.toLowerCase() },
@@ -53,6 +42,10 @@ export async function POST(
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
+  const body = await req.json().catch(() => ({}));
+  const reasonRaw = typeof body.reason === "string" ? body.reason : "";
+  const reason = reasonRaw.trim() || "Cancelled by tutor";
+
   const session = await prisma.session.findUnique({
     where: { id },
     select: {
@@ -69,32 +62,34 @@ export async function POST(
     return NextResponse.json({ message: "Not found" }, { status: 404 });
   }
 
-  if (session.status !== "ACCEPTED") {
+  if (session.status === "CANCELLED" || session.status === "COMPLETED") {
     return NextResponse.json(
-      { message: "Only accepted sessions can be completed" },
+      { message: "This session is already closed." },
       { status: 409 }
     );
   }
 
+  // optional guard: block cancelling after it ended
   const start = new Date(session.scheduledAt);
   const end =
     session.endsAt ??
     new Date(start.getTime() + (session.durationMin ?? 60) * 60_000);
 
-  if (new Date() < end) {
+  if (new Date() >= end) {
     return NextResponse.json(
-      { message: "You can complete this after the session ends." },
+      { message: "You can’t cancel after the session has ended." },
       { status: 409 }
     );
   }
 
   await prisma.session.update({
     where: { id: session.id },
-    data: { status: "COMPLETED" },
+    data: {
+      status: "CANCELLED",
+      cancelledAt: new Date(),
+      cancelReason: reason,
+    },
   });
 
-  // ✅ Trigger allocation right after a tutor frees up
-  await triggerAllocator();
-
-  return NextResponse.json({ success: true, status: "COMPLETED" });
+  return NextResponse.json({ success: true, status: "CANCELLED" });
 }

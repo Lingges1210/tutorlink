@@ -4,7 +4,10 @@ import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
 export async function GET() {
   const supabase = await supabaseServerComponent();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   if (!user?.email) return NextResponse.json({ items: [] });
 
   const dbUser = await prisma.user.findUnique({
@@ -43,8 +46,16 @@ export async function GET() {
       cancelReason: true,
       cancelledAt: true,
       rescheduledAt: true,
+
+      // ✅ NEW: proposal fields
+      proposedAt: true,
+      proposedNote: true,
+      proposalStatus: true,
+
       subject: { select: { code: true, title: true } },
-      student: { select: { id: true, name: true, email: true, programme: true, avatarUrl: true } },
+      student: {
+        select: { id: true, name: true, email: true, programme: true, avatarUrl: true },
+      },
     },
   });
 

@@ -4,7 +4,10 @@ import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
 export async function GET() {
   const supabase = await supabaseServerComponent();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   if (!user?.email) return NextResponse.json({ items: [] });
 
   const dbUser = await prisma.user.findUnique({
@@ -16,22 +19,46 @@ export async function GET() {
     return NextResponse.json({ items: [] });
   }
 
-  const items = await prisma.session.findMany({
+  const sessions = await prisma.session.findMany({
     where: { studentId: dbUser.id },
     orderBy: { scheduledAt: "desc" },
     take: 50,
     select: {
       id: true,
       scheduledAt: true,
+      endsAt: true,
       durationMin: true,
       status: true,
-      cancelledAt: true,
       cancelReason: true,
-      rescheduledAt: true,
+      tutorId: true,
+
+      // ✅ NEW: proposal fields
+      proposedAt: true,
+      proposedNote: true,
+      proposalStatus: true,
+
       subject: { select: { code: true, title: true } },
-      tutor: { select: { id: true, name: true, programme: true, avatarUrl: true } },
+      tutor: { select: { id: true, name: true, programme: true, avatarUrl: true, email: true } },
     },
   });
+
+  const items = sessions.map((s) => ({
+    id: s.id,
+    scheduledAt: s.scheduledAt,
+    endsAt: s.endsAt,
+    durationMin: s.durationMin,
+    status: s.status,
+    cancelReason: s.cancelReason,
+
+    assigned: !!s.tutorId,
+    subject: s.subject,
+    tutor: s.tutor ?? null,
+
+    // ✅ pass through proposal fields
+    proposedAt: s.proposedAt ?? null,
+    proposedNote: s.proposedNote ?? null,
+    proposalStatus: s.proposalStatus ?? null,
+  }));
 
   return NextResponse.json({ items });
 }

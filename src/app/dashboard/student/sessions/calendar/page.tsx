@@ -2,20 +2,23 @@
 
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
+import type { NavigateAction } from "react-big-calendar";
+
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Calendar,
+  Calendar as RBCalendar,
   dateFnsLocalizer,
   Views,
   type EventProps,
+  type View,
 } from "react-big-calendar";
 import { format, parse, startOfWeek, getDay } from "date-fns";
 import { enUS } from "date-fns/locale/en-US";
 
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 
-const DnDCalendar = withDragAndDrop(Calendar);
+const DnDCalendar = withDragAndDrop(RBCalendar);
 
 type SessionRow = {
   id: string;
@@ -80,9 +83,7 @@ function SessionEvent({ event }: EventProps<CalEvent>) {
             border: `1px solid ${
               accepted ? "rgb(var(--primary) / 0.35)" : "rgb(var(--border))"
             }`,
-            background: accepted
-              ? "rgb(var(--primary) / 0.16)"
-              : "rgb(var(--card))",
+            background: accepted ? "rgb(var(--primary) / 0.16)" : "rgb(var(--card))",
             color: accepted ? "rgb(var(--primary))" : "rgb(var(--muted))",
             flexShrink: 0,
           }}
@@ -118,16 +119,13 @@ export default function StudentSessionCalendarPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // ✅ MOVED HERE (Hooks must be inside component)
-  const [conflict, setConflict] = useState<{
-    student: boolean;
-    tutor: boolean;
-  } | null>(null);
+  // ✅ CONTROLLED VIEW + DATE (fixes Day/Week/Agenda buttons)
+  const [view, setView] = useState<View>(Views.WEEK);
+  const [date, setDate] = useState<Date>(new Date());
 
-  // ✅ MOVED HERE (Hooks must be inside component)
+  const [conflict, setConflict] = useState<{ student: boolean; tutor: boolean } | null>(null);
   const [checking, setChecking] = useState(false);
 
-  // ✅ Confirm modal state
   const [pendingDrop, setPendingDrop] = useState<{
     eventId: string;
     start: Date;
@@ -169,7 +167,6 @@ export default function StudentSessionCalendarPage() {
   // ✅ Only PENDING draggable
   const draggableAccessor = (event: CalEvent) => event.resource.status === "PENDING";
 
-  // ✅ Event styling (matches your theme)
   function eventPropGetter(event: CalEvent) {
     const s = event.resource;
     const accepted = s.status === "ACCEPTED";
@@ -183,9 +180,7 @@ export default function StudentSessionCalendarPage() {
         }`,
         padding: "8px 10px",
         color: "rgb(var(--fg))",
-        background: accepted
-          ? "rgb(var(--primary) / 0.22)"
-          : "rgb(var(--card2))",
+        background: accepted ? "rgb(var(--primary) / 0.22)" : "rgb(var(--card2))",
         boxShadow: accepted
           ? "0 10px 26px rgb(var(--shadow) / 0.20)"
           : "0 8px 18px rgb(var(--shadow) / 0.14)",
@@ -195,9 +190,8 @@ export default function StudentSessionCalendarPage() {
     };
   }
 
-  function dayPropGetter(date: Date) {
-    const isToday = new Date().toDateString() === new Date(date).toDateString();
-
+  function dayPropGetter(d: Date) {
+    const isToday = new Date().toDateString() === new Date(d).toDateString();
     return {
       style: {
         background: isToday ? "rgb(var(--primary) / 0.06)" : "transparent",
@@ -205,7 +199,6 @@ export default function StudentSessionCalendarPage() {
     };
   }
 
-  // ✅ on drop => open confirm modal (NO save yet)
   async function onEventDrop({
     event,
     start,
@@ -216,7 +209,6 @@ export default function StudentSessionCalendarPage() {
     end: Date;
     isAllDay: boolean;
   }) {
-    // extra guard (should already be blocked by draggableAccessor)
     if (event.resource.status !== "PENDING") {
       setMsg("Only PENDING sessions can be moved.");
       return;
@@ -226,21 +218,21 @@ export default function StudentSessionCalendarPage() {
     setPendingDrop({ eventId: event.id, start, end });
 
     setChecking(true);
+    try {
+      const res = await fetch(`/api/sessions/${event.id}/check-conflict`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scheduledAt: start.toISOString() }),
+      });
 
-    const res = await fetch(`/api/sessions/${event.id}/check-conflict`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scheduledAt: start.toISOString() }),
-    });
-
-    const data = await res.json().catch(() => ({}));
-
-    setConflict({
-      student: !!data.studentConflict,
-      tutor: !!data.tutorConflict,
-    });
-
-    setChecking(false);
+      const data = await res.json().catch(() => ({}));
+      setConflict({
+        student: !!data.studentConflict,
+        tutor: !!data.tutorConflict,
+      });
+    } finally {
+      setChecking(false);
+    }
   }
 
   async function confirmReschedule() {
@@ -251,13 +243,13 @@ export default function StudentSessionCalendarPage() {
     setSaving(true);
     setMsg("Saving new time…");
 
-    // optimistic UI
     const prev = items;
     const newDurationMin = Math.max(
       30,
       Math.round((pendingDrop.end.getTime() - pendingDrop.start.getTime()) / 60000)
     );
 
+    // optimistic UI
     setItems((old) =>
       old.map((x) =>
         x.id === eventId
@@ -281,14 +273,14 @@ export default function StudentSessionCalendarPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setItems(prev); // revert
+        setItems(prev);
         setMsg(data?.message ?? "Reschedule failed (conflict).");
         return;
       }
 
       setMsg("✅ Rescheduled!");
       setPendingDrop(null);
-      await load(); // sync from server
+      await load();
     } finally {
       setSaving(false);
     }
@@ -302,9 +294,7 @@ export default function StudentSessionCalendarPage() {
   return (
     <div className="space-y-6">
       <div className="rounded-3xl border p-6 border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] shadow-[0_20px_60px_rgb(var(--shadow)/0.10)]">
-        <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">
-          My Sessions Calendar
-        </h1>
+        <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">My Sessions Calendar</h1>
         <p className="mt-1 text-sm text-[rgb(var(--muted))]">
           Drag a session to reschedule. (Only <b>PENDING</b> can be moved)
         </p>
@@ -341,6 +331,8 @@ export default function StudentSessionCalendarPage() {
                 flex-wrap: wrap;
                 gap: 10px;
                 margin-bottom: 12px;
+                position: relative;
+                z-index: 5;
               }
               .rbc-toolbar .rbc-toolbar-label {
                 font-weight: 900;
@@ -419,154 +411,109 @@ export default function StudentSessionCalendarPage() {
                 font-size: 12px;
               }
 
-             /* ================= DARK MODE CALENDAR ================= */
-
-.dark .rbc-calendar {
-  background: rgb(var(--card));
-}
-
-/* Main container */
-.dark .rbc-time-view,
-.dark .rbc-month-view {
-  background: rgb(var(--card));
-  border: 1px solid rgb(60 75 100 / 0.55) !important;
-}
-
-/* Header row */
-.dark .rbc-header,
-.dark .rbc-time-header {
-  background: rgb(var(--card2));
-  color: rgb(var(--muted));
-  border-bottom: 1px solid rgb(60 75 100 / 0.55) !important;
-}
-
-/* Top separator (time grid) */
-.dark .rbc-time-content {
-  border-top: 1px solid rgb(60 75 100 / 0.55) !important;
-  border-left: 0 !important; /* kill accidental bright left edge */
-}
-
-/* Horizontal grid lines */
-.dark .rbc-timeslot-group {
-  border-bottom: 1px solid rgb(60 75 100 / 0.45) !important;
-}
-
-/* Smaller inner slot lines */
-.dark .rbc-time-slot {
-  border-top: 1px solid rgb(60 75 100 / 0.35) !important;
-}
-
-/* Vertical grid lines (day columns) */
-.dark .rbc-day-bg + .rbc-day-bg {
-  border-left: 1px solid rgb(60 75 100 / 0.45) !important;
-}
-
-/* FIX bright vertical column line (deep wrapper) */
-.dark .rbc-time-content > * + * > * {
-  border-left: 1px solid rgb(60 75 100 / 0.45) !important;
-}
-
-/* Header vertical separators */
-.dark .rbc-time-header-content > * + * {
-  border-left: 1px solid rgb(60 75 100 / 0.45) !important;
-}
-
-/* Left divider (time gutter → day columns) */
-.dark .rbc-time-gutter,
-.dark .rbc-time-header-gutter {
-  border-right: 1px solid rgb(60 75 100 / 0.45) !important;
-  border-left: 0 !important;
-}
-
-/* Sometimes header wrapper draws its own left line */
-.dark .rbc-time-header-content {
-  border-left: 1px solid rgb(60 75 100 / 0.45) !important;
-  border-top: 0 !important; /* prevent top-left “L” seam */
-}
-
-/* kill the last bright top-left seam (double borders) */
-.dark .rbc-time-header,
-.dark .rbc-time-header-gutter {
-  border-top: 0 !important;
-}
-
-/* Extra guard for the seam between gutter and grid */
-.dark .rbc-time-header-gutter + .rbc-time-header-content,
-.dark .rbc-time-gutter + .rbc-day-slot {
-  border-left: 1px solid rgb(60 75 100 / 0.45) !important;
-}
-
-/* Off range background */
-.dark .rbc-off-range-bg {
-  background: rgb(30 40 60 / 0.35);
-}
-
-/* Today column highlight */
-.dark .rbc-today {
-  background: rgb(var(--primary) / 0.08);
-}
-
-/* Time labels */
-.dark .rbc-time-gutter,
-.dark .rbc-label {
-  color: rgb(var(--muted2));
-}
-
-/* IMPORTANT: force any leftover default borders (the “still got” issue) */
-.dark .rbc-time-view,
-.dark .rbc-time-view .rbc-time-header,
-.dark .rbc-time-view .rbc-time-header-content,
-.dark .rbc-time-view .rbc-time-header-gutter,
-.dark .rbc-time-view .rbc-time-content,
-.dark .rbc-time-view .rbc-header,
-.dark .rbc-time-view .rbc-timeslot-group,
-.dark .rbc-time-view .rbc-day-bg,
-.dark .rbc-time-view .rbc-day-slot,
-.dark .rbc-time-view .rbc-time-gutter {
-  border-color: rgb(60 75 100 / 0.45) !important;
-}
-
-/* FIX: the last “right edge” bright seam (before scrollbar) */
-.dark .rbc-time-view .rbc-time-header-content,
-.dark .rbc-time-view .rbc-time-content {
-  box-shadow: inset -1px 0 0 rgb(60 75 100 / 0.45) !important;
-}
-
-/* If the header last column still shows a bright line */
-.dark .rbc-time-header-content .rbc-header:last-child {
-  border-right: 0 !important;
-  box-shadow: inset -1px 0 0 rgb(60 75 100 / 0.45) !important;
-}
-
-/* ================= AGENDA VIEW DARK FIX ================= */
-
-.dark .rbc-agenda-view table,
-.dark .rbc-agenda-view th,
-.dark .rbc-agenda-view td {
-  border-color: rgb(60 75 100 / 0.45) !important;
-}
-
-/* Remove bright vertical divider between columns */
-.dark .rbc-agenda-view th + th,
-.dark .rbc-agenda-view td + td {
-  border-left: 1px solid rgb(60 75 100 / 0.45) !important;
-}
-
-/* Make entire agenda background consistent */
-.dark .rbc-agenda-view table {
-  background: rgb(var(--card)) !important;
-}
-
-
-
-
+              /* ================= DARK MODE CALENDAR ================= */
+              .dark .rbc-calendar {
+                background: rgb(var(--card));
+              }
+              .dark .rbc-time-view,
+              .dark .rbc-month-view {
+                background: rgb(var(--card));
+                border: 1px solid rgb(60 75 100 / 0.55) !important;
+              }
+              .dark .rbc-header,
+              .dark .rbc-time-header {
+                background: rgb(var(--card2));
+                color: rgb(var(--muted));
+                border-bottom: 1px solid rgb(60 75 100 / 0.55) !important;
+              }
+              .dark .rbc-time-content {
+                border-top: 1px solid rgb(60 75 100 / 0.55) !important;
+                border-left: 0 !important;
+              }
+              .dark .rbc-timeslot-group {
+                border-bottom: 1px solid rgb(60 75 100 / 0.45) !important;
+              }
+              .dark .rbc-time-slot {
+                border-top: 1px solid rgb(60 75 100 / 0.35) !important;
+              }
+              .dark .rbc-day-bg + .rbc-day-bg {
+                border-left: 1px solid rgb(60 75 100 / 0.45) !important;
+              }
+              .dark .rbc-time-content > * + * > * {
+                border-left: 1px solid rgb(60 75 100 / 0.45) !important;
+              }
+              .dark .rbc-time-header-content > * + * {
+                border-left: 1px solid rgb(60 75 100 / 0.45) !important;
+              }
+              .dark .rbc-time-gutter,
+              .dark .rbc-time-header-gutter {
+                border-right: 1px solid rgb(60 75 100 / 0.45) !important;
+                border-left: 0 !important;
+              }
+              .dark .rbc-time-header-content {
+                border-left: 1px solid rgb(60 75 100 / 0.45) !important;
+                border-top: 0 !important;
+              }
+              .dark .rbc-time-header,
+              .dark .rbc-time-header-gutter {
+                border-top: 0 !important;
+              }
+              .dark .rbc-time-header-gutter + .rbc-time-header-content,
+              .dark .rbc-time-gutter + .rbc-day-slot {
+                border-left: 1px solid rgb(60 75 100 / 0.45) !important;
+              }
+              .dark .rbc-off-range-bg {
+                background: rgb(30 40 60 / 0.35);
+              }
+              .dark .rbc-today {
+                background: rgb(var(--primary) / 0.08);
+              }
+              .dark .rbc-time-gutter,
+              .dark .rbc-label {
+                color: rgb(var(--muted2));
+              }
+              .dark .rbc-time-view,
+              .dark .rbc-time-view .rbc-time-header,
+              .dark .rbc-time-view .rbc-time-header-content,
+              .dark .rbc-time-view .rbc-time-header-gutter,
+              .dark .rbc-time-view .rbc-time-content,
+              .dark .rbc-time-view .rbc-header,
+              .dark .rbc-time-view .rbc-timeslot-group,
+              .dark .rbc-time-view .rbc-day-bg,
+              .dark .rbc-time-view .rbc-day-slot,
+              .dark .rbc-time-view .rbc-time-gutter {
+                border-color: rgb(60 75 100 / 0.45) !important;
+              }
+              .dark .rbc-time-view .rbc-time-header-content,
+              .dark .rbc-time-view .rbc-time-content {
+                box-shadow: inset -1px 0 0 rgb(60 75 100 / 0.45) !important;
+              }
+              .dark .rbc-time-header-content .rbc-header:last-child {
+                border-right: 0 !important;
+                box-shadow: inset -1px 0 0 rgb(60 75 100 / 0.45) !important;
+              }
+              .dark .rbc-agenda-view table,
+              .dark .rbc-agenda-view th,
+              .dark .rbc-agenda-view td {
+                border-color: rgb(60 75 100 / 0.45) !important;
+              }
+              .dark .rbc-agenda-view th + th,
+              .dark .rbc-agenda-view td + td {
+                border-left: 1px solid rgb(60 75 100 / 0.45) !important;
+              }
+              .dark .rbc-agenda-view table {
+                background: rgb(var(--card)) !important;
+              }
             `}</style>
 
             <div style={{ height: 680 }}>
               <DnDCalendar
                 localizer={localizer}
                 events={events}
-                defaultView={Views.WEEK}
+                view={view}
+                date={date}
+                onView={(v: View) => setView(v)}
+  onNavigate={(d: Date, _view: View, _action: NavigateAction) => setDate(d)}
                 views={[Views.DAY, Views.WEEK, Views.AGENDA]}
                 step={30}
                 timeslots={2}
@@ -579,6 +526,18 @@ export default function StudentSessionCalendarPage() {
                 components={{ event: SessionEvent }}
               />
             </div>
+
+            {checking && (
+              <div className="mt-3 text-xs text-[rgb(var(--muted2))]">Checking conflicts…</div>
+            )}
+
+            {conflict && (conflict.student || conflict.tutor) && (
+              <div className="mt-3 rounded-2xl border p-3 border-rose-500/30 bg-rose-500/10 text-xs text-rose-600 dark:text-rose-400">
+                Conflict detected:{" "}
+                {conflict.student ? "you have another booking. " : ""}
+                {conflict.tutor ? "tutor is busy. " : ""}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -593,13 +552,9 @@ export default function StudentSessionCalendarPage() {
             className="w-full max-w-md rounded-3xl border p-5 border-[rgb(var(--border))] bg-[rgb(var(--card2))] shadow-[0_30px_120px_rgb(var(--shadow)/0.35)]"
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-              Confirm reschedule
-            </div>
+            <div className="text-sm font-semibold text-[rgb(var(--fg))]">Confirm reschedule</div>
 
-            <div className="mt-3 text-xs text-[rgb(var(--muted))]">
-              Move this session to:
-            </div>
+            <div className="mt-3 text-xs text-[rgb(var(--muted))]">Move this session to:</div>
 
             <div className="mt-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3">
               <div className="text-sm font-semibold text-[rgb(var(--fg))]">

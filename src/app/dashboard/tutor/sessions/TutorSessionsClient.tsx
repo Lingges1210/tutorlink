@@ -10,6 +10,12 @@ type Row = {
   durationMin: number;
   status: "PENDING" | "ACCEPTED" | "COMPLETED" | "CANCELLED" | string;
   cancelReason: string | null;
+
+  // ✅ proposal fields (return from API)
+  proposedAt?: string | null;
+  proposedNote?: string | null;
+  proposalStatus?: "PENDING" | "ACCEPTED" | "REJECTED" | null;
+
   subject: { code: string; title: string };
   student: {
     id: string;
@@ -22,6 +28,13 @@ type Row = {
 
 function prettyDate(iso: string) {
   return new Date(iso).toLocaleString();
+}
+
+function formatLocalInputValue(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
 }
 
 function getEndTime(s: Row) {
@@ -45,7 +58,7 @@ function isOngoing(s: Row) {
 function isStartingSoon(s: Row) {
   const start = new Date(s.scheduledAt).getTime();
   const diff = start - Date.now();
-  return diff > 0 && diff <= 5 * 60_000; // 5 minutes
+  return diff > 0 && diff <= 5 * 60_000;
 }
 
 function overlaps(aStart: number, aEnd: number, bStart: number, bEnd: number) {
@@ -69,7 +82,6 @@ function tutorHasOverlap(target: Row, all: Row[]) {
   });
 }
 
-/** ✅ Match MyBookings badge style */
 function statusBadgeClass(status: string) {
   switch (status) {
     case "PENDING":
@@ -124,11 +136,26 @@ export default function TutorSessionsClient() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // still used to re-render countdown text, but we DO NOT re-group/re-sort on tick
   const [, setTick] = useState(0);
 
   const [actionLoading, setActionLoading] = useState(false);
   const [showPast, setShowPast] = useState(false);
+
+  // ✅ modal state
+  const [mode, setMode] = useState<"CANCEL" | "PROPOSE" | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const [proposedTime, setProposedTime] = useState(() =>
+    formatLocalInputValue(new Date(Date.now() + 60 * 60 * 1000))
+  );
+  const [note, setNote] = useState("");
+
+  function closeModal() {
+    setMode(null);
+    setActiveId(null);
+    setReason("");
+    setNote("");
+  }
 
   async function refresh(opts?: { silent?: boolean }) {
     const silent = !!opts?.silent;
@@ -136,7 +163,7 @@ export default function TutorSessionsClient() {
 
     try {
       const res = await fetch("/api/tutor/sessions", { cache: "no-store" });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       setItems(Array.isArray(data.items) ? data.items : []);
     } finally {
       if (!silent) setLoading(false);
@@ -154,7 +181,6 @@ export default function TutorSessionsClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // countdown refresh every second (UI only)
   useEffect(() => {
     const t = setInterval(() => setTick((x) => x + 1), 1000);
     return () => clearInterval(t);
@@ -164,30 +190,99 @@ export default function TutorSessionsClient() {
     setActionLoading(true);
     setMsg(null);
 
-    const res = await fetch(`/api/tutor/sessions/${id}/accept`, {
-      method: "POST",
-    });
-    const data = await res.json().catch(() => ({}));
+    try {
+      const res = await fetch(`/api/tutor/sessions/${id}/accept`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) setMsg(data?.message ?? "Accept failed.");
-    else await refresh({ silent: true });
-
-    setActionLoading(false);
+      if (!res.ok) setMsg(data?.message ?? "Accept failed.");
+      else await refresh({ silent: true });
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function complete(id: string) {
     setActionLoading(true);
     setMsg(null);
 
-    const res = await fetch(`/api/tutor/sessions/${id}/complete`, {
-      method: "POST",
-    });
-    const data = await res.json().catch(() => ({}));
+    try {
+      const res = await fetch(`/api/tutor/sessions/${id}/complete`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) setMsg(data?.message ?? "Complete failed.");
-    else await refresh({ silent: true });
+      if (!res.ok) setMsg(data?.message ?? "Complete failed.");
+      else await refresh({ silent: true });
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
-    setActionLoading(false);
+  async function cancelSession() {
+    if (!activeId) return;
+
+    setActionLoading(true);
+    setMsg(null);
+
+    try {
+      const res = await fetch(`/api/tutor/sessions/${activeId}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) setMsg(data?.message ?? "Cancel failed.");
+      else {
+        setMsg("Session cancelled.");
+        closeModal();
+        await refresh({ silent: true });
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function proposeTime() {
+    if (!activeId) return;
+
+    const chosen = new Date(proposedTime);
+    if (Number.isNaN(chosen.getTime())) {
+      setMsg("Please choose a valid date/time.");
+      return;
+    }
+    if (chosen.getTime() < Date.now() + 5 * 60 * 1000) {
+      setMsg("Choose a time at least 5 minutes from now.");
+      return;
+    }
+
+    setActionLoading(true);
+    setMsg(null);
+
+    try {
+      const res = await fetch(`/api/tutor/sessions/${activeId}/propose-time`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proposedAt: chosen.toISOString(),
+          note: note?.trim() ? note.trim() : undefined,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) setMsg(data?.message ?? "Propose failed.");
+      else {
+        setMsg("Proposed new time sent to student for confirmation.");
+        closeModal();
+        await refresh({ silent: true });
+      }
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   const grouped = useMemo(() => {
@@ -199,9 +294,7 @@ export default function TutorSessionsClient() {
     );
     const past = items.filter((s) => getEndTime(s) <= now);
 
-    upcoming.sort(
-      (a, b) => +new Date(a.scheduledAt) - +new Date(b.scheduledAt)
-    );
+    upcoming.sort((a, b) => +new Date(a.scheduledAt) - +new Date(b.scheduledAt));
     past.sort((a, b) => +new Date(b.scheduledAt) - +new Date(a.scheduledAt));
 
     return { ongoing, upcoming, past };
@@ -235,8 +328,13 @@ export default function TutorSessionsClient() {
         <AnimatePresence initial={false}>
           {list.map((s) => {
             const pending = s.status === "PENDING";
+            const accepted = s.status === "ACCEPTED";
             const ongoing = isOngoing(s);
             const conflict = pending && tutorHasOverlap(s, items);
+
+            const active = pending || accepted;
+            const proposalPending =
+              s.proposalStatus === "PENDING" && !!s.proposedAt;
 
             return (
               <motion.div
@@ -269,6 +367,39 @@ export default function TutorSessionsClient() {
                       {prettyDate(s.scheduledAt)} · {s.durationMin} min
                     </div>
 
+                    {/* ✅ Proposed time pending block */}
+                    {proposalPending && (
+  <motion.div
+    key={`proposal-${s.id}`}
+    initial={{ opacity: 0, y: 10, scale: 0.985 }}
+    animate={{ opacity: 1, y: 0, scale: 1 }}
+    exit={{ opacity: 0, y: -10, scale: 0.985 }}
+    transition={{ duration: 0.18, ease: "easeOut" }}
+    className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3"
+  >
+    {/* Left */}
+    <div className="min-w-0">
+      <div className="text-[0.8rem] font-semibold text-[rgb(var(--fg))]">
+        Proposed time sent to student
+      </div>
+
+      <div className="mt-0.5 text-[0.75rem] text-[rgb(var(--muted2))] truncate">
+        {prettyDate(s.proposedAt!)}
+        {s.proposedNote ? ` · ${s.proposedNote}` : ""}
+      </div>
+    </div>
+
+    {/* Right status indicator (instead of buttons) */}
+    <div className="shrink-0">
+      <span className="rounded-full px-3 py-1 text-[11px] font-semibold border border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300">
+        Waiting confirmation
+      </span>
+    </div>
+  </motion.div>
+)}
+
+
+
                     {ongoing && (
                       <motion.div
                         initial={{ opacity: 0.6, y: 2 }}
@@ -278,6 +409,12 @@ export default function TutorSessionsClient() {
                       >
                         {countdownLabel(s)}
                       </motion.div>
+                    )}
+
+                    {s.status === "CANCELLED" && s.cancelReason && (
+                      <div className="mt-2 text-[0.7rem] text-[rgb(var(--muted2))]">
+                        Reason: {s.cancelReason}
+                      </div>
                     )}
                   </div>
 
@@ -302,7 +439,8 @@ export default function TutorSessionsClient() {
                         </span>
                       )}
 
-                      {pending && (
+                      {/* ✅ Accept only if pending and no conflict and no proposal pending */}
+                      {pending && !proposalPending && (
                         <button
                           disabled={actionLoading || conflict}
                           onClick={() => accept(s.id)}
@@ -336,6 +474,54 @@ export default function TutorSessionsClient() {
                           ].join(" ")}
                         >
                           Complete
+                        </button>
+                      )}
+
+                      {/* ✅ Propose time allowed while active (even if proposal pending → allow re-propose) */}
+                      {active && (
+                        <button
+                          disabled={actionLoading}
+                          onClick={() => {
+                            setActiveId(s.id);
+                            setMode("PROPOSE");
+                            setMsg(null);
+                            setNote("");
+                            setProposedTime(
+                              formatLocalInputValue(new Date(s.scheduledAt))
+                            );
+                          }}
+                          className={[
+                            "rounded-md px-3 py-2 text-xs font-semibold border",
+                            "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]",
+                            actionLoading
+                              ? "opacity-60 cursor-not-allowed"
+                              : "hover:bg-[rgb(var(--card)/0.6)]",
+                          ].join(" ")}
+                        >
+                          Propose time
+                        </button>
+                      )}
+
+                      {/* ✅ Cancel allowed while active */}
+                      {active && (
+                        <button
+                          disabled={actionLoading}
+                          onClick={() => {
+                            setActiveId(s.id);
+                            setMode("CANCEL");
+                            setMsg(null);
+                            setReason("");
+                          }}
+                          className={[
+                            "rounded-md px-3 py-2 text-xs font-semibold border",
+                            "border-rose-500/60 text-rose-600 dark:text-rose-400",
+                            "bg-[rgb(var(--card))]",
+                            actionLoading
+                              ? "opacity-60 cursor-not-allowed"
+                              : "hover:bg-rose-500/10",
+                          ].join(" ")}
+                        >
+                          Cancel
                         </button>
                       )}
                     </div>
@@ -389,11 +575,7 @@ export default function TutorSessionsClient() {
           </div>
 
           <Section title="Ongoing" subtitle="Live now" list={grouped.ongoing} />
-          <Section
-            title="Upcoming"
-            subtitle="Scheduled next"
-            list={grouped.upcoming}
-          />
+          <Section title="Upcoming" subtitle="Scheduled next" list={grouped.upcoming} />
 
           {showPast && (
             <Section
@@ -403,6 +585,116 @@ export default function TutorSessionsClient() {
             />
           )}
         </>
+      )}
+
+      {/* ✅ CANCEL MODAL */}
+      {mode === "CANCEL" && activeId && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
+          onMouseDown={() => !actionLoading && closeModal()}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border p-5 border-[rgb(var(--border))] bg-[rgb(var(--card2))] shadow-[0_30px_120px_rgb(var(--shadow)/0.35)]"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+              Cancel session
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
+                Reason (optional)
+              </label>
+              <input
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="e.g. Not available / emergency"
+                className="w-full rounded-md border px-3 py-2 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-rose-500"
+              />
+            </div>
+
+            <div className="mt-5 flex gap-2">
+              <button
+                disabled={actionLoading}
+                onClick={closeModal}
+                className="flex-1 rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
+              >
+                Close
+              </button>
+
+              <button
+                disabled={actionLoading}
+                onClick={cancelSession}
+                className="flex-1 rounded-md px-3 py-2 text-xs font-semibold text-white bg-rose-600 hover:opacity-90 disabled:opacity-60"
+              >
+                {actionLoading ? "Working…" : "Cancel session"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ PROPOSE MODAL */}
+      {mode === "PROPOSE" && activeId && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
+          onMouseDown={() => !actionLoading && closeModal()}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border p-5 border-[rgb(var(--border))] bg-[rgb(var(--card2))] shadow-[0_30px_120px_rgb(var(--shadow)/0.35)]"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+              Propose a new time
+            </div>
+
+            <div className="mt-3 text-xs text-[rgb(var(--muted2))]">
+              Student must confirm this change. Until then, the session time stays the same.
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
+                Proposed date & time
+              </label>
+              <input
+                type="datetime-local"
+                value={proposedTime}
+                onChange={(e) => setProposedTime(e.target.value)}
+                className="w-full rounded-md border px-3 py-2 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))]"
+              />
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
+                Note (optional)
+              </label>
+              <input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="e.g. I have a class at that time—can we shift?"
+                className="w-full rounded-md border px-3 py-2 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))]"
+              />
+            </div>
+
+            <div className="mt-5 flex gap-2">
+              <button
+                disabled={actionLoading}
+                onClick={closeModal}
+                className="flex-1 rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
+              >
+                Close
+              </button>
+
+              <button
+                disabled={actionLoading}
+                onClick={proposeTime}
+                className="flex-1 rounded-md px-3 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-90 disabled:opacity-60"
+              >
+                {actionLoading ? "Sending…" : "Send proposal"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

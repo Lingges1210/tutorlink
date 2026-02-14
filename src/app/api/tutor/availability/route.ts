@@ -3,6 +3,23 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
+async function triggerAllocator() {
+  // If you don't set these, allocator won't run (and that's OK)
+  const appUrl = process.env.APP_URL;
+  const secret = process.env.ALLOCATOR_SECRET;
+  if (!appUrl || !secret) return;
+
+  try {
+    await fetch(`${appUrl}/api/sessions/allocate`, {
+      method: "POST",
+      headers: { "x-allocator-secret": secret },
+      cache: "no-store",
+    });
+  } catch {
+    // ignore - allocator cron will still handle it
+  }
+}
+
 export async function GET() {
   try {
     const supabase = await supabaseServerComponent();
@@ -11,7 +28,10 @@ export async function GET() {
     } = await supabase.auth.getUser();
 
     if (!user?.email) {
-      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const dbUser = await prisma.user.findUnique({
@@ -20,10 +40,12 @@ export async function GET() {
     });
 
     if (!dbUser) {
-      return NextResponse.json({ success: false, message: "User not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: "User not found" },
+        { status: 404 }
+      );
     }
 
-    // ✅ adjust model name if yours differs
     const app = await prisma.tutorApplication.findFirst({
       where: { userId: dbUser.id },
       orderBy: { createdAt: "desc" },
@@ -36,7 +58,10 @@ export async function GET() {
       status: app?.status ?? null,
     });
   } catch {
-    return NextResponse.json({ success: false, message: "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Server error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -48,14 +73,20 @@ export async function POST(req: Request) {
     } = await supabase.auth.getUser();
 
     if (!user?.email) {
-      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const body = await req.json().catch(() => ({}));
     const availability = typeof body.availability === "string" ? body.availability : null;
 
     if (!availability?.trim()) {
-      return NextResponse.json({ success: false, message: "Availability is required" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: "Availability is required" },
+        { status: 400 }
+      );
     }
 
     const dbUser = await prisma.user.findUnique({
@@ -64,10 +95,12 @@ export async function POST(req: Request) {
     });
 
     if (!dbUser) {
-      return NextResponse.json({ success: false, message: "User not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: "User not found" },
+        { status: 404 }
+      );
     }
 
-    // ✅ update latest application (or create separate tutorProfile table later)
     const latest = await prisma.tutorApplication.findFirst({
       where: { userId: dbUser.id },
       orderBy: { createdAt: "desc" },
@@ -86,8 +119,14 @@ export async function POST(req: Request) {
       data: { availability },
     });
 
+    // ✅ Trigger allocation right after availability changes
+    await triggerAllocator();
+
     return NextResponse.json({ success: true });
   } catch {
-    return NextResponse.json({ success: false, message: "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Server error" },
+      { status: 500 }
+    );
   }
 }

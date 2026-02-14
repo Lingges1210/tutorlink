@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
-/** ---------- availability parsing helpers (best-effort) ---------- */
+/** ---------- availability parsing helpers (same as your reschedule) ---------- */
 type DayKey = "SUN" | "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT";
 type TimeSlot = { start: string; end: string };
 type DayAvailability = { day: DayKey; off: boolean; slots: TimeSlot[] };
@@ -15,7 +15,6 @@ function toMinutes(hhmm: string) {
 }
 
 function dayKeyFromDate(d: Date): DayKey {
-  // JS: 0=Sun ... 6=Sat
   const k: DayKey[] = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
   return k[d.getDay()];
 }
@@ -23,8 +22,6 @@ function dayKeyFromDate(d: Date): DayKey {
 function withinSlots(day: DayAvailability, startMin: number, endMin: number) {
   if (day.off) return false;
   if (!Array.isArray(day.slots) || day.slots.length === 0) return false;
-
-  // must fit fully inside one slot
   return day.slots.some((s) => {
     const a = toMinutes(s.start);
     const b = toMinutes(s.end);
@@ -32,25 +29,19 @@ function withinSlots(day: DayAvailability, startMin: number, endMin: number) {
   });
 }
 
-/**
- * Tries to read a tutor availability JSON string from common places.
- * - If not found / invalid JSON -> returns null (means "unknown", we won't block)
- */
 async function getTutorAvailability(tutorId: string): Promise<DayAvailability[] | null> {
-  // ✅ Adjust these fields to match YOUR schema.
-  // I’m doing “best effort” so this won’t crash even if a table/field is missing.
-  // If you KNOW exactly where availability is stored, tell me and I’ll simplify it.
-
-  // 1) maybe stored directly on User as `availability` or `availabilityJson`
-  const tutorUser = await prisma.user.findUnique({
-    where: { id: tutorId },
-    select: {
-      // @ts-ignore - your schema might not have these, that's ok
-      availability: true,
-      // @ts-ignore
-      availabilityJson: true,
-    } as any,
-  }).catch(() => null);
+  // Best-effort read from common places (same approach as your reschedule route)
+  const tutorUser = await prisma.user
+    .findUnique({
+      where: { id: tutorId },
+      select: {
+        // @ts-ignore
+        availability: true,
+        // @ts-ignore
+        availabilityJson: true,
+      } as any,
+    })
+    .catch(() => null);
 
   const raw =
     (tutorUser as any)?.availabilityJson ??
@@ -61,8 +52,6 @@ async function getTutorAvailability(tutorId: string): Promise<DayAvailability[] 
 
   try {
     const parsed = JSON.parse(raw);
-
-    // expect array of {day, off, slots}
     if (!Array.isArray(parsed)) return null;
 
     const cleaned: DayAvailability[] = parsed
@@ -80,19 +69,11 @@ async function getTutorAvailability(tutorId: string): Promise<DayAvailability[] 
   }
 }
 
-/**
- * Returns:
- * - true  => tutor is declared-available for this time
- * - false => tutor is declared-unavailable for this time
- * - null  => no availability info found (we don't block)
- */
 async function tutorDeclaredAvailable(
   tutorId: string,
   start: Date,
   end: Date
 ): Promise<true | false | null> {
-  // We only support same-day sessions for availability slots.
-  // (If you allow cross-midnight sessions, we can extend this.)
   const sameDay =
     start.getFullYear() === end.getFullYear() &&
     start.getMonth() === end.getMonth() &&
@@ -114,9 +95,8 @@ async function tutorDeclaredAvailable(
 }
 
 /** ---------- route ---------- */
-
 export async function POST(
-  req: Request,
+  _req: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
@@ -143,30 +123,23 @@ export async function POST(
     return NextResponse.json({ message: "Not verified" }, { status: 403 });
   }
 
-  const body = await req.json().catch(() => ({}));
-  const scheduledAtRaw =
-    typeof body.scheduledAt === "string" ? body.scheduledAt : null;
-
-  if (!scheduledAtRaw) {
-    return NextResponse.json({ message: "Missing date" }, { status: 400 });
-  }
-
-  const newScheduledAt = new Date(scheduledAtRaw);
-  if (Number.isNaN(newScheduledAt.getTime())) {
-    return NextResponse.json({ message: "Invalid date" }, { status: 400 });
-  }
-
-  // ✅ Fetch existing session details
   const session = await prisma.session.findUnique({
     where: { id },
     select: {
       id: true,
       studentId: true,
-      tutorId: true,      // may be null now
-      subjectId: true,
+      tutorId: true,
       status: true,
       durationMin: true,
-    },
+
+      // proposal fields (must exist in schema)
+      // @ts-ignore
+      proposedAt: true,
+      // @ts-ignore
+      proposedEndAt: true,
+      // @ts-ignore
+      proposalStatus: true,
+    } as any,
   });
 
   if (!session || session.studentId !== dbUser.id) {
@@ -175,13 +148,26 @@ export async function POST(
 
   if (session.status === "CANCELLED" || session.status === "COMPLETED") {
     return NextResponse.json(
-      { message: "Cannot reschedule this session" },
+      { message: "Cannot accept proposal for a closed session." },
+      { status: 409 }
+    );
+  }
+
+  const proposalStatus = (session as any).proposalStatus as string | null;
+  const proposedAt = (session as any).proposedAt as Date | null;
+  const proposedEndAt = (session as any).proposedEndAt as Date | null;
+
+  if (proposalStatus !== "PENDING" || !proposedAt) {
+    return NextResponse.json(
+      { message: "No pending proposal to accept." },
       { status: 409 }
     );
   }
 
   const durationMin = session.durationMin ?? 60;
-  const newEndsAt = new Date(newScheduledAt.getTime() + durationMin * 60_000);
+  const newScheduledAt = new Date(proposedAt);
+  const newEndsAt =
+    proposedEndAt ?? new Date(newScheduledAt.getTime() + durationMin * 60_000);
 
   // ✅ 1) Student overlap check (exclude this session)
   const studentClash = await prisma.session.findFirst({
@@ -197,14 +183,13 @@ export async function POST(
 
   if (studentClash) {
     return NextResponse.json(
-      { message: "You already have another booking that overlaps this time." },
+      { message: "You have another booking that overlaps this proposed time." },
       { status: 409 }
     );
   }
 
-  // ✅ If tutor is assigned, enforce tutor availability + overlap
+  // ✅ 2) Tutor checks (only if tutor exists)
   if (session.tutorId) {
-    // 2) Tutor overlap check
     const tutorClash = await prisma.session.findFirst({
       where: {
         id: { not: session.id },
@@ -217,27 +202,13 @@ export async function POST(
     });
 
     if (tutorClash) {
-      // 👉 queue behavior: unassign tutor instead of hard-failing
-      await prisma.session.update({
-        where: { id: session.id },
-        data: {
-          scheduledAt: newScheduledAt,
-          endsAt: newEndsAt,
-          rescheduledAt: new Date(),
-          status: "PENDING",
-          tutorId: null, // ✅ queued (no tutor assigned)
-        },
-      });
-
-      return NextResponse.json({
-        success: true,
-        queued: true,
-        message:
-          "Rescheduled, but your tutor is busy at that time. You’ve been queued for reassignment.",
-      });
+      // keep proposal pending; student can reject or tutor can propose again
+      return NextResponse.json(
+        { message: "Tutor has a conflict at this proposed time." },
+        { status: 409 }
+      );
     }
 
-    // 3) Declared availability check (best-effort)
     const declared = await tutorDeclaredAvailable(
       session.tutorId,
       newScheduledAt,
@@ -245,28 +216,14 @@ export async function POST(
     );
 
     if (declared === false) {
-      // 👉 queue behavior: unassign tutor instead of hard-failing
-      await prisma.session.update({
-        where: { id: session.id },
-        data: {
-          scheduledAt: newScheduledAt,
-          endsAt: newEndsAt,
-          rescheduledAt: new Date(),
-          status: "PENDING",
-          tutorId: null, // ✅ queued (no tutor assigned)
-        },
-      });
-
-      return NextResponse.json({
-        success: true,
-        queued: true,
-        message:
-          "Rescheduled, but your tutor isn’t available then. You’ve been queued for reassignment.",
-      });
+      return NextResponse.json(
+        { message: "Tutor is not available at this proposed time." },
+        { status: 409 }
+      );
     }
   }
 
-  // ✅ No tutor assigned OR tutor is fine -> normal reschedule
+  // ✅ Apply proposal as the new schedule
   await prisma.session.update({
     where: { id: session.id },
     data: {
@@ -274,8 +231,20 @@ export async function POST(
       endsAt: newEndsAt,
       rescheduledAt: new Date(),
       status: "PENDING",
-    },
+
+      // mark proposal accepted + clear proposal
+      // @ts-ignore
+      proposalStatus: "ACCEPTED",
+      // @ts-ignore
+      proposedAt: null,
+      // @ts-ignore
+      proposedEndAt: null,
+      // @ts-ignore
+      proposedNote: null,
+      // @ts-ignore
+      proposedByUserId: null,
+    } as any,
   });
 
-  return NextResponse.json({ success: true, queued: !session.tutorId });
+  return NextResponse.json({ success: true });
 }

@@ -78,6 +78,13 @@ enum SessionStatus {
   CANCELLED
 }
 
+enum ProposalStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+
 model Subject {
   id        String   @id @default(cuid())
   code      String   @unique // e.g. WIA2003
@@ -106,8 +113,8 @@ model Session {
   student   User   @relation("StudentSessions", fields: [studentId], references: [id])
   studentId String
 
-  tutor   User   @relation("TutorSessions", fields: [tutorId], references: [id])
-  tutorId String
+  tutor   User?   @relation("TutorSessions", fields: [tutorId], references: [id])
+  tutorId String?
 
   subject   Subject @relation(fields: [subjectId], references: [id])
   subjectId String
@@ -129,4 +136,13 @@ model Session {
   @@index([studentId, status])
   @@index([tutorId, status])
   @@index([scheduledAt])
+
+    // ---- reschedule proposal flow (tutor -> student confirm) ----
+  proposedAt       DateTime?
+  proposedEndAt    DateTime?
+  proposedNote     String?
+  proposalStatus   ProposalStatus?
+  proposedByUserId String?
+
 }
+
