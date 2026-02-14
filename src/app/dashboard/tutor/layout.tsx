@@ -45,7 +45,6 @@ export default async function TutorLayout({
     { type: "link", href: "/dashboard/tutor", label: "Tutor Home", icon: "dashboard" },
     { type: "link", href: "/dashboard/tutor/profile", label: "Tutor Profile", icon: "profile" },
     { type: "link", href: "/dashboard/tutor/availability", label: "Availability", icon: "calendar" },
-    { type: "link", href: "/dashboard/tutor/requests", label: "Requests", icon: "calendar" },
     { type: "link", href: "/dashboard/tutor/sessions", label: "Sessions", icon: "calendar" },
 
     { type: "divider" },

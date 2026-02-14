@@ -192,7 +192,7 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
 
           <div className="mt-4 flex flex-wrap gap-3">
             {isVerified ? (
-              <PrimaryLinkButton href="/dashboard/student/find-tutor">Find a Tutor</PrimaryLinkButton>
+              <PrimaryLinkButton href="/find-tutor">Find a Tutor</PrimaryLinkButton>
             ) : (
               <DisabledButton>Find a Tutor</DisabledButton>
             )}

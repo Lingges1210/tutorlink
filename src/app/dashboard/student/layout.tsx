@@ -59,14 +59,14 @@ export default async function StudentLayout({
   ? ([
       {
         type: "link",
-        href: "/dashboard/student/find-tutor",
-        label: "Find Tutor (later)",
+        href: "/find-tutor",
+        label: "Find Tutor",
         icon: "search",
       },
       {
         type: "link",
         href: "/dashboard/student/sessions",
-        label: "My Bookings (later)",
+        label: "My Bookings",
         icon: "calendar",
       },
       !isTutor
