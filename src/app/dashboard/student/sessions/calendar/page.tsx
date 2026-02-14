@@ -557,6 +557,9 @@ export default function StudentSessionCalendarPage() {
   background: rgb(var(--card)) !important;
 }
 
+
+
+
             `}</style>
 
             <div style={{ height: 680 }}>
