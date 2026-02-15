@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Calendar, CheckCircle } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type Row = {
   id: string;
@@ -85,6 +85,11 @@ function isPast(s: Row) {
 }
 
 export default function MyBookingsClient() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
+  const focusId = sp.get("focus");
+
   const [items, setItems] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -145,6 +150,41 @@ export default function MyBookingsClient() {
     pa.sort((a, b) => +new Date(b.scheduledAt) - +new Date(a.scheduledAt));
     return { upcoming: up, past: pa };
   }, [items]);
+
+  // ✅ Focus UX: scroll + glow + auto-show Past + clear focus param after 3s
+  useEffect(() => {
+    if (!focusId) return;
+    if (loading) return;
+    if (!items.length) return;
+
+    const exists = items.some((x) => x.id === focusId);
+    if (!exists) return;
+
+    // If focused one is in past, force showPast
+    const isFocusedPast = past.some((x) => x.id === focusId);
+    if (isFocusedPast) setShowPast(true);
+
+    const el = document.getElementById(`session-${focusId}`);
+    if (el) {
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("focus-glow");
+      });
+    }
+
+    const t = window.setTimeout(() => {
+      const el2 = document.getElementById(`session-${focusId}`);
+      if (el2) el2.classList.remove("focus-glow");
+
+      const next = new URLSearchParams(sp.toString());
+      next.delete("focus");
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }, 3000);
+
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, loading, items.length, past.length]);
 
   async function doReschedule() {
     if (!activeId) return;
@@ -209,7 +249,6 @@ export default function MyBookingsClient() {
     }
   }
 
-  // ✅ Student accepts tutor proposal
   async function acceptProposal(id: string) {
     setActionLoading(true);
     setMsg(null);
@@ -230,7 +269,6 @@ export default function MyBookingsClient() {
     }
   }
 
-  // ✅ Student rejects tutor proposal
   async function rejectProposal(id: string) {
     setActionLoading(true);
     setMsg(null);
@@ -259,12 +297,15 @@ export default function MyBookingsClient() {
     const unassigned = !s.tutor;
 
     const proposalPending = s.proposalStatus === "PENDING" && !!s.proposedAt;
+    const isFocused = focusId === s.id;
 
     return (
       <div
+        id={`session-${s.id}`} // ✅ scroll target
         className={[
-          "rounded-2xl border p-4 border-[rgb(var(--border))] bg-[rgb(var(--card2))] transition-opacity duration-300",
+          "rounded-2xl border p-4 border-[rgb(var(--border))] bg-[rgb(var(--card2))] transition-all duration-300",
           closed ? "opacity-80" : "",
+          isFocused ? "ring-2 ring-[rgb(var(--primary))]" : "",
         ].join(" ")}
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -278,7 +319,6 @@ export default function MyBookingsClient() {
               {tutorProgramme ? ` · ${tutorProgramme}` : ""}
             </div>
 
-            {/* ✅ Assignment feedback */}
             {s.tutor && (
               <div className="mt-1 text-[0.7rem] font-medium text-emerald-600 dark:text-emerald-400">
                 Tutor assigned: {s.tutor.name ?? "Tutor"}
@@ -295,57 +335,48 @@ export default function MyBookingsClient() {
               {prettyDate(s.scheduledAt)} · {s.durationMin} min
             </div>
 
-            {/* ✅ Tutor proposed new time */}
-            {/* ✅ Tutor proposed new time */}
-{/* ✅ Minimal proposal banner */}
-{/* ✅ Animated proposal banner (slide-in) */}
-<AnimatePresence initial={false}>
-  {proposalPending && (
-    <motion.div
-      key={`proposal-${s.id}`}
-      initial={{ opacity: 0, y: 10, scale: 0.985 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -10, scale: 0.985 }}
-      transition={{ duration: 0.18, ease: "easeOut" }}
-      className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3"
-    >
-      {/* Left */}
-      <div className="min-w-0">
-        <div className="text-[0.8rem] font-semibold text-[rgb(var(--fg))]">
-          Tutor proposed a new time
-        </div>
-        <div className="mt-0.5 text-[0.75rem] text-[rgb(var(--muted2))] truncate">
-          {prettyDate(s.proposedAt!)}
-          {s.proposedNote ? ` · ${s.proposedNote}` : ""}
-        </div>
-      </div>
+            <AnimatePresence initial={false}>
+              {proposalPending && (
+                <motion.div
+                  key={`proposal-${s.id}`}
+                  initial={{ opacity: 0, y: 10, scale: 0.985 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.985 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <div className="text-[0.8rem] font-semibold text-[rgb(var(--fg))]">
+                      Tutor proposed a new time
+                    </div>
+                    <div className="mt-0.5 text-[0.75rem] text-[rgb(var(--muted2))] truncate">
+                      {prettyDate(s.proposedAt!)}
+                      {s.proposedNote ? ` · ${s.proposedNote}` : ""}
+                    </div>
+                  </div>
 
-      {/* Right buttons */}
-      <div className="flex gap-2 shrink-0">
-        <motion.button
-          whileTap={{ scale: 0.98 }}
-          disabled={actionLoading}
-          onClick={() => acceptProposal(s.id)}
-          className="rounded-md px-3 py-2 text-xs font-semibold text-white bg-emerald-600 hover:opacity-90 disabled:opacity-60"
-        >
-          {actionLoading ? "..." : "Accept"}
-        </motion.button>
+                  <div className="flex gap-2 shrink-0">
+                    <motion.button
+                      whileTap={{ scale: 0.98 }}
+                      disabled={actionLoading}
+                      onClick={() => acceptProposal(s.id)}
+                      className="rounded-md px-3 py-2 text-xs font-semibold text-white bg-emerald-600 hover:opacity-90 disabled:opacity-60"
+                    >
+                      {actionLoading ? "..." : "Accept"}
+                    </motion.button>
 
-        <motion.button
-          whileTap={{ scale: 0.98 }}
-          disabled={actionLoading}
-          onClick={() => rejectProposal(s.id)}
-          className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
-        >
-          Reject
-        </motion.button>
-      </div>
-    </motion.div>
-  )}
-</AnimatePresence>
-
-
-
+                    <motion.button
+                      whileTap={{ scale: 0.98 }}
+                      disabled={actionLoading}
+                      onClick={() => rejectProposal(s.id)}
+                      className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
+                    >
+                      Reject
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <div className="flex items-center gap-2">
@@ -358,7 +389,6 @@ export default function MyBookingsClient() {
               {s.status}
             </span>
 
-            {/* Optional: while proposal pending, block student reschedule to avoid chaos */}
             <button
               disabled={closed || proposalPending}
               onClick={() => {

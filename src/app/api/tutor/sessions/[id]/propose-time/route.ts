@@ -1,6 +1,8 @@
+// src/app/api/tutor/sessions/[id]/propose-time/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { notify } from "@/lib/notify";
 
 function isoToDate(v: unknown) {
   if (typeof v !== "string") return null;
@@ -77,6 +79,7 @@ export async function POST(
     select: {
       id: true,
       tutorId: true,
+      studentId: true, // ✅ ADD
       status: true,
       scheduledAt: true,
       endsAt: true,
@@ -112,7 +115,7 @@ export async function POST(
     proposedEndAt ??
     new Date(proposedAt.getTime() + (session.durationMin ?? 60) * 60_000);
 
-  await prisma.session.update({
+  const updated = await prisma.session.update({
     where: { id: session.id },
     data: {
       proposedAt,
@@ -121,7 +124,27 @@ export async function POST(
       proposalStatus: "PENDING",
       proposedByUserId: tutor.id,
     },
+    select: {
+      id: true,
+      tutorId: true,
+      studentId: true,
+      proposedAt: true,
+    },
   });
+
+  // ✅ Notify student (do not block propose)
+  try {
+    if (updated.studentId && updated.tutorId && updated.proposedAt) {
+      await notify.proposalSentToStudent(
+        updated.studentId,
+        updated.tutorId,
+        updated.id,
+        updated.proposedAt.toISOString()
+      );
+    }
+  } catch {
+    // ignore
+  }
 
   return NextResponse.json({
     success: true,

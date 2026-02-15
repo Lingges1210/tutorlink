@@ -1,6 +1,8 @@
+// src/app/api/tutor/sessions/[id]/cancel/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { notify } from "@/lib/notify";
 
 export async function POST(
   req: Request,
@@ -51,6 +53,7 @@ export async function POST(
     select: {
       id: true,
       tutorId: true,
+      studentId: true,
       status: true,
       scheduledAt: true,
       endsAt: true,
@@ -69,7 +72,6 @@ export async function POST(
     );
   }
 
-  // optional guard: block cancelling after it ended
   const start = new Date(session.scheduledAt);
   const end =
     session.endsAt ??
@@ -82,14 +84,24 @@ export async function POST(
     );
   }
 
-  await prisma.session.update({
+  const updated = await prisma.session.update({
     where: { id: session.id },
     data: {
       status: "CANCELLED",
       cancelledAt: new Date(),
       cancelReason: reason,
     },
+    select: { id: true, studentId: true },
   });
+
+  // ✅ Notify student (viewer must be STUDENT)
+  try {
+    if (updated.studentId) {
+      await notify.sessionCancelled(updated.studentId, updated.id, "STUDENT", reason);
+    }
+  } catch {
+    // ignore
+  }
 
   return NextResponse.json({ success: true, status: "CANCELLED" });
 }

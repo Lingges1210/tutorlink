@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type Row = {
   id: string;
@@ -132,6 +133,11 @@ function countdownLabel(s: Row) {
 }
 
 export default function TutorSessionsClient() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
+  const focusId = sp.get("focus");
+
   const [items, setItems] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
@@ -300,6 +306,41 @@ export default function TutorSessionsClient() {
     return { ongoing, upcoming, past };
   }, [items]);
 
+  // ✅ Focus UX: scroll + glow + auto-show Past + clear focus param after 3s
+  useEffect(() => {
+    if (!focusId) return;
+    if (loading) return;
+    if (!items.length) return;
+
+    const exists = items.some((x) => x.id === focusId);
+    if (!exists) return;
+
+    // If focused one is in past, force showPast
+    const isFocusedPast = grouped.past.some((x) => x.id === focusId);
+    if (isFocusedPast) setShowPast(true);
+
+    const el = document.getElementById(`session-${focusId}`);
+    if (el) {
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("focus-glow");
+      });
+    }
+
+    const t = window.setTimeout(() => {
+      const el2 = document.getElementById(`session-${focusId}`);
+      if (el2) el2.classList.remove("focus-glow");
+
+      const next = new URLSearchParams(sp.toString());
+      next.delete("focus");
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }, 3000);
+
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, loading, items.length, grouped.past.length]);
+
   function Section({
     title,
     list,
@@ -336,9 +377,12 @@ export default function TutorSessionsClient() {
             const proposalPending =
               s.proposalStatus === "PENDING" && !!s.proposedAt;
 
+            const isFocused = focusId === s.id;
+
             return (
               <motion.div
                 key={s.id}
+                id={`session-${s.id}`} // ✅ scroll target
                 layout="position"
                 initial={{ opacity: 0, y: 10, scale: 0.985 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -351,6 +395,8 @@ export default function TutorSessionsClient() {
                   isStartingSoon(s) && !ongoing
                     ? "ring-2 ring-amber-400 animate-pulse"
                     : "",
+                  // ✅ immediate visual cue even before animation kicks in
+                  isFocused ? "ring-2 ring-[rgb(var(--primary))]" : "",
                 ].join(" ")}
               >
                 <div className="flex justify-between items-start gap-3">
@@ -367,38 +413,33 @@ export default function TutorSessionsClient() {
                       {prettyDate(s.scheduledAt)} · {s.durationMin} min
                     </div>
 
-                    {/* ✅ Proposed time pending block */}
                     {proposalPending && (
-  <motion.div
-    key={`proposal-${s.id}`}
-    initial={{ opacity: 0, y: 10, scale: 0.985 }}
-    animate={{ opacity: 1, y: 0, scale: 1 }}
-    exit={{ opacity: 0, y: -10, scale: 0.985 }}
-    transition={{ duration: 0.18, ease: "easeOut" }}
-    className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3"
-  >
-    {/* Left */}
-    <div className="min-w-0">
-      <div className="text-[0.8rem] font-semibold text-[rgb(var(--fg))]">
-        Proposed time sent to student
-      </div>
+                      <motion.div
+                        key={`proposal-${s.id}`}
+                        initial={{ opacity: 0, y: 10, scale: 0.985 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -10, scale: 0.985 }}
+                        transition={{ duration: 0.18, ease: "easeOut" }}
+                        className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-[0.8rem] font-semibold text-[rgb(var(--fg))]">
+                            Proposed time sent to student
+                          </div>
 
-      <div className="mt-0.5 text-[0.75rem] text-[rgb(var(--muted2))] truncate">
-        {prettyDate(s.proposedAt!)}
-        {s.proposedNote ? ` · ${s.proposedNote}` : ""}
-      </div>
-    </div>
+                          <div className="mt-0.5 text-[0.75rem] text-[rgb(var(--muted2))] truncate">
+                            {prettyDate(s.proposedAt!)}
+                            {s.proposedNote ? ` · ${s.proposedNote}` : ""}
+                          </div>
+                        </div>
 
-    {/* Right status indicator (instead of buttons) */}
-    <div className="shrink-0">
-      <span className="rounded-full px-3 py-1 text-[11px] font-semibold border border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300">
-        Waiting confirmation
-      </span>
-    </div>
-  </motion.div>
-)}
-
-
+                        <div className="shrink-0">
+                          <span className="rounded-full px-3 py-1 text-[11px] font-semibold border border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300">
+                            Waiting confirmation
+                          </span>
+                        </div>
+                      </motion.div>
+                    )}
 
                     {ongoing && (
                       <motion.div
@@ -439,7 +480,6 @@ export default function TutorSessionsClient() {
                         </span>
                       )}
 
-                      {/* ✅ Accept only if pending and no conflict and no proposal pending */}
                       {pending && !proposalPending && (
                         <button
                           disabled={actionLoading || conflict}
@@ -477,7 +517,6 @@ export default function TutorSessionsClient() {
                         </button>
                       )}
 
-                      {/* ✅ Propose time allowed while active (even if proposal pending → allow re-propose) */}
                       {active && (
                         <button
                           disabled={actionLoading}
@@ -502,7 +541,6 @@ export default function TutorSessionsClient() {
                         </button>
                       )}
 
-                      {/* ✅ Cancel allowed while active */}
                       {active && (
                         <button
                           disabled={actionLoading}

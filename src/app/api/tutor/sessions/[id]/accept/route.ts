@@ -1,9 +1,11 @@
+// src/app/api/tutor/sessions/[id]/accept/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { notify } from "@/lib/notify";
 
 export async function POST(
-  req: Request,
+  _req: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
@@ -42,12 +44,13 @@ export async function POST(
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
-  // ✅ Need scheduledAt + endsAt for conflict checks
+  // ✅ Need scheduledAt + endsAt for conflict checks + studentId for notification
   const session = await prisma.session.findUnique({
     where: { id },
     select: {
       id: true,
       tutorId: true,
+      studentId: true,
       status: true,
       scheduledAt: true,
       endsAt: true,
@@ -71,8 +74,7 @@ export async function POST(
     session.endsAt ??
     new Date(start.getTime() + (session.durationMin ?? 60) * 60_000);
 
-  // ✅ Prevent double-booking:
-  // any ACCEPTED session overlap => block
+  // ✅ Prevent double-booking: any ACCEPTED session overlap => block
   const clash = await prisma.session.findFirst({
     where: {
       tutorId: tutor.id,
@@ -86,15 +88,39 @@ export async function POST(
 
   if (clash) {
     return NextResponse.json(
-      { message: "You already accepted another session that overlaps this time." },
+      {
+        message:
+          "You already accepted another session that overlaps this time.",
+      },
       { status: 409 }
     );
   }
 
-  await prisma.session.update({
+  const updated = await prisma.session.update({
     where: { id: session.id },
     data: { status: "ACCEPTED" },
+    select: {
+      id: true,
+      tutorId: true,
+      studentId: true,
+      scheduledAt: true,
+    },
   });
+
+  // ✅ Notifications (do not block accept if notification fails)
+  try {
+    if (updated.studentId && updated.tutorId) {
+      await notify.bookingConfirmed(
+        updated.studentId,
+        updated.tutorId,
+        updated.id,
+        updated.scheduledAt.toISOString()
+      );
+    }
+  } catch {
+    // ignore notification errors
+  }
+
 
   return NextResponse.json({ success: true, status: "ACCEPTED" });
 }

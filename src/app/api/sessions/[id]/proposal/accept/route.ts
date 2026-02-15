@@ -1,6 +1,8 @@
+// src/app/api/sessions/[id]/proposal/accept/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { notify } from "@/lib/notify";
 
 /** ---------- availability parsing helpers (same as your reschedule) ---------- */
 type DayKey = "SUN" | "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT";
@@ -29,25 +31,19 @@ function withinSlots(day: DayAvailability, startMin: number, endMin: number) {
   });
 }
 
-async function getTutorAvailability(tutorId: string): Promise<DayAvailability[] | null> {
-  // Best-effort read from common places (same approach as your reschedule route)
-  const tutorUser = await prisma.user
-    .findUnique({
-      where: { id: tutorId },
-      select: {
-        // @ts-ignore
-        availability: true,
-        // @ts-ignore
-        availabilityJson: true,
-      } as any,
+async function getTutorAvailability(
+  tutorId: string
+): Promise<DayAvailability[] | null> {
+  // ✅ get latest APPROVED tutor application
+  const app = await prisma.tutorApplication
+    .findFirst({
+      where: { userId: tutorId, status: "APPROVED" },
+      orderBy: { createdAt: "desc" },
+      select: { availability: true },
     })
     .catch(() => null);
 
-  const raw =
-    (tutorUser as any)?.availabilityJson ??
-    (tutorUser as any)?.availability ??
-    null;
-
+  const raw = (app as any)?.availability ?? null;
   if (typeof raw !== "string" || !raw.trim()) return null;
 
   try {
@@ -68,6 +64,7 @@ async function getTutorAvailability(tutorId: string): Promise<DayAvailability[] 
     return null;
   }
 }
+
 
 async function tutorDeclaredAvailable(
   tutorId: string,
@@ -132,7 +129,6 @@ export async function POST(
       status: true,
       durationMin: true,
 
-      // proposal fields (must exist in schema)
       // @ts-ignore
       proposedAt: true,
       // @ts-ignore
@@ -202,7 +198,6 @@ export async function POST(
     });
 
     if (tutorClash) {
-      // keep proposal pending; student can reject or tutor can propose again
       return NextResponse.json(
         { message: "Tutor has a conflict at this proposed time." },
         { status: 409 }
@@ -224,7 +219,7 @@ export async function POST(
   }
 
   // ✅ Apply proposal as the new schedule
-  await prisma.session.update({
+  const updated = await prisma.session.update({
     where: { id: session.id },
     data: {
       scheduledAt: newScheduledAt,
@@ -232,7 +227,6 @@ export async function POST(
       rescheduledAt: new Date(),
       status: "PENDING",
 
-      // mark proposal accepted + clear proposal
       // @ts-ignore
       proposalStatus: "ACCEPTED",
       // @ts-ignore
@@ -244,7 +238,27 @@ export async function POST(
       // @ts-ignore
       proposedByUserId: null,
     } as any,
+    select: {
+      id: true,
+      tutorId: true,
+      studentId: true,
+      scheduledAt: true,
+    },
   });
+
+  // ✅ Notify tutor: proposal accepted (only if tutor exists)
+  try {
+    if (updated.tutorId) {
+      await notify.proposalAcceptedToTutor(
+        updated.tutorId,
+        updated.studentId,
+        updated.id,
+        updated.scheduledAt.toISOString()
+      );
+    }
+  } catch {
+    // ignore
+  }
 
   return NextResponse.json({ success: true });
 }

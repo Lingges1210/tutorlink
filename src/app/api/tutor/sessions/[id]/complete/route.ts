@@ -1,6 +1,8 @@
+// src/app/api/tutor/sessions/[id]/complete/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { notify } from "@/lib/notify";
 
 async function triggerAllocator() {
   const appUrl = process.env.APP_URL;
@@ -14,19 +16,24 @@ async function triggerAllocator() {
       cache: "no-store",
     });
   } catch {
-    // ignore - cron will still catch up
+    // ignore
   }
 }
 
 export async function POST(
-  req: Request,
+  _req: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
 
   const supabase = await supabaseServerComponent();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user?.email) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.email) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
 
   const tutor = await prisma.user.findUnique({
     where: { email: user.email.toLowerCase() },
@@ -58,6 +65,7 @@ export async function POST(
     select: {
       id: true,
       tutorId: true,
+      studentId: true,
       status: true,
       scheduledAt: true,
       endsAt: true,
@@ -88,12 +96,28 @@ export async function POST(
     );
   }
 
-  await prisma.session.update({
+  const updated = await prisma.session.update({
     where: { id: session.id },
     data: { status: "COMPLETED" },
+    select: { id: true, studentId: true },
   });
 
-  // ✅ Trigger allocation right after a tutor frees up
+  // ✅ Notify student (viewer must be STUDENT)
+  try {
+    if (updated.studentId) {
+      await notify.user({
+        userId: updated.studentId,
+        viewer: "STUDENT",
+        type: "SESSION_COMPLETED",
+        title: "Session completed ✅",
+        body: "Your tutoring session has been marked as completed.",
+        data: { sessionId: updated.id },
+      });
+    }
+  } catch {
+    // ignore
+  }
+
   await triggerAllocator();
 
   return NextResponse.json({ success: true, status: "COMPLETED" });

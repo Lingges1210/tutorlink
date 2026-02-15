@@ -1,6 +1,8 @@
+// src/app/api/sessions/[id]/proposal/reject/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { notify } from "@/lib/notify";
 
 export async function POST(
   _req: Request,
@@ -35,6 +37,7 @@ export async function POST(
     select: {
       id: true,
       studentId: true,
+      tutorId: true, // ✅ ADD
       status: true,
       // @ts-ignore
       proposalStatus: true,
@@ -61,14 +64,27 @@ export async function POST(
     );
   }
 
-  // keep proposedAt/proposedEndAt/proposedNote for audit if you want
-  await prisma.session.update({
+  const updated = await prisma.session.update({
     where: { id: session.id },
     data: {
       // @ts-ignore
       proposalStatus: "REJECTED",
     } as any,
+    select: { id: true, tutorId: true, studentId: true },
   });
+
+  // ✅ Notify tutor: proposal rejected
+  try {
+    if (updated.tutorId) {
+      await notify.proposalRejectedToTutor(
+        updated.tutorId,
+        updated.studentId,
+        updated.id
+      );
+    }
+  } catch {
+    // ignore
+  }
 
   return NextResponse.json({ success: true });
 }

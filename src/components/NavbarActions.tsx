@@ -2,6 +2,7 @@ import Link from "next/link";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { prisma } from "@/lib/prisma";
 import UserMenuClient from "@/components/UserMenuClient";
+import NotificationsBellClient from "@/components/NotificationsBellClient";
 
 export default async function NavbarActions() {
   const supabase = await supabaseServerComponent();
@@ -37,18 +38,31 @@ export default async function NavbarActions() {
 
   const dbUser = await prisma.user.findUnique({
     where: { email: user.email.toLowerCase() },
-    select: { role: true, name: true, email: true, avatarUrl: true },
+    select: { id: true, role: true, name: true, email: true, avatarUrl: true },
   });
 
   const dashboardHref =
     dbUser?.role === "TUTOR" ? "/dashboard/tutor" : "/dashboard/student";
 
+  const initialUnread = dbUser?.id
+    ? await prisma.notification.count({
+        where: { userId: dbUser.id, readAt: null },
+      })
+    : 0;
+
   return (
-    <UserMenuClient
-      name={dbUser?.name ?? null}
-      email={dbUser?.email ?? user.email}
-      avatarUrl={dbUser?.avatarUrl ?? null}
-      dashboardHref={dashboardHref}
-    />
+    <div className="flex items-center gap-2">
+      <NotificationsBellClient
+        initialUnread={initialUnread}
+        dashboardHref={dashboardHref}
+      />
+
+      <UserMenuClient
+        name={dbUser?.name ?? null}
+        email={dbUser?.email ?? user.email}
+        avatarUrl={dbUser?.avatarUrl ?? null}
+        dashboardHref={dashboardHref}
+      />
+    </div>
   );
 }
