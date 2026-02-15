@@ -307,39 +307,58 @@ export default function TutorSessionsClient() {
   }, [items]);
 
   // ✅ Focus UX: scroll + glow + auto-show Past + clear focus param after 3s
-  useEffect(() => {
-    if (!focusId) return;
-    if (loading) return;
-    if (!items.length) return;
+useEffect(() => {
+  if (!focusId) return;
+  if (loading) return;
+  if (!items.length) return;
 
-    const exists = items.some((x) => x.id === focusId);
-    if (!exists) return;
+  const exists = items.some((x) => x.id === focusId);
+  if (!exists) return;
 
-    // If focused one is in past, force showPast
-    const isFocusedPast = grouped.past.some((x) => x.id === focusId);
-    if (isFocusedPast) setShowPast(true);
+  // If focused one is in past, force showPast
+  const isFocusedPast = grouped.past.some((x) => x.id === focusId);
+  if (isFocusedPast) setShowPast(true);
+
+  let alive = true;
+  let tries = 0;
+  const maxTries = 30;
+
+  const findAndScroll = () => {
+    if (!alive) return;
 
     const el = document.getElementById(`session-${focusId}`);
     if (el) {
-      requestAnimationFrame(() => {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        el.classList.add("focus-glow");
-      });
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("focus-glow");
+
+      const t = window.setTimeout(() => {
+        const el2 = document.getElementById(`session-${focusId}`);
+        if (el2) el2.classList.remove("focus-glow");
+
+        const next = new URLSearchParams(sp.toString());
+        next.delete("focus");
+        const qs = next.toString();
+        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      }, 3000);
+
+      return () => window.clearTimeout(t);
     }
 
-    const t = window.setTimeout(() => {
-      const el2 = document.getElementById(`session-${focusId}`);
-      if (el2) el2.classList.remove("focus-glow");
+    tries++;
+    if (tries < maxTries) {
+      window.setTimeout(findAndScroll, 120);
+    }
+  };
 
-      const next = new URLSearchParams(sp.toString());
-      next.delete("focus");
-      const qs = next.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    }, 3000);
+  requestAnimationFrame(() => {
+    window.setTimeout(findAndScroll, 0);
+  });
 
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusId, loading, items.length, grouped.past.length]);
+  return () => {
+    alive = false;
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [focusId, loading, items.length, grouped.past.length, showPast]);
 
   function Section({
     title,
