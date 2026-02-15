@@ -3,8 +3,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Bell, ChevronDown } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { Bell, ChevronDown, Trash2 } from "lucide-react";
+import {
+  AnimatePresence,
+  motion,
+  useMotionValue,
+  useTransform,
+  animate,
+} from "framer-motion";
 import { useRouter } from "next/navigation";
 
 type ViewerHint = "STUDENT" | "TUTOR";
@@ -47,6 +53,141 @@ function safeParseData(raw: any) {
   return data as Record<string, any>;
 }
 
+/** ✅ Row component: hooks live here (top-level), not inside map/useMemo */
+function NotiRow({
+  n,
+  isUnread,
+  viewer,
+  pretty,
+  onOpen,
+  onDelete,
+  deleting,
+  setDraggingId,
+}: {
+  n: NotiItem;
+  isUnread: boolean;
+  viewer: ViewerHint | null;
+  pretty: (iso: string) => string;
+  onOpen: (n: NotiItem) => Promise<void> | void;
+  onDelete: (n: NotiItem) => Promise<void> | void;
+  deleting: boolean;
+  setDraggingId: (id: string | null) => void;
+}) {
+  // ✅ per-row motion values
+  const x = useMotionValue(0);
+
+  // ✅ reveal delete layer ONLY when swiping left (no touch/click reveal)
+  const revealOpacity = useTransform(x, [0, -14, -70], [0, 0, 1]);
+
+  // ✅ "Delete" slides in as you swipe
+  const deleteSlideX = useTransform(x, [0, -20, -90], [14, 10, 0]);
+  const deleteScale = useTransform(x, [0, -30, -90], [0.96, 0.98, 1]);
+
+  const draggingRef = useRef(false);
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 6, scale: 0.99 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+      transition={{ duration: 0.16, ease: "easeOut" }}
+      className="relative overflow-x-hidden"
+
+    >
+      {/* ✅ red delete layer behind (hidden until swipe) */}
+      <motion.div
+        style={{ opacity: revealOpacity }}
+        className="absolute inset-0 rounded-2xl border border-rose-500/25 bg-rose-500/10
+                   flex items-center justify-end pr-4"
+        aria-hidden="true"
+      >
+        <motion.div
+          style={{ opacity: revealOpacity, x: deleteSlideX, scale: deleteScale }}
+          className="flex items-center gap-2 text-rose-600 dark:text-rose-400 text-xs font-semibold"
+        >
+          <Trash2 size={16} />
+          <span>Delete</span>
+        </motion.div>
+      </motion.div>
+
+      {/* ✅ draggable notification */}
+      <motion.button
+        type="button"
+        drag="x"
+        dragDirectionLock
+        dragConstraints={{ left: -160, right: 0 }}
+        dragElastic={0.08}
+        style={{ x }}
+        onDragStart={() => {
+          draggingRef.current = true;
+          setDraggingId(n.id);
+        }}
+        onDragEnd={async (_e, info) => {
+          // release click guard next tick
+          window.setTimeout(() => {
+            draggingRef.current = false;
+            setDraggingId(null);
+          }, 0);
+
+          // threshold swipe left => delete
+          if (info.offset.x <= -120) {
+            await onDelete(n);
+            return;
+          }
+
+          // snap back smoothly so delete layer hides again
+          animate(x, 0, { type: "spring", stiffness: 520, damping: 38 });
+        }}
+        onClick={async () => {
+          // ✅ if user was dragging, do NOT open
+          if (draggingRef.current) return;
+          if (deleting) return;
+          await onOpen(n);
+        }}
+        className={[
+          "relative w-full text-left rounded-2xl border p-3 transition",
+          "border-[rgb(var(--border))] bg-[rgb(var(--card2))]",
+          "hover:bg-[rgb(var(--card)/0.75)]",
+          isUnread ? "ring-1 ring-[rgb(var(--primary))]" : "",
+        ].join(" ")}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="text-sm font-semibold text-[rgb(var(--fg))] truncate">
+                {n.title}
+              </div>
+
+              {/* viewer badge */}
+              <span
+                className={[
+                  "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold",
+                  "border-[rgb(var(--border))] bg-[rgb(var(--card))]",
+                  "text-[rgb(var(--muted))]",
+                  viewer === "TUTOR" ? "ring-1 ring-[rgb(var(--primary))]" : "",
+                ].join(" ")}
+                title={`This notification is for your ${viewerLabel(viewer)} view`}
+              >
+                {viewerLabel(viewer)}
+              </span>
+            </div>
+
+            <div className="mt-1 text-xs text-[rgb(var(--muted2))]">{n.body}</div>
+            <div className="mt-2 text-[0.7rem] text-[rgb(var(--muted))]">
+              {pretty(n.createdAt)}
+            </div>
+          </div>
+
+          {isUnread && (
+            <span className="shrink-0 mt-1 inline-flex h-2.5 w-2.5 rounded-full bg-[rgb(var(--primary))]" />
+          )}
+        </div>
+      </motion.button>
+    </motion.div>
+  );
+}
+
 export default function NotificationsBellClient({
   initialUnread = 0,
   dashboardHref,
@@ -62,6 +203,10 @@ export default function NotificationsBellClient({
   const [items, setItems] = useState<NotiItem[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+
+  // ✅ swipe helpers
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -132,7 +277,6 @@ export default function NotificationsBellClient({
           setItems([]);
         } else {
           const arr = Array.isArray(data.items) ? data.items : [];
-          // normalize data field
           setItems(
             arr.map((n) => ({
               ...n,
@@ -163,7 +307,6 @@ export default function NotificationsBellClient({
     if (viewer === "TUTOR") return "/dashboard/tutor/sessions";
     if (viewer === "STUDENT") return "/dashboard/student/sessions";
 
-    // fallback (older notifications / general)
     return dashboardHref.startsWith("/dashboard/tutor")
       ? "/dashboard/tutor/sessions"
       : "/dashboard/student/sessions";
@@ -178,15 +321,66 @@ export default function NotificationsBellClient({
   function pickHref(n: NotiItem) {
     const data = safeParseData(n.data);
 
-    // ✅ best: direct href (new notify.ts will inject this)
     const href = typeof data.href === "string" ? data.href : null;
     if (href) return href;
 
-    // fallback: old logic
     const sessionId =
       typeof data.sessionId === "string" ? data.sessionId : undefined;
     const viewer = (data.viewer as ViewerHint | undefined) ?? null;
     return buildFocusHref(sessionId, viewer);
+  }
+
+  // ✅ Single delete (swipe-to-clear)
+  async function deleteOne(n: NotiItem) {
+    if (deletingId) return;
+    setErr(null);
+    setDeletingId(n.id);
+
+    const wasUnread = !n.readAt;
+    const prevItems = items;
+    const prevUnread = unread;
+
+    // optimistic
+    setItems((prev) => prev.filter((x) => x.id !== n.id));
+    if (wasUnread) setUnread((u) => Math.max(0, u - 1));
+
+    try {
+      const res = await fetch(`/api/notifications/${n.id}/delete`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setItems(prevItems);
+      setUnread(prevUnread);
+      setErr("Failed to delete notification.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function openNotification(n: NotiItem) {
+    const isUnread = !n.readAt;
+
+    setErr(null);
+
+    // Mark read (optimistic)
+    if (isUnread) {
+      setItems((prev) =>
+        prev.map((x) =>
+          x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x
+        )
+      );
+      setUnread((u) => Math.max(0, u - 1));
+
+      try {
+        await fetch(`/api/notifications/${n.id}/read`, { method: "POST" });
+      } catch {
+        // ignore
+      }
+    }
+
+    setOpen(false);
+    router.push(pickHref(n));
   }
 
   const panel = useMemo(() => {
@@ -198,7 +392,7 @@ export default function NotificationsBellClient({
         transition={{ duration: 0.16, ease: "easeOut" }}
         className={[
           "absolute right-0 top-[calc(100%+10px)] z-50 w-[min(420px,92vw)]",
-          "rounded-3xl border p-3 overflow-hidden", // ✅ keep dropdown compact
+          "rounded-3xl border p-3 overflow-hidden",
           "border-[rgb(var(--border))] bg-[rgb(var(--card))]",
           "shadow-[0_24px_90px_rgb(var(--shadow)/0.22)]",
         ].join(" ")}
@@ -213,9 +407,7 @@ export default function NotificationsBellClient({
             </div>
           </div>
 
-          {/* ✅ header button group */}
           <div className="flex items-center gap-2">
-            {/* Mark all read */}
             <button
               type="button"
               onClick={async () => {
@@ -244,7 +436,6 @@ export default function NotificationsBellClient({
               Mark all read
             </button>
 
-            {/* Open dashboard */}
             <Link
               href={dashboardHref}
               className="rounded-xl px-3 py-2 text-xs font-semibold text-white
@@ -271,101 +462,51 @@ export default function NotificationsBellClient({
             </div>
           ) : (
             <>
-              {/* ✅ Scroll area (hard constrained, cannot fail) */}
               <div
-                style={{
-                  maxHeight: showAll ? 360 : undefined,
-                  overflowY: showAll ? "auto" : "hidden",
-                  paddingRight: showAll ? 6 : 0,
-                  WebkitOverflowScrolling: "touch",
-                }}
-                className="space-y-2"
-              >
-                {shown.map((n) => {
-                  const isUnread = !n.readAt;
-                  const data = safeParseData(n.data);
-                  const viewer = (data.viewer as ViewerHint | undefined) ?? null;
+  style={{
+    maxHeight: showAll ? 360 : undefined,
+    overflowY: showAll ? "auto" : "hidden",
+    overflowX: "hidden",
 
-                  return (
-                    <button
-                      key={n.id}
-                      type="button"
-                      onClick={async () => {
-                        setErr(null);
+    // ✅ give ring breathing room on BOTH sides
+    paddingLeft: 6,
+    paddingRight: showAll ? 16 : 6, // ✅ extra space for scrollbar when showAll
 
-                        // Mark read (optimistic)
-                        if (isUnread) {
-                          setItems((prev) =>
-                            prev.map((x) =>
-                              x.id === n.id
-                                ? { ...x, readAt: new Date().toISOString() }
-                                : x
-                            )
-                          );
-                          setUnread((u) => Math.max(0, u - 1));
+    // ✅ keep top/bottom safe too
+    paddingTop: 6,
+    paddingBottom: 6,
 
-                          try {
-                            await fetch(`/api/notifications/${n.id}/read`, {
-                              method: "POST",
-                            });
-                          } catch {
-                            // ignore
-                          }
-                        }
+    WebkitOverflowScrolling: "touch",
+  }}
+  className="space-y-2 overflow-x-hidden"
+>
 
-                        setOpen(false);
-                        router.push(pickHref(n));
-                      }}
-                      className={[
-                        "w-full text-left rounded-2xl border p-3 transition",
-                        "border-[rgb(var(--border))] bg-[rgb(var(--card2))]",
-                        "hover:bg-[rgb(var(--card)/0.75)]",
-                        isUnread ? "ring-1 ring-[rgb(var(--primary))]" : "",
-                      ].join(" ")}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div className="text-sm font-semibold text-[rgb(var(--fg))] truncate">
-                              {n.title}
-                            </div>
 
-                            {/* viewer badge */}
-                            <span
-                              className={[
-                                "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold",
-                                "border-[rgb(var(--border))] bg-[rgb(var(--card))]",
-                                "text-[rgb(var(--muted))]",
-                                viewer === "TUTOR"
-                                  ? "ring-1 ring-[rgb(var(--primary))]"
-                                  : "",
-                              ].join(" ")}
-                              title={`This notification is for your ${viewerLabel(
-                                viewer
-                              )} view`}
-                            >
-                              {viewerLabel(viewer)}
-                            </span>
-                          </div>
 
-                          <div className="mt-1 text-xs text-[rgb(var(--muted2))]">
-                            {n.body}
-                          </div>
-                          <div className="mt-2 text-[0.7rem] text-[rgb(var(--muted))]">
-                            {pretty(n.createdAt)}
-                          </div>
-                        </div>
 
-                        {isUnread && (
-                          <span className="shrink-0 mt-1 inline-flex h-2.5 w-2.5 rounded-full bg-[rgb(var(--primary))]" />
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
+                <AnimatePresence initial={false}>
+                  {shown.map((n) => {
+                    const isUnread = !n.readAt;
+                    const data = safeParseData(n.data);
+                    const viewer = (data.viewer as ViewerHint | undefined) ?? null;
+
+                    return (
+                      <NotiRow
+                        key={n.id}
+                        n={n}
+                        isUnread={isUnread}
+                        viewer={viewer}
+                        pretty={pretty}
+                        deleting={deletingId === n.id}
+                        setDraggingId={setDraggingId}
+                        onDelete={deleteOne}
+                        onOpen={openNotification}
+                      />
+                    );
+                  })}
+                </AnimatePresence>
               </div>
 
-              {/* ✅ Toggle stays outside the scroll area (always visible) */}
               {items.length > 3 && (
                 <div className="pt-2">
                   <button
@@ -390,7 +531,6 @@ export default function NotificationsBellClient({
                 </div>
               )}
 
-              {/* ✅ NEW: Clear all moved to bottom (separated + muted red + confirm) */}
               <div className="pt-3 mt-3 border-t border-[rgb(var(--border))]">
                 <button
                   type="button"
@@ -429,6 +569,7 @@ export default function NotificationsBellClient({
     );
   }, [
     dashboardHref,
+    deletingId,
     err,
     hasItems,
     items,
