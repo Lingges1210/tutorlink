@@ -213,7 +213,9 @@ export default function NotificationsBellClient({
             </div>
           </div>
 
+          {/* ✅ header button group */}
           <div className="flex items-center gap-2">
+            {/* Mark all read */}
             <button
               type="button"
               onClick={async () => {
@@ -242,6 +244,7 @@ export default function NotificationsBellClient({
               Mark all read
             </button>
 
+            {/* Open dashboard */}
             <Link
               href={dashboardHref}
               className="rounded-xl px-3 py-2 text-xs font-semibold text-white
@@ -386,12 +389,55 @@ export default function NotificationsBellClient({
                   </button>
                 </div>
               )}
+
+              {/* ✅ NEW: Clear all moved to bottom (separated + muted red + confirm) */}
+              <div className="pt-3 mt-3 border-t border-[rgb(var(--border))]">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setErr(null);
+
+                    const ok = window.confirm(
+                      "Clear all notifications? This cannot be undone."
+                    );
+                    if (!ok) return;
+
+                    try {
+                      const res = await fetch("/api/notifications/clear-all", {
+                        method: "POST",
+                      });
+                      if (!res.ok) throw new Error();
+
+                      setItems([]);
+                      setUnread(0);
+                      setShowAll(false);
+                    } catch {
+                      setErr("Failed to clear notifications.");
+                    }
+                  }}
+                  className="w-full rounded-xl px-3 py-2 text-xs font-semibold
+                             text-rose-600 dark:text-rose-400
+                             hover:bg-rose-500/10 transition"
+                >
+                  Clear all notifications
+                </button>
+              </div>
             </>
           )}
         </div>
       </motion.div>
     );
-  }, [dashboardHref, err, hasItems, items, loading, router, showAll, shown, unread]);
+  }, [
+    dashboardHref,
+    err,
+    hasItems,
+    items,
+    loading,
+    router,
+    showAll,
+    shown,
+    unread,
+  ]);
 
   return (
     <div ref={rootRef} className="relative">
