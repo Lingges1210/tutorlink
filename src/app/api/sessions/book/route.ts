@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
+// ✅ ADD: booking notification helper (adjust path/name to match your existing notifier)
+import { notify } from "@/lib/notify";
+
 /** ---------- availability types ---------- */
 type DayKey = "SUN" | "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT";
 type TimeSlot = { start: string; end: string };
@@ -279,11 +282,43 @@ export async function POST(req: Request) {
           endsAt: true,
           durationMin: true,
           status: true,
+
+          // ✅ ADD: ids needed for notifications
+          tutorId: true,
+          studentId: true,
+
           tutor: { select: { id: true, name: true, programme: true, avatarUrl: true, email: true } },
           subject: { select: { code: true, title: true } },
         },
       });
     });
+
+
+    // ✅ ADD: notify after booking is confirmed created
+    // (wrapped so booking doesn't fail if notification fails)
+    try {
+      await notify.user({
+        userId: created.tutorId!, // ✅ notify the tutor
+        type: "SESSION_BOOKED",
+        title: "New booking request",
+        body: `${created.subject?.code ?? "Subject"} ${
+          created.subject?.title ? `— ${created.subject.title}` : ""
+        }\n${new Date(created.scheduledAt).toLocaleString()}`,
+        viewer: "TUTOR",
+        data: {
+          sessionId: created.id,
+          studentId: created.studentId,
+          tutorId: created.tutorId,
+          scheduledAt: created.scheduledAt,
+          endsAt: created.endsAt,
+          durationMin: created.durationMin,
+          subjectCode: created.subject?.code ?? null,
+          subjectTitle: created.subject?.title ?? null,
+        },
+      });
+    } catch (err) {
+      console.error("notify.user booking failed:", err);
+    }
 
     return NextResponse.json({
       success: true,
@@ -292,6 +327,7 @@ export async function POST(req: Request) {
         assigned: true,
       },
     });
+
   } catch (e: any) {
     if (String(e?.message) === "RACE_CLASH") {
       return NextResponse.json(
