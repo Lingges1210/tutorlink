@@ -3,8 +3,14 @@ import { prisma } from "@/lib/prisma";
 
 // IMPORTANT: protect this route in production with a secret header
 function assertCronAuth(req: Request) {
-  const got = req.headers.get("x-cron-secret");
+  const url = new URL(req.url);
+
+  const gotHeader = req.headers.get("x-cron-secret");
+  const gotQuery = url.searchParams.get("secret");
+
+  const got = gotHeader || gotQuery;
   const want = process.env.CRON_SECRET;
+
   if (want && got !== want) throw new Error("Unauthorized cron");
 }
 
