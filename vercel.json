@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/session-reminders?secret=__CRON_SECRET__",
-      "schedule": "* * * * *"
-    }
-  ]
-}

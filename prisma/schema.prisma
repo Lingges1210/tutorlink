@@ -176,15 +176,3 @@ model Notification {
   @@index([userId, status])
 }
 
-model SessionReminder {
-  id        String   @id @default(cuid())
-  sessionId String
-  kind      String   // e.g. "H24" | "H1" | "M5"
-  sendAt    DateTime
-  sentAt    DateTime?
-  createdAt DateTime @default(now())
-
-  @@unique([sessionId, kind])
-  @@index([sendAt, sentAt])
-}
-
