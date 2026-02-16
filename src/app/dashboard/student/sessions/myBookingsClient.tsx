@@ -84,6 +84,22 @@ function isPast(s: Row) {
   return s.status === "COMPLETED" || s.status === "CANCELLED";
 }
 
+/** ✅ show only up to 7 buttons: 1 … 4 5 6 … last */
+function getPastPageItems(current: number, total: number): (number | "…")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+
+  const last = total;
+
+  // near start
+  if (current <= 3) return [1, 2, 3, 4, "…", last - 1, last];
+
+  // near end
+  if (current >= total - 2) return [1, 2, "…", last - 3, last - 2, last - 1, last];
+
+  // middle
+  return [1, "…", current - 1, current, current + 1, "…", last];
+}
+
 export default function MyBookingsClient() {
   const router = useRouter();
   const pathname = usePathname();
@@ -105,6 +121,14 @@ export default function MyBookingsClient() {
   const [actionLoading, setActionLoading] = useState(false);
 
   const [showPast, setShowPast] = useState(false);
+
+  const [pastFilter, setPastFilter] = useState<
+    "ALL" | "COMPLETED" | "CANCELLED"
+  >("ALL");
+
+  // ✅ Past pagination state (only for past)
+  const PAST_PAGE_SIZE = 5;
+  const [pastPage, setPastPage] = useState(1);
 
   function closeModal() {
     setMode(null);
@@ -151,62 +175,79 @@ export default function MyBookingsClient() {
     return { upcoming: up, past: pa };
   }, [items]);
 
+  const filteredPast =
+    pastFilter === "ALL" ? past : past.filter((x) => x.status === pastFilter);
+
+  // ✅ Past pagination derived values
+  const totalPastPages = Math.max(1, Math.ceil(filteredPast.length / PAST_PAGE_SIZE));
+  const safePastPage = Math.min(pastPage, totalPastPages);
+
+  const pagedPast = filteredPast.slice(
+    (safePastPage - 1) * PAST_PAGE_SIZE,
+    safePastPage * PAST_PAGE_SIZE
+  );
+
+  // ✅ keep page valid if filter changes or list shrinks
+  useEffect(() => {
+    if (pastPage > totalPastPages) setPastPage(totalPastPages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalPastPages]);
+
   // ✅ Focus UX: scroll + glow + auto-show Past + clear focus param after 3s
-useEffect(() => {
-  if (!focusId) return;
-  if (loading) return;
-  if (!items.length) return;
+  useEffect(() => {
+    if (!focusId) return;
+    if (loading) return;
+    if (!items.length) return;
 
-  const exists = items.some((x) => x.id === focusId);
-  if (!exists) return;
+    const exists = items.some((x) => x.id === focusId);
+    if (!exists) return;
 
-  // If focused one is in past, force showPast
-  const isFocusedPast = past.some((x) => x.id === focusId);
-  if (isFocusedPast) setShowPast(true);
+    // If focused one is in past, force showPast
+    const isFocusedPast = past.some((x) => x.id === focusId);
+    if (isFocusedPast) setShowPast(true);
 
-  let alive = true;
-  let tries = 0;
-  const maxTries = 30;
+    let alive = true;
+    let tries = 0;
+    const maxTries = 30;
 
-  const findAndScroll = () => {
-    if (!alive) return;
+    const findAndScroll = () => {
+      if (!alive) return;
 
-    const el = document.getElementById(`session-${focusId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      el.classList.add("focus-glow");
+      const el = document.getElementById(`session-${focusId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("focus-glow");
 
-      const t = window.setTimeout(() => {
-        const el2 = document.getElementById(`session-${focusId}`);
-        if (el2) el2.classList.remove("focus-glow");
+        const t = window.setTimeout(() => {
+          const el2 = document.getElementById(`session-${focusId}`);
+          if (el2) el2.classList.remove("focus-glow");
 
-        const next = new URLSearchParams(sp.toString());
-        next.delete("focus");
-        const qs = next.toString();
-        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-      }, 3000);
+          const next = new URLSearchParams(sp.toString());
+          next.delete("focus");
+          const qs = next.toString();
+          router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+        }, 3000);
 
-      return () => window.clearTimeout(t);
-    }
+        return () => window.clearTimeout(t);
+      }
 
-    tries++;
-    if (tries < maxTries) {
-      // wait for DOM + (if past) wait for Past section to render
-      window.setTimeout(findAndScroll, 120);
-    }
-  };
+      tries++;
+      if (tries < maxTries) {
+        // wait for DOM + (if past) wait for Past section to render
+        window.setTimeout(findAndScroll, 120);
+      }
+    };
 
-  // start after paint
-  requestAnimationFrame(() => {
-    window.setTimeout(findAndScroll, 0);
-  });
+    // start after paint
+    requestAnimationFrame(() => {
+      window.setTimeout(findAndScroll, 0);
+    });
 
-  return () => {
-    alive = false;
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [focusId, loading, items.length, past.length, showPast]);
-
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, loading, items.length, past.length, showPast]);
 
   async function doReschedule() {
     if (!activeId) return;
@@ -504,7 +545,14 @@ useEffect(() => {
 
               <button
                 type="button"
-                onClick={() => setShowPast((v) => !v)}
+                onClick={() =>
+                  setShowPast((v) => {
+                    const next = !v;
+                    setPastPage(1); // ✅ reset page when toggling
+                    if (!next) setPastFilter("ALL"); // ✅ reset when closing
+                    return next;
+                  })
+                }
                 className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]"
               >
                 {showPast ? "Hide Past" : `Show Past (${past.length})`}
@@ -525,25 +573,79 @@ useEffect(() => {
 
             {showPast && (
               <div className="pt-2">
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-[11px] font-semibold tracking-wide text-[rgb(var(--fg))]">
-                    PAST
-                  </span>
-                  <span className="text-xs text-[rgb(var(--muted2))]">
-                    Completed and cancelled sessions
-                  </span>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-[11px] font-semibold tracking-wide text-[rgb(var(--fg))]">
+                      PAST
+                    </span>
+                    <span className="text-xs text-[rgb(var(--muted2))]">
+                      Completed and cancelled sessions
+                    </span>
+                  </div>
+
+                  <div className="flex gap-2">
+                    {(["ALL", "COMPLETED", "CANCELLED"] as const).map((k) => (
+                      <button
+                        key={k}
+                        onClick={() => {
+                          setPastFilter(k);
+                          setPastPage(1); // ✅ reset page on filter change
+                        }}
+                        className={[
+                          "rounded-full px-3 py-1 text-[11px] font-semibold border transition-all duration-150",
+                          k === pastFilter
+                            ? "border-[rgb(var(--primary))] text-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.08)]"
+                            : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
+                        ].join(" ")}
+                      >
+                        {k}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                {past.length === 0 ? (
+                {filteredPast.length === 0 ? (
                   <div className="text-sm text-[rgb(var(--muted2))]">
                     No past sessions.
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {past.map((s) => (
-                      <BookingCard key={s.id} s={s} />
-                    ))}
-                  </div>
+                  <>
+                    <div className="space-y-3">
+                      {pagedPast.map((s) => (
+                        <BookingCard key={s.id} s={s} />
+                      ))}
+                    </div>
+
+                    {/* ✅ Pagination buttons (max 7 visible with …) */}
+                    {totalPastPages > 1 && (
+                      <div className="flex flex-wrap items-center justify-center gap-2 pt-3">
+                        {getPastPageItems(safePastPage, totalPastPages).map(
+                          (it, idx) =>
+                            it === "…" ? (
+                              <span
+                                key={`dots-${idx}`}
+                                className="px-2 text-xs text-[rgb(var(--muted2))]"
+                              >
+                                …
+                              </span>
+                            ) : (
+                              <button
+                                key={it}
+                                onClick={() => setPastPage(it)}
+                                className={[
+                                  "rounded-full px-3 py-1 text-[11px] font-semibold border transition-all duration-150",
+                                  it === safePastPage
+                                    ? "border-[rgb(var(--primary))] text-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.08)]"
+                                    : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
+                                ].join(" ")}
+                              >
+                                {it}
+                              </button>
+                            )
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
