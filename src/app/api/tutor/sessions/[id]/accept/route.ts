@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { notify } from "@/lib/notify";
+import {
+  scheduleSessionReminderEmail,
+  computeOneHourBeforeISO,
+  cancelScheduledEmail,
+} from "@/lib/email";
 
 export async function POST(
   _req: Request,
@@ -55,6 +60,13 @@ export async function POST(
       scheduledAt: true,
       endsAt: true,
       durationMin: true,
+
+      // ✅ for email reminder reschedule safety (if exists)
+      studentReminderEmailId: true,
+
+      // ✅ for email contents
+      subject: { select: { code: true, title: true } },
+      student: { select: { email: true, name: true } },
     },
   });
 
@@ -89,8 +101,7 @@ export async function POST(
   if (clash) {
     return NextResponse.json(
       {
-        message:
-          "You already accepted another session that overlaps this time.",
+        message: "You already accepted another session that overlaps this time.",
       },
       { status: 409 }
     );
@@ -121,6 +132,35 @@ export async function POST(
     // ignore notification errors
   }
 
+  // ✅ Email reminder (do not block accept if email fails)
+  try {
+    const toEmail = session.student?.email;
+    if (toEmail) {
+      // cancel old scheduled reminder if any (safety)
+      if (session.studentReminderEmailId) {
+        await cancelScheduledEmail(session.studentReminderEmailId);
+        await prisma.session.update({
+          where: { id: session.id },
+          data: { studentReminderEmailId: null },
+        });
+      }
+
+      const scheduledAtISO = computeOneHourBeforeISO(
+        updated.scheduledAt.toISOString()
+      );
+
+      await scheduleSessionReminderEmail({
+        sessionId: session.id,
+        toEmail,
+        toName: session.student?.name,
+        subjectCode: session.subject.code,
+        subjectTitle: session.subject.title,
+        scheduledAtISO,
+      });
+    }
+  } catch {
+    // ignore email errors
+  }
 
   return NextResponse.json({ success: true, status: "ACCEPTED" });
 }

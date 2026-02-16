@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { notify } from "@/lib/notify";
+import {
+  scheduleSessionReminderEmail,
+  computeOneHourBeforeISO,
+  cancelScheduledEmail,
+} from "@/lib/email";
 
 /** ---------- availability parsing helpers (best-effort) ---------- */
 type DayKey = "SUN" | "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT";
@@ -65,7 +70,6 @@ async function getTutorAvailability(
   }
 }
 
-
 async function tutorDeclaredAvailable(
   tutorId: string,
   start: Date,
@@ -109,7 +113,7 @@ export async function POST(
 
   const dbUser = await prisma.user.findUnique({
     where: { email: user.email.toLowerCase() },
-    select: { id: true, verificationStatus: true, isDeactivated: true },
+    select: { id: true, verificationStatus: true, isDeactivated: true, email: true, name: true },
   });
 
   if (!dbUser || dbUser.isDeactivated) {
@@ -143,12 +147,29 @@ export async function POST(
       subjectId: true,
       status: true,
       durationMin: true,
+
+      // ✅ for cancelling old scheduled email
+      studentReminderEmailId: true,
+
+      // ✅ for email subject/body
+      subject: { select: { code: true, title: true } },
     },
   });
 
   if (!session || session.studentId !== dbUser.id) {
     return NextResponse.json({ message: "Not found" }, { status: 404 });
   }
+
+  // ✅ capture non-null values for TS (avoid "possibly null" inside helper)
+const existingReminderId = session.studentReminderEmailId;
+const subjCode = session.subject.code;
+const subjTitle = session.subject.title;
+
+const studentEmail = dbUser.email;
+const studentName = dbUser.name;
+
+const sessionId = session.id;
+
 
   if (session.status === "CANCELLED" || session.status === "COMPLETED") {
     return NextResponse.json(
@@ -181,6 +202,33 @@ export async function POST(
 
   const prevTutorId = session.tutorId; // ✅ keep old tutor for notifications
 
+  async function rescheduleReminderEmailSafe(finalSessionId: string, finalStartISO: string) {
+  try {
+    // cancel old scheduled email if exists
+    if (existingReminderId) {
+      await cancelScheduledEmail(existingReminderId);
+      await prisma.session.update({
+        where: { id: finalSessionId },
+        data: { studentReminderEmailId: null },
+      });
+    }
+
+    const dueISO = computeOneHourBeforeISO(finalStartISO);
+
+    await scheduleSessionReminderEmail({
+      sessionId: finalSessionId,
+      toEmail: studentEmail,
+      toName: studentName,
+      subjectCode: subjCode,
+      subjectTitle: subjTitle,
+      scheduledAtISO: dueISO,
+    });
+  } catch {
+    // ignore email errors
+  }
+}
+
+
   // ✅ If tutor is assigned, enforce tutor availability + overlap
   if (session.tutorId) {
     // 2) Tutor overlap check
@@ -206,8 +254,14 @@ export async function POST(
           status: "PENDING",
           tutorId: null,
         },
-        select: { id: true },
+        select: { id: true, scheduledAt: true },
       });
+
+      // ✅ email: cancel old + schedule new (still meaningful for student)
+      await rescheduleReminderEmailSafe(
+        updated.id,
+        updated.scheduledAt.toISOString()
+      );
 
       // ✅ Notify old tutor that student rescheduled and tutor was unassigned
       try {
@@ -248,8 +302,14 @@ export async function POST(
           status: "PENDING",
           tutorId: null,
         },
-        select: { id: true },
+        select: { id: true, scheduledAt: true },
       });
+
+      // ✅ email: cancel old + schedule new
+      await rescheduleReminderEmailSafe(
+        updated.id,
+        updated.scheduledAt.toISOString()
+      );
 
       // ✅ Notify old tutor that student rescheduled and tutor was unassigned
       try {
@@ -283,8 +343,11 @@ export async function POST(
       rescheduledAt: new Date(),
       status: "PENDING",
     },
-    select: { id: true, tutorId: true },
+    select: { id: true, tutorId: true, scheduledAt: true },
   });
+
+  // ✅ email: cancel old + schedule new
+  await rescheduleReminderEmailSafe(updated.id, updated.scheduledAt.toISOString());
 
   // ✅ Notify tutor if still assigned (viewer must be TUTOR)
   try {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { notify } from "@/lib/notify";
+import { cancelScheduledEmail } from "@/lib/email";
 
 export async function POST(
   req: Request,
@@ -36,7 +37,13 @@ export async function POST(
 
   const session = await prisma.session.findUnique({
     where: { id },
-    select: { id: true, studentId: true, tutorId: true, status: true },
+    select: {
+      id: true,
+      studentId: true,
+      tutorId: true,
+      status: true,
+      studentReminderEmailId: true, // ✅ added
+    },
   });
 
   if (!session || session.studentId !== dbUser.id) {
@@ -56,6 +63,20 @@ export async function POST(
     },
     select: { id: true, tutorId: true },
   });
+
+  // ✅ Cancel scheduled reminder email (if any)
+  try {
+    if (session.studentReminderEmailId) {
+      await cancelScheduledEmail(session.studentReminderEmailId);
+      await prisma.session.update({
+        where: { id: session.id },
+        data: { studentReminderEmailId: null },
+        select: { id: true },
+      });
+    }
+  } catch {
+    // ignore
+  }
 
   // ✅ Notify tutor if assigned (viewer must be TUTOR)
   try {

@@ -1,8 +1,8 @@
-// src/app/api/tutor/sessions/[id]/cancel/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { notify } from "@/lib/notify";
+import { cancelScheduledEmail } from "@/lib/email";
 
 export async function POST(
   req: Request,
@@ -58,6 +58,7 @@ export async function POST(
       scheduledAt: true,
       endsAt: true,
       durationMin: true,
+      studentReminderEmailId: true, // ✅ added
     },
   });
 
@@ -94,10 +95,29 @@ export async function POST(
     select: { id: true, studentId: true },
   });
 
+  // ✅ Cancel scheduled reminder email (if any)
+  try {
+    if (session.studentReminderEmailId) {
+      await cancelScheduledEmail(session.studentReminderEmailId);
+      await prisma.session.update({
+        where: { id: session.id },
+        data: { studentReminderEmailId: null },
+        select: { id: true },
+      });
+    }
+  } catch {
+    // ignore
+  }
+
   // ✅ Notify student (viewer must be STUDENT)
   try {
     if (updated.studentId) {
-      await notify.sessionCancelled(updated.studentId, updated.id, "STUDENT", reason);
+      await notify.sessionCancelled(
+        updated.studentId,
+        updated.id,
+        "STUDENT",
+        reason
+      );
     }
   } catch {
     // ignore

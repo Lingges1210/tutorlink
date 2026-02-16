@@ -216,6 +216,43 @@ export default function TutorSessionsClient() {
     return () => clearInterval(t);
   }, []);
 
+ useEffect(() => {
+  let t: any;
+
+  const run = async () => {
+    try {
+      await fetch("/api/reminders/pull", { cache: "no-store" });
+    } catch {}
+  };
+
+  const start = () => {
+  stop(); // ✅ prevent duplicate intervals
+  run();  // run immediately
+  t = setInterval(run, 60_000);
+};
+
+
+  const stop = () => {
+    if (t) clearInterval(t);
+    t = null;
+  };
+
+  const onVis = () => {
+    if (document.visibilityState === "visible") start();
+    else stop();
+  };
+
+  onVis(); // init based on current visibility
+  document.addEventListener("visibilitychange", onVis);
+
+  return () => {
+    stop();
+    document.removeEventListener("visibilitychange", onVis);
+  };
+}, []);
+
+
+
   async function accept(id: string) {
     setActionLoading(true);
     setMsg(null);
@@ -227,7 +264,10 @@ export default function TutorSessionsClient() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) setMsg(data?.message ?? "Accept failed.");
-      else await refresh({ silent: true });
+else {
+  await refresh({ silent: true });
+  await fetch("/api/reminders/pull", { cache: "no-store" });
+}
     } finally {
       setActionLoading(false);
     }
@@ -244,7 +284,10 @@ export default function TutorSessionsClient() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) setMsg(data?.message ?? "Complete failed.");
-      else await refresh({ silent: true });
+else {
+  await refresh({ silent: true });
+  await fetch("/api/reminders/pull", { cache: "no-store" });
+}
     } finally {
       setActionLoading(false);
     }
@@ -266,11 +309,13 @@ export default function TutorSessionsClient() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) setMsg(data?.message ?? "Cancel failed.");
-      else {
-        setMsg("Session cancelled.");
-        closeModal();
-        await refresh({ silent: true });
-      }
+else {
+  setMsg("Session cancelled.");
+  closeModal();
+  await refresh({ silent: true });
+  await fetch("/api/reminders/pull", { cache: "no-store" });
+}
+
     } finally {
       setActionLoading(false);
     }
@@ -305,11 +350,13 @@ export default function TutorSessionsClient() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) setMsg(data?.message ?? "Propose failed.");
-      else {
-        setMsg("Proposed new time sent to student for confirmation.");
-        closeModal();
-        await refresh({ silent: true });
-      }
+else {
+  setMsg("Proposed new time sent to student for confirmation.");
+  closeModal();
+  await refresh({ silent: true });
+  await fetch("/api/reminders/pull", { cache: "no-store" });
+}
+
     } finally {
       setActionLoading(false);
     }
@@ -346,6 +393,11 @@ export default function TutorSessionsClient() {
     (safePastPage - 1) * PAST_PAGE_SIZE,
     safePastPage * PAST_PAGE_SIZE
   );
+
+  useEffect(() => {
+  if (pastPage > totalPastPages) setPastPage(totalPastPages);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [totalPastPages]);
 
   // ✅ Focus UX: scroll + glow + auto-show Past + clear focus param after 3s
   useEffect(() => {

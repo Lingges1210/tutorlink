@@ -164,6 +164,43 @@ export default function MyBookingsClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+  let t: any;
+
+  const run = async () => {
+    try {
+      await fetch("/api/reminders/pull", { cache: "no-store" });
+    } catch {}
+  };
+
+  const start = () => {
+  stop(); // ✅ prevent duplicate intervals
+  run();  // run immediately
+  t = setInterval(run, 60_000);
+};
+
+
+  const stop = () => {
+    if (t) clearInterval(t);
+    t = null;
+  };
+
+  const onVis = () => {
+    if (document.visibilityState === "visible") start();
+    else stop();
+  };
+
+  onVis(); // init based on current visibility
+  document.addEventListener("visibilitychange", onVis);
+
+  return () => {
+    stop();
+    document.removeEventListener("visibilitychange", onVis);
+  };
+}, []);
+
+
+
   const { upcoming, past } = useMemo(() => {
     const up: Row[] = [];
     const pa: Row[] = [];
@@ -276,11 +313,13 @@ export default function MyBookingsClient() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) setMsg(data?.message ?? "Reschedule failed.");
-      else {
-        setMsg("Booking rescheduled successfully.");
-        closeModal();
-        await refresh({ silent: true });
-      }
+else {
+  closeModal();
+  await refresh({ silent: true });
+  await fetch("/api/reminders/pull", { cache: "no-store" });
+  setMsg("Booking rescheduled successfully.");
+}
+
     } finally {
       setActionLoading(false);
     }
@@ -302,11 +341,13 @@ export default function MyBookingsClient() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) setMsg(data?.message ?? "Cancel failed.");
-      else {
-        setMsg("Booking cancelled successfully.");
-        closeModal();
-        await refresh({ silent: true });
-      }
+else {
+  closeModal();
+  await refresh({ silent: true });
+  await fetch("/api/reminders/pull", { cache: "no-store" });
+  setMsg("Booking cancelled successfully.");
+}
+
     } finally {
       setActionLoading(false);
     }
@@ -324,9 +365,11 @@ export default function MyBookingsClient() {
 
       if (!res.ok) setMsg(data?.message ?? "Accept proposal failed.");
       else {
-        setMsg("✅ Proposal accepted. Session updated.");
-        await refresh({ silent: true });
-      }
+  await refresh({ silent: true });
+  await fetch("/api/reminders/pull", { cache: "no-store" });
+  setMsg("✅ Proposal accepted. Session updated.");
+}
+
     } finally {
       setActionLoading(false);
     }
@@ -344,9 +387,11 @@ export default function MyBookingsClient() {
 
       if (!res.ok) setMsg(data?.message ?? "Reject proposal failed.");
       else {
-        setMsg("Proposal rejected.");
-        await refresh({ silent: true });
-      }
+  await refresh({ silent: true });
+  await fetch("/api/reminders/pull", { cache: "no-store" });
+  setMsg("Proposal rejected.");
+}
+
     } finally {
       setActionLoading(false);
     }

@@ -146,6 +146,8 @@ model Session {
   proposalStatus   ProposalStatus?
   proposedByUserId String?
 
+  studentReminderEmailId String?
+  tutorReminderEmailId   String?
 }
 
 enum NotificationStatus {
@@ -171,6 +173,9 @@ model Notification {
 
   user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  dedupeKey String?            @db.VarChar(120)
+
+  @@unique([userId, dedupeKey])
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@index([userId, status])
