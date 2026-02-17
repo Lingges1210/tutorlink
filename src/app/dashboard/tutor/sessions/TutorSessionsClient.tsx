@@ -271,6 +271,28 @@ export default function TutorSessionsClient() {
     }
   }
 
+  async function startChat(sessionId: string) {
+  try {
+    const r = await fetch("/api/chat/channel-from-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+    });
+    const j = await r.json();
+    if (j?.ok && j.channelId) {
+      router.push(
+  `/messaging?channelId=${j.channelId}&returnTo=/dashboard/tutor/sessions&focus=${sessionId}`
+);
+
+    } else {
+      setMsg(j?.message ?? "Unable to start chat.");
+    }
+  } catch {
+    setMsg("Unable to start chat.");
+  }
+}
+
+
   async function complete(id: string) {
     setActionLoading(true);
     setMsg(null);
@@ -603,6 +625,18 @@ export default function TutorSessionsClient() {
                     >
                       {s.status}
                     </motion.span>
+
+                    {/* ✅ START CHAT button (only when ACCEPTED) */}
+  {accepted && (
+    <button
+      disabled={actionLoading}
+      onClick={() => startChat(s.id)}
+      className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
+    >
+      Start chat
+    </button>
+  )}
+
 
                     <div className="flex items-center gap-2">
                       {pending && conflict && (

@@ -47,6 +47,11 @@ model User {
   tutorSubjects           TutorSubject[]
 
   notifications Notification[]
+
+  chatChannelsAsStudent ChatChannel[] @relation("ChatStudent")
+  chatChannelsAsTutor   ChatChannel[] @relation("ChatTutor")
+  chatMessagesSent      ChatMessage[] @relation("ChatSender")
+  chatReads             ChatRead[]    @relation("ChatReader")
 }
 
 model UserRoleAssignment {
@@ -86,7 +91,6 @@ enum ProposalStatus {
   REJECTED
 }
 
-
 model Subject {
   id        String   @id @default(cuid())
   code      String   @unique // e.g. WIA2003
@@ -122,8 +126,10 @@ model Session {
   subjectId String
 
   scheduledAt DateTime
-  durationMin Int      @default(60)
-  endsAt DateTime?
+  durationMin Int       @default(60)
+  endsAt      DateTime?
+
+  chatChannel ChatChannel? @relation("SessionChatChannel")
 
   status SessionStatus @default(PENDING)
 
@@ -135,11 +141,7 @@ model Session {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([studentId, status])
-  @@index([tutorId, status])
-  @@index([scheduledAt])
-
-    // ---- reschedule proposal flow (tutor -> student confirm) ----
+  // ---- reschedule proposal flow (tutor -> student confirm) ----
   proposedAt       DateTime?
   proposedEndAt    DateTime?
   proposedNote     String?
@@ -149,8 +151,12 @@ model Session {
   studentReminderEmailId String?
   tutorReminderEmailId   String?
 
-  calendarUid      String?  @unique
-  calendarSequence Int      @default(0)
+  calendarUid      String? @unique
+  calendarSequence Int     @default(0)
+
+  @@index([studentId, status])
+  @@index([tutorId, status])
+  @@index([scheduledAt])
 }
 
 enum NotificationStatus {
@@ -162,21 +168,21 @@ enum NotificationStatus {
 }
 
 model Notification {
-  id        String             @id @default(cuid())
-  userId    String
-  type      String
-  title     String
-  body      String
-  data      Json?
-  status    NotificationStatus @default(QUEUED)
+  id     String             @id @default(cuid())
+  userId String
+  type   String
+  title  String
+  body   String
+  data   Json?
+  status NotificationStatus @default(QUEUED)
 
-  createdAt DateTime           @default(now())
+  createdAt DateTime  @default(now())
   sentAt    DateTime?
   readAt    DateTime?
 
-  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  dedupeKey String?            @db.VarChar(120)
+  dedupeKey String? @db.VarChar(120)
 
   @@unique([userId, dedupeKey])
   @@index([userId, createdAt])
@@ -184,3 +190,75 @@ model Notification {
   @@index([userId, status])
 }
 
+model ChatChannel {
+  id        String @id @default(uuid())
+  sessionId String @unique
+  studentId String
+  tutorId   String
+
+  createdAt     DateTime @default(now())
+  lastMessageAt DateTime @default(now())
+
+  session Session @relation("SessionChatChannel", fields: [sessionId], references: [id], onDelete: Cascade)
+  student User    @relation("ChatStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  tutor   User    @relation("ChatTutor", fields: [tutorId], references: [id], onDelete: Cascade)
+
+  messages ChatMessage[]
+  reads    ChatRead[]
+
+  @@index([studentId])
+  @@index([tutorId])
+  @@index([lastMessageAt])
+}
+
+model ChatMessage {
+  id        String @id @default(uuid())
+  channelId String
+  senderId  String
+  text      String
+
+  createdAt DateTime @default(now())
+
+  channel ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  sender  User        @relation("ChatSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  attachments ChatAttachment[]
+
+  @@index([channelId, createdAt])
+  @@index([senderId])
+}
+
+model ChatRead {
+  id         String   @id @default(uuid())
+  channelId  String
+  userId     String
+  lastReadAt DateTime @default(now())
+
+  channel ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User        @relation("ChatReader", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([userId])
+}
+
+model ChatAttachment {
+  id        String   @id @default(uuid())
+  messageId String
+  fileUrl   String
+  type      String // "image" | "pdf" | "other"
+  createdAt DateTime @default(now())
+
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+model ChatTyping {
+  id        String   @id @default(uuid())
+  channelId String
+  userId    String
+  isTyping  Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  @@unique([channelId, userId])
+}

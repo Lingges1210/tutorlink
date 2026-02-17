@@ -3,6 +3,7 @@ import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { prisma } from "@/lib/prisma";
 import UserMenuClient from "@/components/UserMenuClient";
 import NotificationsBellClient from "@/components/NotificationsBellClient";
+import ChatInboxIconClient from "@/components/ChatInboxIconClient";
 
 export default async function NavbarActions() {
   const supabase = await supabaseServerComponent();
@@ -50,8 +51,26 @@ export default async function NavbarActions() {
       })
     : 0;
 
+  const initialChatUnread = dbUser?.id
+    ? Number(
+        (
+          await prisma.$queryRaw<Array<{ total: bigint }>>`
+            SELECT COALESCE(COUNT(m."id"), 0) AS total
+            FROM "ChatRead" r
+            JOIN "ChatMessage" m
+              ON m."channelId" = r."channelId"
+             AND m."createdAt" > r."lastReadAt"
+             AND m."senderId" <> r."userId"
+            WHERE r."userId" = ${dbUser.id};
+          `
+        )?.[0]?.total ?? 0
+      )
+    : 0;
+
   return (
     <div className="flex items-center gap-2">
+      <ChatInboxIconClient initialUnread={initialChatUnread} />
+
       <NotificationsBellClient
         initialUnread={initialUnread}
         dashboardHref={dashboardHref}

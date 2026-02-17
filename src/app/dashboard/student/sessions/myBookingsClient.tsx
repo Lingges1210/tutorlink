@@ -394,6 +394,28 @@ else {
     }
   }
 
+  async function startChat(sessionId: string) {
+  try {
+    const r = await fetch("/api/chat/channel-from-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+    });
+    const j = await r.json();
+    if (j?.ok && j.channelId) {
+      router.push(
+  `/messaging?channelId=${j.channelId}&returnTo=/dashboard/student/sessions&focus=${sessionId}`
+);
+
+    } else {
+      setMsg(j?.message ?? "Unable to start chat.");
+    }
+  } catch {
+    setMsg("Unable to start chat.");
+  }
+}
+
+
   async function rejectProposal(id: string) {
     setActionLoading(true);
     setMsg(null);
@@ -507,32 +529,42 @@ else {
           </div>
 
           <div className="flex items-center gap-2">
-            <span
-              className={[
-                "rounded-full px-3 py-1 text-[11px] font-semibold border tracking-wide uppercase",
-                statusBadgeClass(s.status),
-              ].join(" ")}
-            >
-              {s.status}
-            </span>
+  <span
+    className={[
+      "rounded-full px-3 py-1 text-[11px] font-semibold border tracking-wide uppercase",
+      statusBadgeClass(s.status),
+    ].join(" ")}
+  >
+    {s.status}
+  </span>
 
-            <button
-              disabled={closed || proposalPending}
-              onClick={() => {
-                setActiveId(s.id);
-                setMode("RESCHEDULE");
-                setNewTime(formatLocalInputValue(new Date(s.scheduledAt)));
-                setMsg(null);
-              }}
-              className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
-              title={
-                proposalPending
-                  ? "You have a pending proposal. Accept/Reject it first."
-                  : ""
-              }
-            >
-              Reschedule
-            </button>
+  {/* ✅ START CHAT (only when accepted, tutor exists) */}
+  {s.status === "ACCEPTED" && !!s.tutor && (
+    <button
+      onClick={() => startChat(s.id)}
+      className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]"
+    >
+      Start chat
+    </button>
+  )}
+
+  <button
+    disabled={closed || proposalPending}
+    onClick={() => {
+      setActiveId(s.id);
+      setMode("RESCHEDULE");
+      setNewTime(formatLocalInputValue(new Date(s.scheduledAt)));
+      setMsg(null);
+    }}
+    className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
+    title={
+      proposalPending
+        ? "You have a pending proposal. Accept/Reject it first."
+        : ""
+    }
+  >
+    Reschedule
+  </button>
 
             <button
               disabled={closed}
