@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { notify } from "@/lib/notify";
-import { cancelScheduledEmail } from "@/lib/email";
+import { cancelScheduledEmail, sendSessionInviteEmail } from "@/lib/email"; // ✅ added
 
 export async function POST(
   req: Request,
@@ -35,6 +35,7 @@ export async function POST(
   const body = await req.json().catch(() => ({}));
   const reason = typeof body.reason === "string" ? body.reason.trim() : "";
 
+  // ✅ expanded select (calendar + subject + tutor email)
   const session = await prisma.session.findUnique({
     where: { id },
     select: {
@@ -42,7 +43,17 @@ export async function POST(
       studentId: true,
       tutorId: true,
       status: true,
-      studentReminderEmailId: true, // ✅ added
+      scheduledAt: true,
+      endsAt: true,
+      durationMin: true,
+      cancelReason: true,
+      studentReminderEmailId: true,
+
+      calendarUid: true,
+      calendarSequence: true,
+
+      subject: { select: { code: true, title: true } },
+      tutor: { select: { email: true, name: true } },
     },
   });
 
@@ -54,14 +65,29 @@ export async function POST(
     return NextResponse.json({ message: "Already closed" }, { status: 409 });
   }
 
+  // ✅ ensure calendar UID exists
+  const uid = session.calendarUid ?? `${session.id}@tutorlink`;
+
   const updated = await prisma.session.update({
     where: { id },
     data: {
       status: "CANCELLED",
       cancelledAt: new Date(),
       cancelReason: reason || null,
+
+      // ✅ calendar tracking
+      calendarUid: uid,
+      calendarSequence: { increment: 1 },
     },
-    select: { id: true, tutorId: true },
+    select: {
+      id: true,
+      tutorId: true,
+      scheduledAt: true,
+      endsAt: true,
+      durationMin: true,
+      calendarUid: true,
+      calendarSequence: true,
+    },
   });
 
   // ✅ Cancel scheduled reminder email (if any)
@@ -90,6 +116,50 @@ export async function POST(
     }
   } catch {
     // ignore
+  }
+
+  // ✅ NEW: Send calendar cancellation email (.ics) to student + tutor
+  try {
+    const start = new Date(updated.scheduledAt);
+    const end =
+      updated.endsAt ??
+      new Date(start.getTime() + (updated.durationMin ?? 60) * 60_000);
+
+    // Student cancellation notice
+    await sendSessionInviteEmail({
+      mode: "CANCELLED",
+      toEmail: user.email.toLowerCase(),
+      toName: null,
+      subjectCode: session.subject.code,
+      subjectTitle: session.subject.title,
+      startISO: start.toISOString(),
+      endISO: end.toISOString(),
+      uid: updated.calendarUid ?? uid,
+      sequence: updated.calendarSequence ?? 0,
+      organizerName: "TutorLink",
+      organizerEmail: process.env.RESEND_FROM_EMAIL!,
+      cancelReason: reason || null,
+    });
+
+    // Tutor cancellation notice
+    if (session.tutor?.email) {
+      await sendSessionInviteEmail({
+        mode: "CANCELLED",
+        toEmail: session.tutor.email,
+        toName: session.tutor.name,
+        subjectCode: session.subject.code,
+        subjectTitle: session.subject.title,
+        startISO: start.toISOString(),
+        endISO: end.toISOString(),
+        uid: updated.calendarUid ?? uid,
+        sequence: updated.calendarSequence ?? 0,
+        organizerName: "TutorLink",
+        organizerEmail: process.env.RESEND_FROM_EMAIL!,
+        cancelReason: reason || null,
+      });
+    }
+  } catch {
+    // ignore calendar email errors
   }
 
   return NextResponse.json({ success: true });

@@ -7,6 +7,7 @@ import {
   scheduleSessionReminderEmail,
   computeOneHourBeforeISO,
   cancelScheduledEmail,
+  sendSessionInviteEmail, // ✅ add this
 } from "@/lib/email";
 
 export async function POST(
@@ -28,6 +29,7 @@ export async function POST(
     where: { email: user.email.toLowerCase() },
     select: {
       id: true,
+      name: true, // ✅ add (for email greeting)
       isDeactivated: true,
       verificationStatus: true,
       isTutorApproved: true,
@@ -61,8 +63,12 @@ export async function POST(
       endsAt: true,
       durationMin: true,
 
-      // ✅ for email reminder reschedule safety (if exists)
+      // ✅ scheduled reminder tracking
       studentReminderEmailId: true,
+
+      // ✅ calendar invite tracking
+      calendarUid: true,
+      calendarSequence: true,
 
       // ✅ for email contents
       subject: { select: { code: true, title: true } },
@@ -107,9 +113,26 @@ export async function POST(
     );
   }
 
+  // ✅ ensure calendar UID exists (stable across updates)
+  const uid =
+    session.calendarUid?.trim() ||
+    `tutorlink-session-${session.id}@tutorlink.local`;
+
+  const sequence = typeof session.calendarSequence === "number"
+    ? session.calendarSequence
+    : 0;
+
   const updated = await prisma.session.update({
     where: { id: session.id },
-    data: { status: "ACCEPTED" },
+    data: {
+      status: "ACCEPTED",
+      // ✅ only set uid if it was missing
+      ...(session.calendarUid ? {} : { calendarUid: uid }),
+      // ✅ keep sequence unchanged on first accept
+      ...(typeof session.calendarSequence === "number"
+        ? {}
+        : { calendarSequence: 0 }),
+    },
     select: {
       id: true,
       tutorId: true,
@@ -132,7 +155,46 @@ export async function POST(
     // ignore notification errors
   }
 
-  // ✅ Email reminder (do not block accept if email fails)
+  // ✅ Calendar invite email (.ics) (do not block accept if email fails)
+  try {
+    const studentEmail = session.student?.email;
+    const studentName = session.student?.name ?? null;
+
+    if (studentEmail) {
+      await sendSessionInviteEmail({
+        mode: "ACCEPTED",
+        toEmail: studentEmail,
+        toName: studentName,
+        subjectCode: session.subject.code,
+        subjectTitle: session.subject.title,
+        startISO: start.toISOString(),
+        endISO: end.toISOString(),
+        uid,
+        sequence,
+        organizerName: tutor.name ?? "TutorLink Tutor",
+        organizerEmail: user.email.toLowerCase(),
+      });
+    }
+
+    // ✅ optional: also send to tutor so tutor can add it to their calendar
+    await sendSessionInviteEmail({
+      mode: "ACCEPTED",
+      toEmail: user.email.toLowerCase(),
+      toName: tutor.name ?? null,
+      subjectCode: session.subject.code,
+      subjectTitle: session.subject.title,
+      startISO: start.toISOString(),
+      endISO: end.toISOString(),
+      uid,
+      sequence,
+      organizerName: tutor.name ?? "TutorLink Tutor",
+      organizerEmail: user.email.toLowerCase(),
+    });
+  } catch {
+    // ignore calendar email errors
+  }
+
+  // ✅ Existing reminder email logic (keep)
   try {
     const toEmail = session.student?.email;
     if (toEmail) {

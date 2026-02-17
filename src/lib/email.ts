@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
+import { buildIcs } from "@/lib/ics";
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
@@ -94,4 +95,91 @@ export async function cancelScheduledEmail(resendEmailId: string) {
   } catch {
     // ignore: already sent/cancelled/not found
   }
+}
+
+
+export async function sendSessionInviteEmail(opts: {
+  mode: "ACCEPTED" | "RESCHEDULED" | "CANCELLED";
+  toEmail: string;
+  toName?: string | null;
+
+  subjectCode: string;
+  subjectTitle: string;
+
+  startISO: string;
+  endISO: string;
+
+  uid: string;
+  sequence: number;
+
+  organizerName: string;
+  organizerEmail: string;
+
+  cancelReason?: string | null;
+}) {
+  const start = new Date(opts.startISO);
+  const end = new Date(opts.endISO);
+
+  const method = opts.mode === "CANCELLED" ? "CANCEL" : "REQUEST";
+
+  const title = `TutorLink Session: ${opts.subjectCode}`;
+  const descriptionLines = [
+    `Course: ${opts.subjectCode} — ${opts.subjectTitle}`,
+    `Start: ${start.toLocaleString()}`,
+    `End: ${end.toLocaleString()}`,
+    opts.mode === "CANCELLED" && opts.cancelReason
+      ? `Reason: ${opts.cancelReason}`
+      : null,
+  ].filter(Boolean);
+
+  const ics = buildIcs({
+    method,
+    uid: opts.uid,
+    sequence: opts.sequence,
+    start,
+    end,
+    title,
+    description: descriptionLines.join("\n"),
+    organizerName: opts.organizerName,
+    organizerEmail: opts.organizerEmail,
+    attendeeName: opts.toName ?? "User",
+    attendeeEmail: opts.toEmail,
+  });
+
+  const subject =
+    opts.mode === "CANCELLED"
+      ? `Cancelled: ${opts.subjectCode} session`
+      : opts.mode === "RESCHEDULED"
+      ? `Updated: ${opts.subjectCode} session time`
+      : `Confirmed: ${opts.subjectCode} session invite`;
+
+  // ✅ Resend expects base64 for attachments
+  const base64Ics = Buffer.from(ics, "utf-8").toString("base64");
+
+  await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL!,
+    to: opts.toEmail,
+    subject,
+    html: `
+      <p>Hi ${opts.toName ?? "there"},</p>
+      <p>Please add the attached <b>calendar invite</b> to get automatic reminders.</p>
+      <p><b>${opts.subjectCode} — ${opts.subjectTitle}</b></p>
+      <p><b>Start:</b> ${start.toLocaleString()}<br/>
+         <b>End:</b> ${end.toLocaleString()}</p>
+      ${
+        opts.mode === "CANCELLED"
+          ? `<p>This is a cancellation notice.</p>`
+          : `<p>If the session changes again, you'll receive an updated invite.</p>`
+      }
+      <br/>
+      <p>TutorLink Team</p>
+    `,
+    attachments: [
+      {
+        filename: method === "CANCEL" ? "session-cancel.ics" : "session.ics",
+        content: base64Ics,
+        contentType: `text/calendar; charset=utf-8; method=${method}`,
+      },
+    ],
+  });
 }

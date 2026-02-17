@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { notify } from "@/lib/notify";
-import { cancelScheduledEmail } from "@/lib/email";
+import { cancelScheduledEmail, sendSessionInviteEmail } from "@/lib/email";
 
 export async function POST(
   req: Request,
@@ -23,6 +23,7 @@ export async function POST(
     where: { email: user.email.toLowerCase() },
     select: {
       id: true,
+      name: true, // ✅ add (for organizerName + greeting)
       isDeactivated: true,
       verificationStatus: true,
       isTutorApproved: true,
@@ -52,13 +53,22 @@ export async function POST(
     where: { id },
     select: {
       id: true,
-      tutorId: true,
       studentId: true,
+      tutorId: true,
       status: true,
       scheduledAt: true,
       endsAt: true,
       durationMin: true,
-      studentReminderEmailId: true, // ✅ added
+      cancelReason: true,
+      studentReminderEmailId: true,
+
+      calendarUid: true,
+      calendarSequence: true,
+
+      subject: { select: { code: true, title: true } },
+
+      // ✅ need student email to send cancel invite
+      student: { select: { email: true, name: true } },
     },
   });
 
@@ -85,20 +95,35 @@ export async function POST(
     );
   }
 
-  const updated = await prisma.session.update({
-  where: { id: session.id },
-  data: {
-    status: "CANCELLED",
-    cancelledAt: new Date(),
-    cancelReason: reason,
+  // ✅ ensure calendar UID exists (stable across updates)
+  const uid =
+    session.calendarUid?.trim() ||
+    `tutorlink-session-${session.id}@tutorlink.local`;
 
-    // ✅ clear any pending proposal so student UI won't show "waiting confirmation"
-    proposedAt: null,
-    proposedNote: null,
-    proposalStatus: null, // or "REJECTED" if your DB expects a value
-  },
-  select: { id: true, studentId: true },
-});
+  const sequence =
+    typeof session.calendarSequence === "number" ? session.calendarSequence : 0;
+
+  const updated = await prisma.session.update({
+    where: { id: session.id },
+    data: {
+      status: "CANCELLED",
+      cancelledAt: new Date(),
+      cancelReason: reason,
+
+      // ✅ clear any pending proposal so student UI won't show "waiting confirmation"
+      proposedAt: null,
+      proposedNote: null,
+      proposalStatus: null, // or "REJECTED" if your DB expects a value
+
+      // ✅ only set uid if it was missing
+      ...(session.calendarUid ? {} : { calendarUid: uid }),
+      // ✅ keep sequence unchanged here (or set to 0 if missing)
+      ...(typeof session.calendarSequence === "number"
+        ? {}
+        : { calendarSequence: 0 }),
+    },
+    select: { id: true, studentId: true },
+  });
 
   // ✅ Cancel scheduled reminder email (if any)
   try {
@@ -114,15 +139,51 @@ export async function POST(
     // ignore
   }
 
+  // ✅ Calendar cancellation email (.ics) (do not block cancel if email fails)
+  try {
+    const studentEmail = session.student?.email;
+    const studentName = session.student?.name ?? null;
+
+    if (studentEmail) {
+      await sendSessionInviteEmail({
+        mode: "CANCELLED",
+        toEmail: studentEmail,
+        toName: studentName,
+        subjectCode: session.subject.code,
+        subjectTitle: session.subject.title,
+        startISO: start.toISOString(),
+        endISO: end.toISOString(),
+        uid,
+        sequence,
+        organizerName: tutor.name ?? "TutorLink Tutor",
+        organizerEmail: user.email.toLowerCase(),
+        cancelReason: reason,
+      });
+    }
+
+    // ✅ optional: send cancellation to tutor too (keeps their calendar clean)
+    await sendSessionInviteEmail({
+      mode: "CANCELLED",
+      toEmail: user.email.toLowerCase(),
+      toName: tutor.name ?? null,
+      subjectCode: session.subject.code,
+      subjectTitle: session.subject.title,
+      startISO: start.toISOString(),
+      endISO: end.toISOString(),
+      uid,
+      sequence,
+      organizerName: tutor.name ?? "TutorLink Tutor",
+      organizerEmail: user.email.toLowerCase(),
+      cancelReason: reason,
+    });
+  } catch {
+    // ignore calendar email errors
+  }
+
   // ✅ Notify student (viewer must be STUDENT)
   try {
     if (updated.studentId) {
-      await notify.sessionCancelled(
-        updated.studentId,
-        updated.id,
-        "STUDENT",
-        reason
-      );
+      await notify.sessionCancelled(updated.studentId, updated.id, "STUDENT", reason);
     }
   } catch {
     // ignore

@@ -7,6 +7,7 @@ import {
   scheduleSessionReminderEmail,
   computeOneHourBeforeISO,
   cancelScheduledEmail,
+  sendSessionInviteEmail, // ✅ added
 } from "@/lib/email";
 
 /** ---------- availability parsing helpers (best-effort) ---------- */
@@ -113,7 +114,13 @@ export async function POST(
 
   const dbUser = await prisma.user.findUnique({
     where: { email: user.email.toLowerCase() },
-    select: { id: true, verificationStatus: true, isDeactivated: true, email: true, name: true },
+    select: {
+      id: true,
+      verificationStatus: true,
+      isDeactivated: true,
+      email: true,
+      name: true,
+    },
   });
 
   if (!dbUser || dbUser.isDeactivated) {
@@ -151,8 +158,15 @@ export async function POST(
       // ✅ for cancelling old scheduled email
       studentReminderEmailId: true,
 
+      // ✅ calendar tracking
+      calendarUid: true,
+      calendarSequence: true,
+
       // ✅ for email subject/body
       subject: { select: { code: true, title: true } },
+
+      // ✅ tutor email for calendar update email (if assigned)
+      tutor: { select: { email: true, name: true } },
     },
   });
 
@@ -161,15 +175,14 @@ export async function POST(
   }
 
   // ✅ capture non-null values for TS (avoid "possibly null" inside helper)
-const existingReminderId = session.studentReminderEmailId;
-const subjCode = session.subject.code;
-const subjTitle = session.subject.title;
+  const existingReminderId = session.studentReminderEmailId;
+  const subjCode = session.subject.code;
+  const subjTitle = session.subject.title;
 
-const studentEmail = dbUser.email;
-const studentName = dbUser.name;
+  const studentEmail = dbUser.email;
+  const studentName = dbUser.name;
 
-const sessionId = session.id;
-
+  const sessionId = session.id;
 
   if (session.status === "CANCELLED" || session.status === "COMPLETED") {
     return NextResponse.json(
@@ -202,32 +215,83 @@ const sessionId = session.id;
 
   const prevTutorId = session.tutorId; // ✅ keep old tutor for notifications
 
-  async function rescheduleReminderEmailSafe(finalSessionId: string, finalStartISO: string) {
-  try {
-    // cancel old scheduled email if exists
-    if (existingReminderId) {
-      await cancelScheduledEmail(existingReminderId);
-      await prisma.session.update({
-        where: { id: finalSessionId },
-        data: { studentReminderEmailId: null },
+  async function rescheduleReminderEmailSafe(
+    finalSessionId: string,
+    finalStartISO: string
+  ) {
+    try {
+      // cancel old scheduled email if exists
+      if (existingReminderId) {
+        await cancelScheduledEmail(existingReminderId);
+        await prisma.session.update({
+          where: { id: finalSessionId },
+          data: { studentReminderEmailId: null },
+        });
+      }
+
+      const dueISO = computeOneHourBeforeISO(finalStartISO);
+
+      await scheduleSessionReminderEmail({
+        sessionId: finalSessionId,
+        toEmail: studentEmail,
+        toName: studentName,
+        subjectCode: subjCode,
+        subjectTitle: subjTitle,
+        scheduledAtISO: dueISO,
       });
+    } catch {
+      // ignore email errors
     }
-
-    const dueISO = computeOneHourBeforeISO(finalStartISO);
-
-    await scheduleSessionReminderEmail({
-      sessionId: finalSessionId,
-      toEmail: studentEmail,
-      toName: studentName,
-      subjectCode: subjCode,
-      subjectTitle: subjTitle,
-      scheduledAtISO: dueISO,
-    });
-  } catch {
-    // ignore email errors
   }
-}
 
+  // ✅ helper: send UPDATED calendar invite to student + tutor
+  async function sendCalendarUpdateSafe(opts: {
+    finalStart: Date;
+    finalEnd: Date;
+    tutorEmail?: string | null;
+    tutorName?: string | null;
+    uid: string;
+    sequence: number;
+  }) {
+    try {
+      // student update
+      await sendSessionInviteEmail({
+        mode: "RESCHEDULED",
+        toEmail: studentEmail,
+        toName: studentName,
+        subjectCode: subjCode,
+        subjectTitle: subjTitle,
+        startISO: opts.finalStart.toISOString(),
+        endISO: opts.finalEnd.toISOString(),
+        uid: opts.uid,
+        sequence: opts.sequence,
+        organizerName: "TutorLink",
+        organizerEmail: process.env.RESEND_FROM_EMAIL!,
+      });
+
+      // tutor update (only if we have email)
+      if (opts.tutorEmail) {
+        await sendSessionInviteEmail({
+          mode: "RESCHEDULED",
+          toEmail: opts.tutorEmail,
+          toName: opts.tutorName ?? null,
+          subjectCode: subjCode,
+          subjectTitle: subjTitle,
+          startISO: opts.finalStart.toISOString(),
+          endISO: opts.finalEnd.toISOString(),
+          uid: opts.uid,
+          sequence: opts.sequence,
+          organizerName: "TutorLink",
+          organizerEmail: process.env.RESEND_FROM_EMAIL!,
+        });
+      }
+    } catch {
+      // ignore calendar email errors
+    }
+  }
+
+  // ✅ ensure calendar UID exists
+  const uid = session.calendarUid ?? `${session.id}@tutorlink`;
 
   // ✅ If tutor is assigned, enforce tutor availability + overlap
   if (session.tutorId) {
@@ -253,15 +317,40 @@ const sessionId = session.id;
           rescheduledAt: new Date(),
           status: "PENDING",
           tutorId: null,
+
+          // ✅ calendar tracking
+          calendarUid: uid,
+          calendarSequence: { increment: 1 },
         },
-        select: { id: true, scheduledAt: true },
+        select: {
+          id: true,
+          scheduledAt: true,
+          endsAt: true,
+          durationMin: true,
+          calendarUid: true,
+          calendarSequence: true,
+        },
       });
 
       // ✅ email: cancel old + schedule new (still meaningful for student)
-      await rescheduleReminderEmailSafe(
-        updated.id,
-        updated.scheduledAt.toISOString()
-      );
+      await rescheduleReminderEmailSafe(updated.id, updated.scheduledAt.toISOString());
+
+      // ✅ calendar UPDATED invite to student only (tutor is unassigned now)
+      const end =
+        updated.endsAt ??
+        new Date(
+          new Date(updated.scheduledAt).getTime() +
+            (updated.durationMin ?? durationMin) * 60_000
+        );
+
+      await sendCalendarUpdateSafe({
+        finalStart: new Date(updated.scheduledAt),
+        finalEnd: end,
+        tutorEmail: null,
+        tutorName: null,
+        uid: updated.calendarUid ?? uid,
+        sequence: updated.calendarSequence ?? 0,
+      });
 
       // ✅ Notify old tutor that student rescheduled and tutor was unassigned
       try {
@@ -301,15 +390,40 @@ const sessionId = session.id;
           rescheduledAt: new Date(),
           status: "PENDING",
           tutorId: null,
+
+          // ✅ calendar tracking
+          calendarUid: uid,
+          calendarSequence: { increment: 1 },
         },
-        select: { id: true, scheduledAt: true },
+        select: {
+          id: true,
+          scheduledAt: true,
+          endsAt: true,
+          durationMin: true,
+          calendarUid: true,
+          calendarSequence: true,
+        },
       });
 
       // ✅ email: cancel old + schedule new
-      await rescheduleReminderEmailSafe(
-        updated.id,
-        updated.scheduledAt.toISOString()
-      );
+      await rescheduleReminderEmailSafe(updated.id, updated.scheduledAt.toISOString());
+
+      // ✅ calendar UPDATED invite to student only (tutor unassigned)
+      const end =
+        updated.endsAt ??
+        new Date(
+          new Date(updated.scheduledAt).getTime() +
+            (updated.durationMin ?? durationMin) * 60_000
+        );
+
+      await sendCalendarUpdateSafe({
+        finalStart: new Date(updated.scheduledAt),
+        finalEnd: end,
+        tutorEmail: null,
+        tutorName: null,
+        uid: updated.calendarUid ?? uid,
+        sequence: updated.calendarSequence ?? 0,
+      });
 
       // ✅ Notify old tutor that student rescheduled and tutor was unassigned
       try {
@@ -342,12 +456,39 @@ const sessionId = session.id;
       endsAt: newEndsAt,
       rescheduledAt: new Date(),
       status: "PENDING",
+
+      // ✅ calendar tracking
+      calendarUid: uid,
+      calendarSequence: { increment: 1 },
     },
-    select: { id: true, tutorId: true, scheduledAt: true },
+    select: {
+      id: true,
+      tutorId: true,
+      scheduledAt: true,
+      endsAt: true,
+      durationMin: true,
+      calendarUid: true,
+      calendarSequence: true,
+    },
   });
 
   // ✅ email: cancel old + schedule new
   await rescheduleReminderEmailSafe(updated.id, updated.scheduledAt.toISOString());
+
+  // ✅ calendar UPDATED invite to student + (if assigned) tutor
+  const finalStart = new Date(updated.scheduledAt);
+  const finalEnd =
+    updated.endsAt ??
+    new Date(finalStart.getTime() + (updated.durationMin ?? durationMin) * 60_000);
+
+  await sendCalendarUpdateSafe({
+    finalStart,
+    finalEnd,
+    tutorEmail: session.tutorId ? session.tutor?.email : null,
+    tutorName: session.tutorId ? session.tutor?.name : null,
+    uid: updated.calendarUid ?? uid,
+    sequence: updated.calendarSequence ?? 0,
+  });
 
   // ✅ Notify tutor if still assigned (viewer must be TUTOR)
   try {

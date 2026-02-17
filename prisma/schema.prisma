@@ -148,6 +148,9 @@ model Session {
 
   studentReminderEmailId String?
   tutorReminderEmailId   String?
+
+  calendarUid      String?  @unique
+  calendarSequence Int      @default(0)
 }
 
 enum NotificationStatus {
