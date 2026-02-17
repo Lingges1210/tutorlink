@@ -8,11 +8,11 @@ type Conv = {
   id: string;
   sessionId: string;
   name: string; // other person's name
-  subjectName: string; // NEW
+  subjectName: string;
   lastMessage: string;
   lastAt: string;
   unread: number;
-  viewerIsStudent: boolean;
+  viewerIsStudent: boolean; // true => you are Student in this chat, false => you are Tutor in this chat
 };
 
 type Msg = {
@@ -42,21 +42,10 @@ export default function MessagingPage() {
   const [conversations, setConversations] = useState<Conv[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  // ✅ NEW: role filter (All / Student / Tutor)
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>("ALL");
-
   const active = useMemo(
     () => conversations.find((c) => c.id === activeId) ?? null,
     [conversations, activeId]
   );
-
-  // ✅ NEW: filtered conversations (doesn't change data/logic, only view)
-  const filteredConversations = useMemo(() => {
-    if (roleFilter === "ALL") return conversations;
-    if (roleFilter === "STUDENT")
-      return conversations.filter((c) => c.viewerIsStudent);
-    return conversations.filter((c) => !c.viewerIsStudent); // TUTOR
-  }, [conversations, roleFilter]);
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -67,6 +56,32 @@ export default function MessagingPage() {
 
   const sp = useSearchParams();
   const qsChannelId = sp.get("channelId");
+
+  // ✅ NEW: search + role filter (UI only, no backend changes)
+  const [q, setQ] = useState("");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("ALL");
+
+  const filteredConversations = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+
+    return conversations.filter((c) => {
+      // Role filter: viewerIsStudent tells what role YOU are in that chat
+      if (roleFilter === "STUDENT" && !c.viewerIsStudent) return false;
+      if (roleFilter === "TUTOR" && c.viewerIsStudent) return false;
+
+      if (!needle) return true;
+
+      const hay = [
+        c.subjectName ?? "",
+        c.name ?? "",
+        c.lastMessage ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return hay.includes(needle);
+    });
+  }, [conversations, q, roleFilter]);
 
   // ✅ read receipt timestamps from API
   const [readInfo, setReadInfo] = useState<{
@@ -169,8 +184,14 @@ export default function MessagingPage() {
           return onlyNew.length ? [...prev, ...onlyNew] : prev;
         });
 
-        // (kept your atBottom calc, but you removed autoscroll here — good)
-        void atBottom;
+        // ✅ keep your “Seen” working by marking read while at bottom
+        if (atBottom) {
+          await fetch("/api/chat/read", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ channelId: activeId }),
+          }).catch(() => {});
+        }
       }
 
       fetch(`/api/chat/typing?channelId=${activeId}`, { cache: "no-store" })
@@ -295,9 +316,28 @@ export default function MessagingPage() {
     return null;
   })();
 
+  const filterBtn = (key: RoleFilter, label: string) => {
+    const active = roleFilter === key;
+    return (
+      <button
+        type="button"
+        onClick={() => setRoleFilter(key)}
+        className={`rounded-full px-3 py-1 text-[0.7rem] font-semibold transition
+          ${
+            active
+              ? "border border-[rgb(var(--primary))] bg-[rgb(var(--primary))/0.10] text-[rgb(var(--primary))]"
+              : "border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))] hover:bg-[rgb(var(--card))]"
+          }
+        `}
+      >
+        {label}
+      </button>
+    );
+  };
+
   return (
     // ✅ Centered like dashboard + nicer spacing
-    <div className="pt-6 pb-10">
+    <div className="pt-12 pb-10">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 space-y-6">
         {/* Header */}
         <header className="flex flex-col gap-2">
@@ -319,36 +359,24 @@ export default function MessagingPage() {
                 Recent Conversations
               </h2>
               <span className="rounded-full bg-[rgb(var(--primary))/0.12] px-2 py-1 text-[0.65rem] font-medium text-[rgb(var(--primary))]">
-                {conversations.length} active
+                {filteredConversations.length} active
               </span>
             </div>
 
-            {/* ✅ NEW: Filter pills (All / Students / Tutors) */}
+            {/* ✅ NEW: role filter pills */}
             <div className="flex items-center gap-2">
-              {(["ALL", "STUDENT", "TUTOR"] as const).map((k) => {
-                const isOn = roleFilter === k;
-                return (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setRoleFilter(k)}
-                    className={`rounded-full px-3 py-1 text-[0.65rem] font-semibold border transition
-                      ${
-                        isOn
-                          ? "border-[rgb(var(--primary))] bg-[rgb(var(--primary))/0.10] text-[rgb(var(--primary))]"
-                          : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))]"
-                      }`}
-                  >
-                    {k === "ALL" ? "All" : k === "STUDENT" ? "Student" : "Tutor"}
-                  </button>
-                );
-              })}
+              {filterBtn("ALL", "All")}
+              {filterBtn("STUDENT", "Student")}
+              {filterBtn("TUTOR", "Tutor")}
             </div>
 
+            {/* ✅ Search now works */}
             <div className="rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-1">
               <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
                 className="w-full bg-transparent px-1 py-1 text-xs text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] focus:outline-none"
-                placeholder="Search tutor or subject..."
+                placeholder="Search subject, name, message..."
               />
             </div>
 
@@ -413,7 +441,7 @@ export default function MessagingPage() {
 
               {filteredConversations.length === 0 && (
                 <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3 text-[rgb(var(--muted))]">
-                  No chats in this filter.
+                  No chats match your filter/search.
                 </div>
               )}
             </div>
@@ -446,7 +474,7 @@ export default function MessagingPage() {
               )}
             </div>
 
-            {/* ✅ This is now the big/tall scroll area */}
+            {/* ✅ Big/tall scroll area */}
             <div className="mt-3 flex-1 min-h-0 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3 text-xs overflow-y-auto">
               {nextCursor && (
                 <button
