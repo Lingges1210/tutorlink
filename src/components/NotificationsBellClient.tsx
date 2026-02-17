@@ -312,23 +312,45 @@ export default function NotificationsBellClient({
       : "/dashboard/student/sessions";
   }
 
-  function buildFocusHref(sessionId?: string, viewer?: ViewerHint | null) {
-    const base = baseSessionsPath(viewer);
-    if (!sessionId) return base;
-    return `${base}?focus=${encodeURIComponent(sessionId)}`;
+  function buildFocusHref(
+  sessionId?: string,
+  viewer?: ViewerHint | null,
+  page?: number
+) {
+  const base = baseSessionsPath(viewer);
+  if (!sessionId) return base;
+
+  const params = new URLSearchParams();
+  params.set("focus", sessionId);
+
+  // ✅ if notif includes page, jump directly to that page
+  if (typeof page === "number" && Number.isFinite(page) && page > 0) {
+    params.set("page", String(page));
   }
+
+  return `${base}?${params.toString()}`;
+}
 
   function pickHref(n: NotiItem) {
-    const data = safeParseData(n.data);
+  const data = safeParseData(n.data);
 
-    const href = typeof data.href === "string" ? data.href : null;
-    if (href) return href;
+  const href = typeof data.href === "string" ? data.href : null;
+  if (href) return href;
 
-    const sessionId =
-      typeof data.sessionId === "string" ? data.sessionId : undefined;
-    const viewer = (data.viewer as ViewerHint | undefined) ?? null;
-    return buildFocusHref(sessionId, viewer);
-  }
+  const sessionId =
+    typeof data.sessionId === "string" ? data.sessionId : undefined;
+  const viewer = (data.viewer as ViewerHint | undefined) ?? null;
+
+  // ✅ page hint (if your noti data includes it)
+  const page =
+    typeof data.page === "number"
+      ? data.page
+      : typeof data.page === "string"
+      ? parseInt(data.page, 10)
+      : undefined;
+
+  return buildFocusHref(sessionId, viewer, page);
+}
 
   // ✅ Single delete (swipe-to-clear)
   async function deleteOne(n: NotiItem) {
@@ -466,13 +488,13 @@ export default function NotificationsBellClient({
   style={{
     maxHeight: showAll ? 360 : undefined,
 
-    // ✅ only scroll vertically when showAll, otherwise allow ring to breathe
+    // only scroll vertically when showAll, otherwise allow ring to breathe
     overflowY: showAll ? "auto" : "visible",
 
-    // ✅ IMPORTANT: don't clip ring on sides
+    // IMPORTANT: don't clip ring on sides
     overflowX: "visible",
 
-    // ✅ keep breathing room
+    // keep breathing room
     paddingLeft: 8,
     paddingRight: showAll ? 16 : 8,
     paddingTop: 8,

@@ -491,7 +491,8 @@ else {
 
             const active = pending || accepted;
             const proposalPending =
-              s.proposalStatus === "PENDING" && !!s.proposedAt;
+              active && s.proposalStatus === "PENDING" && !!s.proposedAt;
+
 
             const isFocused = focusId === s.id;
 

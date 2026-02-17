@@ -86,14 +86,19 @@ export async function POST(
   }
 
   const updated = await prisma.session.update({
-    where: { id: session.id },
-    data: {
-      status: "CANCELLED",
-      cancelledAt: new Date(),
-      cancelReason: reason,
-    },
-    select: { id: true, studentId: true },
-  });
+  where: { id: session.id },
+  data: {
+    status: "CANCELLED",
+    cancelledAt: new Date(),
+    cancelReason: reason,
+
+    // ✅ clear any pending proposal so student UI won't show "waiting confirmation"
+    proposedAt: null,
+    proposedNote: null,
+    proposalStatus: null, // or "REJECTED" if your DB expects a value
+  },
+  select: { id: true, studentId: true },
+});
 
   // ✅ Cancel scheduled reminder email (if any)
   try {
