@@ -278,7 +278,7 @@ export default function StudentSessionCalendarPage() {
         return;
       }
 
-      setMsg("✅ Rescheduled!");
+      setMsg("Rescheduled!");
       setPendingDrop(null);
       await load();
     } finally {

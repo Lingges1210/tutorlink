@@ -7,7 +7,7 @@ export async function sendApprovalEmail(email: string, name?: string) {
   await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL!,
     to: email,
-    subject: "✅ Your TutorLink account has been verified",
+    subject: "Your TutorLink account has been verified",
     html: `
       <p>Hi ${name ?? "there"},</p>
       <p>Your TutorLink account has been <strong>successfully verified</strong>.</p>

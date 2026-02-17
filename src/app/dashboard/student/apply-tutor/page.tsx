@@ -503,7 +503,7 @@ setSubjects(parsedSubjects);
       setTranscriptFile(null);
       setTranscriptPath(null);
 
-      setStatusMsg("✅ Application submitted. Awaiting admin approval.");
+      setStatusMsg("Application submitted. Awaiting admin approval.");
     } catch (e: any) {
       setStatusMsg(e?.message ?? "Something went wrong");
     } finally {
@@ -835,7 +835,7 @@ setSubjects(parsedSubjects);
           <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-[rgb(var(--muted))]">
             <div className="truncate">
               {transcriptPath
-                ? `✅ Uploaded: ${transcriptPath}`
+                ? `Uploaded: ${transcriptPath}`
                 : transcriptFile
                 ? `Selected: ${transcriptFile.name}`
                 : "PDF/PNG/JPG • Max 8MB"}

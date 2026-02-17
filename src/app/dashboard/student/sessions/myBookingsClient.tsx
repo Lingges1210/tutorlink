@@ -386,7 +386,7 @@ else {
       else {
   await refresh({ silent: true });
   await fetch("/api/reminders/pull", { cache: "no-store" });
-  setMsg("✅ Proposal accepted. Session updated.");
+  setMsg("Proposal accepted. Session updated.");
 }
 
     } finally {

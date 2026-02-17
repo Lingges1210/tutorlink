@@ -64,7 +64,7 @@ function VerificationBadge({ status }: { status: VerificationStatus | string }) 
           : "border-amber-500/30 bg-amber-500/15 text-amber-500",
       ].join(" ")}
     >
-      {verified ? "✅ Verified" : "⏳ Pending verification"}
+      {verified ? "Verified" : "Pending verification"}
     </span>
   );
 }

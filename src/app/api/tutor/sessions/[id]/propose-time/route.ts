@@ -79,7 +79,7 @@ export async function POST(
     select: {
       id: true,
       tutorId: true,
-      studentId: true, // ✅ ADD
+      studentId: true, 
       status: true,
       scheduledAt: true,
       endsAt: true,

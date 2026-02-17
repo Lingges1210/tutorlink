@@ -295,9 +295,9 @@ export default function FindTutorClient({
         return;
       }
 
-      setBookingMsg("✅ Booked! Tutor assigned instantly. Check My Bookings →");
+      setBookingMsg("Booked! Tutor assigned instantly. Check My Bookings →");
       showToast({
-        text: "✅ Booked! Tutor assigned instantly.",
+        text: "Booked! Tutor assigned instantly.",
         kind: "success",
         actionHref: "/dashboard/student/sessions",
         actionLabel: "My Bookings →",

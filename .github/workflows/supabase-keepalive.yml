@@ -18,4 +18,4 @@ jobs:
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
             -H "Accept: application/json"
-          echo "✅ Keepalive ping done"
+          echo "Keepalive ping done"

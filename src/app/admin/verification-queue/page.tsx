@@ -42,10 +42,10 @@ function StatusPill({ status }: { status: string }) {
 
   const label =
     s === "AUTO_VERIFIED" || s === "APPROVED"
-      ? "✅ VERIFIED"
+      ? "VERIFIED"
       : s === "REJECTED"
-      ? "❌ REJECTED"
-      : "⏳ PENDING";
+      ? "REJECTED"
+      : "PENDING";
 
   return (
     <span className={`inline-flex rounded-full border px-3 py-1 text-[0.7rem] font-semibold ${cls}`}>

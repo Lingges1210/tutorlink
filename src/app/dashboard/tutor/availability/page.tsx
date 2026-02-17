@@ -119,7 +119,7 @@ export default function TutorAvailabilityPage() {
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to save");
 
-      setMsg("✅ Availability updated.");
+      setMsg("Availability updated.");
     } catch (e: any) {
       setMsg(e?.message ?? "Something went wrong");
     } finally {
