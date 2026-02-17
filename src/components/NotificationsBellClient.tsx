@@ -92,8 +92,7 @@ function NotiRow({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -6, scale: 0.98 }}
       transition={{ duration: 0.16, ease: "easeOut" }}
-      className="relative overflow-x-hidden"
-
+      className="relative overflow-visible"
     >
       {/* ✅ red delete layer behind (hidden until swipe) */}
       <motion.div
@@ -203,6 +202,7 @@ export default function NotificationsBellClient({
   const [items, setItems] = useState<NotiItem[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
 
   // ✅ swipe helpers
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -465,24 +465,23 @@ export default function NotificationsBellClient({
               <div
   style={{
     maxHeight: showAll ? 360 : undefined,
-    overflowY: showAll ? "auto" : "hidden",
-    overflowX: "hidden",
 
-    // ✅ give ring breathing room on BOTH sides
-    paddingLeft: 6,
-    paddingRight: showAll ? 16 : 6, // ✅ extra space for scrollbar when showAll
+    // ✅ only scroll vertically when showAll, otherwise allow ring to breathe
+    overflowY: showAll ? "auto" : "visible",
 
-    // ✅ keep top/bottom safe too
-    paddingTop: 6,
-    paddingBottom: 6,
+    // ✅ IMPORTANT: don't clip ring on sides
+    overflowX: "visible",
+
+    // ✅ keep breathing room
+    paddingLeft: 8,
+    paddingRight: showAll ? 16 : 8,
+    paddingTop: 8,
+    paddingBottom: 8,
 
     WebkitOverflowScrolling: "touch",
   }}
-  className="space-y-2 overflow-x-hidden"
+  className="space-y-2"
 >
-
-
-
 
                 <AnimatePresence initial={false}>
                   {shown.map((n) => {
@@ -534,27 +533,7 @@ export default function NotificationsBellClient({
               <div className="pt-3 mt-3 border-t border-[rgb(var(--border))]">
                 <button
                   type="button"
-                  onClick={async () => {
-                    setErr(null);
-
-                    const ok = window.confirm(
-                      "Clear all notifications? This cannot be undone."
-                    );
-                    if (!ok) return;
-
-                    try {
-                      const res = await fetch("/api/notifications/clear-all", {
-                        method: "POST",
-                      });
-                      if (!res.ok) throw new Error();
-
-                      setItems([]);
-                      setUnread(0);
-                      setShowAll(false);
-                    } catch {
-                      setErr("Failed to clear notifications.");
-                    }
-                  }}
+                  onClick={() => setConfirmClearOpen(true)}
                   className="w-full rounded-xl px-3 py-2 text-xs font-semibold
                              text-rose-600 dark:text-rose-400
                              hover:bg-rose-500/10 transition"
@@ -562,6 +541,94 @@ export default function NotificationsBellClient({
                   Clear all notifications
                 </button>
               </div>
+
+              {/* ✅ Styled confirm modal for Clear all */}
+              <AnimatePresence>
+                {confirmClearOpen && (
+                  <motion.div
+                    className="absolute inset-0 z-[60] grid place-items-center bg-black/35 p-4"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onMouseDown={() => setConfirmClearOpen(false)}
+                  >
+                    <motion.div
+                      className="w-full max-w-sm rounded-3xl border
+                                 border-[rgb(var(--border))]
+                                 bg-[rgb(var(--card))]
+                                 shadow-[0_24px_90px_rgb(var(--shadow)/0.28)]
+                                 p-4"
+                      initial={{ y: 12, scale: 0.98, opacity: 0 }}
+                      animate={{ y: 0, scale: 1, opacity: 1 }}
+                      exit={{ y: 12, scale: 0.98, opacity: 0 }}
+                      transition={{ duration: 0.16, ease: "easeOut" }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label="Confirm clear notifications"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 grid h-9 w-9 place-items-center rounded-2xl bg-rose-500/10 border border-rose-500/25">
+                          <Trash2
+                            size={18}
+                            className="text-rose-600 dark:text-rose-400"
+                          />
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                            Clear all notifications?
+                          </div>
+                          <div className="mt-1 text-xs text-[rgb(var(--muted2))]">
+                            This action can’t be undone. You’ll remove all
+                            notifications from your list.
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setConfirmClearOpen(false)}
+                          className="rounded-xl border px-3 py-2 text-xs font-semibold
+                                     border-[rgb(var(--border))] bg-[rgb(var(--card2))]
+                                     text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.7)]"
+                        >
+                          Cancel
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setErr(null);
+                            try {
+                              const res = await fetch(
+                                "/api/notifications/clear-all",
+                                {
+                                  method: "POST",
+                                }
+                              );
+                              if (!res.ok) throw new Error();
+
+                              setItems([]);
+                              setUnread(0);
+                              setShowAll(false);
+                              setConfirmClearOpen(false);
+                            } catch {
+                              setErr("Failed to clear notifications.");
+                              setConfirmClearOpen(false);
+                            }
+                          }}
+                          className="rounded-xl px-3 py-2 text-xs font-semibold text-white
+                                     bg-rose-600 hover:opacity-90"
+                        >
+                          Yes, clear all
+                        </button>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </>
           )}
         </div>
@@ -578,6 +645,7 @@ export default function NotificationsBellClient({
     showAll,
     shown,
     unread,
+    confirmClearOpen,
   ]);
 
   return (
