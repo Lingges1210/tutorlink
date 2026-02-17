@@ -206,6 +206,10 @@ model ChatChannel {
   messages ChatMessage[]
   reads    ChatRead[]
 
+  closeAt   DateTime?  // when it should auto-close
+  closedAt  DateTime?  // when it actually closed
+
+
   @@index([studentId])
   @@index([tutorId])
   @@index([lastMessageAt])

@@ -74,11 +74,7 @@ export default function MessagingPage() {
 
       if (!needle) return true;
 
-      const hay = [
-        c.subjectName ?? "",
-        c.name ?? "",
-        c.lastMessage ?? "",
-      ]
+      const hay = [c.subjectName ?? "", c.name ?? "", c.lastMessage ?? ""]
         .join(" ")
         .toLowerCase();
 
@@ -97,6 +93,15 @@ export default function MessagingPage() {
   const typingStopTimer = useRef<any>(null);
   const lastTypingSentAt = useRef(0);
 
+  // ✅ NEW: chat close window info
+  const [chatMeta, setChatMeta] = useState<{
+    isChatClosed: boolean;
+    chatCloseAt: string | null;
+  }>({ isChatClosed: false, chatCloseAt: null });
+
+  // ✅ NEW: inline error for send failures (e.g., closed)
+  const [sendErr, setSendErr] = useState<string | null>(null);
+
   function pingTyping(isTyping: boolean) {
     if (!activeId) return;
     fetch("/api/chat/typing", {
@@ -107,31 +112,37 @@ export default function MessagingPage() {
   }
 
   async function deleteMessage(messageId: string) {
-  const r = await fetch(`/api/chat/messages/${messageId}`, { method: "DELETE" });
-  const j = await r.json().catch(() => null);
+    const r = await fetch(`/api/chat/messages/${messageId}`, {
+      method: "DELETE",
+    });
+    const j = await r.json().catch(() => null);
 
-  if (j?.ok) {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === messageId
-          ? { ...m, isDeleted: true, text: "", deletedAt: j.message?.deletedAt ?? null }
-          : m
-      )
-    );
+    if (j?.ok) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                isDeleted: true,
+                text: "",
+                deletedAt: j.message?.deletedAt ?? null,
+              }
+            : m
+        )
+      );
+    }
   }
-}
-
 
   // helper: refresh left list (unread + preview)
   async function refreshConversations() {
     const r = await fetch("/api/chat/channels", { cache: "no-store" });
     const j = await r.json().catch(() => null);
     if (j?.ok) {
-  const sorted = [...j.items].sort(
-    (a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()
-  );
-  setConversations(sorted);
-}
+      const sorted = [...j.items].sort(
+        (a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()
+      );
+      setConversations(sorted);
+    }
   }
 
   // 0) Load current user (Prisma user id) for message alignment
@@ -171,6 +182,25 @@ export default function MessagingPage() {
     return el.scrollHeight - (el.scrollTop + el.clientHeight) < 20;
   }
 
+  function timeLeft(iso: string) {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return "Closed";
+  const mins = Math.ceil(ms / 60000);
+  if (mins < 60) return `${mins} min left`;
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem ? `${hrs} hr ${rem} min left` : `${hrs} hr left`;
+}
+
+function closeUrgency(iso: string | null) {
+  if (!iso) return "none";
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return "closed";
+  if (ms <= 2 * 60 * 1000) return "danger";
+  if (ms <= 10 * 60 * 1000) return "warn";
+  return "ok";
+}
+
   useEffect(() => {
     const onPageShow = (e: PageTransitionEvent) => {
       const nav = performance.getEntriesByType("navigation")[0] as any;
@@ -201,6 +231,14 @@ export default function MessagingPage() {
         setNextCursor(j.nextCursor ?? null);
 
         if (j.read) setReadInfo(j.read);
+
+        // ✅ NEW: update close window info from API
+        if (typeof j.isChatClosed === "boolean") {
+          setChatMeta({
+            isChatClosed: !!j.isChatClosed,
+            chatCloseAt: j.chatCloseAt ?? null,
+          });
+        }
 
         setMessages((prev) => {
           const seen = new Set(prev.map((m) => m.id));
@@ -235,26 +273,24 @@ export default function MessagingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
-
   const [ctx, setCtx] = useState<{
-  open: boolean;
-  x: number;
-  y: number;
-  messageId: string | null;
-}>({ open: false, x: 0, y: 0, messageId: null });
+    open: boolean;
+    x: number;
+    y: number;
+    messageId: string | null;
+  }>({ open: false, x: 0, y: 0, messageId: null });
 
-useEffect(() => {
-  const close = () => setCtx((p) => ({ ...p, open: false, messageId: null }));
-  window.addEventListener("click", close);
-  window.addEventListener("scroll", close, true);
-  window.addEventListener("resize", close);
-  return () => {
-    window.removeEventListener("click", close);
-    window.removeEventListener("scroll", close, true);
-    window.removeEventListener("resize", close);
-  };
-}, []);
-
+  useEffect(() => {
+    const close = () => setCtx((p) => ({ ...p, open: false, messageId: null }));
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, []);
 
   // 2) Load messages when a conversation selected (initial load + mark read)
   useEffect(() => {
@@ -264,6 +300,7 @@ useEffect(() => {
       setLoadingMsgs(true);
       setMessages([]);
       setNextCursor(null);
+      setSendErr(null);
 
       const r = await fetch(`/api/chat/messages?channelId=${activeId}&take=30`, {
         cache: "no-store",
@@ -276,6 +313,16 @@ useEffect(() => {
         setNextCursor(j.nextCursor ?? null);
 
         if (j.read) setReadInfo(j.read);
+
+        // ✅ NEW: close window info
+        if (typeof j.isChatClosed === "boolean") {
+          setChatMeta({
+            isChatClosed: !!j.isChatClosed,
+            chatCloseAt: j.chatCloseAt ?? null,
+          });
+        } else {
+          setChatMeta({ isChatClosed: false, chatCloseAt: null });
+        }
 
         await fetch("/api/chat/read", {
           method: "POST",
@@ -310,6 +357,14 @@ useEffect(() => {
       setMessages((prev) => [...older, ...prev]);
       setNextCursor(j.nextCursor ?? null);
       if (j.read) setReadInfo(j.read);
+
+      // ✅ NEW: keep close info fresh
+      if (typeof j.isChatClosed === "boolean") {
+        setChatMeta({
+          isChatClosed: !!j.isChatClosed,
+          chatCloseAt: j.chatCloseAt ?? null,
+        });
+      }
     }
 
     setLoadingMsgs(false);
@@ -317,6 +372,11 @@ useEffect(() => {
 
   async function send() {
     if (!activeId) return;
+    if (chatMeta.isChatClosed) {
+      setSendErr("Chat is closed.");
+      return;
+    }
+
     const t = text.trim();
     if (!t) return;
 
@@ -324,6 +384,7 @@ useEffect(() => {
     pingTyping(false);
 
     setText("");
+    setSendErr(null);
 
     const r = await fetch("/api/chat/messages", {
       method: "POST",
@@ -331,6 +392,16 @@ useEffect(() => {
       body: JSON.stringify({ channelId: activeId, text: t }),
     });
     const j = await r.json().catch(() => null);
+
+    if (!r.ok) {
+      // server enforces closeAt, so show the message nicely
+      setSendErr(j?.message ?? "Failed to send");
+      // if server says closed, lock UI
+      if (r.status === 403 && (j?.message?.toLowerCase?.() ?? "").includes("closed")) {
+        setChatMeta((p) => ({ ...p, isChatClosed: true }));
+      }
+      return;
+    }
 
     if (j?.ok) {
       setMessages((prev) => [...prev, j.message]);
@@ -379,6 +450,8 @@ useEffect(() => {
       </button>
     );
   };
+
+  const inputDisabled = !active || chatMeta.isChatClosed;
 
   return (
     // ✅ Centered like dashboard + nicer spacing
@@ -495,29 +568,82 @@ useEffect(() => {
           {/* Right: chat window */}
           <div className="lg:col-span-2 flex flex-col min-h-0">
             <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] pb-3">
-              <div>
-                <p className="text-sm font-semibold text-[rgb(var(--fg))]">
-                  {active
-                    ? `Chat — ${active.subjectName}`
-                    : "Select a conversation"}
-                </p>
+  <div>
+    <p className="text-sm font-semibold text-[rgb(var(--fg))]">
+      {active ? `Chat — ${active.subjectName}` : "Select a conversation"}
+    </p>
 
-                {active && (
-                  <p className="text-[0.7rem] text-[rgb(var(--muted))]">
-                    with {active.name}
-                  </p>
-                )}
+    {active && (
+      <p className="text-[0.7rem] text-[rgb(var(--muted))]">
+        with {active.name}
+      </p>
+    )}
+
+    {/* ✅ NEW: show remaining open window */}
+    {active && chatMeta.chatCloseAt && !chatMeta.isChatClosed && (
+  <div className="mt-1 flex items-center gap-2">
+    <span
+      className={`rounded-full px-2 py-0.5 text-[0.65rem] font-semibold border
+        ${
+          closeUrgency(chatMeta.chatCloseAt) === "danger"
+            ? "border-red-500/40 bg-red-500/10 text-red-600"
+            : closeUrgency(chatMeta.chatCloseAt) === "warn"
+            ? "border-amber-500/40 bg-amber-500/10 text-amber-700"
+            : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))]"
+        }
+      `}
+    >
+      {closeUrgency(chatMeta.chatCloseAt) === "danger"
+        ? `Closing soon • ${timeLeft(chatMeta.chatCloseAt)}`
+        : `Open • ${timeLeft(chatMeta.chatCloseAt)}`}
+    </span>
+
+    <span className="text-[0.7rem] text-[rgb(var(--muted2))]">
+      Chat stays open for 8 hours after completion
+    </span>
+  </div>
+)}
+
+
+    {/* ✅ NEW: show closed label */}
+    {active && chatMeta.isChatClosed && (
+      <p className="text-[0.7rem] text-[rgb(var(--muted2))]">
+        Chat closed (8-hour window ended)
+      </p>
+    )}
+  </div>
+
+  {active && (
+    <a
+      href={`/sessions/${active.sessionId}`}
+      className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1 text-[0.7rem] text-[rgb(var(--fg))] hover:ring-1 hover:ring-[rgb(var(--primary))/0.35]"
+    >
+      View session details
+    </a>
+  )}
+</div>
+
+
+            {/* ✅ Banner when chat is closed */}
+            {active && chatMeta.isChatClosed && (
+              <div className="mt-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-[0.75rem] text-[rgb(var(--muted))]">
+                Chat is closed.
+                {chatMeta.chatCloseAt ? (
+                  <>
+                    {" "}
+                    (Closed after{" "}
+                    {new Date(chatMeta.chatCloseAt).toLocaleString([], {
+                      year: "numeric",
+                      month: "short",
+                      day: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                    )
+                  </>
+                ) : null}
               </div>
-
-              {active && (
-                <a
-                  href={`/sessions/${active.sessionId}`}
-                  className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1 text-[0.7rem] text-[rgb(var(--fg))] hover:ring-1 hover:ring-[rgb(var(--primary))/0.35]"
-                >
-                  View session details
-                </a>
-              )}
-            </div>
+            )}
 
             {/* ✅ Big/tall scroll area */}
             <div className="mt-3 flex-1 min-h-0 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3 text-xs overflow-y-auto">
@@ -546,45 +672,48 @@ useEffect(() => {
                       isMe ? "justify-end" : "justify-start"
                     }`}
                     onContextMenu={(e) => {
-  // Only allow delete for my own non-deleted messages
-  if (!isMe || msg.isDeleted) return;
-  e.preventDefault();
-  setCtx({ open: true, x: e.clientX, y: e.clientY, messageId: msg.id });
-}}
-
+                      // Only allow delete for my own non-deleted messages
+                      if (!isMe || msg.isDeleted) return;
+                      e.preventDefault();
+                      setCtx({
+                        open: true,
+                        x: e.clientX,
+                        y: e.clientY,
+                        messageId: msg.id,
+                      });
+                    }}
                   >
                     <div
-  className={`group max-w-[70%] rounded-2xl px-3 py-2 relative ${
-    isMe
-      ? "bg-[rgb(var(--primary))] text-white"
-      : "bg-[rgb(var(--card))] text-[rgb(var(--fg))] border border-[rgb(var(--border))]"
-  }`}
->
-
-                     {msg.isDeleted ? (
-  <p className="italic opacity-80">This message was deleted</p>
-) : (
-  <p>{msg.text}</p>
-)}
-
+                      className={`group max-w-[70%] rounded-2xl px-3 py-2 relative ${
+                        isMe
+                          ? "bg-[rgb(var(--primary))] text-white"
+                          : "bg-[rgb(var(--card))] text-[rgb(var(--fg))] border border-[rgb(var(--border))]"
+                      }`}
+                    >
+                      {msg.isDeleted ? (
+                        <p className="italic opacity-80">
+                          This message was deleted
+                        </p>
+                      ) : (
+                        <p>{msg.text}</p>
+                      )}
 
                       <div
-  className={`mt-1 flex items-center justify-between gap-2 text-[0.6rem] ${
-    isMe ? "text-white/80" : "text-[rgb(var(--muted2))]"
-  }`}
->
-  <div className="flex items-center gap-2">
-    <span>
-      {new Date(msg.createdAt).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      })}
-    </span>
+                        className={`mt-1 flex items-center justify-between gap-2 text-[0.6rem] ${
+                          isMe ? "text-white/80" : "text-[rgb(var(--muted2))]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>
+                            {new Date(msg.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
 
-    {isLastMine && <span>{isSeen ? "Seen" : "Sent"}</span>}
-  </div>
-</div>
-
+                          {isLastMine && <span>{isSeen ? "Seen" : "Sent"}</span>}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );
@@ -610,26 +739,36 @@ useEffect(() => {
             </div>
 
             {/* ✅ PUT CONTEXT MENU HERE (after scroll area, before input) */}
-{ctx.open && ctx.messageId && (
-  <div
-    style={{ left: ctx.x, top: ctx.y }}
-    className="fixed z-50 min-w-[140px] rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_18px_40px_rgba(0,0,0,0.18)] p-1"
-    onClick={(e) => e.stopPropagation()}
-  >
-    <button
-      className="w-full rounded-lg px-3 py-2 text-left text-xs text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]"
-      onClick={() => {
-        deleteMessage(ctx.messageId!);
-        setCtx((p) => ({ ...p, open: false, messageId: null }));
-      }}
-    >
-      Delete message
-    </button>
-  </div>
-)}
+            {ctx.open && ctx.messageId && (
+              <div
+                style={{ left: ctx.x, top: ctx.y }}
+                className="fixed z-50 min-w-[140px] rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_18px_40px_rgba(0,0,0,0.18)] p-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  className="w-full rounded-lg px-3 py-2 text-left text-xs text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]"
+                  onClick={() => {
+                    deleteMessage(ctx.messageId!);
+                    setCtx((p) => ({ ...p, open: false, messageId: null }));
+                  }}
+                >
+                  Delete message
+                </button>
+              </div>
+            )}
+
+            {/* ✅ inline error line (send failures like closed) */}
+            {active && sendErr && (
+              <div className="mt-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-[0.75rem] text-[rgb(var(--muted))]">
+                {sendErr}
+              </div>
+            )}
 
             <div className="mt-3 flex items-center gap-2">
-              <button className="rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-2 text-[0.7rem] text-[rgb(var(--fg))] hover:ring-1 hover:ring-[rgb(var(--primary))/0.35]">
+              <button
+                disabled={inputDisabled}
+                className="rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-2 text-[0.7rem] text-[rgb(var(--fg))] hover:ring-1 hover:ring-[rgb(var(--primary))/0.35] disabled:opacity-60"
+              >
                 + Attach file
               </button>
 
@@ -653,14 +792,18 @@ useEffect(() => {
                 onKeyDown={(e) => e.key === "Enter" && send()}
                 className="flex-1 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] focus:outline-none focus:ring-1 focus:ring-[rgb(var(--primary))/0.55]"
                 placeholder={
-                  active ? "Type a message..." : "Select a conversation..."
+                  !active
+                    ? "Select a conversation..."
+                    : chatMeta.isChatClosed
+                      ? "Chat is closed"
+                      : "Type a message..."
                 }
-                disabled={!active}
+                disabled={inputDisabled}
               />
 
               <button
                 onClick={send}
-                disabled={!active}
+                disabled={inputDisabled}
                 className="rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 px-4 py-2 text-[0.7rem] font-semibold text-white shadow-[0_10px_25px_rgba(124,58,237,0.35)] disabled:opacity-60"
               >
                 Send

@@ -102,6 +102,26 @@ export async function POST(
     select: { id: true, studentId: true },
   });
 
+  // ✅ keep chat open for 8 hours after tutor completes
+try {
+  const closeAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
+
+  await prisma.chatChannel.upsert({
+    where: { sessionId: updated.id },
+    create: {
+      sessionId: updated.id,
+      studentId: session.studentId,
+      tutorId: session.tutorId!, // ACCEPTED => tutorId exists
+      closeAt,
+    },
+    update: { closeAt, closedAt: null },
+  });
+} catch {
+  // ignore
+}
+
+
+
   // ✅ Notify student (viewer must be STUDENT)
   try {
     if (updated.studentId) {
@@ -110,7 +130,7 @@ export async function POST(
         viewer: "STUDENT",
         type: "SESSION_COMPLETED",
         title: "Session completed ✅",
-        body: "Your tutoring session has been marked as completed.",
+        body: "Your tutoring session has been marked as completed. Chat stays open for 8 hours.",
         data: { sessionId: updated.id },
       });
     }
@@ -120,5 +140,9 @@ export async function POST(
 
   await triggerAllocator();
 
-  return NextResponse.json({ success: true, status: "COMPLETED" });
+  return NextResponse.json({
+    success: true,
+    status: "COMPLETED",
+    chatCloseHours: 8,
+  });
 }

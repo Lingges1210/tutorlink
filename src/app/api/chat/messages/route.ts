@@ -8,7 +8,10 @@ export async function GET(req: Request) {
   const { data } = await supabase.auth.getUser();
 
   if (!data?.user?.email) {
-    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, message: "Unauthorized" },
+      { status: 401 }
+    );
   }
 
   const url = new URL(req.url);
@@ -17,7 +20,10 @@ export async function GET(req: Request) {
   const cursor = url.searchParams.get("cursor");
 
   if (!channelId) {
-    return NextResponse.json({ ok: false, message: "Missing channelId" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, message: "Missing channelId" },
+      { status: 400 }
+    );
   }
 
   const me = await prisma.user.findUnique({
@@ -26,13 +32,23 @@ export async function GET(req: Request) {
   });
 
   if (!me) {
-    return NextResponse.json({ ok: false, message: "User not found" }, { status: 404 });
+    return NextResponse.json(
+      { ok: false, message: "User not found" },
+      { status: 404 }
+    );
   }
 
   // Ensure user belongs to channel
   const ch = await prisma.chatChannel.findUnique({
     where: { id: channelId },
-    select: { id: true, studentId: true, tutorId: true },
+    select: {
+      id: true,
+      studentId: true,
+      tutorId: true,
+      // ✅ added (no behavior change for GET)
+      closeAt: true,
+      closedAt: true,
+    },
   });
 
   if (!ch || (ch.studentId !== me.id && ch.tutorId !== me.id)) {
@@ -64,13 +80,24 @@ export async function GET(req: Request) {
           skip: 1,
         }
       : {}),
-    select: { id: true, senderId: true, text: true, createdAt: true, isDeleted: true, deletedAt: true },
+    select: {
+      id: true,
+      senderId: true,
+      text: true,
+      createdAt: true,
+      isDeleted: true,
+      deletedAt: true,
+    },
   });
 
   const nextCursor =
     messages.length >= Math.min(Math.max(take, 1), 50)
       ? messages[messages.length - 1].id
       : null;
+
+  // ✅ include close window info for UI (no other behavior change)
+  const isChatClosed =
+    !!ch.closedAt || (ch.closeAt ? new Date().getTime() >= ch.closeAt.getTime() : false);
 
   return NextResponse.json({
     ok: true,
@@ -84,6 +111,8 @@ export async function GET(req: Request) {
       meLastReadAt: meLastReadAt.toISOString(),
       otherLastReadAt: otherLastReadAt.toISOString(),
     },
+    chatCloseAt: ch.closeAt ? ch.closeAt.toISOString() : null,
+    isChatClosed,
   });
 }
 
@@ -92,7 +121,10 @@ export async function POST(req: Request) {
   const { data } = await supabase.auth.getUser();
 
   if (!data?.user?.email) {
-    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, message: "Unauthorized" },
+      { status: 401 }
+    );
   }
 
   const body = await req.json().catch(() => ({}));
@@ -112,17 +144,39 @@ export async function POST(req: Request) {
   });
 
   if (!me) {
-    return NextResponse.json({ ok: false, message: "User not found" }, { status: 404 });
+    return NextResponse.json(
+      { ok: false, message: "User not found" },
+      { status: 404 }
+    );
   }
 
   // Ensure user belongs to channel
   const ch = await prisma.chatChannel.findUnique({
     where: { id: channelId },
-    select: { id: true, studentId: true, tutorId: true },
+    select: {
+      id: true,
+      studentId: true,
+      tutorId: true,
+      // ✅ added for close window logic
+      closeAt: true,
+      closedAt: true,
+    },
   });
 
   if (!ch || (ch.studentId !== me.id && ch.tutorId !== me.id)) {
     return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
+  }
+
+  // ✅ NEW: block sending if chat is closed / expired
+  const now = new Date();
+  const isClosed =
+    !!ch.closedAt || (ch.closeAt ? ch.closeAt.getTime() <= now.getTime() : false);
+
+  if (isClosed) {
+    return NextResponse.json(
+      { ok: false, message: "Chat is closed" },
+      { status: 403 }
+    );
   }
 
   const msg = await prisma.chatMessage.create({
@@ -131,21 +185,37 @@ export async function POST(req: Request) {
       senderId: me.id,
       text,
     },
-    select: { id: true, senderId: true, text: true, createdAt: true, isDeleted: true, deletedAt: true },
+    select: {
+      id: true,
+      senderId: true,
+      text: true,
+      createdAt: true,
+      isDeleted: true,
+      deletedAt: true,
+    },
+  });
+
+  // ✅ keep channel ordering correct (lastMessageAt drives channel list)
+  await prisma.chatChannel.update({
+    where: { id: channelId },
+    data: { lastMessageAt: msg.createdAt },
   });
 
   // ✅ sender has read up to now (including this sent message)
-await prisma.chatRead.upsert({
-  where: { channelId_userId: { channelId, userId: me.id } }, // needs @@unique([channelId,userId])
-  update: { lastReadAt: new Date() },
-  create: { channelId, userId: me.id, lastReadAt: new Date() },
-});
+  await prisma.chatRead.upsert({
+    where: { channelId_userId: { channelId, userId: me.id } }, // needs @@unique([channelId,userId])
+    update: { lastReadAt: new Date() },
+    create: { channelId, userId: me.id, lastReadAt: new Date() },
+  });
 
   return NextResponse.json({
     ok: true,
     message: {
       ...msg,
       createdAt: msg.createdAt.toISOString(),
+      deletedAt: msg.deletedAt ? msg.deletedAt.toISOString() : null,
     },
+    chatCloseAt: ch.closeAt ? ch.closeAt.toISOString() : null,
+    isChatClosed: false,
   });
 }

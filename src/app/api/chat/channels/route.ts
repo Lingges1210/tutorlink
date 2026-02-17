@@ -20,32 +20,44 @@ export async function GET() {
 
   if (!me) return NextResponse.json({ ok: false }, { status: 404 });
 
-  const channels = await prisma.chatChannel.findMany({
-    where: {
-      OR: [{ studentId: me.id }, { tutorId: me.id }],
+  const now = new Date();
+
+const channels = await prisma.chatChannel.findMany({
+  where: {
+    OR: [{ studentId: me.id }, { tutorId: me.id }],
+    // ✅ hide chats that have expired
+    AND: [
+      {
+        OR: [
+          { closeAt: null },          // not scheduled to close (still open)
+          { closeAt: { gt: now } },   // close time still in future
+        ],
+      },
+    ],
+  },
+  orderBy: { createdAt: "desc" },
+  include: {
+    session: {
+      select: {
+        id: true,
+        status: true,
+        subject: { select: { code: true, title: true } },
+        student: { select: { id: true, name: true } },
+        tutor: { select: { id: true, name: true } },
+      },
     },
-    orderBy: { createdAt: "desc" },
-    include: {
-      session: {
-        select: {
-          id: true,
-          subject: { select: { code: true, title: true } },
-          student: { select: { id: true, name: true } },
-          tutor: { select: { id: true, name: true } },
-        },
-      },
-      messages: {
-        take: 1,
-        orderBy: { createdAt: "desc" },
-        select: { id: true, text: true, createdAt: true, isDeleted: true },
-      },
-      reads: {
-        where: { userId: me.id },
-        select: { lastReadAt: true },
-        take: 1,
-      },
+    messages: {
+      take: 1,
+      orderBy: { createdAt: "desc" },
+      select: { id: true, text: true, createdAt: true, isDeleted: true },
     },
-  });
+    reads: {
+      where: { userId: me.id },
+      select: { lastReadAt: true },
+      take: 1,
+    },
+  },
+});
 
   const items = await Promise.all(
     channels.map(async (c) => {
@@ -60,14 +72,17 @@ export async function GET() {
         },
       });
 
-      const isMeStudent = c.session?.student?.id === me.id;
+      const isMeStudent = c.session.student.id === me.id;
 
       const otherName = isMeStudent
-        ? c.session?.tutor?.name ?? "Tutor"
-        : c.session?.student?.name ?? "Student";
+        ? c.session.tutor?.name ?? "Tutor"
+        : c.session.student?.name ?? "Student";
 
-      const subj = c.session?.subject;
-      const subjectName = subj ? `${subj.code} ${subj.title}` : "Subject";
+      const subj = c.session.subject;
+      const subjectName = `${subj.code} ${subj.title}`;
+
+      const chatCloseAt = c.closeAt ?? null;
+      const isChatClosed = chatCloseAt ? new Date() > chatCloseAt : false;
 
       return {
         id: c.id,
@@ -75,11 +90,15 @@ export async function GET() {
         name: otherName,
         subjectName,
         lastMessage: last
-  ? (last.isDeleted ? "This message was deleted" : last.text)
-  : "No messages yet",
-        lastAt: (last?.createdAt ?? c.createdAt).toISOString(),
+          ? last.isDeleted
+            ? "This message was deleted"
+            : last.text
+          : "No messages yet",
+        lastAt: (last?.createdAt ?? c.lastMessageAt).toISOString(),
         unread,
         viewerIsStudent: isMeStudent,
+        chatCloseAt: chatCloseAt ? chatCloseAt.toISOString() : null,
+        isChatClosed,
       };
     })
   );
