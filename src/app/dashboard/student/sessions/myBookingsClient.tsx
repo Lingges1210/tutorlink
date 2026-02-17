@@ -202,15 +202,34 @@ export default function MyBookingsClient() {
 
 
   const { upcoming, past } = useMemo(() => {
-    const up: Row[] = [];
-    const pa: Row[] = [];
-    for (const it of items) {
-      (isPast(it) ? pa : up).push(it);
+  const up: Row[] = [];
+  const pa: Row[] = [];
+
+  for (const it of items) {
+    const closed = it.status === "COMPLETED" || it.status === "CANCELLED";
+
+    // ✅ CANCELLED/COMPLETED always Past (even if scheduledAt is future)
+    if (closed) {
+      pa.push(it);
+      continue;
     }
-    up.sort((a, b) => +new Date(a.scheduledAt) - +new Date(b.scheduledAt));
-    pa.sort((a, b) => +new Date(b.scheduledAt) - +new Date(a.scheduledAt));
-    return { upcoming: up, past: pa };
-  }, [items]);
+
+    // ✅ Only these can be Upcoming/Active bucket
+    if (it.status === "PENDING" || it.status === "ACCEPTED") {
+      up.push(it);
+      continue;
+    }
+
+    // any other weird status -> treat as Past to avoid polluting Upcoming
+    pa.push(it);
+  }
+
+  up.sort((a, b) => +new Date(a.scheduledAt) - +new Date(b.scheduledAt));
+  pa.sort((a, b) => +new Date(b.scheduledAt) - +new Date(a.scheduledAt));
+
+  return { upcoming: up, past: pa };
+}, [items]);
+
 
   const filteredPast =
     pastFilter === "ALL" ? past : past.filter((x) => x.status === pastFilter);
@@ -578,43 +597,53 @@ else {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-[11px] font-semibold tracking-wide text-[rgb(var(--fg))]">
-                  UPCOMING
-                </span>
-                <span className="text-xs text-[rgb(var(--muted2))]">
-                  {upcoming.length} item{upcoming.length === 1 ? "" : "s"}
-                </span>
-              </div>
+  {/* ✅ Header row always visible (like tutor page) */}
+  <div className="flex items-center justify-between gap-3">
+    <div className="flex items-center gap-2">
+      {/* show the UPCOMING pill only when there is upcoming */}
+      <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-[11px] font-semibold tracking-wide text-[rgb(var(--fg))]">
+  {upcoming.length > 0 ? "UPCOMING" : "SESSIONS"}
+</span>
 
-              <button
-                type="button"
-                onClick={() =>
-                  setShowPast((v) => {
-                    const next = !v;
-                    setPastPage(1); // ✅ reset page when toggling
-                    if (!next) setPastFilter("ALL"); // ✅ reset when closing
-                    return next;
-                  })
-                }
-                className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]"
-              >
-                {showPast ? "Hide Past" : `Show Past (${past.length})`}
-              </button>
-            </div>
+<span className="text-xs text-[rgb(var(--muted2))]">
+  {upcoming.length > 0
+    ? `${upcoming.length} item${upcoming.length === 1 ? "" : "s"}`
+    : "No active sessions"}
+</span>
 
-            {upcoming.length === 0 ? (
-              <div className="text-sm text-[rgb(var(--muted2))]">
-                No upcoming bookings.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {upcoming.map((s) => (
-                  <BookingCard key={s.id} s={s} />
-                ))}
-              </div>
-            )}
+    </div>
+
+    <button
+      type="button"
+      onClick={() =>
+        setShowPast((v) => {
+          const next = !v;
+          setPastPage(1);
+          if (!next) setPastFilter("ALL");
+          return next;
+        })
+      }
+      className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]"
+    >
+      {showPast ? "Hide Past" : `Show Past (${past.length})`}
+    </button>
+  </div>
+
+  {/* ✅ Upcoming content OR empty card */}
+  {upcoming.length === 0 && !showPast ? (
+    <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-8 text-center text-sm text-[rgb(var(--muted2))]">
+      No active sessions at the moment.
+      <div className="mt-2 text-xs text-[rgb(var(--muted2))]">
+        Past sessions are available in the archive.
+      </div>
+    </div>
+  ) : upcoming.length > 0 ? (
+    <div className="space-y-3">
+      {upcoming.map((s) => (
+        <BookingCard key={s.id} s={s} />
+      ))}
+    </div>
+  ) : null}
 
             {showPast && (
               <div className="pt-2">

@@ -142,7 +142,8 @@ function getPastPageItems(current: number, total: number): (number | "…")[] {
   if (current <= 3) return [1, 2, 3, 4, "…", last - 1, last];
 
   // near end
-  if (current >= total - 2) return [1, 2, "…", last - 3, last - 2, last - 1, last];
+  if (current >= total - 2)
+    return [1, 2, "…", last - 3, last - 2, last - 1, last];
 
   // middle
   return [1, "…", current - 1, current, current + 1, "…", last];
@@ -216,42 +217,39 @@ export default function TutorSessionsClient() {
     return () => clearInterval(t);
   }, []);
 
- useEffect(() => {
-  let t: any;
+  useEffect(() => {
+    let t: any;
 
-  const run = async () => {
-    try {
-      await fetch("/api/reminders/pull", { cache: "no-store" });
-    } catch {}
-  };
+    const run = async () => {
+      try {
+        await fetch("/api/reminders/pull", { cache: "no-store" });
+      } catch {}
+    };
 
-  const start = () => {
-  stop(); // ✅ prevent duplicate intervals
-  run();  // run immediately
-  t = setInterval(run, 60_000);
-};
+    const start = () => {
+      stop(); // ✅ prevent duplicate intervals
+      run(); // run immediately
+      t = setInterval(run, 60_000);
+    };
 
+    const stop = () => {
+      if (t) clearInterval(t);
+      t = null;
+    };
 
-  const stop = () => {
-    if (t) clearInterval(t);
-    t = null;
-  };
+    const onVis = () => {
+      if (document.visibilityState === "visible") start();
+      else stop();
+    };
 
-  const onVis = () => {
-    if (document.visibilityState === "visible") start();
-    else stop();
-  };
+    onVis();
+    document.addEventListener("visibilitychange", onVis);
 
-  onVis(); // init based on current visibility
-  document.addEventListener("visibilitychange", onVis);
-
-  return () => {
-    stop();
-    document.removeEventListener("visibilitychange", onVis);
-  };
-}, []);
-
-
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
 
   async function accept(id: string) {
     setActionLoading(true);
@@ -264,10 +262,10 @@ export default function TutorSessionsClient() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) setMsg(data?.message ?? "Accept failed.");
-else {
-  await refresh({ silent: true });
-  await fetch("/api/reminders/pull", { cache: "no-store" });
-}
+      else {
+        await refresh({ silent: true });
+        await fetch("/api/reminders/pull", { cache: "no-store" });
+      }
     } finally {
       setActionLoading(false);
     }
@@ -284,10 +282,10 @@ else {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) setMsg(data?.message ?? "Complete failed.");
-else {
-  await refresh({ silent: true });
-  await fetch("/api/reminders/pull", { cache: "no-store" });
-}
+      else {
+        await refresh({ silent: true });
+        await fetch("/api/reminders/pull", { cache: "no-store" });
+      }
     } finally {
       setActionLoading(false);
     }
@@ -309,13 +307,12 @@ else {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) setMsg(data?.message ?? "Cancel failed.");
-else {
-  setMsg("Session cancelled.");
-  closeModal();
-  await refresh({ silent: true });
-  await fetch("/api/reminders/pull", { cache: "no-store" });
-}
-
+      else {
+        setMsg("Session cancelled.");
+        closeModal();
+        await refresh({ silent: true });
+        await fetch("/api/reminders/pull", { cache: "no-store" });
+      }
     } finally {
       setActionLoading(false);
     }
@@ -350,13 +347,12 @@ else {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) setMsg(data?.message ?? "Propose failed.");
-else {
-  setMsg("Proposed new time sent to student for confirmation.");
-  closeModal();
-  await refresh({ silent: true });
-  await fetch("/api/reminders/pull", { cache: "no-store" });
-}
-
+      else {
+        setMsg("Proposed new time sent to student for confirmation.");
+        closeModal();
+        await refresh({ silent: true });
+        await fetch("/api/reminders/pull", { cache: "no-store" });
+      }
     } finally {
       setActionLoading(false);
     }
@@ -365,13 +361,21 @@ else {
   const grouped = useMemo(() => {
     const now = Date.now();
 
-    const ongoing = items.filter((s) => isOngoing(s));
-    const upcoming = items.filter(
-      (s) => new Date(s.scheduledAt).getTime() > now && !isOngoing(s)
-    );
-    const past = items.filter((s) => getEndTime(s) <= now);
+    const isClosed = (s: Row) =>
+      s.status === "CANCELLED" || s.status === "COMPLETED";
 
-    upcoming.sort((a, b) => +new Date(a.scheduledAt) - +new Date(b.scheduledAt));
+    const past = items.filter((s) => isClosed(s) || getEndTime(s) <= now);
+    const ongoing = items.filter((s) => !isClosed(s) && isOngoing(s));
+
+    const upcoming = items.filter((s) => {
+      if (isClosed(s)) return false;
+      const t = new Date(s.scheduledAt).getTime();
+      return t > now && !isOngoing(s);
+    });
+
+    upcoming.sort(
+      (a, b) => +new Date(a.scheduledAt) - +new Date(b.scheduledAt)
+    );
     past.sort((a, b) => +new Date(b.scheduledAt) - +new Date(a.scheduledAt));
 
     return { ongoing, upcoming, past };
@@ -382,7 +386,6 @@ else {
       ? grouped.past
       : grouped.past.filter((x) => x.status === pastFilter);
 
-  // ✅ Past pagination derived values
   const totalPastPages = Math.max(
     1,
     Math.ceil(filteredPast.length / PAST_PAGE_SIZE)
@@ -395,11 +398,10 @@ else {
   );
 
   useEffect(() => {
-  if (pastPage > totalPastPages) setPastPage(totalPastPages);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [totalPastPages]);
+    if (pastPage > totalPastPages) setPastPage(totalPastPages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalPastPages]);
 
-  // ✅ Focus UX: scroll + glow + auto-show Past + clear focus param after 3s
   useEffect(() => {
     if (!focusId) return;
     if (loading) return;
@@ -408,13 +410,20 @@ else {
     const exists = items.some((x) => x.id === focusId);
     if (!exists) return;
 
-    // If focused one is in past, force showPast
     const isFocusedPast = grouped.past.some((x) => x.id === focusId);
-    if (isFocusedPast) setShowPast(true);
+    if (isFocusedPast) {
+      setShowPast(true);
+
+      const idx = filteredPast.findIndex((x) => x.id === focusId);
+      if (idx >= 0) {
+        const computedPage = Math.floor(idx / PAST_PAGE_SIZE) + 1;
+        setPastPage((p) => (p === computedPage ? p : computedPage));
+      }
+    }
 
     let alive = true;
     let tries = 0;
-    const maxTries = 30;
+    const maxTries = 40;
 
     const findAndScroll = () => {
       if (!alive) return;
@@ -438,9 +447,7 @@ else {
       }
 
       tries++;
-      if (tries < maxTries) {
-        window.setTimeout(findAndScroll, 120);
-      }
+      if (tries < maxTries) window.setTimeout(findAndScroll, 120);
     };
 
     requestAnimationFrame(() => {
@@ -451,7 +458,16 @@ else {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusId, loading, items.length, grouped.past.length, showPast]);
+  }, [
+    focusId,
+    loading,
+    items.length,
+    grouped.past.length,
+    filteredPast.length,
+    pastFilter,
+    pastPage,
+    showPast,
+  ]);
 
   function Section({
     title,
@@ -493,13 +509,12 @@ else {
             const proposalPending =
               active && s.proposalStatus === "PENDING" && !!s.proposedAt;
 
-
             const isFocused = focusId === s.id;
 
             return (
               <motion.div
                 key={s.id}
-                id={`session-${s.id}`} // ✅ scroll target
+                id={`session-${s.id}`}
                 layout="position"
                 initial={{ opacity: 0, y: 10, scale: 0.985 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -512,7 +527,6 @@ else {
                   isStartingSoon(s) && !ongoing
                     ? "ring-2 ring-amber-400 animate-pulse"
                     : "",
-                  // ✅ immediate visual cue even before animation kicks in
                   isFocused ? "ring-2 ring-[rgb(var(--primary))]" : "",
                 ].join(" ")}
               >
@@ -690,6 +704,20 @@ else {
     );
   }
 
+  // ✅ helper counts for the “student-style” header row
+  const activeCount = grouped.ongoing.length + grouped.upcoming.length;
+  const leftPill =
+    grouped.ongoing.length > 0
+      ? "ONGOING"
+      : grouped.upcoming.length > 0
+      ? "UPCOMING"
+      : "SESSIONS";
+
+  const leftMeta =
+    activeCount > 0
+      ? `${activeCount} item${activeCount === 1 ? "" : "s"}`
+      : "No active sessions";
+
   return (
     <div className="space-y-6">
       <motion.div
@@ -715,101 +743,125 @@ else {
         </motion.div>
       )}
 
-      {loading ? (
-        <div className="text-sm text-[rgb(var(--muted2))]">Loading…</div>
-      ) : (
-        <>
-          {/* ✅ Only Show Past button here (like student page) */}
-          <div className="flex items-center justify-end">
-            <button
-              type="button"
-              onClick={() =>
-                setShowPast((p) => {
-                  const next = !p;
-                  setPastPage(1); // ✅ reset page when toggling
-                  if (!next) {
-                    setPastFilter("ALL"); // ✅ reset when closing
-                  }
-                  return next;
-                })
-              }
-              className="rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]"
-            >
-              {showPast ? "Hide Past" : `Show Past (${grouped.past.length})`}
-            </button>
-          </div>
+      {/* ✅ Student-style main card wrapper */}
+      <div className="rounded-3xl border p-5 border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]">
+        {loading ? (
+          <div className="text-sm text-[rgb(var(--muted2))]">Loading…</div>
+        ) : (
+          <div className="space-y-4">
+            {/* ✅ Header row ALWAYS visible (like student page) */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-[11px] font-semibold tracking-wide text-[rgb(var(--fg))]">
+                  {leftPill}
+                </span>
 
-          <Section title="Ongoing" subtitle="Live now" list={grouped.ongoing} />
-          <Section
-            title="Upcoming"
-            subtitle="Scheduled next"
-            list={grouped.upcoming}
-          />
+                <span className="text-xs text-[rgb(var(--muted2))]">
+                  {leftMeta}
+                </span>
+              </div>
 
-          {/* ✅ Past filters appear INSIDE the past header row (below upcoming/ongoing) */}
-          {showPast && (
-            <>
-              <Section
-                title="Past Sessions"
-                subtitle="Completed and cancelled"
-                list={pagedPast}
-                rightSlot={
-                  <div className="flex gap-2">
-                    {(["ALL", "COMPLETED", "CANCELLED"] as const).map((k) => (
-                      <button
-                        key={k}
-                        onClick={() => {
-                          setPastFilter(k);
-                          setPastPage(1); // ✅ reset page on filter change
-                        }}
-                        className={[
-                          "rounded-full px-3 py-1 text-[11px] font-semibold border transition-all duration-150",
-                          k === pastFilter
-                            ? "border-[rgb(var(--primary))] text-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.08)]"
-                            : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
-                        ].join(" ")}
-                      >
-                        {k}
-                      </button>
-                    ))}
-                  </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setShowPast((p) => {
+                    const next = !p;
+                    setPastPage(1);
+                    if (!next) setPastFilter("ALL");
+                    return next;
+                  })
                 }
-              />
+                className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]"
+              >
+                {showPast ? "Hide Past" : `Show Past (${grouped.past.length})`}
+              </button>
+            </div>
 
-              {/* ✅ Pagination buttons (max 7 visible with …) */}
-              {filteredPast.length > 0 && totalPastPages > 1 && (
-                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-                  {getPastPageItems(safePastPage, totalPastPages).map((it, idx) =>
-                    it === "…" ? (
-                      <span
-                        key={`dots-${idx}`}
-                        className="px-2 text-xs text-[rgb(var(--muted2))]"
-                      >
-                        …
-                      </span>
-                    ) : (
-                      <button
-                        key={it}
-                        onClick={() => setPastPage(it)}
-                        className={[
-                          "rounded-full px-3 py-1 text-[11px] font-semibold border transition-all duration-150",
-                          it === safePastPage
-                            ? "border-[rgb(var(--primary))] text-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.08)]"
-                            : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
-                        ].join(" ")}
-                      >
-                        {it}
-                      </button>
-                    )
-                  )}
+            {/* ✅ When no active sessions & past hidden -> show same empty card as student page */}
+            {activeCount === 0 && !showPast ? (
+              <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-8 text-center text-sm text-[rgb(var(--muted2))]">
+                No active sessions at the moment.
+                <div className="mt-2 text-xs text-[rgb(var(--muted2))]">
+                  Past sessions are available in the archive.
                 </div>
-              )}
-            </>
-          )}
-        </>
-      )}
+              </div>
+            ) : (
+              <>
+                {/* ✅ Sections (unchanged) */}
+                <Section title="Ongoing" subtitle="Live now" list={grouped.ongoing} />
+                <Section
+                  title="Upcoming"
+                  subtitle="Scheduled next"
+                  list={grouped.upcoming}
+                />
+              </>
+            )}
 
-      {/* ✅ CANCEL MODAL */}
+            {/* ✅ Past section (same behavior as before) */}
+            {showPast && (
+              <>
+                <Section
+                  title="Past Sessions"
+                  subtitle="Completed and cancelled"
+                  list={pagedPast}
+                  rightSlot={
+                    <div className="flex gap-2">
+                      {(["ALL", "COMPLETED", "CANCELLED"] as const).map((k) => (
+                        <button
+                          key={k}
+                          onClick={() => {
+                            setPastFilter(k);
+                            setPastPage(1);
+                          }}
+                          className={[
+                            "rounded-full px-3 py-1 text-[11px] font-semibold border transition-all duration-150",
+                            k === pastFilter
+                              ? "border-[rgb(var(--primary))] text-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.08)]"
+                              : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
+                          ].join(" ")}
+                        >
+                          {k}
+                        </button>
+                      ))}
+                    </div>
+                  }
+                />
+
+                {filteredPast.length > 0 && totalPastPages > 1 && (
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                    {getPastPageItems(safePastPage, totalPastPages).map(
+                      (it, idx) =>
+                        it === "…" ? (
+                          <span
+                            key={`dots-${idx}`}
+                            className="px-2 text-xs text-[rgb(var(--muted2))]"
+                          >
+                            …
+                          </span>
+                        ) : (
+                          <button
+                            key={it}
+                            onClick={() => setPastPage(it)}
+                            className={[
+                              "rounded-full px-3 py-1 text-[11px] font-semibold border transition-all duration-150",
+                              it === safePastPage
+                                ? "border-[rgb(var(--primary))] text-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.08)]"
+                                : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
+                            ].join(" ")}
+                          >
+                            {it}
+                          </button>
+                        )
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ✅ CANCEL MODAL (unchanged) */}
       {mode === "CANCEL" && activeId && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
@@ -856,7 +908,7 @@ else {
         </div>
       )}
 
-      {/* ✅ PROPOSE MODAL */}
+      {/* ✅ PROPOSE MODAL (unchanged) */}
       {mode === "PROPOSE" && activeId && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
