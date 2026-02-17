@@ -37,7 +37,7 @@ export async function GET() {
       messages: {
         take: 1,
         orderBy: { createdAt: "desc" },
-        select: { id: true, text: true, createdAt: true },
+        select: { id: true, text: true, createdAt: true, isDeleted: true },
       },
       reads: {
         where: { userId: me.id },
@@ -74,7 +74,9 @@ export async function GET() {
         sessionId: c.sessionId,
         name: otherName,
         subjectName,
-        lastMessage: last?.text ?? "No messages yet",
+        lastMessage: last
+  ? (last.isDeleted ? "This message was deleted" : last.text)
+  : "No messages yet",
         lastAt: (last?.createdAt ?? c.createdAt).toISOString(),
         unread,
         viewerIsStudent: isMeStudent,

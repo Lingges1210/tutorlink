@@ -64,7 +64,7 @@ export async function GET(req: Request) {
           skip: 1,
         }
       : {}),
-    select: { id: true, senderId: true, text: true, createdAt: true },
+    select: { id: true, senderId: true, text: true, createdAt: true, isDeleted: true, deletedAt: true },
   });
 
   const nextCursor =
@@ -77,6 +77,7 @@ export async function GET(req: Request) {
     items: messages.map((m) => ({
       ...m,
       createdAt: m.createdAt.toISOString(),
+      deletedAt: m.deletedAt ? m.deletedAt.toISOString() : null,
     })),
     nextCursor,
     read: {
@@ -130,7 +131,7 @@ export async function POST(req: Request) {
       senderId: me.id,
       text,
     },
-    select: { id: true, senderId: true, text: true, createdAt: true },
+    select: { id: true, senderId: true, text: true, createdAt: true, isDeleted: true, deletedAt: true },
   });
 
   // ✅ sender has read up to now (including this sent message)

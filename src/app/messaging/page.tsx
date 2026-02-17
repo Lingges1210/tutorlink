@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Trash2 } from "lucide-react";
 
 type Conv = {
   id: string;
@@ -20,6 +21,8 @@ type Msg = {
   senderId: string;
   text: string;
   createdAt: string;
+  isDeleted?: boolean;
+  deletedAt?: string | null;
 };
 
 function timeAgo(iso: string) {
@@ -103,11 +106,32 @@ export default function MessagingPage() {
     }).catch(() => {});
   }
 
+  async function deleteMessage(messageId: string) {
+  const r = await fetch(`/api/chat/messages/${messageId}`, { method: "DELETE" });
+  const j = await r.json().catch(() => null);
+
+  if (j?.ok) {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? { ...m, isDeleted: true, text: "", deletedAt: j.message?.deletedAt ?? null }
+          : m
+      )
+    );
+  }
+}
+
+
   // helper: refresh left list (unread + preview)
   async function refreshConversations() {
     const r = await fetch("/api/chat/channels", { cache: "no-store" });
     const j = await r.json().catch(() => null);
-    if (j?.ok) setConversations(j.items);
+    if (j?.ok) {
+  const sorted = [...j.items].sort(
+    (a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()
+  );
+  setConversations(sorted);
+}
   }
 
   // 0) Load current user (Prisma user id) for message alignment
@@ -210,6 +234,27 @@ export default function MessagingPage() {
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
+
+
+  const [ctx, setCtx] = useState<{
+  open: boolean;
+  x: number;
+  y: number;
+  messageId: string | null;
+}>({ open: false, x: 0, y: 0, messageId: null });
+
+useEffect(() => {
+  const close = () => setCtx((p) => ({ ...p, open: false, messageId: null }));
+  window.addEventListener("click", close);
+  window.addEventListener("scroll", close, true);
+  window.addEventListener("resize", close);
+  return () => {
+    window.removeEventListener("click", close);
+    window.removeEventListener("scroll", close, true);
+    window.removeEventListener("resize", close);
+  };
+}, []);
+
 
   // 2) Load messages when a conversation selected (initial load + mark read)
   useEffect(() => {
@@ -500,30 +545,46 @@ export default function MessagingPage() {
                     className={`mb-3 flex ${
                       isMe ? "justify-end" : "justify-start"
                     }`}
+                    onContextMenu={(e) => {
+  // Only allow delete for my own non-deleted messages
+  if (!isMe || msg.isDeleted) return;
+  e.preventDefault();
+  setCtx({ open: true, x: e.clientX, y: e.clientY, messageId: msg.id });
+}}
+
                   >
                     <div
-                      className={`max-w-[70%] rounded-2xl px-3 py-2 ${
-                        isMe
-                          ? "bg-[rgb(var(--primary))] text-white"
-                          : "bg-[rgb(var(--card))] text-[rgb(var(--fg))] border border-[rgb(var(--border))]"
-                      }`}
-                    >
-                      <p>{msg.text}</p>
+  className={`group max-w-[70%] rounded-2xl px-3 py-2 relative ${
+    isMe
+      ? "bg-[rgb(var(--primary))] text-white"
+      : "bg-[rgb(var(--card))] text-[rgb(var(--fg))] border border-[rgb(var(--border))]"
+  }`}
+>
 
-                      <p
-                        className={`mt-1 flex items-center justify-between gap-2 text-[0.6rem] ${
-                          isMe ? "text-white/80" : "text-[rgb(var(--muted2))]"
-                        }`}
-                      >
-                        <span>
-                          {new Date(msg.createdAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
+                     {msg.isDeleted ? (
+  <p className="italic opacity-80">This message was deleted</p>
+) : (
+  <p>{msg.text}</p>
+)}
 
-                        {isLastMine && <span>{isSeen ? "Seen" : "Sent"}</span>}
-                      </p>
+
+                      <div
+  className={`mt-1 flex items-center justify-between gap-2 text-[0.6rem] ${
+    isMe ? "text-white/80" : "text-[rgb(var(--muted2))]"
+  }`}
+>
+  <div className="flex items-center gap-2">
+    <span>
+      {new Date(msg.createdAt).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })}
+    </span>
+
+    {isLastMine && <span>{isSeen ? "Seen" : "Sent"}</span>}
+  </div>
+</div>
+
                     </div>
                   </div>
                 );
@@ -547,6 +608,25 @@ export default function MessagingPage() {
 
               <div ref={bottomRef} />
             </div>
+
+            {/* ✅ PUT CONTEXT MENU HERE (after scroll area, before input) */}
+{ctx.open && ctx.messageId && (
+  <div
+    style={{ left: ctx.x, top: ctx.y }}
+    className="fixed z-50 min-w-[140px] rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_18px_40px_rgba(0,0,0,0.18)] p-1"
+    onClick={(e) => e.stopPropagation()}
+  >
+    <button
+      className="w-full rounded-lg px-3 py-2 text-left text-xs text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]"
+      onClick={() => {
+        deleteMessage(ctx.messageId!);
+        setCtx((p) => ({ ...p, open: false, messageId: null }));
+      }}
+    >
+      Delete message
+    </button>
+  </div>
+)}
 
             <div className="mt-3 flex items-center gap-2">
               <button className="rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-2 text-[0.7rem] text-[rgb(var(--fg))] hover:ring-1 hover:ring-[rgb(var(--primary))/0.35]">

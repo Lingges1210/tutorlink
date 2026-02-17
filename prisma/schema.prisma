@@ -224,6 +224,10 @@ model ChatMessage {
 
   attachments ChatAttachment[]
 
+  isDeleted Boolean  @default(false)
+  deletedAt DateTime?
+  deletedBy String?
+
   @@index([channelId, createdAt])
   @@index([senderId])
 }
