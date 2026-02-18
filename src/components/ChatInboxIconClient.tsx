@@ -40,7 +40,15 @@ export default function ChatInboxIconClient({ initialUnread = 0 }: { initialUnre
     <div className="relative">
       <Link
         href="/messaging"
-        className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-slate-900/60 text-slate-200 hover:border-sky-400"
+        className="
+          relative inline-flex h-10 w-10 items-center justify-center rounded-full border
+          border-[rgb(var(--border))]
+          bg-[rgb(var(--card)/0.70)]
+          text-[rgb(var(--fg))]
+          hover:bg-[rgb(var(--card)/0.95)]
+          hover:ring-1 hover:ring-[rgb(var(--primary))/0.35]
+          transition
+        "
         aria-label="Messages"
         title="Messages"
       >
