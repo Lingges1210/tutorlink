@@ -15,26 +15,30 @@ export default function ChatInboxIconClient({ initialUnread = 0 }: { initialUnre
   }
 
   useEffect(() => {
-    refresh();
+  refresh();
 
-    // fallback polling
-    const interval = setInterval(refresh, 4000);
+  const interval = setInterval(refresh, 4000);
 
-    // realtime: whenever a ChatMessage is inserted, refresh total
-    const ch = supabaseBrowser
-      .channel("chat-unread-total")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "ChatMessage" },
-        () => refresh()
-      )
-      .subscribe();
+  // ✅ listen for "read happened" event (instant badge drop)
+  const onRead = () => refresh();
+  window.addEventListener("chat:unread-refresh", onRead);
 
-    return () => {
-      clearInterval(interval);
-      supabaseBrowser.removeChannel(ch);
-    };
-  }, []);
+  const ch = supabaseBrowser
+    .channel("chat-unread-total")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "ChatMessage" },
+      () => refresh()
+    )
+    .subscribe();
+
+  return () => {
+    clearInterval(interval);
+    window.removeEventListener("chat:unread-refresh", onRead);
+    supabaseBrowser.removeChannel(ch);
+  };
+}, []);
+
 
   return (
     <div className="relative">

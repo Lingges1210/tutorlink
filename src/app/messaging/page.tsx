@@ -3,7 +3,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Trash2 } from "lucide-react";
 
 type Conv = {
   id: string;
@@ -218,53 +217,68 @@ function closeUrgency(iso: string | null) {
   useEffect(() => {
     if (!activeId) return;
 
-    const tick = async () => {
-      const atBottom = isNearBottom();
+  const tick = async () => {
+  const atBottom = isNearBottom();
+  let skipRefresh = false;
 
-      const r = await fetch(`/api/chat/messages?channelId=${activeId}&take=30`, {
-        cache: "no-store",
-      });
-      const j = await r.json().catch(() => null);
+  try {
+    const r = await fetch(`/api/chat/messages?channelId=${activeId}&take=30`, {
+      cache: "no-store",
+    });
 
-      if (j?.ok) {
-        const latest = (j.items as Msg[]).slice().reverse();
-        setNextCursor(j.nextCursor ?? null);
+    const j = await r.json().catch(() => null);
 
-        if (j.read) setReadInfo(j.read);
+    if (j?.ok) {
+      const latest = (j.items as Msg[]).slice().reverse();
+      setNextCursor(j.nextCursor ?? null);
 
-        // ✅ NEW: update close window info from API
-        if (typeof j.isChatClosed === "boolean") {
-          setChatMeta({
-            isChatClosed: !!j.isChatClosed,
-            chatCloseAt: j.chatCloseAt ?? null,
-          });
-        }
+      if (j.read) setReadInfo(j.read);
 
-        setMessages((prev) => {
-          const seen = new Set(prev.map((m) => m.id));
-          const onlyNew = latest.filter((m) => !seen.has(m.id));
-          return onlyNew.length ? [...prev, ...onlyNew] : prev;
+      if (typeof j.isChatClosed === "boolean") {
+        setChatMeta({
+          isChatClosed: !!j.isChatClosed,
+          chatCloseAt: j.chatCloseAt ?? null,
         });
-
-        // ✅ keep your “Seen” working by marking read while at bottom
-        if (atBottom) {
-          await fetch("/api/chat/read", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ channelId: activeId }),
-          }).catch(() => {});
-        }
       }
 
-      fetch(`/api/chat/typing?channelId=${activeId}`, { cache: "no-store" })
-        .then((rr) => rr.json())
-        .then((tj) => {
-          if (tj?.ok) setOtherTyping(!!tj.otherTyping);
-        })
-        .catch(() => {});
+      setMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        const onlyNew = latest.filter((m) => !seen.has(m.id));
+        return onlyNew.length ? [...prev, ...onlyNew] : prev;
+      });
 
-      await refreshConversations();
-    };
+      if (atBottom) {
+        const rr = await fetch("/api/chat/read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channelId: activeId }),
+        }).catch(() => null);
+
+        if (rr?.ok) {
+          window.dispatchEvent(new Event("chat:unread-refresh"));
+          setConversations((prev) =>
+            prev.map((c) => (c.id === activeId ? { ...c, unread: 0 } : c))
+          );
+          skipRefresh = true;
+        }
+      }
+    }
+  } finally {
+  // typing runs EVEN if messages API fails
+  try {
+    const rr = await fetch(
+      `/api/chat/typing?channelId=${activeId}`,
+      { cache: "no-store" }
+    );
+    const tj = await rr.json().catch(() => null);
+    if (tj?.ok) setOtherTyping(!!tj.otherTyping);
+  } catch {}
+
+  if (!skipRefresh) {
+    await refreshConversations();
+  }
+}
+};
 
     tick();
     const t = setInterval(tick, 1500);
@@ -324,13 +338,26 @@ function closeUrgency(iso: string | null) {
           setChatMeta({ isChatClosed: false, chatCloseAt: null });
         }
 
-        await fetch("/api/chat/read", {
+        const rr = await fetch("/api/chat/read", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ channelId: activeId }),
-        }).catch(() => {});
+        }).catch(() => null);
 
-        await refreshConversations();
+        let skipRefresh = false;
+
+        if (rr?.ok) {
+          window.dispatchEvent(new Event("chat:unread-refresh"));
+          setConversations((prev) =>
+            prev.map((c) => (c.id === activeId ? { ...c, unread: 0 } : c))
+          );
+          skipRefresh = true;
+        }
+
+        if (!skipRefresh) {
+          await refreshConversations();
+        }
+
         setTimeout(
           () => bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
           50
