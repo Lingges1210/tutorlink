@@ -457,15 +457,6 @@ export default function NotificationsBellClient({
             >
               Mark all read
             </button>
-
-            <Link
-              href={dashboardHref}
-              className="rounded-xl px-3 py-2 text-xs font-semibold text-white
-                         bg-[rgb(var(--primary))] hover:opacity-90"
-              onClick={() => setOpen(false)}
-            >
-              Open dashboard
-            </Link>
           </div>
         </div>
 

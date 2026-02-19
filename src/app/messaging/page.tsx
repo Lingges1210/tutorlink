@@ -15,6 +15,15 @@ type Conv = {
   viewerIsStudent: boolean; // true => you are Student in this chat, false => you are Tutor in this chat
 };
 
+type Attachment = {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  url: string | null;
+  createdAt: string;
+};
+
 type Msg = {
   id: string;
   senderId: string;
@@ -22,6 +31,7 @@ type Msg = {
   createdAt: string;
   isDeleted?: boolean;
   deletedAt?: string | null;
+  attachments?: Attachment[];
 };
 
 function timeAgo(iso: string) {
@@ -37,6 +47,14 @@ function timeAgo(iso: string) {
 }
 
 type RoleFilter = "ALL" | "STUDENT" | "TUTOR";
+
+type UploadPayload = {
+  bucket: string;
+  objectPath: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+};
 
 export default function MessagingPage() {
   const [meId, setMeId] = useState<string | null>(null);
@@ -101,6 +119,11 @@ export default function MessagingPage() {
   // ✅ NEW: inline error for send failures (e.g., closed)
   const [sendErr, setSendErr] = useState<string | null>(null);
 
+  // ✅ NEW: attachments state
+  const [pickedFiles, setPickedFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   function pingTyping(isTyping: boolean) {
     if (!activeId) return;
     fetch("/api/chat/typing", {
@@ -108,6 +131,86 @@ export default function MessagingPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ channelId: activeId, isTyping }),
     }).catch(() => {});
+  }
+
+  function validateFile(file: File) {
+    const okType =
+      file.type.startsWith("image/") || file.type === "application/pdf";
+    if (!okType) return "Only images or PDFs allowed";
+    const maxBytes = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxBytes) return "File too large (max 10MB)";
+    return null;
+  }
+
+  function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+
+    for (const f of files) {
+      const err = validateFile(f);
+      if (err) {
+        alert(err);
+        e.target.value = "";
+        return;
+      }
+    }
+
+    setPickedFiles((prev) => [...prev, ...files]);
+    e.target.value = ""; // allow reselect same file later
+  }
+
+  function removePickedFile(idx: number) {
+    setPickedFiles((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  async function forceDownload(url: string, filename: string) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Download failed");
+
+  const blob = await res.blob();
+  const blobUrl = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename || "download";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  URL.revokeObjectURL(blobUrl);
+}
+
+  async function uploadAttachment(channelId: string, file: File): Promise<UploadPayload> {
+    const sign = await fetch("/api/chat/attachments/sign-upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channelId,
+        fileName: file.name,
+        contentType: file.type,
+      }),
+    }).then((r) => r.json());
+
+    if (!sign?.ok) throw new Error(sign?.message ?? "Sign upload failed");
+
+    const put = await fetch(sign.signedUrl as string, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type,
+        "x-upsert": "false",
+      },
+      body: file,
+    });
+
+    if (!put.ok) throw new Error("Upload failed");
+
+    return {
+      bucket: sign.bucket as string,
+      objectPath: sign.objectPath as string,
+      fileName: file.name,
+      contentType: file.type,
+      sizeBytes: file.size,
+    };
   }
 
   async function deleteMessage(messageId: string) {
@@ -125,6 +228,7 @@ export default function MessagingPage() {
                 isDeleted: true,
                 text: "",
                 deletedAt: j.message?.deletedAt ?? null,
+                // keep attachments but URLs will be null on next refresh; don't break UI
               }
             : m
         )
@@ -182,23 +286,23 @@ export default function MessagingPage() {
   }
 
   function timeLeft(iso: string) {
-  const ms = new Date(iso).getTime() - Date.now();
-  if (ms <= 0) return "Closed";
-  const mins = Math.ceil(ms / 60000);
-  if (mins < 60) return `${mins} min left`;
-  const hrs = Math.floor(mins / 60);
-  const rem = mins % 60;
-  return rem ? `${hrs} hr ${rem} min left` : `${hrs} hr left`;
-}
+    const ms = new Date(iso).getTime() - Date.now();
+    if (ms <= 0) return "Closed";
+    const mins = Math.ceil(ms / 60000);
+    if (mins < 60) return `${mins} min left`;
+    const hrs = Math.floor(mins / 60);
+    const rem = mins % 60;
+    return rem ? `${hrs} hr ${rem} min left` : `${hrs} hr left`;
+  }
 
-function closeUrgency(iso: string | null) {
-  if (!iso) return "none";
-  const ms = new Date(iso).getTime() - Date.now();
-  if (ms <= 0) return "closed";
-  if (ms <= 2 * 60 * 1000) return "danger";
-  if (ms <= 10 * 60 * 1000) return "warn";
-  return "ok";
-}
+  function closeUrgency(iso: string | null) {
+    if (!iso) return "none";
+    const ms = new Date(iso).getTime() - Date.now();
+    if (ms <= 0) return "closed";
+    if (ms <= 2 * 60 * 1000) return "danger";
+    if (ms <= 10 * 60 * 1000) return "warn";
+    return "ok";
+  }
 
   useEffect(() => {
     const onPageShow = (e: PageTransitionEvent) => {
@@ -217,68 +321,67 @@ function closeUrgency(iso: string | null) {
   useEffect(() => {
     if (!activeId) return;
 
-  const tick = async () => {
-  const atBottom = isNearBottom();
-  let skipRefresh = false;
+    const tick = async () => {
+      const atBottom = isNearBottom();
+      let skipRefresh = false;
 
-  try {
-    const r = await fetch(`/api/chat/messages?channelId=${activeId}&take=30`, {
-      cache: "no-store",
-    });
-
-    const j = await r.json().catch(() => null);
-
-    if (j?.ok) {
-      const latest = (j.items as Msg[]).slice().reverse();
-      setNextCursor(j.nextCursor ?? null);
-
-      if (j.read) setReadInfo(j.read);
-
-      if (typeof j.isChatClosed === "boolean") {
-        setChatMeta({
-          isChatClosed: !!j.isChatClosed,
-          chatCloseAt: j.chatCloseAt ?? null,
+      try {
+        const r = await fetch(`/api/chat/messages?channelId=${activeId}&take=30`, {
+          cache: "no-store",
         });
-      }
 
-      setMessages((prev) => {
-        const seen = new Set(prev.map((m) => m.id));
-        const onlyNew = latest.filter((m) => !seen.has(m.id));
-        return onlyNew.length ? [...prev, ...onlyNew] : prev;
-      });
+        const j = await r.json().catch(() => null);
 
-      if (atBottom) {
-        const rr = await fetch("/api/chat/read", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ channelId: activeId }),
-        }).catch(() => null);
+        if (j?.ok) {
+          const latest = (j.items as Msg[]).slice().reverse();
+          setNextCursor(j.nextCursor ?? null);
 
-        if (rr?.ok) {
-          window.dispatchEvent(new Event("chat:unread-refresh"));
-          setConversations((prev) =>
-            prev.map((c) => (c.id === activeId ? { ...c, unread: 0 } : c))
-          );
-          skipRefresh = true;
+          if (j.read) setReadInfo(j.read);
+
+          if (typeof j.isChatClosed === "boolean") {
+            setChatMeta({
+              isChatClosed: !!j.isChatClosed,
+              chatCloseAt: j.chatCloseAt ?? null,
+            });
+          }
+
+          setMessages((prev) => {
+            const seen = new Set(prev.map((m) => m.id));
+            const onlyNew = latest.filter((m) => !seen.has(m.id));
+            return onlyNew.length ? [...prev, ...onlyNew] : prev;
+          });
+
+          if (atBottom) {
+            const rr = await fetch("/api/chat/read", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ channelId: activeId }),
+            }).catch(() => null);
+
+            if (rr?.ok) {
+              window.dispatchEvent(new Event("chat:unread-refresh"));
+              setConversations((prev) =>
+                prev.map((c) => (c.id === activeId ? { ...c, unread: 0 } : c))
+              );
+              skipRefresh = true;
+            }
+          }
+        }
+      } finally {
+        // typing runs EVEN if messages API fails
+        try {
+          const rr = await fetch(`/api/chat/typing?channelId=${activeId}`, {
+            cache: "no-store",
+          });
+          const tj = await rr.json().catch(() => null);
+          if (tj?.ok) setOtherTyping(!!tj.otherTyping);
+        } catch {}
+
+        if (!skipRefresh) {
+          await refreshConversations();
         }
       }
-    }
-  } finally {
-  // typing runs EVEN if messages API fails
-  try {
-    const rr = await fetch(
-      `/api/chat/typing?channelId=${activeId}`,
-      { cache: "no-store" }
-    );
-    const tj = await rr.json().catch(() => null);
-    if (tj?.ok) setOtherTyping(!!tj.otherTyping);
-  } catch {}
-
-  if (!skipRefresh) {
-    await refreshConversations();
-  }
-}
-};
+    };
 
     tick();
     const t = setInterval(tick, 1500);
@@ -315,6 +418,8 @@ function closeUrgency(iso: string | null) {
       setMessages([]);
       setNextCursor(null);
       setSendErr(null);
+      setPickedFiles([]);
+      setUploading(false);
 
       const r = await fetch(`/api/chat/messages?channelId=${activeId}&take=30`, {
         cache: "no-store",
@@ -399,58 +504,93 @@ function closeUrgency(iso: string | null) {
 
   async function send() {
     if (!activeId) return;
+
     if (chatMeta.isChatClosed) {
       setSendErr("Chat is closed.");
       return;
     }
 
     const t = text.trim();
-    if (!t) return;
+
+    // ✅ allow attachment-only messages
+    if (!t && pickedFiles.length === 0) return;
 
     if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
     pingTyping(false);
 
+    // Clear input immediately for snappy UX (keep files until upload succeeds)
     setText("");
     setSendErr(null);
 
-    const r = await fetch("/api/chat/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channelId: activeId, text: t }),
-    });
-    const j = await r.json().catch(() => null);
-
-    if (!r.ok) {
-      // server enforces closeAt, so show the message nicely
-      setSendErr(j?.message ?? "Failed to send");
-      // if server says closed, lock UI
-      if (r.status === 403 && (j?.message?.toLowerCase?.() ?? "").includes("closed")) {
-        setChatMeta((p) => ({ ...p, isChatClosed: true }));
+    setUploading(true);
+    try {
+      // 1) upload files (sequential)
+      const uploaded: UploadPayload[] = [];
+      for (const f of pickedFiles) {
+        uploaded.push(await uploadAttachment(activeId, f));
       }
-      return;
-    }
 
-    if (j?.ok) {
-      setMessages((prev) => [...prev, j.message]);
+      // 2) send message with attachments
+      const r = await fetch("/api/chat/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelId: activeId,
+          text: t,
+          attachments: uploaded,
+        }),
+      });
 
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === activeId
-            ? { ...c, lastMessage: t, lastAt: new Date().toISOString() }
-            : c
-        )
-      );
+      const j = await r.json().catch(() => null);
 
-      setTimeout(
-        () => bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
-        30
-      );
+      if (!r.ok) {
+        setSendErr(j?.message ?? "Failed to send");
+
+        // if server says closed, lock UI
+        if (
+          r.status === 403 &&
+          (j?.message?.toLowerCase?.() ?? "").includes("closed")
+        ) {
+          setChatMeta((p) => ({ ...p, isChatClosed: true }));
+        }
+
+        // restore typed text if send failed (optional)
+        setText(t);
+        return;
+      }
+
+      if (j?.ok) {
+        setMessages((prev) => [...prev, j.message]);
+
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === activeId
+              ? {
+                  ...c,
+                  lastMessage: t || (pickedFiles.length ? "📎 Attachment" : ""),
+                  lastAt: new Date().toISOString(),
+                }
+              : c
+          )
+        );
+
+        setPickedFiles([]);
+
+        setTimeout(
+          () => bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
+          30
+        );
+      }
+    } catch (e: any) {
+      setSendErr(e?.message ?? "Failed to send");
+      // restore typed text if upload/send failed (optional)
+      setText(t);
+    } finally {
+      setUploading(false);
     }
   }
 
-  const otherReadAtMs = readInfo
-    ? new Date(readInfo.otherLastReadAt).getTime()
-    : 0;
+  const otherReadAtMs = readInfo ? new Date(readInfo.otherLastReadAt).getTime() : 0;
 
   const lastMyMsgId = (() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -478,7 +618,7 @@ function closeUrgency(iso: string | null) {
     );
   };
 
-  const inputDisabled = !active || chatMeta.isChatClosed;
+  const inputDisabled = !active || chatMeta.isChatClosed || uploading;
 
   return (
     // ✅ Centered like dashboard + nicer spacing
@@ -595,61 +735,59 @@ function closeUrgency(iso: string | null) {
           {/* Right: chat window */}
           <div className="lg:col-span-2 flex flex-col min-h-0">
             <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] pb-3">
-  <div>
-    <p className="text-sm font-semibold text-[rgb(var(--fg))]">
-      {active ? `Chat — ${active.subjectName}` : "Select a conversation"}
-    </p>
+              <div>
+                <p className="text-sm font-semibold text-[rgb(var(--fg))]">
+                  {active ? `Chat — ${active.subjectName}` : "Select a conversation"}
+                </p>
 
-    {active && (
-      <p className="text-[0.7rem] text-[rgb(var(--muted))]">
-        with {active.name}
-      </p>
-    )}
+                {active && (
+                  <p className="text-[0.7rem] text-[rgb(var(--muted))]">
+                    with {active.name}
+                  </p>
+                )}
 
-    {/* ✅ NEW: show remaining open window */}
-    {active && chatMeta.chatCloseAt && !chatMeta.isChatClosed && (
-  <div className="mt-1 flex items-center gap-2">
-    <span
-      className={`rounded-full px-2 py-0.5 text-[0.65rem] font-semibold border
-        ${
-          closeUrgency(chatMeta.chatCloseAt) === "danger"
-            ? "border-red-500/40 bg-red-500/10 text-red-600"
-            : closeUrgency(chatMeta.chatCloseAt) === "warn"
-            ? "border-amber-500/40 bg-amber-500/10 text-amber-700"
-            : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))]"
-        }
-      `}
-    >
-      {closeUrgency(chatMeta.chatCloseAt) === "danger"
-        ? `Closing soon • ${timeLeft(chatMeta.chatCloseAt)}`
-        : `Open • ${timeLeft(chatMeta.chatCloseAt)}`}
-    </span>
+                {/* ✅ NEW: show remaining open window */}
+                {active && chatMeta.chatCloseAt && !chatMeta.isChatClosed && (
+                  <div className="mt-1 flex items-center gap-2">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[0.65rem] font-semibold border
+                        ${
+                          closeUrgency(chatMeta.chatCloseAt) === "danger"
+                            ? "border-red-500/40 bg-red-500/10 text-red-600"
+                            : closeUrgency(chatMeta.chatCloseAt) === "warn"
+                            ? "border-amber-500/40 bg-amber-500/10 text-amber-700"
+                            : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))]"
+                        }
+                      `}
+                    >
+                      {closeUrgency(chatMeta.chatCloseAt) === "danger"
+                        ? `Closing soon • ${timeLeft(chatMeta.chatCloseAt)}`
+                        : `Open • ${timeLeft(chatMeta.chatCloseAt)}`}
+                    </span>
 
-    <span className="text-[0.7rem] text-[rgb(var(--muted2))]">
-      Chat stays open for 8 hours after completion
-    </span>
-  </div>
-)}
+                    <span className="text-[0.7rem] text-[rgb(var(--muted2))]">
+                      Chat stays open for 8 hours after completion
+                    </span>
+                  </div>
+                )}
 
+                {/* ✅ NEW: show closed label */}
+                {active && chatMeta.isChatClosed && (
+                  <p className="text-[0.7rem] text-[rgb(var(--muted2))]">
+                    Chat closed (8-hour window ended)
+                  </p>
+                )}
+              </div>
 
-    {/* ✅ NEW: show closed label */}
-    {active && chatMeta.isChatClosed && (
-      <p className="text-[0.7rem] text-[rgb(var(--muted2))]">
-        Chat closed (8-hour window ended)
-      </p>
-    )}
-  </div>
-
-  {active && (
-    <a
-      href={`/sessions/${active.sessionId}`}
-      className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1 text-[0.7rem] text-[rgb(var(--fg))] hover:ring-1 hover:ring-[rgb(var(--primary))/0.35]"
-    >
-      View session details
-    </a>
-  )}
-</div>
-
+              {active && (
+                <a
+                  href={`/sessions/${active.sessionId}`}
+                  className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1 text-[0.7rem] text-[rgb(var(--fg))] hover:ring-1 hover:ring-[rgb(var(--primary))/0.35]"
+                >
+                  View session details
+                </a>
+              )}
+            </div>
 
             {/* ✅ Banner when chat is closed */}
             {active && chatMeta.isChatClosed && (
@@ -695,9 +833,7 @@ function closeUrgency(iso: string | null) {
                 return (
                   <div
                     key={msg.id}
-                    className={`mb-3 flex ${
-                      isMe ? "justify-end" : "justify-start"
-                    }`}
+                    className={`mb-3 flex ${isMe ? "justify-end" : "justify-start"}`}
                     onContextMenu={(e) => {
                       // Only allow delete for my own non-deleted messages
                       if (!isMe || msg.isDeleted) return;
@@ -718,11 +854,128 @@ function closeUrgency(iso: string | null) {
                       }`}
                     >
                       {msg.isDeleted ? (
-                        <p className="italic opacity-80">
-                          This message was deleted
-                        </p>
+                        <p className="italic opacity-80">This message was deleted</p>
                       ) : (
-                        <p>{msg.text}</p>
+                        <>
+                          {msg.text ? <p>{msg.text}</p> : null}
+
+                          {/* ✅ Attachments (image preview + pdf download) */}
+                          {msg.attachments?.map((a) => {
+                            const isImg = a.contentType?.startsWith("image/");
+                            const isPdf = a.contentType === "application/pdf";
+
+                            if (isImg) {
+  return (
+    <div key={a.id} className="mt-2">
+      {a.url ? (
+        <>
+          <img
+            src={a.url}
+            alt={a.fileName}
+            onClick={() => window.open(a.url ?? "", "_blank")}
+            className={`max-w-[260px] rounded-lg border cursor-zoom-in ${
+              isMe ? "border-white/20" : "border-[rgb(var(--border))]"
+            }`}
+            title="Click to open"
+          />
+
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => window.open(a.url ?? "", "_blank")}
+              className={`rounded-md px-3 py-1.5 text-[0.65rem] font-semibold ${
+                isMe
+                  ? "bg-white text-black"
+                  : "bg-[rgb(var(--card))] text-[rgb(var(--fg))] border border-[rgb(var(--border))]"
+              }`}
+            >
+              Open
+            </button>
+
+            <button
+              type="button"
+              onClick={() => forceDownload(a.url!, a.fileName)}
+              className={`rounded-md px-3 py-1.5 text-[0.65rem] font-semibold ${
+                isMe ? "bg-white text-black" : "bg-[rgb(var(--primary))] text-white"
+              }`}
+            >
+              Download
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="text-[0.7rem] opacity-70">Image unavailable</div>
+      )}
+    </div>
+  );
+}
+
+
+                            if (isPdf) {
+  return (
+    <div
+      key={a.id}
+      className={`mt-2 rounded-lg border px-3 py-2 ${
+        isMe
+          ? "border-white/20 bg-white/10"
+          : "border-[rgb(var(--border))] bg-[rgb(var(--card2))]"
+      }`}
+    >
+      <div className="min-w-0">
+        <div className="truncate text-[0.75rem] font-semibold">
+          {a.fileName}
+        </div>
+        <div className="text-[0.65rem] opacity-70">
+          PDF • {(a.sizeBytes / 1024).toFixed(0)} KB
+        </div>
+      </div>
+
+      {a.url ? (
+        <div className="mt-2 flex items-center gap-2">
+          {/* ✅ Open (preview in new tab) */}
+          <button
+            type="button"
+            onClick={() => window.open(a.url!, "_blank")}
+            className={`rounded-md px-3 py-1.5 text-[0.65rem] font-semibold ${
+              isMe
+                ? "bg-white text-black"
+                : "bg-[rgb(var(--card))] text-[rgb(var(--fg))] border border-[rgb(var(--border))]"
+            }`}
+          >
+            Open
+          </button>
+
+          {/* ✅ Force download */}
+          <button
+            type="button"
+            onClick={() => forceDownload(a.url!, a.fileName)}
+            className={`rounded-md px-3 py-1.5 text-[0.65rem] font-semibold ${
+              isMe
+                ? "bg-white text-black"
+                : "bg-[rgb(var(--primary))] text-white"
+            }`}
+          >
+            Download
+          </button>
+        </div>
+      ) : (
+        <div className="mt-2">
+          <button
+            disabled
+            className="rounded-md px-3 py-1.5 text-[0.65rem] font-semibold opacity-50"
+          >
+            Unavailable
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+                            return null;
+                          })}
+                        </>
                       )}
 
                       <div
@@ -791,12 +1044,47 @@ function closeUrgency(iso: string | null) {
               </div>
             )}
 
+            {/* ✅ picked files chips */}
+            {active && pickedFiles.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {pickedFiles.map((f, idx) => (
+                  <div
+                    key={`${f.name}-${idx}`}
+                    className="flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1 text-[0.7rem] text-[rgb(var(--fg))]"
+                  >
+                    <span className="max-w-[240px] truncate">{f.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => removePickedFile(idx)}
+                      className="opacity-70 hover:opacity-100"
+                      disabled={uploading}
+                      title="Remove"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ✅ hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,application/pdf"
+              multiple
+              className="hidden"
+              onChange={onPickFiles}
+            />
+
             <div className="mt-3 flex items-center gap-2">
               <button
-                disabled={inputDisabled}
+                type="button"
+                disabled={!active || chatMeta.isChatClosed || uploading}
+                onClick={() => fileInputRef.current?.click()}
                 className="rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-2 text-[0.7rem] text-[rgb(var(--fg))] hover:ring-1 hover:ring-[rgb(var(--primary))/0.35] disabled:opacity-60"
               >
-                + Attach file
+                {uploading ? "Uploading..." : "+ Attach file"}
               </button>
 
               <input
@@ -822,8 +1110,10 @@ function closeUrgency(iso: string | null) {
                   !active
                     ? "Select a conversation..."
                     : chatMeta.isChatClosed
-                      ? "Chat is closed"
-                      : "Type a message..."
+                    ? "Chat is closed"
+                    : uploading
+                    ? "Uploading..."
+                    : "Type a message..."
                 }
                 disabled={inputDisabled}
               />

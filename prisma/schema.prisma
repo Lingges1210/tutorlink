@@ -206,9 +206,8 @@ model ChatChannel {
   messages ChatMessage[]
   reads    ChatRead[]
 
-  closeAt   DateTime?  // when it should auto-close
-  closedAt  DateTime?  // when it actually closed
-
+  closeAt  DateTime? // when it should auto-close
+  closedAt DateTime? // when it actually closed
 
   @@index([studentId])
   @@index([tutorId])
@@ -228,7 +227,7 @@ model ChatMessage {
 
   attachments ChatAttachment[]
 
-  isDeleted Boolean  @default(false)
+  isDeleted Boolean   @default(false)
   deletedAt DateTime?
   deletedBy String?
 
@@ -250,10 +249,16 @@ model ChatRead {
 }
 
 model ChatAttachment {
-  id        String   @id @default(uuid())
+  id        String @id @default(uuid())
   messageId String
-  fileUrl   String
-  type      String // "image" | "pdf" | "other"
+
+  bucket     String @default("chat-attachments")
+  objectPath String
+
+  fileName    String
+  contentType String
+  sizeBytes   Int
+
   createdAt DateTime @default(now())
 
   message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
