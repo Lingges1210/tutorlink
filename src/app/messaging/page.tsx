@@ -1,7 +1,7 @@
 // src/app/messaging/page.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 type Conv = {
@@ -123,6 +123,93 @@ export default function MessagingPage() {
   const [pickedFiles, setPickedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [zoom, setZoom] = useState(1);
+const [offset, setOffset] = useState({ x: 0, y: 0 });
+const [dragging, setDragging] = useState(false);
+const dragStart = useRef({ x: 0, y: 0 });
+
+
+  // ✅ NEW: WhatsApp-like image preview modal (open in chat)
+  const [imgViewer, setImgViewer] = useState<{
+    open: boolean;
+    urls: string[];
+    idx: number;
+  }>({ open: false, urls: [], idx: 0 });
+
+  const [imgViewerMounted, setImgViewerMounted] = useState(false);
+
+  const allImageUrls = useMemo(() => {
+    const urls: string[] = [];
+    for (const m of messages) {
+      for (const a of m.attachments ?? []) {
+        if (a?.url && (a.contentType ?? "").startsWith("image/")) urls.push(a.url);
+      }
+    }
+    // keep duplicates? WA can have duplicates; but navigation feels better without dupes
+    return Array.from(new Set(urls));
+  }, [messages]);
+
+  function prettyNameFromUrl(u: string) {
+  try {
+    const p = new URL(u).pathname.split("/").pop() || "image";
+    return decodeURIComponent(p);
+  } catch {
+    const parts = u.split("/").pop() || "image";
+    return decodeURIComponent(parts.split("?")[0]);
+  }
+}
+
+  function openImageInChat(url: string) {
+    const urls = allImageUrls.length ? allImageUrls : [url];
+    const idx = Math.max(0, urls.indexOf(url));
+    setImgViewer({ open: true, urls, idx: idx >= 0 ? idx : 0 });
+  }
+
+  function closeImageViewer() {
+    setImgViewer((p) => ({ ...p, open: false }));
+    setImgViewerMounted(false);
+  }
+
+  function nextImage() {
+    setImgViewer((p) => {
+      if (!p.urls.length) return p;
+      return { ...p, idx: (p.idx + 1) % p.urls.length };
+    });
+  }
+
+  function prevImage() {
+    setImgViewer((p) => {
+      if (!p.urls.length) return p;
+      return { ...p, idx: (p.idx - 1 + p.urls.length) % p.urls.length };
+    });
+  }
+
+  // Esc + Arrow nav like WhatsApp
+  useEffect(() => {
+    if (!imgViewer.open) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeImageViewer();
+      if (e.key === "ArrowRight") nextImage();
+      if (e.key === "ArrowLeft") prevImage();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+
+    // prevent background scroll
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    // zoom-in animation (mount tick)
+    const t = window.setTimeout(() => setImgViewerMounted(true), 10);
+
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imgViewer.open]);
 
   function pingTyping(isTyping: boolean) {
     if (!activeId) return;
@@ -231,7 +318,6 @@ export default function MessagingPage() {
                 isDeleted: true,
                 text: "",
                 deletedAt: j.message?.deletedAt ?? null,
-                // keep attachments but URLs will be null on next refresh; don't break UI
               }
             : m
         )
@@ -259,6 +345,12 @@ export default function MessagingPage() {
       if (j?.ok) setMeId(j.id);
     })();
   }, []);
+
+  useEffect(() => {
+  setZoom(1);
+  setOffset({ x: 0, y: 0 });
+}, [imgViewer.idx]);
+
 
   // 1) Load conversations (left list)
   useEffect(() => {
@@ -364,7 +456,7 @@ export default function MessagingPage() {
               body: JSON.stringify({ channelId: activeId }),
             }).catch(() => null);
 
-            if (rr?.ok) {
+            if ((rr as any)?.ok) {
               window.dispatchEvent(new Event("chat:unread-refresh"));
               setConversations((prev) =>
                 prev.map((c) => (c.id === activeId ? { ...c, unread: 0 } : c))
@@ -457,7 +549,7 @@ export default function MessagingPage() {
 
         let skipRefresh = false;
 
-        if (rr?.ok) {
+        if ((rr as any)?.ok) {
           window.dispatchEvent(new Event("chat:unread-refresh"));
           setConversations((prev) =>
             prev.map((c) => (c.id === activeId ? { ...c, unread: 0 } : c))
@@ -589,7 +681,6 @@ export default function MessagingPage() {
       }
     } catch (e: any) {
       setSendErr(e?.message ?? "Failed to send");
-      // restore typed text if upload/send failed (optional)
       setText(t);
     } finally {
       setUploading(false);
@@ -862,222 +953,263 @@ export default function MessagingPage() {
                         <>
                           {msg.text ? <p>{msg.text}</p> : null}
 
-                          {/* ✅ WhatsApp-style Attachments */}
                           {/* ✅ Even more WhatsApp Web-style Attachments */}
-{msg.attachments?.map((a) => {
-  const isImg = a.contentType?.startsWith("image/");
-  const isPdf = a.contentType === "application/pdf";
+                          {msg.attachments?.map((a) => {
+                            const isImg = a.contentType?.startsWith("image/");
+                            const isPdf = a.contentType === "application/pdf";
 
-  const kb = Math.max(1, Math.round((a.sizeBytes ?? 0) / 1024));
-  const sizeLabel = kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`;
+                            const kb = Math.max(
+                              1,
+                              Math.round((a.sizeBytes ?? 0) / 1024)
+                            );
+                            const sizeLabel =
+                              kb >= 1024
+                                ? `${(kb / 1024).toFixed(1)} MB`
+                                : `${kb} KB`;
 
-  const cardShell = isMe
-    ? "bg-white/10 border-white/15"
-    : "bg-black/5 border-black/10 dark:bg-white/5 dark:border-white/10";
+                            const cardShell = isMe
+                              ? "bg-white/10 border-white/15"
+                              : "bg-black/5 border-black/10 dark:bg-white/5 dark:border-white/10";
 
-  const subText = isMe ? "text-white/70" : "text-[rgb(var(--muted2))]";
-  const titleText = isMe ? "text-white" : "text-[rgb(var(--fg))]";
+                            const subText = isMe
+                              ? "text-white/70"
+                              : "text-[rgb(var(--muted2))]";
+                            const titleText = isMe
+                              ? "text-white"
+                              : "text-[rgb(var(--fg))]";
 
-  const iconBtn = isMe
-    ? "bg-white/15 text-white hover:bg-white/20 border-white/15"
-    : "bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))] border-[rgb(var(--border))]";
+                            const iconBtn = isMe
+                              ? "bg-white/15 text-white hover:bg-white/20 border-white/15"
+                              : "bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))] border-[rgb(var(--border))]";
 
-  const rowDivider = isMe ? "border-white/10" : "border-[rgb(var(--border))]";
+                            const rowDivider = isMe
+                              ? "border-white/10"
+                              : "border-[rgb(var(--border))]";
 
-  // tiny inline icons (no extra deps)
-  const IconOpen = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="opacity-90">
-      <path
-        d="M14 5h5v5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M10 14L19 5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M19 14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+                            // tiny inline icons (no extra deps)
+                            const IconOpen = () => (
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                className="opacity-90"
+                              >
+                                <path
+                                  d="M14 5h5v5"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                                <path
+                                  d="M10 14L19 5"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                                <path
+                                  d="M19 14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            );
 
-  const IconDownload = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="opacity-90">
-      <path
-        d="M12 3v12"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M7 10l5 5 5-5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M5 21h14"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
+                            const IconDownload = () => (
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                className="opacity-90"
+                              >
+                                <path
+                                  d="M12 3v12"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                />
+                                <path
+                                  d="M7 10l5 5 5-5"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                                <path
+                                  d="M5 21h14"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                            );
 
-  const IconPdf = () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="opacity-95">
-      <path
-        d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M14 2v5h5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+                            const IconPdf = () => (
+                              <svg
+                                width="18"
+                                height="18"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                className="opacity-95"
+                              >
+                                <path
+                                  d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5z"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinejoin="round"
+                                />
+                                <path
+                                  d="M14 2v5h5"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            );
 
-  if (isImg) {
-    return (
-      <div key={a.id} className="mt-2">
-        {a.url ? (
-          <div
-            className={`relative overflow-hidden rounded-xl border ${cardShell} shadow-[0_10px_22px_rgba(0,0,0,0.10)]`}
-          >
-            {/* image */}
-            <button
-              type="button"
-              onClick={() => window.open(a.url ?? "", "_blank")}
-              className="block w-full"
-              title="Open image"
-            >
-              <img
-                src={a.url}
-                alt={a.fileName}
-                className="block w-full max-w-[360px] h-auto"
-              />
-            </button>
+                            if (isImg) {
+                              return (
+                                <div key={a.id} className="mt-2">
+                                  {a.url ? (
+                                    <div
+                                      className={`relative overflow-hidden rounded-xl border ${cardShell} shadow-[0_10px_22px_rgba(0,0,0,0.10)]`}
+                                    >
+                                      {/* image (OPEN IN CHAT) */}
+                                      <button
+                                        type="button"
+                                        onClick={() => openImageInChat(a.url!)}
+                                        className="block w-full"
+                                        title="Open image"
+                                      >
+                                        <img
+                                          src={a.url}
+                                          alt={a.fileName}
+                                          className="block w-full max-w-[360px] h-auto"
+                                        />
+                                      </button>
 
-            {/* hover actions like WA */}
-            <div className="pointer-events-none absolute inset-0">
-              <div className="absolute top-2 right-2 flex items-center gap-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                {/* we rely on parent bubble `group` already */}
-              </div>
-            </div>
+                                      {/* bottom bar (file name + action icons) */}
+                                      <div
+                                        className={`flex items-center justify-between gap-2 px-2.5 py-2 border-t ${rowDivider}`}
+                                      >
+                                        <span
+                                          className={`truncate text-[0.68rem] ${subText}`}
+                                          title={a.fileName}
+                                        >
+                                          {a.fileName}
+                                        </span>
 
-            {/* bottom bar (file name + action icons) */}
-            <div className={`flex items-center justify-between gap-2 px-2.5 py-2 border-t ${rowDivider}`}>
-              <span
-                className={`truncate text-[0.68rem] ${subText}`}
-                title={a.fileName}
-              >
-                {a.fileName}
-              </span>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          {/* Open (in-chat) */}
+                                          <button
+                                            type="button"
+                                            onClick={() => openImageInChat(a.url!)}
+                                            className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 transition ${iconBtn}`}
+                                            title="Open"
+                                          >
+                                            <IconOpen />
+                                          </button>
 
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => window.open(a.url ?? "", "_blank")}
-                  className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 transition ${iconBtn}`}
-                  title="Open"
-                >
-                  <IconOpen />
-                </button>
+                                          {/* Download */}
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              forceDownload(a.url!, a.fileName)
+                                            }
+                                            className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 transition ${
+                                              isMe
+                                                ? "bg-white text-black hover:bg-white/90 border-white/30"
+                                                : "bg-[rgb(var(--primary))] text-white hover:opacity-95 border-transparent"
+                                            }`}
+                                            title="Download"
+                                          >
+                                            <IconDownload />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-[0.7rem] opacity-70">
+                                      Image unavailable
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
 
-                <button
-                  type="button"
-                  onClick={() => forceDownload(a.url!, a.fileName)}
-                  className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 transition ${
-                    isMe ? "bg-white text-black hover:bg-white/90 border-white/30" : "bg-[rgb(var(--primary))] text-white hover:opacity-95 border-transparent"
-                  }`}
-                  title="Download"
-                >
-                  <IconDownload />
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="text-[0.7rem] opacity-70">Image unavailable</div>
-        )}
-      </div>
-    );
-  }
+                            if (isPdf) {
+                              return (
+                                <div key={a.id} className="mt-2">
+                                  <div
+                                    className={`rounded-xl border ${cardShell} shadow-[0_10px_22px_rgba(0,0,0,0.10)] overflow-hidden`}
+                                  >
+                                    {/* WA-like doc row */}
+                                    <div className="flex items-center gap-3 px-3 py-3">
+                                      <div
+                                        className={`flex h-11 w-11 items-center justify-center rounded-xl border ${
+                                          isMe
+                                            ? "border-white/15 bg-white/10 text-white"
+                                            : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))]"
+                                        }`}
+                                        aria-hidden
+                                      >
+                                        <IconPdf />
+                                      </div>
 
-  if (isPdf) {
-    return (
-      <div key={a.id} className="mt-2">
-        <div
-          className={`rounded-xl border ${cardShell} shadow-[0_10px_22px_rgba(0,0,0,0.10)] overflow-hidden`}
-        >
-          {/* WA-like doc row */}
-          <div className="flex items-center gap-3 px-3 py-3">
-            <div
-              className={`flex h-11 w-11 items-center justify-center rounded-xl border ${
-                isMe
-                  ? "border-white/15 bg-white/10 text-white"
-                  : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))]"
-              }`}
-              aria-hidden
-            >
-              <IconPdf />
-            </div>
+                                      <div className="min-w-0 flex-1">
+                                        <div
+                                          className={`truncate text-[0.78rem] font-semibold ${titleText}`}
+                                        >
+                                          {a.fileName}
+                                        </div>
+                                        <div className={`text-[0.65rem] ${subText}`}>
+                                          Document • {sizeLabel}
+                                        </div>
+                                      </div>
 
-            <div className="min-w-0 flex-1">
-              <div className={`truncate text-[0.78rem] font-semibold ${titleText}`}>
-                {a.fileName}
-              </div>
-              <div className={`text-[0.65rem] ${subText}`}>Document • {sizeLabel}</div>
-            </div>
+                                      {/* action icons */}
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            a.url && window.open(a.url, "_blank")
+                                          }
+                                          disabled={!a.url}
+                                          className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 transition disabled:opacity-50 ${iconBtn}`}
+                                          title="Open"
+                                        >
+                                          <IconOpen />
+                                        </button>
 
-            {/* action icons on right like WA */}
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => a.url && window.open(a.url, "_blank")}
-                disabled={!a.url}
-                className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 transition disabled:opacity-50 ${iconBtn}`}
-                title="Open"
-              >
-                <IconOpen />
-              </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            a.url && forceDownload(a.url, a.fileName)
+                                          }
+                                          disabled={!a.url}
+                                          className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 transition disabled:opacity-50 ${
+                                            isMe
+                                              ? "bg-white text-black hover:bg-white/90 border-white/30"
+                                              : "bg-[rgb(var(--primary))] text-white hover:opacity-95 border-transparent"
+                                          }`}
+                                          title="Download"
+                                        >
+                                          <IconDownload />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
 
-              <button
-                type="button"
-                onClick={() => a.url && forceDownload(a.url, a.fileName)}
-                disabled={!a.url}
-                className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 transition disabled:opacity-50 ${
-                  isMe ? "bg-white text-black hover:bg-white/90 border-white/30" : "bg-[rgb(var(--primary))] text-white hover:opacity-95 border-transparent"
-                }`}
-                title="Download"
-              >
-                <IconDownload />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return null;
-})}
-
+                            return null;
+                          })}
                         </>
                       )}
 
@@ -1198,8 +1330,7 @@ export default function MessagingPage() {
                     pingTyping(true);
                   }
 
-                  if (typingStopTimer.current)
-                    clearTimeout(typingStopTimer.current);
+                  if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
                   typingStopTimer.current = setTimeout(() => {
                     pingTyping(false);
                   }, 1200);
@@ -1228,6 +1359,176 @@ export default function MessagingPage() {
             </div>
           </div>
         </section>
+
+        {/* ✅ WhatsApp-style image viewer modal (close button + zoom + esc + arrows) */}
+{/* ✅ WhatsApp-style image viewer modal */}
+{imgViewer.open && (
+  <div
+    className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-[3px]"
+    onClick={(e) => {
+      if (e.target === e.currentTarget) closeImageViewer();
+    }}
+  >
+    {/* 🔝 Top Bar */}
+    <div className="absolute top-0 left-0 right-0 z-30 pointer-events-auto flex items-center justify-between px-4 py-3">
+      <div className="text-white/80 text-xs">
+        {imgViewer.urls.length > 0
+          ? `${imgViewer.idx + 1} / ${imgViewer.urls.length}`
+          : ""}
+      </div>
+
+      <div className="flex items-center gap-2">
+        {/* Download */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            const url = imgViewer.urls[imgViewer.idx];
+            if (!url) return;
+            forceDownload(url, prettyNameFromUrl(url));
+          }}
+          className="inline-flex items-center gap-2 rounded-full bg-white/10 hover:bg-white/20 text-white px-3 py-2 text-xs transition"
+        >
+          Download
+        </button>
+
+        {/* Close */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            closeImageViewer();
+          }}
+          className="h-9 w-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+
+    {/* ⬅️➡️ Arrows */}
+    {imgViewer.urls.length > 1 && (
+      <>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            prevImage();
+          }}
+          className="absolute z-30 pointer-events-auto left-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white text-lg transition"
+        >
+          ‹
+        </button>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            nextImage();
+          }}
+          className="absolute z-30 pointer-events-auto right-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white text-lg transition"
+        >
+          ›
+        </button>
+      </>
+    )}
+
+    {/* 🖼 Image Layer */}
+    <div className="absolute inset-0 z-10 flex items-center justify-center p-6 pb-24 pointer-events-none">
+      <img
+        src={imgViewer.urls[imgViewer.idx] ?? ""}
+        alt="Preview"
+        draggable={false}
+        onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          if (zoom > 1) {
+            setZoom(1);
+            setOffset({ x: 0, y: 0 });
+          } else {
+            setZoom(2);
+          }
+        }}
+        onWheel={(e) => {
+          e.preventDefault();
+          const delta = e.deltaY > 0 ? -0.2 : 0.2;
+          setZoom((z) => Math.min(Math.max(1, z + delta), 4));
+        }}
+        onMouseDown={(e) => {
+          if (zoom <= 1) return;
+          setDragging(true);
+          dragStart.current = {
+            x: e.clientX - offset.x,
+            y: e.clientY - offset.y,
+          };
+        }}
+        onMouseMove={(e) => {
+          if (!dragging) return;
+          setOffset({
+            x: e.clientX - dragStart.current.x,
+            y: e.clientY - dragStart.current.y,
+          });
+        }}
+        onMouseUp={() => setDragging(false)}
+        onMouseLeave={() => setDragging(false)}
+        className="pointer-events-auto max-h-[82vh] max-w-[92vw] rounded-xl shadow-2xl select-none transition-transform duration-100 ease-out"
+        style={{
+          transform: `scale(${zoom}) translate(${offset.x / zoom}px, ${
+            offset.y / zoom
+          }px)`,
+          cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "zoom-in",
+        }}
+      />
+    </div>
+
+    {/* 🧩 Thumbnail Strip */}
+    {imgViewer.urls.length > 1 && (
+      <div
+        className="absolute z-30 pointer-events-auto left-0 right-0 bottom-4 px-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto max-w-4xl rounded-xl bg-black/60 border border-white/10 backdrop-blur px-3 py-2">
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {imgViewer.urls.map((u, i) => {
+              const active = i === imgViewer.idx;
+              return (
+                <button
+                  key={`${u}-${i}`}
+                  type="button"
+                  onClick={() =>
+                    setImgViewer((p) => ({ ...p, idx: i }))
+                  }
+                  className={`relative shrink-0 rounded-lg overflow-hidden border transition
+                    ${
+                      active
+                        ? "border-white ring-2 ring-white/30"
+                        : "border-white/20 hover:border-white/40"
+                    }`}
+                >
+                  <img
+                    src={u}
+                    alt={`thumb-${i}`}
+                    className="h-14 w-20 object-cover"
+                    draggable={false}
+                  />
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-1 flex items-center justify-between text-[11px] text-white/70">
+            <span className="truncate">
+              {prettyNameFromUrl(imgViewer.urls[imgViewer.idx] ?? "")}
+            </span>
+            <span className="text-white/50">← / → • Esc</span>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+)}
+
+
       </div>
     </div>
   );
