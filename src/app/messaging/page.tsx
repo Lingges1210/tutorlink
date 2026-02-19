@@ -164,23 +164,26 @@ export default function MessagingPage() {
   }
 
   async function forceDownload(url: string, filename: string) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Download failed");
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Download failed");
 
-  const blob = await res.blob();
-  const blobUrl = URL.createObjectURL(blob);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
 
-  const a = document.createElement("a");
-  a.href = blobUrl;
-  a.download = filename || "download";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename || "download";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
 
-  URL.revokeObjectURL(blobUrl);
-}
+    URL.revokeObjectURL(blobUrl);
+  }
 
-  async function uploadAttachment(channelId: string, file: File): Promise<UploadPayload> {
+  async function uploadAttachment(
+    channelId: string,
+    file: File
+  ): Promise<UploadPayload> {
     const sign = await fetch("/api/chat/attachments/sign-upload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -326,9 +329,12 @@ export default function MessagingPage() {
       let skipRefresh = false;
 
       try {
-        const r = await fetch(`/api/chat/messages?channelId=${activeId}&take=30`, {
-          cache: "no-store",
-        });
+        const r = await fetch(
+          `/api/chat/messages?channelId=${activeId}&take=30`,
+          {
+            cache: "no-store",
+          }
+        );
 
         const j = await r.json().catch(() => null);
 
@@ -590,7 +596,9 @@ export default function MessagingPage() {
     }
   }
 
-  const otherReadAtMs = readInfo ? new Date(readInfo.otherLastReadAt).getTime() : 0;
+  const otherReadAtMs = readInfo
+    ? new Date(readInfo.otherLastReadAt).getTime()
+    : 0;
 
   const lastMyMsgId = (() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -621,10 +629,8 @@ export default function MessagingPage() {
   const inputDisabled = !active || chatMeta.isChatClosed || uploading;
 
   return (
-    // ✅ Centered like dashboard + nicer spacing
     <div className="pt-12 pb-10">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 space-y-6">
-        {/* Header */}
         <header className="flex flex-col gap-2">
           <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">
             Messages
@@ -635,7 +641,6 @@ export default function MessagingPage() {
           </p>
         </header>
 
-        {/* ✅ Taller main card like dashboard panels */}
         <section className="grid gap-4 lg:grid-cols-3 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.12)] min-h-[calc(100vh-260px)]">
           {/* Left: conversation list */}
           <div className="flex flex-col gap-3 border-b border-[rgb(var(--border))] pb-3 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4 min-h-0">
@@ -648,14 +653,12 @@ export default function MessagingPage() {
               </span>
             </div>
 
-            {/* ✅ NEW: role filter pills */}
             <div className="flex items-center gap-2">
               {filterBtn("ALL", "All")}
               {filterBtn("STUDENT", "Student")}
               {filterBtn("TUTOR", "Tutor")}
             </div>
 
-            {/* ✅ Search now works */}
             <div className="rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-1">
               <input
                 value={q}
@@ -665,7 +668,6 @@ export default function MessagingPage() {
               />
             </div>
 
-            {/* ✅ Scroll inside (keeps card tall/clean) */}
             <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-2 text-xs">
               {filteredConversations.map((conv) => {
                 const isActive = conv.id === activeId;
@@ -737,7 +739,9 @@ export default function MessagingPage() {
             <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] pb-3">
               <div>
                 <p className="text-sm font-semibold text-[rgb(var(--fg))]">
-                  {active ? `Chat — ${active.subjectName}` : "Select a conversation"}
+                  {active
+                    ? `Chat — ${active.subjectName}`
+                    : "Select a conversation"}
                 </p>
 
                 {active && (
@@ -746,7 +750,6 @@ export default function MessagingPage() {
                   </p>
                 )}
 
-                {/* ✅ NEW: show remaining open window */}
                 {active && chatMeta.chatCloseAt && !chatMeta.isChatClosed && (
                   <div className="mt-1 flex items-center gap-2">
                     <span
@@ -771,7 +774,6 @@ export default function MessagingPage() {
                   </div>
                 )}
 
-                {/* ✅ NEW: show closed label */}
                 {active && chatMeta.isChatClosed && (
                   <p className="text-[0.7rem] text-[rgb(var(--muted2))]">
                     Chat closed (8-hour window ended)
@@ -789,7 +791,6 @@ export default function MessagingPage() {
               )}
             </div>
 
-            {/* ✅ Banner when chat is closed */}
             {active && chatMeta.isChatClosed && (
               <div className="mt-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-[0.75rem] text-[rgb(var(--muted))]">
                 Chat is closed.
@@ -810,7 +811,6 @@ export default function MessagingPage() {
               </div>
             )}
 
-            {/* ✅ Big/tall scroll area */}
             <div className="mt-3 flex-1 min-h-0 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3 text-xs overflow-y-auto">
               {nextCursor && (
                 <button
@@ -833,9 +833,10 @@ export default function MessagingPage() {
                 return (
                   <div
                     key={msg.id}
-                    className={`mb-3 flex ${isMe ? "justify-end" : "justify-start"}`}
+                    className={`mb-3 flex ${
+                      isMe ? "justify-end" : "justify-start"
+                    }`}
                     onContextMenu={(e) => {
-                      // Only allow delete for my own non-deleted messages
                       if (!isMe || msg.isDeleted) return;
                       e.preventDefault();
                       setCtx({
@@ -854,127 +855,229 @@ export default function MessagingPage() {
                       }`}
                     >
                       {msg.isDeleted ? (
-                        <p className="italic opacity-80">This message was deleted</p>
+                        <p className="italic opacity-80">
+                          This message was deleted
+                        </p>
                       ) : (
                         <>
                           {msg.text ? <p>{msg.text}</p> : null}
 
-                          {/* ✅ Attachments (image preview + pdf download) */}
-                          {msg.attachments?.map((a) => {
-                            const isImg = a.contentType?.startsWith("image/");
-                            const isPdf = a.contentType === "application/pdf";
+                          {/* ✅ WhatsApp-style Attachments */}
+                          {/* ✅ Even more WhatsApp Web-style Attachments */}
+{msg.attachments?.map((a) => {
+  const isImg = a.contentType?.startsWith("image/");
+  const isPdf = a.contentType === "application/pdf";
 
-                            if (isImg) {
-  return (
-    <div key={a.id} className="mt-2">
-      {a.url ? (
-        <>
-          <img
-            src={a.url}
-            alt={a.fileName}
-            onClick={() => window.open(a.url ?? "", "_blank")}
-            className={`max-w-[260px] rounded-lg border cursor-zoom-in ${
-              isMe ? "border-white/20" : "border-[rgb(var(--border))]"
-            }`}
-            title="Click to open"
-          />
+  const kb = Math.max(1, Math.round((a.sizeBytes ?? 0) / 1024));
+  const sizeLabel = kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`;
 
-          <div className="mt-2 flex items-center gap-2">
+  const cardShell = isMe
+    ? "bg-white/10 border-white/15"
+    : "bg-black/5 border-black/10 dark:bg-white/5 dark:border-white/10";
+
+  const subText = isMe ? "text-white/70" : "text-[rgb(var(--muted2))]";
+  const titleText = isMe ? "text-white" : "text-[rgb(var(--fg))]";
+
+  const iconBtn = isMe
+    ? "bg-white/15 text-white hover:bg-white/20 border-white/15"
+    : "bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))] border-[rgb(var(--border))]";
+
+  const rowDivider = isMe ? "border-white/10" : "border-[rgb(var(--border))]";
+
+  // tiny inline icons (no extra deps)
+  const IconOpen = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="opacity-90">
+      <path
+        d="M14 5h5v5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10 14L19 5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M19 14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+
+  const IconDownload = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="opacity-90">
+      <path
+        d="M12 3v12"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M7 10l5 5 5-5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5 21h14"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+
+  const IconPdf = () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="opacity-95">
+      <path
+        d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M14 2v5h5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+
+  if (isImg) {
+    return (
+      <div key={a.id} className="mt-2">
+        {a.url ? (
+          <div
+            className={`relative overflow-hidden rounded-xl border ${cardShell} shadow-[0_10px_22px_rgba(0,0,0,0.10)]`}
+          >
+            {/* image */}
             <button
               type="button"
               onClick={() => window.open(a.url ?? "", "_blank")}
-              className={`rounded-md px-3 py-1.5 text-[0.65rem] font-semibold ${
-                isMe
-                  ? "bg-white text-black"
-                  : "bg-[rgb(var(--card))] text-[rgb(var(--fg))] border border-[rgb(var(--border))]"
-              }`}
+              className="block w-full"
+              title="Open image"
             >
-              Open
+              <img
+                src={a.url}
+                alt={a.fileName}
+                className="block w-full max-w-[360px] h-auto"
+              />
             </button>
 
-            <button
-              type="button"
-              onClick={() => forceDownload(a.url!, a.fileName)}
-              className={`rounded-md px-3 py-1.5 text-[0.65rem] font-semibold ${
-                isMe ? "bg-white text-black" : "bg-[rgb(var(--primary))] text-white"
-              }`}
-            >
-              Download
-            </button>
+            {/* hover actions like WA */}
+            <div className="pointer-events-none absolute inset-0">
+              <div className="absolute top-2 right-2 flex items-center gap-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                {/* we rely on parent bubble `group` already */}
+              </div>
+            </div>
+
+            {/* bottom bar (file name + action icons) */}
+            <div className={`flex items-center justify-between gap-2 px-2.5 py-2 border-t ${rowDivider}`}>
+              <span
+                className={`truncate text-[0.68rem] ${subText}`}
+                title={a.fileName}
+              >
+                {a.fileName}
+              </span>
+
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => window.open(a.url ?? "", "_blank")}
+                  className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 transition ${iconBtn}`}
+                  title="Open"
+                >
+                  <IconOpen />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => forceDownload(a.url!, a.fileName)}
+                  className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 transition ${
+                    isMe ? "bg-white text-black hover:bg-white/90 border-white/30" : "bg-[rgb(var(--primary))] text-white hover:opacity-95 border-transparent"
+                  }`}
+                  title="Download"
+                >
+                  <IconDownload />
+                </button>
+              </div>
+            </div>
           </div>
-        </>
-      ) : (
-        <div className="text-[0.7rem] opacity-70">Image unavailable</div>
-      )}
-    </div>
-  );
-}
+        ) : (
+          <div className="text-[0.7rem] opacity-70">Image unavailable</div>
+        )}
+      </div>
+    );
+  }
 
+  if (isPdf) {
+    return (
+      <div key={a.id} className="mt-2">
+        <div
+          className={`rounded-xl border ${cardShell} shadow-[0_10px_22px_rgba(0,0,0,0.10)] overflow-hidden`}
+        >
+          {/* WA-like doc row */}
+          <div className="flex items-center gap-3 px-3 py-3">
+            <div
+              className={`flex h-11 w-11 items-center justify-center rounded-xl border ${
+                isMe
+                  ? "border-white/15 bg-white/10 text-white"
+                  : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))]"
+              }`}
+              aria-hidden
+            >
+              <IconPdf />
+            </div>
 
-                            if (isPdf) {
-  return (
-    <div
-      key={a.id}
-      className={`mt-2 rounded-lg border px-3 py-2 ${
-        isMe
-          ? "border-white/20 bg-white/10"
-          : "border-[rgb(var(--border))] bg-[rgb(var(--card2))]"
-      }`}
-    >
-      <div className="min-w-0">
-        <div className="truncate text-[0.75rem] font-semibold">
-          {a.fileName}
-        </div>
-        <div className="text-[0.65rem] opacity-70">
-          PDF • {(a.sizeBytes / 1024).toFixed(0)} KB
+            <div className="min-w-0 flex-1">
+              <div className={`truncate text-[0.78rem] font-semibold ${titleText}`}>
+                {a.fileName}
+              </div>
+              <div className={`text-[0.65rem] ${subText}`}>Document • {sizeLabel}</div>
+            </div>
+
+            {/* action icons on right like WA */}
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => a.url && window.open(a.url, "_blank")}
+                disabled={!a.url}
+                className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 transition disabled:opacity-50 ${iconBtn}`}
+                title="Open"
+              >
+                <IconOpen />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => a.url && forceDownload(a.url, a.fileName)}
+                disabled={!a.url}
+                className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 transition disabled:opacity-50 ${
+                  isMe ? "bg-white text-black hover:bg-white/90 border-white/30" : "bg-[rgb(var(--primary))] text-white hover:opacity-95 border-transparent"
+                }`}
+                title="Download"
+              >
+                <IconDownload />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+    );
+  }
 
-      {a.url ? (
-        <div className="mt-2 flex items-center gap-2">
-          {/* ✅ Open (preview in new tab) */}
-          <button
-            type="button"
-            onClick={() => window.open(a.url!, "_blank")}
-            className={`rounded-md px-3 py-1.5 text-[0.65rem] font-semibold ${
-              isMe
-                ? "bg-white text-black"
-                : "bg-[rgb(var(--card))] text-[rgb(var(--fg))] border border-[rgb(var(--border))]"
-            }`}
-          >
-            Open
-          </button>
+  return null;
+})}
 
-          {/* ✅ Force download */}
-          <button
-            type="button"
-            onClick={() => forceDownload(a.url!, a.fileName)}
-            className={`rounded-md px-3 py-1.5 text-[0.65rem] font-semibold ${
-              isMe
-                ? "bg-white text-black"
-                : "bg-[rgb(var(--primary))] text-white"
-            }`}
-          >
-            Download
-          </button>
-        </div>
-      ) : (
-        <div className="mt-2">
-          <button
-            disabled
-            className="rounded-md px-3 py-1.5 text-[0.65rem] font-semibold opacity-50"
-          >
-            Unavailable
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
-                            return null;
-                          })}
                         </>
                       )}
 
@@ -1037,14 +1140,12 @@ export default function MessagingPage() {
               </div>
             )}
 
-            {/* ✅ inline error line (send failures like closed) */}
             {active && sendErr && (
               <div className="mt-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-[0.75rem] text-[rgb(var(--muted))]">
                 {sendErr}
               </div>
             )}
 
-            {/* ✅ picked files chips */}
             {active && pickedFiles.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {pickedFiles.map((f, idx) => (
@@ -1067,7 +1168,6 @@ export default function MessagingPage() {
               </div>
             )}
 
-            {/* ✅ hidden file input */}
             <input
               ref={fileInputRef}
               type="file"
