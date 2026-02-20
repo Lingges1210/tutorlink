@@ -1,3 +1,4 @@
+// src/app/api/tutor/ratings/summary/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
@@ -41,9 +42,12 @@ export async function GET() {
     _count: { rating: true },
   });
 
+  const avgRaw = agg._avg.rating ?? 0;
+  const avg = Math.round(avgRaw * 10) / 10; // optional: 1 decimal
+
   return NextResponse.json({
     ok: true,
-    avg: agg._avg.rating ?? 0,
-    count: agg._count.rating ?? 0,
+    avg,
+    count: agg._count.rating,
   });
 }

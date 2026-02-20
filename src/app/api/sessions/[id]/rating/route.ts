@@ -1,3 +1,4 @@
+// src/app/api/sessions/[id]/rating/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
@@ -85,7 +86,8 @@ export async function POST(
 
   const body = await req.json().catch(() => ({}));
   const ratingRaw = body?.rating;
-  const commentRaw = typeof body?.comment === "string" ? body.comment.trim() : "";
+  const commentRaw =
+    typeof body?.comment === "string" ? body.comment.trim() : "";
 
   const rating = Number(ratingRaw);
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
@@ -156,8 +158,31 @@ export async function POST(
       rating: true,
       comment: true,
       createdAt: true,
+      tutorId: true,
     },
   });
 
-  return NextResponse.json({ ok: true, rating: created });
+  // ✅ Option B: recompute and store avgRating + ratingCount on tutor
+  const agg = await prisma.sessionRating.aggregate({
+    where: { tutorId: session.tutorId },
+    _avg: { rating: true },
+    _count: { rating: true },
+  });
+
+  const avgRaw = agg._avg.rating ?? 0;
+  const avg = Math.round(avgRaw * 10) / 10; // 1 decimal
+
+  await prisma.user.update({
+    where: { id: session.tutorId },
+    data: {
+      avgRating: avg,
+      ratingCount: agg._count.rating,
+    },
+  });
+
+  return NextResponse.json({
+    ok: true,
+    rating: created,
+    tutorStats: { avgRating: avg, ratingCount: agg._count.rating },
+  });
 }

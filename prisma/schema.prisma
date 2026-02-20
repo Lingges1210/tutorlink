@@ -51,13 +51,16 @@ model User {
 
   notifications Notification[]
 
-  rating SessionRating? @relation(fields: [sessionRatingId], references: [id])
+  avgRating   Float @default(0)
+  ratingCount Int   @default(0)
+
+  ratingsReceived SessionRating[] @relation("TutorRatings")
+  ratingsGiven    SessionRating[] @relation("StudentRatings")
 
   chatChannelsAsStudent ChatChannel[] @relation("ChatStudent")
   chatChannelsAsTutor   ChatChannel[] @relation("ChatTutor")
   chatMessagesSent      ChatMessage[] @relation("ChatSender")
   chatReads             ChatRead[]    @relation("ChatReader")
-  sessionRatingId       String?
 
   @@schema("public")
 }
@@ -305,19 +308,23 @@ model ChatTyping {
 }
 
 model SessionRating {
-  id        String @id @default(cuid())
+  id String @id @default(cuid())
+
   sessionId String @unique
   studentId String
   tutorId   String
 
-  rating  Int
+  rating  Int // 1..5
   comment String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  users   User[]
+
+  tutor User @relation("TutorRatings", fields: [tutorId], references: [id], onDelete: Cascade)
+
+  student User @relation("StudentRatings", fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([tutorId])
   @@index([studentId])

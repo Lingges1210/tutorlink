@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import StudentSidebarNav, { SidebarItem } from "@/components/StudentSidebarNav";
+import { Star } from "lucide-react";
 
 export default async function TutorLayout({
   children,
@@ -26,6 +27,10 @@ export default async function TutorLayout({
       isDeactivated: true,
       isTutorApproved: true,
       roleAssignments: { select: { role: true } },
+
+      // ✅ rating fields
+      avgRating: true,
+      ratingCount: true,
     },
   });
 
@@ -34,27 +39,67 @@ export default async function TutorLayout({
 
   const verified = dbUser.verificationStatus === "AUTO_VERIFIED";
   const isTutor =
-  dbUser.isTutorApproved ||
-  dbUser.role === "TUTOR" ||
-  dbUser.roleAssignments.some((r) => r.role === "TUTOR");
+    dbUser.isTutorApproved ||
+    dbUser.role === "TUTOR" ||
+    dbUser.roleAssignments.some((r) => r.role === "TUTOR");
 
   // Extra safety: if not tutor, kick back
   if (!isTutor) redirect("/dashboard/student");
 
   const tutorItems: SidebarItem[] = [
-    { type: "link", href: "/dashboard/tutor", label: "Tutor Home", icon: "dashboard" },
-    { type: "link", href: "/dashboard/tutor/profile", label: "Tutor Profile", icon: "profile" },
-    { type: "link", href: "/dashboard/tutor/availability", label: "Availability", icon: "calendar" },
-    { type: "link", href: "/dashboard/tutor/sessions", label: "Sessions", icon: "calendar" },
+    {
+      type: "link",
+      href: "/dashboard/tutor",
+      label: "Tutor Home",
+      icon: "dashboard",
+    },
+    {
+      type: "link",
+      href: "/dashboard/tutor/profile",
+      label: "Tutor Profile",
+      icon: "profile",
+    },
+    {
+      type: "link",
+      href: "/dashboard/tutor/availability",
+      label: "Availability",
+      icon: "calendar",
+    },
+    {
+      type: "link",
+      href: "/dashboard/tutor/sessions",
+      label: "Sessions",
+      icon: "calendar",
+    },
 
     { type: "divider" },
-    { type: "link", href: "/dashboard/student", label: "Student Dashboard", icon: "dashboard" },
+    {
+      type: "link",
+      href: "/dashboard/student",
+      label: "Student Dashboard",
+      icon: "dashboard",
+    },
   ];
 
   const mobileItems: SidebarItem[] = [
-    { type: "link", href: "/dashboard/tutor", label: "Tutor Home", icon: "dashboard" },
-    { type: "link", href: "/dashboard/tutor/requests", label: "Requests", icon: "calendar" },
-    { type: "link", href: "/dashboard/tutor/profile", label: "Profile", icon: "profile" },
+    {
+      type: "link",
+      href: "/dashboard/tutor",
+      label: "Tutor Home",
+      icon: "dashboard",
+    },
+    {
+      type: "link",
+      href: "/dashboard/tutor/requests",
+      label: "Requests",
+      icon: "calendar",
+    },
+    {
+      type: "link",
+      href: "/dashboard/tutor/profile",
+      label: "Profile",
+      icon: "profile",
+    },
   ];
 
   return (
@@ -87,11 +132,30 @@ export default async function TutorLayout({
 
                 <div className="mt-2 text-[0.7rem] text-[rgb(var(--muted))]">
                   Status:{" "}
-                  <span className={verified ? "text-emerald-500" : "text-amber-500"}>
+                  <span
+                    className={verified ? "text-emerald-500" : "text-amber-500"}
+                  >
                     {verified ? "Verified" : "Pending"}
                   </span>{" "}
                   • <span className="text-[rgb(var(--primary))]">Tutor</span>
                 </div>
+
+                {/* Rating pill */}
+                {(dbUser.ratingCount ?? 0) > 0 && (
+                  <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2.5 py-1">
+                    <Star
+  size={14}
+  className="fill-amber-400 text-amber-400"
+/>
+                    <span className="text-xs font-semibold text-[rgb(var(--fg))]">
+                      {(dbUser.avgRating ?? 0).toFixed(1)}
+                      <span className="ml-1 text-[rgb(var(--muted2))]">
+                        ({dbUser.ratingCount} rating
+                        {dbUser.ratingCount === 1 ? "" : "s"})
+                      </span>
+                    </span>
+                  </div>
+                )}
               </div>
 
               <StudentSidebarNav items={tutorItems} />
