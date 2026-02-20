@@ -732,7 +732,7 @@ const dragStart = useRef({ x: 0, y: 0 });
           </p>
         </header>
 
-        <section className="grid gap-4 lg:grid-cols-3 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.12)] min-h-[calc(100vh-260px)]">
+        <section className="grid gap-4 lg:grid-cols-3 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.12)] h-[calc(100vh-260px)] overflow-hidden">
           {/* Left: conversation list */}
           <div className="flex flex-col gap-3 border-b border-[rgb(var(--border))] pb-3 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4 min-h-0">
             <div className="flex items-center justify-between gap-2">
@@ -826,7 +826,7 @@ const dragStart = useRef({ x: 0, y: 0 });
           </div>
 
           {/* Right: chat window */}
-          <div className="lg:col-span-2 flex flex-col min-h-0">
+          <div className="lg:col-span-2 flex flex-col min-h-0 overflow-hidden">
             <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] pb-3">
               <div>
                 <p className="text-sm font-semibold text-[rgb(var(--fg))]">
