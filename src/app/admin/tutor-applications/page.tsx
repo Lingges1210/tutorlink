@@ -8,7 +8,6 @@ type AppRow = {
   id: string;
   subjects: string;
   cgpa: number | null;
-  availability: string | null;
   transcriptPath?: string | null;
   status: "PENDING" | "APPROVED" | "REJECTED" | string;
   createdAt: string;
@@ -28,115 +27,29 @@ const cardShell =
 const softBtn =
   "rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.65)] disabled:opacity-60 disabled:cursor-not-allowed";
 
-type DayKey = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
-type TimeSlot = { start: string; end: string };
-type DayAvailability = { day: DayKey; off: boolean; slots: TimeSlot[] };
-type AvailabilityState = DayAvailability[];
-
-const DAY_LABEL: Record<DayKey, string> = {
-  MON: "Mon",
-  TUE: "Tue",
-  WED: "Wed",
-  THU: "Thu",
-  FRI: "Fri",
-  SAT: "Sat",
-  SUN: "Sun",
-};
-
-function tryParseAvailability(value: string): AvailabilityState | null {
-  try {
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) return null;
-
-    const ok = parsed.every(
-      (d: any) =>
-        d &&
-        typeof d.day === "string" &&
-        typeof d.off === "boolean" &&
-        Array.isArray(d.slots)
-    );
-
-    return ok ? (parsed as AvailabilityState) : null;
-  } catch {
-    return null;
-  }
-}
-
-type AvLine = { day: string; off: boolean; slotsText: string; hasSlots: boolean };
-
-function buildAvailabilityLines(raw: string | null | undefined): AvLine[] {
-  if (!raw?.trim()) return [];
-
-  const parsed = tryParseAvailability(raw);
-
-  // If NOT JSON (old textarea), keep simple: show each line as-is
-  if (!parsed) {
-    return raw
-      .split("\n")
-      .map((t) => t.trim())
-      .filter(Boolean)
-      .map((t) => ({ day: "", off: false, slotsText: t, hasSlots: true }));
-  }
-
-  return parsed.map((d) => {
-    const dayLabel = DAY_LABEL[d.day as DayKey] ?? d.day;
-
-    if (d.off) {
-      return { day: dayLabel, off: true, slotsText: "Off", hasSlots: false };
-    }
-
-    const slotsText = d.slots
-      .filter((s) => s.start && s.end)
-      .map((s) => `${s.start}–${s.end}`)
-      .join(", ");
-
-    const hasSlots = !!slotsText;
-    return { day: dayLabel, off: false, slotsText: slotsText || "—", hasSlots };
-  });
-}
-
-function formatAvailabilityLines(raw: string | null | undefined): string[] {
-  if (!raw?.trim()) return [];
-
-  const parsed = tryParseAvailability(raw);
-  if (!parsed) {
-    // fallback for old textarea format
-    return raw.split("\n");
-  }
-
-  return parsed.map((d) => {
-    if (d.off) return `${DAY_LABEL[d.day as DayKey] ?? d.day}: Off`;
-
-    const slots = d.slots
-      .filter((s) => s.start && s.end)
-      .map((s) => `${s.start}–${s.end}`)
-      .join(", ");
-
-    return `${DAY_LABEL[d.day as DayKey] ?? d.day}: ${slots || "—"}`;
-  });
-}
-
 function StatusPill({ status }: { status: string }) {
   const s = (status || "").toUpperCase();
 
   const cls =
-  s === "AUTO_VERIFIED" || s === "APPROVED"
-    ? `
+    s === "AUTO_VERIFIED" || s === "APPROVED"
+      ? `
       border-emerald-500/30 bg-emerald-500/15 text-emerald-700
       dark:text-emerald-400
     `
-    : s === "REJECTED"
-    ? `
+      : s === "REJECTED"
+      ? `
       border-rose-500/30 bg-rose-500/15 text-rose-700
       dark:text-rose-400
     `
-    : `
+      : `
       border-amber-500/30 bg-amber-500/15 text-amber-700
       dark:text-amber-400
     `;
 
   return (
-    <span className={`inline-flex rounded-full border px-3 py-1 text-[0.7rem] font-semibold ${cls}`}>
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-[0.7rem] font-semibold ${cls}`}
+    >
       {s === "APPROVED" ? "✅ APPROVED" : s === "REJECTED" ? "❌ REJECTED" : "⏳ PENDING"}
     </span>
   );
@@ -175,7 +88,11 @@ function RejectModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" aria-modal="true" role="dialog">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      aria-modal="true"
+      role="dialog"
+    >
       {/* Backdrop */}
       <button
         type="button"
@@ -194,14 +111,16 @@ function RejectModal({
         "
       >
         <div className="border-b border-[rgb(var(--border))] px-5 py-4">
-          <div className="text-sm font-semibold text-[rgb(var(--fg))]">Reject tutor application</div>
+          <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+            Reject tutor application
+          </div>
           <div className="mt-1 text-xs text-[rgb(var(--muted))]">
-            Applicant: <span className="font-medium text-[rgb(var(--fg))]">{applicantLabel}</span>
+            Applicant:{" "}
+            <span className="font-medium text-[rgb(var(--fg))]">{applicantLabel}</span>
           </div>
         </div>
 
         <div className="space-y-3 px-5 py-4">
-          {/* ✅ Make it super readable in light mode */}
           <div
             className="
               rounded-2xl border px-4 py-3
@@ -221,7 +140,7 @@ function RejectModal({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={4}
-            placeholder="Example: Subjects too vague. Please list specific courses + your availability (Mon/Wed 8–10pm)."
+            placeholder="Example: Subjects too vague. Please list specific courses clearly."
             className="
               w-full rounded-2xl border border-[rgb(var(--border))]
               bg-[rgb(var(--card2))]
@@ -255,84 +174,15 @@ function RejectModal({
   );
 }
 
-function AvailabilityCell({ raw }: { raw: string | null }) {
-  const lines = useMemo(() => buildAvailabilityLines(raw), [raw]);
-
-  // collapsed by default: only show days with real slots
-  const active = useMemo(
-    () => lines.filter((l) => l.hasSlots && !l.off),
-    [lines]
-  );
-
-  const [expanded, setExpanded] = useState(false);
-
-  if (lines.length === 0) {
-    return <div className="text-[0.7rem] text-[rgb(var(--muted2))]">—</div>;
-  }
-
-  const shown = expanded ? lines : active;
-
-  return (
-    <div className="space-y-1">
-      {/* rows */}
-      {shown.length > 0 ? (
-        shown.map((l, i) => (
-          <div key={i} className="text-[0.72rem] leading-relaxed">
-            {l.day ? (
-              <>
-                <span
-                  className={
-                    l.hasSlots && !l.off
-                      ? "font-semibold text-[rgb(var(--fg))]"
-                      : "font-medium text-[rgb(var(--muted2))]"
-                  }
-                >
-                  {l.day}:
-                </span>{" "}
-                <span
-                  className={
-                    l.off || !l.hasSlots
-                      ? "text-[rgb(var(--muted2))]"
-                      : "text-[rgb(var(--fg))]"
-                  }
-                >
-                  {l.slotsText}
-                </span>
-              </>
-            ) : (
-              // fallback plain text lines
-              <span className="text-[rgb(var(--fg))]">{l.slotsText}</span>
-            )}
-          </div>
-        ))
-      ) : (
-        <div className="text-[0.7rem] text-[rgb(var(--muted2))]">No active slots</div>
-      )}
-
-      {/* toggle */}
-      {lines.length > active.length && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-1 inline-flex items-center gap-1 text-[0.7rem] font-semibold text-[rgb(var(--primary))] hover:underline"
-        >
-          {expanded ? "Hide" : "Show all"}
-          <span className="text-[rgb(var(--muted2))]">
-            ({expanded ? active.length : lines.length}/{lines.length})
-          </span>
-        </button>
-      )}
-    </div>
-  );
-}
-
 export default function AdminTutorApplicationsPage() {
   const [apps, setApps] = useState<AppRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(
+    null
+  );
 
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectId, setRejectId] = useState<string | null>(null);
@@ -362,10 +212,10 @@ export default function AdminTutorApplicationsPage() {
   }, []);
 
   useEffect(() => {
-  if (!notice) return;
-  const t = setTimeout(() => setNotice(null), 4000);
-  return () => clearTimeout(t);
-}, [notice]);
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [notice]);
 
   function openReject(id: string) {
     setNotice(null);
@@ -470,11 +320,9 @@ export default function AdminTutorApplicationsPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                {/* ✅ readable, still amber */}
                 <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-1 text-[0.65rem] font-semibold text-amber-700 dark:text-amber-400">
-  {pendingCount} pending
-</span>
-
+                  {pendingCount} pending
+                </span>
 
                 <button onClick={load} type="button" className={softBtn} disabled={loading}>
                   {loading ? "Refreshing..." : "Refresh"}
@@ -488,16 +336,16 @@ export default function AdminTutorApplicationsPage() {
           </header>
 
           {notice && (
-  <div
-    className={`mb-4 rounded-2xl border px-3 py-3 text-xs ${
-      notice.type === "success"
-        ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-        : "border-rose-500/30 bg-rose-500/15 text-rose-700 dark:text-rose-400"
-    }`}
-  >
-    {notice.text}
-  </div>
-)}
+            <div
+              className={`mb-4 rounded-2xl border px-3 py-3 text-xs ${
+                notice.type === "success"
+                  ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                  : "border-rose-500/30 bg-rose-500/15 text-rose-700 dark:text-rose-400"
+              }`}
+            >
+              {notice.text}
+            </div>
+          )}
 
           {err && (
             <div className="mb-4 rounded-2xl border border-rose-300 bg-rose-100 px-3 py-3 text-xs text-rose-950 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
@@ -513,14 +361,13 @@ export default function AdminTutorApplicationsPage() {
 
           {!loading && !err && apps.length > 0 && (
             <div className="overflow-x-auto rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] dark:bg-[rgb(var(--card)/0.55)]">
-              <table className="min-w-[980px] w-full text-left">
+              <table className="min-w-[920px] w-full text-left">
                 <thead>
                   <tr className="text-[0.7rem] uppercase tracking-wide text-[rgb(var(--muted2))] bg-[rgb(var(--card2))] dark:bg-transparent">
                     <th className="px-4 py-3">Applicant</th>
                     <th className="px-4 py-3">Subjects</th>
                     <th className="px-4 py-3">CGPA</th>
                     <th className="px-4 py-3">Transcript</th>
-                    <th className="px-4 py-3">Availability</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3 text-right">Action</th>
                   </tr>
@@ -582,12 +429,6 @@ export default function AdminTutorApplicationsPage() {
                         </td>
 
                         <td className="px-4 py-4">
-  <AvailabilityCell raw={a.availability} />
-</td>
-
-
-
-                        <td className="px-4 py-4">
                           <StatusPill status={a.status} />
 
                           {a.reviewedAt && (
@@ -623,10 +464,10 @@ export default function AdminTutorApplicationsPage() {
                               onClick={() => openReject(a.id)}
                               disabled={!pending || busy}
                               className="
-  inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold
-  bg-rose-600 text-white hover:bg-rose-500
-  disabled:cursor-not-allowed disabled:opacity-40
-"
+                                inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold
+                                bg-rose-600 text-white hover:bg-rose-500
+                                disabled:cursor-not-allowed disabled:opacity-40
+                              "
                             >
                               Reject
                             </button>

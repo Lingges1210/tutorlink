@@ -102,25 +102,23 @@ export async function POST(
     select: { id: true, studentId: true },
   });
 
-  // ✅ keep chat open for 8 hours after tutor completes
-try {
-  const closeAt = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  // ✅ keep chat open for 8 hours after session end
+  try {
+    const closeAt = new Date(end.getTime() + 8 * 60 * 60 * 1000);
 
-  await prisma.chatChannel.upsert({
-    where: { sessionId: updated.id },
-    create: {
-      sessionId: updated.id,
-      studentId: session.studentId,
-      tutorId: session.tutorId!, // ACCEPTED => tutorId exists
-      closeAt,
-    },
-    update: { closeAt, closedAt: null },
-  });
-} catch {
-  // ignore
-}
-
-
+    await prisma.chatChannel.upsert({
+      where: { sessionId: updated.id },
+      create: {
+        sessionId: updated.id,
+        studentId: session.studentId,
+        tutorId: session.tutorId!, // ACCEPTED => tutorId exists
+        closeAt,
+      },
+      update: { closeAt, closedAt: null },
+    });
+  } catch {
+    // ignore
+  }
 
   // ✅ Notify student (viewer must be STUDENT)
   try {

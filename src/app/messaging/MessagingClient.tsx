@@ -370,6 +370,26 @@ export default function MessagingClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, qsChannelId, activeId]);
 
+  // ✅ NEW: if active chat disappears (e.g. cancelled), clear right panel and move to next
+  useEffect(() => {
+    if (!activeId) return;
+
+    const stillExists = conversations.some((c) => c.id === activeId);
+    if (stillExists) return;
+
+    const next = conversations[0]?.id ?? null;
+
+    setActiveId(next);
+
+    // clear right panel state so UI doesn't keep showing removed chat
+    setMessages([]);
+    setNextCursor(null);
+    setReadInfo(null);
+    setChatMeta({ isChatClosed: true, chatCloseAt: null });
+    setSendErr("This chat is no longer available (session cancelled/closed).");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversations, activeId]);
+
   // helper used by polling to decide mark read
   function isNearBottom() {
     const el = bottomRef.current?.parentElement; // scroll container
@@ -410,101 +430,112 @@ export default function MessagingClient() {
     return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
-useEffect(() => {
-  if (!activeId || !meId) return;
+  useEffect(() => {
+    if (!activeId || !meId) return;
 
-  let stop = false;
+    let stop = false;
 
-  // helper: merge new messages (avoid duplicates)
-  function mergeMessages(incoming: Msg[]) {
-    setMessages((prev) => {
-      const map = new Map(prev.map((m) => [m.id, m]));
-      for (const m of incoming) map.set(m.id, { ...(map.get(m.id) as any), ...m });
-      const arr = Array.from(map.values());
-      arr.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      return arr;
-    });
-  }
-
-  async function pollMessages() {
-    if (stop) return;
-    const j = await fetch(`/api/chat/messages?channelId=${activeId}&take=30`, { cache: "no-store" })
-      .then((r) => r.json())
-      .catch(() => null);
-
-    if (stop || !j?.ok) return;
-
-    const items = (j.items as Msg[]).slice().reverse();
-    mergeMessages(items);
-
-    if (j.read) setReadInfo(j.read);
-
-    if (typeof j.isChatClosed === "boolean") {
-      setChatMeta({
-        isChatClosed: !!j.isChatClosed,
-        chatCloseAt: j.chatCloseAt ?? null,
+    // helper: merge new messages (avoid duplicates)
+    function mergeMessages(incoming: Msg[]) {
+      setMessages((prev) => {
+        const map = new Map(prev.map((m) => [m.id, m]));
+        for (const m of incoming) map.set(m.id, { ...(map.get(m.id) as any), ...m });
+        const arr = Array.from(map.values());
+        arr.sort(
+          (a, b) =>
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+        return arr;
       });
     }
 
-    // mark read if user is at bottom
-    if (isNearBottom()) {
-      const rr = await fetch("/api/chat/read", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channelId: activeId }),
-      }).then((r) => r.json()).catch(() => null);
+    async function pollMessages() {
+      if (stop) return;
+      const j = await fetch(`/api/chat/messages?channelId=${activeId}&take=30`, {
+        cache: "no-store",
+      })
+        .then((r) => r.json())
+        .catch(() => null);
 
-      if (rr?.ok) {
-        setConversations((prev) => prev.map((c) => (c.id === activeId ? { ...c, unread: 0 } : c)));
-        window.dispatchEvent(new Event("chat:unread-refresh"));
+      if (stop || !j?.ok) return;
+
+      const items = (j.items as Msg[]).slice().reverse();
+      mergeMessages(items);
+
+      if (j.read) setReadInfo(j.read);
+
+      if (typeof j.isChatClosed === "boolean") {
+        setChatMeta({
+          isChatClosed: !!j.isChatClosed,
+          chatCloseAt: j.chatCloseAt ?? null,
+        });
+      }
+
+      // mark read if user is at bottom
+      if (isNearBottom()) {
+        const rr = await fetch("/api/chat/read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channelId: activeId }),
+        })
+          .then((r) => r.json())
+          .catch(() => null);
+
+        if (rr?.ok) {
+          setConversations((prev) =>
+            prev.map((c) => (c.id === activeId ? { ...c, unread: 0 } : c))
+          );
+          window.dispatchEvent(new Event("chat:unread-refresh"));
+        }
       }
     }
-  }
 
-  async function pollConversations() {
-    if (stop) return;
-    await refreshConversations().catch(() => {});
-  }
-
-  async function pollTyping() {
-    if (stop) return;
-    const j = await fetch(`/api/chat/typing?channelId=${activeId}`, { cache: "no-store" })
-      .then((r) => r.json())
-      .catch(() => null);
-
-    if (stop || !j?.ok) return;
-    setOtherTyping(!!j.otherTyping);
-  }
-
-  // poll immediately once
-  pollMessages();
-  pollConversations();
-  pollTyping();
-
-  // intervals
-  const msgT = setInterval(pollMessages, 1500);
-  const convT = setInterval(pollConversations, 4500);
-  const typT = setInterval(pollTyping, 1200);
-
-  // pause polling when tab not visible (optional but good)
-  const onVis = () => {
-    if (document.visibilityState === "visible") {
-      pollMessages();
-      pollConversations();
-      pollTyping();
+    async function pollConversations() {
+      if (stop) return;
+      await refreshConversations().catch(() => {});
     }
-  };
-  document.addEventListener("visibilitychange", onVis);
 
-  return () => {
-    stop = true;
-    clearInterval(msgT);
-    clearInterval(convT);
-    clearInterval(typT);
-    document.removeEventListener("visibilitychange", onVis);
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [activeId, meId]);
+    async function pollTyping() {
+      if (stop) return;
+      const j = await fetch(`/api/chat/typing?channelId=${activeId}`, {
+        cache: "no-store",
+      })
+        .then((r) => r.json())
+        .catch(() => null);
+
+      if (stop || !j?.ok) return;
+      setOtherTyping(!!j.otherTyping);
+    }
+
+    // poll immediately once
+    pollMessages();
+    pollConversations();
+    pollTyping();
+
+    // intervals
+    const msgT = setInterval(pollMessages, 1500);
+    const convT = setInterval(pollConversations, 4500);
+    const typT = setInterval(pollTyping, 1200);
+
+    // pause polling when tab not visible (optional but good)
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        pollMessages();
+        pollConversations();
+        pollTyping();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      stop = true;
+      clearInterval(msgT);
+      clearInterval(convT);
+      clearInterval(typT);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, meId]);
 
   const [ctx, setCtx] = useState<{
     open: boolean;
@@ -552,28 +583,29 @@ useEffect(() => {
 
     setLoadingMsgs(false);
   }
-async function refetchLatest(channelId: string) {
-  const r = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
-    cache: "no-store",
-  });
-  const j = await r.json().catch(() => null);
 
-  if (j?.ok) {
-    const items = (j.items as Msg[]).slice().reverse();
-    setMessages(items);
-    setNextCursor(j.nextCursor ?? null);
-    if (j.read) setReadInfo(j.read);
+  async function refetchLatest(channelId: string) {
+    const r = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
+      cache: "no-store",
+    });
+    const j = await r.json().catch(() => null);
 
-    if (typeof j.isChatClosed === "boolean") {
-      setChatMeta({
-        isChatClosed: !!j.isChatClosed,
-        chatCloseAt: j.chatCloseAt ?? null,
-      });
+    if (j?.ok) {
+      const items = (j.items as Msg[]).slice().reverse();
+      setMessages(items);
+      setNextCursor(j.nextCursor ?? null);
+      if (j.read) setReadInfo(j.read);
+
+      if (typeof j.isChatClosed === "boolean") {
+        setChatMeta({
+          isChatClosed: !!j.isChatClosed,
+          chatCloseAt: j.chatCloseAt ?? null,
+        });
+      }
+
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
     }
-
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
   }
-}
 
   // ✅ CHANGE #3 (optional but recommended): optimistic render created message if API returns it
   async function send() {
@@ -617,7 +649,7 @@ async function refetchLatest(channelId: string) {
 
       const j = await r.json().catch(() => null);
       console.log("SEND RESP:", j);
-console.log("HAS MESSAGE?", !!j?.message);
+      console.log("HAS MESSAGE?", !!j?.message);
 
       if (!r.ok) {
         setSendErr(j?.message ?? "Failed to send");
@@ -632,42 +664,42 @@ console.log("HAS MESSAGE?", !!j?.message);
         return;
       }
 
-     if (j?.ok) {
-  // ✅ optimistic append if server returns created message
-  if (j.message) {
-    const created = j.message as Msg;
+      if (j?.ok) {
+        // ✅ optimistic append if server returns created message
+        if (j.message) {
+          const created = j.message as Msg;
 
-    setMessages((prev) => {
-      if (prev.some((m) => m.id === created.id)) return prev;
-      const next = [...prev, created];
-      next.sort(
-        (a, b) =>
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      );
-      return next;
-    });
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === created.id)) return prev;
+            const next = [...prev, created];
+            next.sort(
+              (a, b) =>
+                new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            );
+            return next;
+          });
 
-    setTimeout(
-      () => bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
-      30
-    );
-  }
+          setTimeout(
+            () => bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
+            30
+          );
+        }
 
-  setConversations((prev) =>
-    prev.map((c) =>
-      c.id === activeId
-        ? {
-            ...c,
-            lastMessage: t || (pickedFiles.length ? "📎 Attachment" : ""),
-            lastAt: new Date().toISOString(),
-          }
-        : c
-    )
-  );
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === activeId
+              ? {
+                  ...c,
+                  lastMessage: t || (pickedFiles.length ? "📎 Attachment" : ""),
+                  lastAt: new Date().toISOString(),
+                }
+              : c
+          )
+        );
 
-  setPickedFiles([]);
-  refetchLatest(activeId);
-}
+        setPickedFiles([]);
+        refetchLatest(activeId);
+      }
     } catch (e: any) {
       setSendErr(e?.message ?? "Failed to send");
       setText(t);

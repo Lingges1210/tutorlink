@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
 async function triggerAllocator() {
-  // If you don't set these, allocator won't run (and that's OK)
   const appUrl = process.env.APP_URL;
   const secret = process.env.ALLOCATOR_SECRET;
   if (!appUrl || !secret) return;
@@ -46,8 +45,9 @@ export async function GET() {
       );
     }
 
+    // ✅ IMPORTANT: read from APPROVED application only
     const app = await prisma.tutorApplication.findFirst({
-      where: { userId: dbUser.id },
+      where: { userId: dbUser.id, status: "APPROVED" },
       orderBy: { createdAt: "desc" },
       select: { availability: true, status: true },
     });
@@ -80,9 +80,10 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const availability = typeof body.availability === "string" ? body.availability : null;
+    const availability =
+      typeof body.availability === "string" ? body.availability.trim() : "";
 
-    if (!availability?.trim()) {
+    if (!availability) {
       return NextResponse.json(
         { success: false, message: "Availability is required" },
         { status: 400 }
@@ -101,25 +102,25 @@ export async function POST(req: Request) {
       );
     }
 
-    const latest = await prisma.tutorApplication.findFirst({
-      where: { userId: dbUser.id },
+    // ✅ IMPORTANT: only update APPROVED application
+    const approved = await prisma.tutorApplication.findFirst({
+      where: { userId: dbUser.id, status: "APPROVED" },
       orderBy: { createdAt: "desc" },
       select: { id: true },
     });
 
-    if (!latest) {
+    if (!approved) {
       return NextResponse.json(
-        { success: false, message: "No tutor application found." },
-        { status: 404 }
+        { success: false, message: "You are not an approved tutor yet." },
+        { status: 403 }
       );
     }
 
     await prisma.tutorApplication.update({
-      where: { id: latest.id },
+      where: { id: approved.id },
       data: { availability },
     });
 
-    // ✅ Trigger allocation right after availability changes
     await triggerAllocator();
 
     return NextResponse.json({ success: true });

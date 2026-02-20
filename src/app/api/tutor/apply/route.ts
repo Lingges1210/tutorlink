@@ -1,3 +1,4 @@
+// src/app/api/tutor/apply/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
@@ -9,13 +10,15 @@ export async function POST(req: Request) {
   } = await supabase.auth.getUser();
 
   if (!user?.email) {
-    return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { success: false, message: "Unauthorized" },
+      { status: 401 }
+    );
   }
 
   const body = await req.json().catch(() => ({}));
 
-  const subjects =
-  Array.isArray(body.subjects)
+  const subjects = Array.isArray(body.subjects)
     ? body.subjects
         .map((s: unknown) => (typeof s === "string" ? s.trim() : ""))
         .filter(Boolean)
@@ -25,21 +28,21 @@ export async function POST(req: Request) {
     : "";
 
   const cgpa = typeof body.cgpa === "number" ? body.cgpa : null;
-  const availability =
-    typeof body.availability === "string" ? body.availability.trim() : "";
 
-  // ✅ NEW: transcriptPath from body
+  // ✅ transcriptPath from body (still required)
   const transcriptPath =
     typeof body.transcriptPath === "string" ? body.transcriptPath.trim() : "";
 
-
-  if (cgpa === null || !Number.isFinite(cgpa)) {
-    return NextResponse.json({ success: false, message: "CGPA is required" }, { status: 400 });
+  if (!subjects) {
+    return NextResponse.json(
+      { success: false, message: "Subjects is required" },
+      { status: 400 }
+    );
   }
 
-  if (!availability) {
+  if (cgpa === null || !Number.isFinite(cgpa)) {
     return NextResponse.json(
-      { success: false, message: "Availability is required" },
+      { success: false, message: "CGPA is required" },
       { status: 400 }
     );
   }
@@ -53,15 +56,26 @@ export async function POST(req: Request) {
 
   const dbUser = await prisma.user.findUnique({
     where: { email: user.email.toLowerCase() },
-    select: { id: true, verificationStatus: true, isDeactivated: true, isTutorApproved: true },
+    select: {
+      id: true,
+      verificationStatus: true,
+      isDeactivated: true,
+      isTutorApproved: true,
+    },
   });
 
   if (!dbUser) {
-    return NextResponse.json({ success: false, message: "User not found" }, { status: 404 });
+    return NextResponse.json(
+      { success: false, message: "User not found" },
+      { status: 404 }
+    );
   }
 
   if (dbUser.isDeactivated) {
-    return NextResponse.json({ success: false, message: "Account deactivated" }, { status: 403 });
+    return NextResponse.json(
+      { success: false, message: "Account deactivated" },
+      { status: 403 }
+    );
   }
 
   if (dbUser.verificationStatus !== "AUTO_VERIFIED") {
@@ -91,14 +105,13 @@ export async function POST(req: Request) {
     );
   }
 
-  // ✅ Create application
+  // ✅ Create application (availability removed)
   const application = await prisma.tutorApplication.create({
     data: {
       userId: dbUser.id,
       subjects,
       cgpa,
-      availability,
-      transcriptPath, // ✅ now defined
+      transcriptPath,
       status: "PENDING",
     },
   });

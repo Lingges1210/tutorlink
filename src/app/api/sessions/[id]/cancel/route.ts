@@ -90,6 +90,15 @@ export async function POST(
     },
   });
 
+    // ✅ NEW: close chat immediately when session cancelled
+  await prisma.chatChannel.updateMany({
+    where: { sessionId: updated.id },
+    data: {
+      closeAt: new Date(),
+      closedAt: new Date(),
+    },
+  });
+
   // ✅ Cancel scheduled reminder email (if any)
   try {
     if (session.studentReminderEmailId) {

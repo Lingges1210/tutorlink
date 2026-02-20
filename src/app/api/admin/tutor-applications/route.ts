@@ -1,3 +1,4 @@
+// src/app/api/admin/tutor-applications/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
@@ -27,7 +28,19 @@ export async function GET() {
 
   const applications = await prisma.tutorApplication.findMany({
     orderBy: { createdAt: "desc" },
-    include: { user: { select: { id: true, name: true, email: true, matricNo: true } } },
+    select: {
+      id: true,
+      subjects: true,
+      cgpa: true,
+      transcriptPath: true,
+      status: true,
+      createdAt: true,
+      reviewedAt: true,
+      rejectionReason: true,
+      user: {
+        select: { id: true, name: true, email: true, matricNo: true },
+      },
+    },
   });
 
   return NextResponse.json({ success: true, applications });

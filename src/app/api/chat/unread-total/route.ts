@@ -19,10 +19,14 @@ export async function GET() {
 
   if (!dbUser) return NextResponse.json({ ok: false }, { status: 404 });
 
-  // ✅ single query, counts unread across ALL my channels
+  const now = new Date();
+
+  // ✅ single query, counts unread across ONLY "visible" channels
   // - includes channels even if ChatRead row doesn't exist (COALESCE to epoch)
   // - excludes my own messages
   // - excludes deleted messages
+  // - excludes expired chats (closeAt <= now)
+  // - excludes CANCELLED sessions
   const rows = await prisma.$queryRaw<Array<{ total: bigint }>>`
     SELECT COALESCE(COUNT(m."id"), 0) AS total
     FROM "ChatChannel" c
@@ -34,8 +38,18 @@ export async function GET() {
      AND m."isDeleted" = FALSE
      AND m."senderId" <> ${dbUser.id}
      AND m."createdAt" > COALESCE(r."lastReadAt", to_timestamp(0))
-    WHERE c."studentId" = ${dbUser.id}
-       OR c."tutorId" = ${dbUser.id};
+
+    -- ✅ join session so we can filter CANCELLED
+    JOIN "Session" s
+      ON s."id" = c."sessionId"
+
+    WHERE (c."studentId" = ${dbUser.id} OR c."tutorId" = ${dbUser.id})
+
+      -- ✅ hide chats that have expired
+      AND (c."closeAt" IS NULL OR c."closeAt" > ${now})
+
+      -- ✅ hide chats whose session is cancelled
+      AND s."status" NOT IN ('CANCELLED');
   `;
 
   return NextResponse.json({ ok: true, total: Number(rows?.[0]?.total ?? 0) });

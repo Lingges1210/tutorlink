@@ -25,13 +25,20 @@ export async function GET() {
 const channels = await prisma.chatChannel.findMany({
   where: {
     OR: [{ studentId: me.id }, { tutorId: me.id }],
-    // ✅ hide chats that have expired
+
+    // ✅ hide chats that have expired (your existing logic)
     AND: [
       {
-        OR: [
-          { closeAt: null },          // not scheduled to close (still open)
-          { closeAt: { gt: now } },   // close time still in future
-        ],
+        OR: [{ closeAt: null }, { closeAt: { gt: now } }],
+      },
+
+      // ✅ NEW: hide chats whose session is cancelled/rejected
+      {
+        session: {
+          status: {
+            notIn: ["CANCELLED"],
+          },
+        },
       },
     ],
   },
