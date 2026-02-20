@@ -3,42 +3,64 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { MessageSquare } from "lucide-react";
-import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
-export default function ChatInboxIconClient({ initialUnread = 0 }: { initialUnread?: number }) {
+export default function ChatInboxIconClient({
+  initialUnread = 0,
+}: {
+  initialUnread?: number;
+}) {
   const [total, setTotal] = useState<number>(initialUnread);
 
-  async function refresh() {
-    const r = await fetch("/api/chat/unread-total", { cache: "no-store" });
-    const j = await r.json();
-    if (j?.ok) setTotal(j.total);
-  }
-
   useEffect(() => {
-  refresh();
+    let refreshing = false;
+    let pending = false;
+    let stop = false;
 
-  const interval = setInterval(refresh, 4000);
+    async function safeRefresh() {
+      if (stop) return;
 
-  // ✅ listen for "read happened" event (instant badge drop)
-  const onRead = () => refresh();
-  window.addEventListener("chat:unread-refresh", onRead);
+      if (refreshing) {
+        pending = true;
+        return;
+      }
 
-  const ch = supabaseBrowser
-    .channel("chat-unread-total")
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "ChatMessage" },
-      () => refresh()
-    )
-    .subscribe();
+      refreshing = true;
+      try {
+        const r = await fetch("/api/chat/unread-total", { cache: "no-store" });
+        const j = await r.json().catch(() => null);
+        if (!stop && j?.ok) setTotal(j.total);
+      } finally {
+        refreshing = false;
+        if (pending && !stop) {
+          pending = false;
+          safeRefresh();
+        }
+      }
+    }
 
-  return () => {
-    clearInterval(interval);
-    window.removeEventListener("chat:unread-refresh", onRead);
-    supabaseBrowser.removeChannel(ch);
-  };
-}, []);
+    // initial load
+    safeRefresh();
 
+    // 🔁 listen for manual refresh (chat page marks read)
+    const onRead = () => safeRefresh();
+    window.addEventListener("chat:unread-refresh", onRead);
+
+    // ✅ polling (light)
+    const t = setInterval(safeRefresh, 8000);
+
+    // optional: refresh when tab becomes active
+    const onVis = () => {
+      if (document.visibilityState === "visible") safeRefresh();
+    };
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      stop = true;
+      window.removeEventListener("chat:unread-refresh", onRead);
+      document.removeEventListener("visibilitychange", onVis);
+      clearInterval(t);
+    };
+  }, []);
 
   return (
     <div className="relative">

@@ -1,55 +1,76 @@
+// src/app/api/chat/messages/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
-export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: Request) {
   const supabase = await supabaseServerComponent();
-  const { data } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!data?.user?.email) {
-    return NextResponse.json({ ok: false }, { status: 401 });
+  if (!user?.email) {
+    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
   }
 
+  const email = user.email.toLowerCase();
   const me = await prisma.user.findUnique({
-    where: { email: data.user.email.toLowerCase() },
+    where: { email },
     select: { id: true },
   });
 
-  if (!me) return NextResponse.json({ ok: false }, { status: 404 });
-
-  const msg = await prisma.chatMessage.findUnique({
-    where: { id: params.id },
-    select: { id: true, senderId: true, isDeleted: true },
-  });
-
-  if (!msg) return NextResponse.json({ ok: false }, { status: 404 });
-
-  // ✅ WhatsApp-style: only sender can delete for everyone
-  if (msg.senderId !== me.id) {
-    return NextResponse.json({ ok: false }, { status: 403 });
+  if (!me) {
+    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
   }
 
-  if (msg.isDeleted) return NextResponse.json({ ok: true });
+  const body = await req.json().catch(() => null);
+  const { channelId, text, attachments } = (body ?? {}) as {
+    channelId?: string;
+    text?: string;
+    attachments?: {
+      bucket: string;
+      objectPath: string;
+      fileName: string;
+      contentType: string;
+      sizeBytes: number;
+    }[];
+  };
 
-  const updated = await prisma.chatMessage.update({
-    where: { id: msg.id },
+  if (!channelId) {
+    return NextResponse.json({ ok: false, message: "Missing channelId" }, { status: 400 });
+  }
+
+  const cleanText = (text ?? "").trim();
+  const hasFiles = Array.isArray(attachments) && attachments.length > 0;
+
+  if (!cleanText && !hasFiles) {
+    return NextResponse.json({ ok: false, message: "Nothing to send" }, { status: 400 });
+  }
+
+  const created = await prisma.chatMessage.create({
     data: {
-      isDeleted: true,
-      deletedAt: new Date(),
-      text: "", // optional: wipe text
+      channelId,
+      senderId: me.id,
+      text: cleanText,
+      attachments: hasFiles
+        ? {
+            createMany: {
+              data: attachments!.map((a) => ({
+                bucket: a.bucket,
+                objectPath: a.objectPath,
+                fileName: a.fileName,
+                contentType: a.contentType,
+                sizeBytes: a.sizeBytes,
+              })),
+            },
+          }
+        : undefined,
     },
-    select: { id: true, isDeleted: true, deletedAt: true },
+    include: {
+      attachments: true, // NOTE: this includes DB fields only (no url)
+    },
   });
 
-  return NextResponse.json({
-    ok: true,
-    message: {
-      id: updated.id,
-      isDeleted: updated.isDeleted,
-      deletedAt: updated.deletedAt ? updated.deletedAt.toISOString() : null,
-    },
-  });
+  // ✅ frontend expects: { ok: true, message: created }
+  return NextResponse.json({ ok: true, message: created });
 }

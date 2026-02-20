@@ -7,12 +7,15 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["public", "auth"]
 }
 
 enum UserRole {
   STUDENT
   TUTOR
   ADMIN
+
+  @@schema("public")
 }
 
 model User {
@@ -52,6 +55,8 @@ model User {
   chatChannelsAsTutor   ChatChannel[] @relation("ChatTutor")
   chatMessagesSent      ChatMessage[] @relation("ChatSender")
   chatReads             ChatRead[]    @relation("ChatReader")
+
+  @@schema("public")
 }
 
 model UserRoleAssignment {
@@ -62,6 +67,8 @@ model UserRoleAssignment {
   createdAt DateTime @default(now())
 
   @@unique([userId, role]) // prevents duplicates
+
+  @@schema("public")
 }
 
 model TutorApplication {
@@ -76,6 +83,8 @@ model TutorApplication {
   reviewedAt      DateTime?
   rejectionReason String?
   transcriptPath  String?
+
+  @@schema("public")
 }
 
 enum SessionStatus {
@@ -83,12 +92,16 @@ enum SessionStatus {
   ACCEPTED
   COMPLETED
   CANCELLED
+
+  @@schema("public")
 }
 
 enum ProposalStatus {
   PENDING
   ACCEPTED
   REJECTED
+
+  @@schema("public")
 }
 
 model Subject {
@@ -100,6 +113,8 @@ model Subject {
 
   tutorLinks TutorSubject[]
   sessions   Session[]
+
+  @@schema("public")
 }
 
 model TutorSubject {
@@ -111,6 +126,8 @@ model TutorSubject {
   createdAt DateTime @default(now())
 
   @@unique([tutorId, subjectId])
+
+  @@schema("public")
 }
 
 model Session {
@@ -157,6 +174,8 @@ model Session {
   @@index([studentId, status])
   @@index([tutorId, status])
   @@index([scheduledAt])
+
+  @@schema("public")
 }
 
 enum NotificationStatus {
@@ -165,6 +184,8 @@ enum NotificationStatus {
   DELIVERED
   READ
   FAILED
+
+  @@schema("public")
 }
 
 model Notification {
@@ -188,6 +209,8 @@ model Notification {
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@index([userId, status])
+
+  @@schema("public")
 }
 
 model ChatChannel {
@@ -212,6 +235,8 @@ model ChatChannel {
   @@index([studentId])
   @@index([tutorId])
   @@index([lastMessageAt])
+
+  @@schema("public")
 }
 
 model ChatMessage {
@@ -233,6 +258,8 @@ model ChatMessage {
 
   @@index([channelId, createdAt])
   @@index([senderId])
+
+  @@schema("public")
 }
 
 model ChatRead {
@@ -246,6 +273,8 @@ model ChatRead {
 
   @@unique([channelId, userId])
   @@index([userId])
+
+  @@schema("public")
 }
 
 model ChatAttachment {
@@ -264,6 +293,8 @@ model ChatAttachment {
   message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@index([messageId])
+
+  @@schema("public")
 }
 
 model ChatTyping {
@@ -274,4 +305,6 @@ model ChatTyping {
   updatedAt DateTime @updatedAt
 
   @@unique([channelId, userId])
+
+  @@schema("public")
 }

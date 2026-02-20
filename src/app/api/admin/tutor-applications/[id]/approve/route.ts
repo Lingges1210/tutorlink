@@ -1,5 +1,5 @@
-// src/app/api/admin/tutor-applications/[id]/approve/route.ts
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
@@ -23,9 +23,11 @@ function extractTitle(line: string, code: string | null): string {
 }
 
 export async function POST(
-  _: Request,
-  { params }: { params: { id: string } }
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+
   const supabase = await supabaseServerComponent();
   const {
     data: { user },
@@ -54,9 +56,8 @@ export async function POST(
     );
   }
 
-  // ✅ include subjects so we can create Subject + TutorSubject
   const app = await prisma.tutorApplication.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: { id: true, status: true, userId: true, subjects: true },
   });
 
@@ -74,11 +75,9 @@ export async function POST(
     );
   }
 
-  // ✅ do everything in ONE transaction (safe + consistent)
   await prisma.$transaction(async (tx) => {
-    // approve application
     await tx.tutorApplication.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         status: "APPROVED",
         reviewedAt: new Date(),
@@ -86,20 +85,17 @@ export async function POST(
       },
     });
 
-    // ensure tutor role assignment
     await tx.userRoleAssignment.upsert({
       where: { userId_role: { userId: app.userId, role: "TUTOR" } },
       update: {},
       create: { userId: app.userId, role: "TUTOR" },
     });
 
-    // mark approved
     await tx.user.update({
       where: { id: app.userId },
       data: { isTutorApproved: true },
     });
 
-    // ✅ create Subject + TutorSubject links
     const lines = splitSubjects(app.subjects);
 
     for (const line of lines) {
@@ -108,10 +104,7 @@ export async function POST(
 
       const subject = await tx.subject.upsert({
         where: { code },
-        update: {
-          // If seeded subject exists, we don't overwrite title.
-          // If you want to fill missing title later, change logic.
-        },
+        update: {},
         create: {
           code,
           title,

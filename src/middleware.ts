@@ -73,5 +73,5 @@ if (needsAdmin) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/admin/:path*"],
+  matcher: ["/dashboard/:path*", "/admin/:path*", "/messaging", "/messaging/:path*"],
 };

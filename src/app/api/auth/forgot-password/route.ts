@@ -24,7 +24,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = supabaseServerAnon();
+    // ✅ FIX: await (because supabaseServerAnon returns Promise<SupabaseClient>)
+    const supabase = await supabaseServerAnon();
 
     const origin =
       req.headers.get("origin") ||
@@ -44,8 +45,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message:
-        "If an account exists with this email, a reset link has been sent.",
+      message: "If an account exists with this email, a reset link has been sent.",
     });
   } catch (err) {
     console.error("Forgot password error:", err);
