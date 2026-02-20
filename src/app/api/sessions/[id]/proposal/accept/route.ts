@@ -34,7 +34,7 @@ function withinSlots(day: DayAvailability, startMin: number, endMin: number) {
 async function getTutorAvailability(
   tutorId: string
 ): Promise<DayAvailability[] | null> {
-  // ✅ get latest APPROVED tutor application
+  //  get latest APPROVED tutor application
   const app = await prisma.tutorApplication
     .findFirst({
       where: { userId: tutorId, status: "APPROVED" },
@@ -165,7 +165,7 @@ export async function POST(
   const newEndsAt =
     proposedEndAt ?? new Date(newScheduledAt.getTime() + durationMin * 60_000);
 
-  // ✅ 1) Student overlap check (exclude this session)
+  //  1) Student overlap check (exclude this session)
   const studentClash = await prisma.session.findFirst({
     where: {
       id: { not: session.id },
@@ -184,7 +184,7 @@ export async function POST(
     );
   }
 
-  // ✅ 2) Tutor checks (only if tutor exists)
+  //  2) Tutor checks (only if tutor exists)
   if (session.tutorId) {
     const tutorClash = await prisma.session.findFirst({
       where: {
@@ -218,7 +218,7 @@ export async function POST(
     }
   }
 
-  // ✅ Apply proposal as the new schedule
+  //  Apply proposal as the new schedule
   const updated = await prisma.session.update({
     where: { id: session.id },
     data: {
@@ -246,7 +246,7 @@ export async function POST(
     },
   });
 
-  // ✅ Notify tutor: proposal accepted (only if tutor exists)
+  //  Notify tutor: proposal accepted (only if tutor exists)
   try {
     if (updated.tutorId) {
       await notify.proposalAcceptedToTutor(

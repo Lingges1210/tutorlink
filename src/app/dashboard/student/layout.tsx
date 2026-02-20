@@ -168,7 +168,7 @@ export default async function StudentLayout({
                 </div>
               </div>
 
-              {/* ✅ Client nav renders icons + active state */}
+              {/*  Client nav renders icons + active state */}
               <StudentSidebarNav items={sidebarItems} />
             </div>
           </aside>

@@ -64,7 +64,7 @@ function prettyTime(d: Date) {
   });
 }
 
-/** ✅ Custom event UI: shows status pill + title */
+/**  Custom event UI: shows status pill + title */
 function SessionEvent({ event }: EventProps<CalEvent>) {
   const s = event.resource;
   const pending = s.status === "PENDING";
@@ -119,7 +119,7 @@ export default function StudentSessionCalendarPage() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // ✅ CONTROLLED VIEW + DATE (fixes Day/Week/Agenda buttons)
+  //  CONTROLLED VIEW + DATE (fixes Day/Week/Agenda buttons)
   const [view, setView] = useState<View>(Views.WEEK);
   const [date, setDate] = useState<Date>(new Date());
 
@@ -164,7 +164,7 @@ export default function StudentSessionCalendarPage() {
       }));
   }, [items]);
 
-  // ✅ Only PENDING draggable
+  //  Only PENDING draggable
   const draggableAccessor = (event: CalEvent) => event.resource.status === "PENDING";
 
   function eventPropGetter(event: CalEvent) {
@@ -542,7 +542,7 @@ export default function StudentSessionCalendarPage() {
         )}
       </div>
 
-      {/* ✅ Confirm modal */}
+      {/*  Confirm modal */}
       {pendingDrop && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"

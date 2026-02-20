@@ -23,7 +23,7 @@ export async function POST(
     where: { email: user.email.toLowerCase() },
     select: {
       id: true,
-      name: true, // ✅ add (for organizerName + greeting)
+      name: true, //  add (for organizerName + greeting)
       isDeactivated: true,
       verificationStatus: true,
       isTutorApproved: true,
@@ -67,7 +67,7 @@ export async function POST(
 
       subject: { select: { code: true, title: true } },
 
-      // ✅ need student email to send cancel invite
+      //  need student email to send cancel invite
       student: { select: { email: true, name: true } },
     },
   });
@@ -95,7 +95,7 @@ export async function POST(
     );
   }
 
-  // ✅ ensure calendar UID exists (stable across updates)
+  //  ensure calendar UID exists (stable across updates)
   const uid =
     session.calendarUid?.trim() ||
     `tutorlink-session-${session.id}@tutorlink.local`;
@@ -110,14 +110,14 @@ export async function POST(
       cancelledAt: new Date(),
       cancelReason: reason,
 
-      // ✅ clear any pending proposal so student UI won't show "waiting confirmation"
+      //  clear any pending proposal so student UI won't show "waiting confirmation"
       proposedAt: null,
       proposedNote: null,
       proposalStatus: null, // or "REJECTED" if your DB expects a value
 
-      // ✅ only set uid if it was missing
+      //  only set uid if it was missing
       ...(session.calendarUid ? {} : { calendarUid: uid }),
-      // ✅ keep sequence unchanged here (or set to 0 if missing)
+      //  keep sequence unchanged here (or set to 0 if missing)
       ...(typeof session.calendarSequence === "number"
         ? {}
         : { calendarSequence: 0 }),
@@ -125,7 +125,7 @@ export async function POST(
     select: { id: true, studentId: true },
   });
 
-    // ✅ NEW: close chat immediately when session cancelled
+    //  NEW: close chat immediately when session cancelled
   await prisma.chatChannel.updateMany({
     where: { sessionId: session.id },
     data: {
@@ -134,7 +134,7 @@ export async function POST(
     },
   });
 
-  // ✅ Cancel scheduled reminder email (if any)
+  //  Cancel scheduled reminder email (if any)
   try {
     if (session.studentReminderEmailId) {
       await cancelScheduledEmail(session.studentReminderEmailId);
@@ -148,7 +148,7 @@ export async function POST(
     // ignore
   }
 
-  // ✅ Calendar cancellation email (.ics) (do not block cancel if email fails)
+  //  Calendar cancellation email (.ics) (do not block cancel if email fails)
   try {
     const studentEmail = session.student?.email;
     const studentName = session.student?.name ?? null;
@@ -170,7 +170,7 @@ export async function POST(
       });
     }
 
-    // ✅ optional: send cancellation to tutor too (keeps their calendar clean)
+    //  optional: send cancellation to tutor too (keeps their calendar clean)
     await sendSessionInviteEmail({
       mode: "CANCELLED",
       toEmail: user.email.toLowerCase(),
@@ -189,7 +189,7 @@ export async function POST(
     // ignore calendar email errors
   }
 
-  // ✅ Notify student (viewer must be STUDENT)
+  //  Notify student (viewer must be STUDENT)
   try {
     if (updated.studentId) {
       await notify.sessionCancelled(updated.studentId, updated.id, "STUDENT", reason);

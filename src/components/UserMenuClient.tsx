@@ -67,7 +67,7 @@ export default function UserMenuClient({
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        {/* ✅ Avatar image if exists, else initials */}
+        {/*  Avatar image if exists, else initials */}
         <span
           className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full
                      border border-[rgb(var(--border))]
@@ -109,7 +109,7 @@ export default function UserMenuClient({
                      shadow-[0_20px_60px_rgb(var(--shadow)/0.18)]"
           role="menu"
         >
-          {/* ✅ Signed in row with avatar */}
+          {/*  Signed in row with avatar */}
           <div className="px-4 py-3 flex items-center gap-3">
             <div className="h-9 w-9 overflow-hidden rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))]">
               {avatarUrl ? (

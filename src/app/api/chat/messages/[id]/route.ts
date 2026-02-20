@@ -71,6 +71,6 @@ export async function POST(req: Request) {
     },
   });
 
-  // ✅ frontend expects: { ok: true, message: created }
+  //  frontend expects: { ok: true, message: created }
   return NextResponse.json({ ok: true, message: created });
 }

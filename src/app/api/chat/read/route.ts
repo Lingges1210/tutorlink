@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, message: "User not found" }, { status: 404 });
   }
 
-  // ✅ Verify membership using ChatChannel itself (most reliable)
+  //  Verify membership using ChatChannel itself (most reliable)
   const channel = await prisma.chatChannel.findUnique({
     where: { id: channelId },
     select: { id: true, studentId: true, tutorId: true },
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
   }
 
-  // ✅ Upsert ChatRead so old channels don't break
+  //  Upsert ChatRead so old channels don't break
   await prisma.chatRead.upsert({
     where: {
       channelId_userId: {

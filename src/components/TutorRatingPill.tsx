@@ -35,7 +35,7 @@ export default function TutorRatingPill({
           const a = typeof data.avg === "number" ? data.avg : 0;
           const c = typeof data.count === "number" ? data.count : 0;
 
-          // ✅ format to 1 decimal
+          //  format to 1 decimal
           setAvg(Math.round(a * 10) / 10);
           setCount(c);
         } else {

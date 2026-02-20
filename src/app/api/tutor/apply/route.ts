@@ -29,7 +29,7 @@ export async function POST(req: Request) {
 
   const cgpa = typeof body.cgpa === "number" ? body.cgpa : null;
 
-  // ✅ transcriptPath from body (still required)
+  //  transcriptPath from body (still required)
   const transcriptPath =
     typeof body.transcriptPath === "string" ? body.transcriptPath.trim() : "";
 
@@ -105,7 +105,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // ✅ Create application (availability removed)
+  //  Create application (availability removed)
   const application = await prisma.tutorApplication.create({
     data: {
       userId: dbUser.id,

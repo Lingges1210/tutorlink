@@ -72,7 +72,7 @@ export default function ChangePasswordPage() {
         return;
       }
 
-      setStatus("✅ Password updated successfully.");
+      setStatus(" Password updated successfully.");
       setCurrentPassword("");
       setNewPassword("");
       setConfirm("");

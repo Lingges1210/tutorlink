@@ -78,7 +78,7 @@ export async function GET(req: Request) {
   const pageItems = hasMore ? items.slice(0, limit) : items;
   const nextCursor = hasMore ? pageItems[pageItems.length - 1]?.id ?? null : null;
 
-  // ✅ normalize data so viewer routing never breaks
+  //  normalize data so viewer routing never breaks
   const normalized = pageItems.map((n) => {
     let data: any = n.data;
 
@@ -97,7 +97,7 @@ export async function GET(req: Request) {
     return { ...n, data };
   });
 
-  // ✅ you were missing this
+  //  you were missing this
   const unreadCount = await prisma.notification.count({
     where: { userId: dbUser.id, readAt: null },
   });

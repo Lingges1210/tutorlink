@@ -20,6 +20,6 @@ export async function GET(req: Request) {
     return NextResponse.redirect(new URL("/auth/login?error=verify_failed", url.origin));
   }
 
-  // ✅ Verified + session created
+  // Verified + session created
   return NextResponse.redirect(new URL("/dashboard", url.origin));
 }

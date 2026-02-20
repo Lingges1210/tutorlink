@@ -11,7 +11,7 @@ type Row = {
 };
 
 export async function POST(req: Request) {
-  // ✅ protect endpoint (so random people can't trigger it)
+  //  protect endpoint (so random people can't trigger it)
   const secret = process.env.AUTO_COMPLETE_SECRET;
   const got = req.headers.get("x-auto-complete-secret");
 
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   const now = new Date();
   const cutoff = new Date(now.getTime() - 15 * 60 * 1000); // now - 15 min
 
-  // ✅ find sessions that should be auto-completed
+  //  find sessions that should be auto-completed
   // endAt = COALESCE(endsAt, scheduledAt + durationMin minutes)
   const due = await prisma.$queryRaw<Row[]>`
     SELECT
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
   let completed = 0;
 
   for (const s of due) {
-    // ✅ idempotent: only update if still ACCEPTED
+    //  idempotent: only update if still ACCEPTED
     const upd = await prisma.session.updateMany({
       where: { id: s.id, status: "ACCEPTED" },
       data: { status: "COMPLETED" },
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     if (upd.count === 0) continue; // already handled elsewhere
     completed++;
 
-    // ✅ chat close: end + 8 hours
+    //  chat close: end + 8 hours
     const closeAt = new Date(s.endAt.getTime() + 8 * 60 * 60 * 1000);
 
     try {
@@ -71,13 +71,13 @@ export async function POST(req: Request) {
       // ignore
     }
 
-    // ✅ notify both (don’t block automation if notify fails)
+    //  notify both (don’t block automation if notify fails)
     try {
       await notify.user({
         userId: s.studentId,
         viewer: "STUDENT",
         type: "SESSION_COMPLETED",
-        title: "Session completed ✅",
+        title: "Session completed ",
         body: "Your session was auto-completed after it ended. Chat stays open for 8 hours.",
         data: { sessionId: s.id, auto: true },
       });
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
           userId: s.tutorId,
           viewer: "TUTOR",
           type: "SESSION_COMPLETED",
-          title: "Session completed ✅",
+          title: "Session completed ",
           body: "This session was auto-completed after it ended. Chat stays open for 8 hours.",
           data: { sessionId: s.id, auto: true },
         });

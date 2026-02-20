@@ -45,7 +45,7 @@ export default function ChatInboxIconClient({
     const onRead = () => safeRefresh();
     window.addEventListener("chat:unread-refresh", onRead);
 
-    // ✅ polling (light)
+    //  polling (light)
     const t = setInterval(safeRefresh, 8000);
 
     // optional: refresh when tab becomes active

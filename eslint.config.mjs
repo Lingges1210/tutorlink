@@ -24,7 +24,7 @@ export default [
   // Next recommended rules
   ...compat.extends("next/core-web-vitals", "next/typescript"),
 
-  // ✅ OVERRIDES MUST BE AFTER extends (so they win)
+  //  OVERRIDES MUST BE AFTER extends (so they win)
   {
     files: ["**/*.{ts,tsx}"],
     rules: {

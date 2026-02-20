@@ -11,7 +11,7 @@ function withinWindow(nowMs: number, targetMs: number, windowMs: number) {
 
 export async function GET() {
   try {
-    // ✅ require login
+    //  require login
     const supabase = await supabaseServerComponent();
     const {
       data: { user },
@@ -24,7 +24,7 @@ export async function GET() {
       );
     }
 
-    // ✅ map auth user -> your DB user (for id + role)
+    //  map auth user -> your DB user (for id + role)
     const dbUser = await prisma.user.findUnique({
       where: { email: user.email.toLowerCase() },
       select: { id: true, role: true },
@@ -40,7 +40,7 @@ export async function GET() {
     const now = Date.now();
     const windowMs = 60_000; // check every 1 min
 
-    // ✅ load sessions for THIS user only
+    //  load sessions for THIS user only
     const sessions = await prisma.session.findMany({
       where: {
         status: SessionStatus.ACCEPTED,
@@ -93,7 +93,7 @@ export async function GET() {
         const fireAt = startMs - c.offsetMs;
         if (!withinWindow(now, fireAt, windowMs)) continue;
 
-        // ✅ Strong dedupe: DB unique (userId + dedupeKey)
+        //  Strong dedupe: DB unique (userId + dedupeKey)
         const dedupeKey = `rem:${s.id}:${c.kind}:${dbUser.id}`;
 
         try {

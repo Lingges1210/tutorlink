@@ -58,7 +58,7 @@ export default function LoginPage() {
 
 
 
-            // ✅ Decide redirect based on computed roles from DB
+            //  Decide redirect based on computed roles from DB
       let targetPath = "/dashboard/student";
 
       try {

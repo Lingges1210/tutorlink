@@ -50,7 +50,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // ✅ Not protected area
+  //  Not protected area
   if (!session) return response;
 
   // 🔒 Tutor sub-dashboard

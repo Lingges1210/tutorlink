@@ -53,7 +53,7 @@ function safeParseData(raw: any) {
   return data as Record<string, any>;
 }
 
-/** ✅ Row component: hooks live here (top-level), not inside map/useMemo */
+/**  Row component: hooks live here (top-level), not inside map/useMemo */
 function NotiRow({
   n,
   isUnread,
@@ -73,13 +73,13 @@ function NotiRow({
   deleting: boolean;
   setDraggingId: (id: string | null) => void;
 }) {
-  // ✅ per-row motion values
+  //  per-row motion values
   const x = useMotionValue(0);
 
-  // ✅ reveal delete layer ONLY when swiping left (no touch/click reveal)
+  //  reveal delete layer ONLY when swiping left (no touch/click reveal)
   const revealOpacity = useTransform(x, [0, -14, -70], [0, 0, 1]);
 
-  // ✅ "Delete" slides in as you swipe
+  //  "Delete" slides in as you swipe
   const deleteSlideX = useTransform(x, [0, -20, -90], [14, 10, 0]);
   const deleteScale = useTransform(x, [0, -30, -90], [0.96, 0.98, 1]);
 
@@ -94,7 +94,7 @@ function NotiRow({
       transition={{ duration: 0.16, ease: "easeOut" }}
       className="relative overflow-visible"
     >
-      {/* ✅ red delete layer behind (hidden until swipe) */}
+      {/*  red delete layer behind (hidden until swipe) */}
       <motion.div
         style={{ opacity: revealOpacity }}
         className="absolute inset-0 rounded-2xl border border-rose-500/25 bg-rose-500/10
@@ -110,7 +110,7 @@ function NotiRow({
         </motion.div>
       </motion.div>
 
-      {/* ✅ draggable notification */}
+      {/*  draggable notification */}
       <motion.button
         type="button"
         drag="x"
@@ -139,7 +139,7 @@ function NotiRow({
           animate(x, 0, { type: "spring", stiffness: 520, damping: 38 });
         }}
         onClick={async () => {
-          // ✅ if user was dragging, do NOT open
+          //  if user was dragging, do NOT open
           if (draggingRef.current) return;
           if (deleting) return;
           await onOpen(n);
@@ -204,7 +204,7 @@ export default function NotificationsBellClient({
   const [showAll, setShowAll] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
 
-  // ✅ swipe helpers
+  //  swipe helpers
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -323,7 +323,7 @@ export default function NotificationsBellClient({
   const params = new URLSearchParams();
   params.set("focus", sessionId);
 
-  // ✅ if notif includes page, jump directly to that page
+  //  if notif includes page, jump directly to that page
   if (typeof page === "number" && Number.isFinite(page) && page > 0) {
     params.set("page", String(page));
   }
@@ -341,7 +341,7 @@ export default function NotificationsBellClient({
     typeof data.sessionId === "string" ? data.sessionId : undefined;
   const viewer = (data.viewer as ViewerHint | undefined) ?? null;
 
-  // ✅ page hint (if your noti data includes it)
+  //  page hint (if your noti data includes it)
   const page =
     typeof data.page === "number"
       ? data.page
@@ -352,7 +352,7 @@ export default function NotificationsBellClient({
   return buildFocusHref(sessionId, viewer, page);
 }
 
-  // ✅ Single delete (swipe-to-clear)
+  //  Single delete (swipe-to-clear)
   async function deleteOne(n: NotiItem) {
     if (deletingId) return;
     setErr(null);
@@ -555,7 +555,7 @@ export default function NotificationsBellClient({
                 </button>
               </div>
 
-              {/* ✅ Styled confirm modal for Clear all */}
+              {/*  Styled confirm modal for Clear all */}
               <AnimatePresence>
                 {confirmClearOpen && (
                   <motion.div

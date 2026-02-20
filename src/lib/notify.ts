@@ -26,10 +26,10 @@ async function create({ userId, type, title, body, viewer, data }: NotifyInput) 
   // Skip if recipient missing (e.g. tutor not assigned yet)
   if (!userId) return null;
 
-  // ✅ always ensure viewer is stored (so bell can route correctly)
+  //  always ensure viewer is stored (so bell can route correctly)
   const payload: Record<string, any> = { ...(data ?? {}), viewer };
 
-  // ✅ if sessionId exists, also store direct href (no guessing in UI)
+  //  if sessionId exists, also store direct href (no guessing in UI)
   const sessionId =
     typeof payload.sessionId === "string" ? payload.sessionId.trim() : "";
 

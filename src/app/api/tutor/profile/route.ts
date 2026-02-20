@@ -56,7 +56,7 @@ export async function GET() {
     return NextResponse.json({ ok: false }, { status: 403 });
   }
 
-  // ✅ Stats
+  //  Stats
   const [completedCount, upcomingCount] = await Promise.all([
     prisma.session.count({
       where: { tutorId: tutor.id, status: "COMPLETED" },
@@ -66,7 +66,7 @@ export async function GET() {
     }),
   ]);
 
-  // ✅ Last 3 reviews (ratings)
+  //  Last 3 reviews (ratings)
   const recentReviews = await prisma.sessionRating.findMany({
     where: { tutorId: tutor.id },
     orderBy: { createdAt: "desc" },

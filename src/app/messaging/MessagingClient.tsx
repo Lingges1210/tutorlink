@@ -76,7 +76,7 @@ export default function MessagingClient() {
   const sp = useSearchParams();
   const qsChannelId = sp.get("channelId");
 
-  // ✅ search + role filter (UI only, no backend changes)
+  //  search + role filter (UI only, no backend changes)
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("ALL");
 
@@ -98,27 +98,27 @@ export default function MessagingClient() {
     });
   }, [conversations, q, roleFilter]);
 
-  // ✅ read receipt timestamps from API
+  //  read receipt timestamps from API
   const [readInfo, setReadInfo] = useState<{
     meLastReadAt: string;
     otherLastReadAt: string;
   } | null>(null);
 
-  // ✅ typing indicator state
+  //  typing indicator state
   const [otherTyping, setOtherTyping] = useState(false);
   const typingStopTimer = useRef<any>(null);
   const lastTypingSentAt = useRef(0);
 
-  // ✅ chat close window info
+  //  chat close window info
   const [chatMeta, setChatMeta] = useState<{
     isChatClosed: boolean;
     chatCloseAt: string | null;
   }>({ isChatClosed: false, chatCloseAt: null });
 
-  // ✅ inline error for send failures (e.g., closed)
+  //  inline error for send failures (e.g., closed)
   const [sendErr, setSendErr] = useState<string | null>(null);
 
-  // ✅ attachments state
+  //  attachments state
   const [pickedFiles, setPickedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -127,7 +127,7 @@ export default function MessagingClient() {
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
 
-  // ✅ WhatsApp-like image preview modal (open in chat)
+  //  WhatsApp-like image preview modal (open in chat)
   const [imgViewer, setImgViewer] = useState<{
     open: boolean;
     urls: string[];
@@ -208,7 +208,7 @@ export default function MessagingClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imgViewer.open]);
 
-  // ✅ Typing now uses DB route (ChatTyping table) via your API
+  //  Typing now uses DB route (ChatTyping table) via your API
   async function pingTyping(isTyping: boolean) {
     if (!activeId || !meId) return;
 
@@ -370,7 +370,7 @@ export default function MessagingClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, qsChannelId, activeId]);
 
-  // ✅ NEW: if active chat disappears (e.g. cancelled), clear right panel and move to next
+  //  NEW: if active chat disappears (e.g. cancelled), clear right panel and move to next
   useEffect(() => {
     if (!activeId) return;
 
@@ -607,7 +607,7 @@ export default function MessagingClient() {
     }
   }
 
-  // ✅ CHANGE #3 (optional but recommended): optimistic render created message if API returns it
+  //  CHANGE #3 (optional but recommended): optimistic render created message if API returns it
   async function send() {
     if (!activeId) return;
 
@@ -665,7 +665,7 @@ export default function MessagingClient() {
       }
 
       if (j?.ok) {
-        // ✅ optimistic append if server returns created message
+        //  optimistic append if server returns created message
         if (j.message) {
           const created = j.message as Msg;
 

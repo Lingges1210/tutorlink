@@ -7,7 +7,7 @@ import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { autoCompleteSessionsIfNeeded } from "@/lib/autoCompleteSessions";
 
 export async function GET() {
-  // ✅ no-cron automation: run auto-complete opportunistically
+  //  no-cron automation: run auto-complete opportunistically
   // (silent, never blocks the tutor sessions page)
   try {
     await autoCompleteSessionsIfNeeded();
@@ -59,7 +59,7 @@ export async function GET() {
       cancelledAt: true,
       rescheduledAt: true,
 
-      // ✅ proposal fields
+      //  proposal fields
       proposedAt: true,
       proposedNote: true,
       proposalStatus: true,

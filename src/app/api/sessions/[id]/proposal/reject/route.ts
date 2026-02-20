@@ -37,7 +37,7 @@ export async function POST(
     select: {
       id: true,
       studentId: true,
-      tutorId: true, // ✅ ADD
+      tutorId: true, //  ADD
       status: true,
       // @ts-ignore
       proposalStatus: true,
@@ -73,7 +73,7 @@ export async function POST(
     select: { id: true, tutorId: true, studentId: true },
   });
 
-  // ✅ Notify tutor: proposal rejected
+  //  Notify tutor: proposal rejected
   try {
     if (updated.tutorId) {
       await notify.proposalRejectedToTutor(

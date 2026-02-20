@@ -13,7 +13,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // ✅ Supabase client with cookies support
+    //  Supabase client with cookies support
     const supabase = supabaseServerAnon();
 
     // 1) Supabase Auth (sets cookies!)
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
 }
 
 
-    // ✅ Cookies are already written by Supabase
+    //  Cookies are already written by Supabase
     return NextResponse.json({
       success: true,
       message: "Login successful",

@@ -50,7 +50,7 @@ export default function ResetPasswordPage() {
   const strength = useMemo(() => getPasswordStrength(newPassword), [newPassword]);
   const match = confirm.length > 0 && newPassword === confirm;
 
-  // ✅ Step 3: invalid/expired link handling
+  //  Step 3: invalid/expired link handling
   useEffect(() => {
     let alive = true;
 
@@ -134,7 +134,7 @@ export default function ResetPasswordPage() {
 
     setLoading(true);
     try {
-      // ✅ Step 2: update password
+      //  Step 2: update password
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
       });

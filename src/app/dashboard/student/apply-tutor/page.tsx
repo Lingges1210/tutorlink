@@ -14,7 +14,7 @@ export default function ApplyTutorPage() {
 
   const [cgpa, setCgpa] = useState("");
 
-  // ✅ transcript (REQUIRED)
+  //  transcript (REQUIRED)
   const [transcriptFile, setTranscriptFile] = useState<File | null>(null);
   const [transcriptPath, setTranscriptPath] = useState<string | null>(null);
   const [uploadingTranscript, setUploadingTranscript] = useState(false);
@@ -80,7 +80,7 @@ export default function ApplyTutorPage() {
     const code = (parts[0] ?? "").trim().toUpperCase();
     const titleRaw = (parts[1] ?? "").trim();
 
-    // ✅ MUST have BOTH code + title
+    //  MUST have BOTH code + title
     if (!code || !titleRaw) return "";
 
     const title = titleRaw
@@ -243,11 +243,11 @@ export default function ApplyTutorPage() {
     setStatusMsg(null);
 
     try {
-      // ✅ REQUIRED checks (availability removed)
+      //  REQUIRED checks (availability removed)
       if (subjects.length === 0) throw new Error("Subjects is required.");
       if (cgpaNumber === null) throw new Error("CGPA is required.");
 
-      // ✅ transcript required
+      //  transcript required
       const uploadedPath = await uploadTranscript();
 
       const res = await fetch("/api/tutor/apply", {
@@ -315,7 +315,7 @@ export default function ApplyTutorPage() {
       <div className="max-w-xl space-y-4">
         <h1 className="text-xl font-semibold text-[rgb(var(--fg))]">Apply as Tutor</h1>
         <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-[rgb(var(--fg))]">
-          ✅ You’re approved as a Tutor.
+           You’re approved as a Tutor.
         </div>
         <Link
           href="/dashboard/tutor"

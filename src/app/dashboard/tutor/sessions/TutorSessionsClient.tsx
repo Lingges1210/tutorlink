@@ -12,7 +12,7 @@ type Row = {
   status: "PENDING" | "ACCEPTED" | "COMPLETED" | "CANCELLED" | string;
   cancelReason: string | null;
 
-  // ✅ proposal fields (return from API)
+  //  proposal fields (return from API)
   proposedAt?: string | null;
   proposedNote?: string | null;
   proposalStatus?: "PENDING" | "ACCEPTED" | "REJECTED" | null;
@@ -132,7 +132,7 @@ function countdownLabel(s: Row) {
   return `${min}m ${sec}s remaining`;
 }
 
-/** ✅ show only up to 7 buttons: 1 … 4 5 6 … last */
+/**  show only up to 7 buttons: 1 … 4 5 6 … last */
 function getPastPageItems(current: number, total: number): (number | "…")[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
 
@@ -168,11 +168,11 @@ export default function TutorSessionsClient() {
     "ALL" | "COMPLETED" | "CANCELLED"
   >("ALL");
 
-  // ✅ Past pagination state (only for past)
+  //  Past pagination state (only for past)
   const PAST_PAGE_SIZE = 5;
   const [pastPage, setPastPage] = useState(1);
 
-  // ✅ modal state
+  //  modal state
   const [mode, setMode] = useState<"CANCEL" | "PROPOSE" | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
@@ -227,7 +227,7 @@ export default function TutorSessionsClient() {
     };
 
     const start = () => {
-      stop(); // ✅ prevent duplicate intervals
+      stop(); //  prevent duplicate intervals
       run(); // run immediately
       t = setInterval(run, 60_000);
     };
@@ -624,7 +624,7 @@ export default function TutorSessionsClient() {
                       {s.status}
                     </motion.span>
 
-                    {/* ✅ START CHAT button (only when ACCEPTED) */}
+                    {/*  START CHAT button (only when ACCEPTED) */}
                     {accepted && (
                       <button
                         disabled={actionLoading}
@@ -735,10 +735,10 @@ export default function TutorSessionsClient() {
     );
   }
 
-  // ✅ helper counts for the “student-style” header row
+  //  helper counts for the “student-style” header row
   const activeCount = grouped.ongoing.length + grouped.upcoming.length;
 
-  // ✅ FIX: prevent "UPCOMING" appearing twice (header + Upcoming section)
+  //  FIX: prevent "UPCOMING" appearing twice (header + Upcoming section)
   const leftPill = grouped.ongoing.length > 0 ? "ONGOING" : "SESSIONS";
 
   const leftMeta =
@@ -771,13 +771,13 @@ export default function TutorSessionsClient() {
         </motion.div>
       )}
 
-      {/* ✅ Student-style main card wrapper */}
+      {/*  Student-style main card wrapper */}
       <div className="rounded-3xl border p-5 border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]">
         {loading ? (
           <div className="text-sm text-[rgb(var(--muted2))]">Loading…</div>
         ) : (
           <div className="space-y-4">
-            {/* ✅ Header row ALWAYS visible (like student page) */}
+            {/*  Header row ALWAYS visible (like student page) */}
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-[11px] font-semibold tracking-wide text-[rgb(var(--fg))]">
@@ -805,7 +805,7 @@ export default function TutorSessionsClient() {
               </button>
             </div>
 
-            {/* ✅ When no active sessions & past hidden -> show same empty card as student page */}
+            {/*  When no active sessions & past hidden -> show same empty card as student page */}
             {activeCount === 0 && !showPast ? (
               <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-8 text-center text-sm text-[rgb(var(--muted2))]">
                 No active sessions at the moment.
@@ -815,7 +815,7 @@ export default function TutorSessionsClient() {
               </div>
             ) : (
               <>
-                {/* ✅ Sections (unchanged) */}
+                {/*  Sections (unchanged) */}
                 <Section title="Ongoing" subtitle="Live now" list={grouped.ongoing} />
                 <Section
                   title="Upcoming"
@@ -825,7 +825,7 @@ export default function TutorSessionsClient() {
               </>
             )}
 
-            {/* ✅ Past section (same behavior as before) */}
+            {/*  Past section (same behavior as before) */}
             {showPast && (
               <>
                 <Section
@@ -889,7 +889,7 @@ export default function TutorSessionsClient() {
         )}
       </div>
 
-      {/* ✅ CANCEL MODAL (unchanged) */}
+      {/*  CANCEL MODAL (unchanged) */}
       {mode === "CANCEL" && activeId && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
@@ -936,7 +936,7 @@ export default function TutorSessionsClient() {
         </div>
       )}
 
-      {/* ✅ PROPOSE MODAL (unchanged) */}
+      {/*  PROPOSE MODAL (unchanged) */}
       {mode === "PROPOSE" && activeId && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"

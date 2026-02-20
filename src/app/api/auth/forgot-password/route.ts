@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ✅ FIX: await (because supabaseServerAnon returns Promise<SupabaseClient>)
+    //  FIX: await (because supabaseServerAnon returns Promise<SupabaseClient>)
     const supabase = await supabaseServerAnon();
 
     const origin =

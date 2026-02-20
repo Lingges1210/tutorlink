@@ -50,7 +50,7 @@ function StatusPill({ status }: { status: string }) {
     <span
       className={`inline-flex rounded-full border px-3 py-1 text-[0.7rem] font-semibold ${cls}`}
     >
-      {s === "APPROVED" ? "✅ APPROVED" : s === "REJECTED" ? "❌ REJECTED" : "⏳ PENDING"}
+      {s === "APPROVED" ? " APPROVED" : s === "REJECTED" ? "❌ REJECTED" : "⏳ PENDING"}
     </span>
   );
 }
@@ -249,7 +249,7 @@ export default function AdminTutorApplicationsPage() {
         )
       );
 
-      setNotice({ type: "success", text: "Approved ✅ Tutor role unlocked" });
+      setNotice({ type: "success", text: "Approved  Tutor role unlocked" });
     } catch (e: any) {
       setNotice({ type: "error", text: e?.message ?? "Something went wrong" });
     } finally {
@@ -279,7 +279,7 @@ export default function AdminTutorApplicationsPage() {
         )
       );
 
-      setNotice({ type: "success", text: "Rejected ✅" });
+      setNotice({ type: "success", text: "Rejected " });
       setRejectOpen(false);
       setRejectId(null);
     } catch (e: any) {

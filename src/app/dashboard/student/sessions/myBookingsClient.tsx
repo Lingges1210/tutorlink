@@ -15,7 +15,7 @@ type Row = {
 
   assigned: boolean;
 
-  // ✅ proposal fields (return from /api/sessions/my)
+  //  proposal fields (return from /api/sessions/my)
   proposedAt?: string | null;
   proposedNote?: string | null;
   proposalStatus?: "PENDING" | "ACCEPTED" | "REJECTED" | null;
@@ -100,7 +100,7 @@ function isPast(s: Row) {
   return s.status === "COMPLETED" || s.status === "CANCELLED";
 }
 
-/** ✅ show only up to 7 buttons: 1 … 4 5 6 … last */
+/**  show only up to 7 buttons: 1 … 4 5 6 … last */
 function getPastPageItems(current: number, total: number): (number | "…")[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
 
@@ -143,11 +143,11 @@ export default function MyBookingsClient() {
     "ALL" | "COMPLETED" | "CANCELLED"
   >("ALL");
 
-  // ✅ Past pagination state (only for past)
+  //  Past pagination state (only for past)
   const PAST_PAGE_SIZE = 5;
   const [pastPage, setPastPage] = useState(1);
 
-  // ✅ Rating state (NEW)
+  //  Rating state (NEW)
   const [rateOpen, setRateOpen] = useState(false);
   const [rateSessionId, setRateSessionId] = useState<string | null>(null);
   const [rateTutorName, setRateTutorName] = useState<string>("Tutor");
@@ -215,7 +215,7 @@ export default function MyBookingsClient() {
     };
 
     const start = () => {
-      stop(); // ✅ prevent duplicate intervals
+      stop(); //  prevent duplicate intervals
       run(); // run immediately
       t = setInterval(run, 60_000);
     };
@@ -246,13 +246,13 @@ export default function MyBookingsClient() {
     for (const it of items) {
       const closed = it.status === "COMPLETED" || it.status === "CANCELLED";
 
-      // ✅ CANCELLED/COMPLETED always Past (even if scheduledAt is future)
+      //  CANCELLED/COMPLETED always Past (even if scheduledAt is future)
       if (closed) {
         pa.push(it);
         continue;
       }
 
-      // ✅ Only these can be Upcoming/Active bucket
+      //  Only these can be Upcoming/Active bucket
       if (it.status === "PENDING" || it.status === "ACCEPTED") {
         up.push(it);
         continue;
@@ -271,7 +271,7 @@ export default function MyBookingsClient() {
   const filteredPast =
     pastFilter === "ALL" ? past : past.filter((x) => x.status === pastFilter);
 
-  // ✅ Past pagination derived values
+  //  Past pagination derived values
   const totalPastPages = Math.max(
     1,
     Math.ceil(filteredPast.length / PAST_PAGE_SIZE)
@@ -283,13 +283,13 @@ export default function MyBookingsClient() {
     safePastPage * PAST_PAGE_SIZE
   );
 
-  // ✅ keep page valid if filter changes or list shrinks
+  //  keep page valid if filter changes or list shrinks
   useEffect(() => {
     if (pastPage > totalPastPages) setPastPage(totalPastPages);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalPastPages]);
 
-  // ✅ Focus UX: scroll + glow + auto-show Past + clear focus param after 3s
+  //  Focus UX: scroll + glow + auto-show Past + clear focus param after 3s
   useEffect(() => {
     if (!focusId) return;
     if (loading) return;
@@ -474,7 +474,7 @@ export default function MyBookingsClient() {
     }
   }
 
-  // ✅ NEW: rating helpers
+  //  NEW: rating helpers
   async function openRateModal(s: Row) {
     if (s.status !== "COMPLETED") return;
     if (!s.tutor) return;
@@ -591,7 +591,7 @@ export default function MyBookingsClient() {
 
     return (
       <div
-        id={`session-${s.id}`} // ✅ scroll target
+        id={`session-${s.id}`} //  scroll target
         className={[
           "rounded-2xl border p-4 border-[rgb(var(--border))] bg-[rgb(var(--card2))] transition-all duration-300",
           closed ? "opacity-80" : "",
@@ -679,7 +679,7 @@ export default function MyBookingsClient() {
               {s.status}
             </span>
 
-            {/* ✅ START CHAT (only when accepted, tutor exists) */}
+            {/*  START CHAT (only when accepted, tutor exists) */}
             {s.status === "ACCEPTED" && !!s.tutor && (
               <button
                 onClick={() => startChat(s.id)}
@@ -689,7 +689,7 @@ export default function MyBookingsClient() {
               </button>
             )}
 
-            {/* ✅ RATE TUTOR (only when COMPLETED + tutor exists) */}
+            {/*  RATE TUTOR (only when COMPLETED + tutor exists) */}
             {canRate && (
               <button
                 disabled={rated}
@@ -788,7 +788,7 @@ export default function MyBookingsClient() {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* ✅ Header row always visible (like tutor page) */}
+            {/*  Header row always visible (like tutor page) */}
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 {/* show the UPCOMING pill only when there is upcoming */}
@@ -821,7 +821,7 @@ export default function MyBookingsClient() {
               </button>
             </div>
 
-            {/* ✅ Upcoming content OR empty card */}
+            {/*  Upcoming content OR empty card */}
             {upcoming.length === 0 && !showPast ? (
               <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-8 text-center text-sm text-[rgb(var(--muted2))]">
                 No active sessions at the moment.
@@ -855,7 +855,7 @@ export default function MyBookingsClient() {
                         key={k}
                         onClick={() => {
                           setPastFilter(k);
-                          setPastPage(1); // ✅ reset page on filter change
+                          setPastPage(1); //  reset page on filter change
                         }}
                         className={[
                           "rounded-full px-3 py-1 text-[11px] font-semibold border transition-all duration-150",
@@ -882,7 +882,7 @@ export default function MyBookingsClient() {
                       ))}
                     </div>
 
-                    {/* ✅ Pagination buttons (max 7 visible with …) */}
+                    {/*  Pagination buttons (max 7 visible with …) */}
                     {totalPastPages > 1 && (
                       <div className="flex flex-wrap items-center justify-center gap-2 pt-3">
                         {getPastPageItems(safePastPage, totalPastPages).map(
@@ -919,7 +919,7 @@ export default function MyBookingsClient() {
         )}
       </div>
 
-      {/* ✅ RESCHEDULE / CANCEL modal (unchanged) */}
+      {/*  RESCHEDULE / CANCEL modal (unchanged) */}
       {mode && activeId && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
@@ -986,7 +986,7 @@ export default function MyBookingsClient() {
         </div>
       )}
 
-      {/* ✅ NEW: RATE MODAL */}
+      {/*  NEW: RATE MODAL */}
       {rateOpen && rateSessionId && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"

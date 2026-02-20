@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { notify } from "@/lib/notify";
-import { cancelScheduledEmail, sendSessionInviteEmail } from "@/lib/email"; // ✅ added
+import { cancelScheduledEmail, sendSessionInviteEmail } from "@/lib/email"; //  added
 
 export async function POST(
   req: Request,
@@ -35,7 +35,7 @@ export async function POST(
   const body = await req.json().catch(() => ({}));
   const reason = typeof body.reason === "string" ? body.reason.trim() : "";
 
-  // ✅ expanded select (calendar + subject + tutor email)
+  //  expanded select (calendar + subject + tutor email)
   const session = await prisma.session.findUnique({
     where: { id },
     select: {
@@ -65,7 +65,7 @@ export async function POST(
     return NextResponse.json({ message: "Already closed" }, { status: 409 });
   }
 
-  // ✅ ensure calendar UID exists
+  //  ensure calendar UID exists
   const uid = session.calendarUid ?? `${session.id}@tutorlink`;
 
   const updated = await prisma.session.update({
@@ -75,7 +75,7 @@ export async function POST(
       cancelledAt: new Date(),
       cancelReason: reason || null,
 
-      // ✅ calendar tracking
+      //  calendar tracking
       calendarUid: uid,
       calendarSequence: { increment: 1 },
     },
@@ -90,7 +90,7 @@ export async function POST(
     },
   });
 
-    // ✅ NEW: close chat immediately when session cancelled
+    //  NEW: close chat immediately when session cancelled
   await prisma.chatChannel.updateMany({
     where: { sessionId: updated.id },
     data: {
@@ -99,7 +99,7 @@ export async function POST(
     },
   });
 
-  // ✅ Cancel scheduled reminder email (if any)
+  //  Cancel scheduled reminder email (if any)
   try {
     if (session.studentReminderEmailId) {
       await cancelScheduledEmail(session.studentReminderEmailId);
@@ -113,7 +113,7 @@ export async function POST(
     // ignore
   }
 
-  // ✅ Notify tutor if assigned (viewer must be TUTOR)
+  //  Notify tutor if assigned (viewer must be TUTOR)
   try {
     if (updated.tutorId) {
       await notify.sessionCancelled(
@@ -127,7 +127,7 @@ export async function POST(
     // ignore
   }
 
-  // ✅ NEW: Send calendar cancellation email (.ics) to student + tutor
+  //  NEW: Send calendar cancellation email (.ics) to student + tutor
   try {
     const start = new Date(updated.scheduledAt);
     const end =

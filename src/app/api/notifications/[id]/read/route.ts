@@ -30,8 +30,8 @@ export async function POST(
     return NextResponse.json({ message: "Not verified" }, { status: 403 });
   }
 
-  // ✅ Only mark as read if it belongs to this user.
-  // ✅ Do NOT 404 — keeps UI smooth + avoids scary logs.
+  //  Only mark as read if it belongs to this user.
+  //  Do NOT 404 — keeps UI smooth + avoids scary logs.
   const updated = await prisma.notification.updateMany({
     where: { id, userId: dbUser.id, readAt: null },
     data: { readAt: new Date() },

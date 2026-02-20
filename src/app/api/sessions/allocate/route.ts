@@ -91,7 +91,7 @@ async function pickTutorForExactSubject(opts: {
           id: true,
           tutorApplications: {
             select: { availability: true },
-            orderBy: { createdAt: "desc" }, // ✅ FIX 1
+            orderBy: { createdAt: "desc" }, //  FIX 1
             take: 1,
           },
         },
@@ -102,12 +102,12 @@ async function pickTutorForExactSubject(opts: {
 
   if (candidates.length === 0) return null;
 
-  // ✅ fairness: don’t always pick same tutor
+  //  fairness: don’t always pick same tutor
   shuffleInPlace(candidates);
 
   const tutorIds = Array.from(new Set(candidates.map((c) => c.tutorId)));
 
-  // ✅ FIX 2: handle endsAt null safely
+  //  FIX 2: handle endsAt null safely
   const clashes = await prisma.session.findMany({
     where: {
       tutorId: { in: tutorIds },
@@ -184,7 +184,7 @@ export async function POST(req: Request) {
 
     if (!tutorId) continue;
 
-    // ✅ race-safe assignment (only assign if still unassigned)
+    //  race-safe assignment (only assign if still unassigned)
     const updated = await prisma.session.updateMany({
       where: { id: s.id, tutorId: null, status: "PENDING" },
       data: { tutorId },

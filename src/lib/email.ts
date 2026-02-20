@@ -62,7 +62,7 @@ export async function scheduleSessionReminderEmail(opts: {
       <br />
       <p>See you soon,<br/>TutorLink Team</p>
     `,
-    // ✅ this is the key (scheduled email)
+    //  this is the key (scheduled email)
     scheduledAt: scheduledAtISO,
   });
 
@@ -153,7 +153,7 @@ export async function sendSessionInviteEmail(opts: {
       ? `Updated: ${opts.subjectCode} session time`
       : `Confirmed: ${opts.subjectCode} session invite`;
 
-  // ✅ Resend expects base64 for attachments
+  //  Resend expects base64 for attachments
   const base64Ics = Buffer.from(ics, "utf-8").toString("base64");
 
   await resend.emails.send({

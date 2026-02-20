@@ -57,7 +57,7 @@ function StatusBadge({ status }: { status: string }) {
   if (s === "AUTO_VERIFIED") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-        ✅ Verified
+        Verified
       </span>
     );
   }
@@ -219,7 +219,7 @@ const statCards = [
 
       setNotice({
         type: "success",
-        text: action === "APPROVE" ? "User approved + email sent ✅" : "User rejected + email sent ✅",
+        text: action === "APPROVE" ? "User approved + email sent " : "User rejected + email sent ",
       });
     } catch (err: any) {
       setNotice({ type: "error", text: err?.message ?? "Something went wrong" });

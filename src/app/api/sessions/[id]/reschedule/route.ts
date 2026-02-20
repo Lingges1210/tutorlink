@@ -7,7 +7,7 @@ import {
   scheduleSessionReminderEmail,
   computeOneHourBeforeISO,
   cancelScheduledEmail,
-  sendSessionInviteEmail, // ✅ added
+  sendSessionInviteEmail, //  added
 } from "@/lib/email";
 
 /** ---------- availability parsing helpers (best-effort) ---------- */
@@ -40,7 +40,7 @@ function withinSlots(day: DayAvailability, startMin: number, endMin: number) {
 async function getTutorAvailability(
   tutorId: string
 ): Promise<DayAvailability[] | null> {
-  // ✅ get latest APPROVED tutor application
+  //  get latest APPROVED tutor application
   const app = await prisma.tutorApplication
     .findFirst({
       where: { userId: tutorId, status: "APPROVED" },
@@ -144,7 +144,7 @@ export async function POST(
     return NextResponse.json({ message: "Invalid date" }, { status: 400 });
   }
 
-  // ✅ Fetch existing session details
+  //  Fetch existing session details
   const session = await prisma.session.findUnique({
     where: { id },
     select: {
@@ -155,17 +155,17 @@ export async function POST(
       status: true,
       durationMin: true,
 
-      // ✅ for cancelling old scheduled email
+      //  for cancelling old scheduled email
       studentReminderEmailId: true,
 
-      // ✅ calendar tracking
+      //  calendar tracking
       calendarUid: true,
       calendarSequence: true,
 
-      // ✅ for email subject/body
+      //  for email subject/body
       subject: { select: { code: true, title: true } },
 
-      // ✅ tutor email for calendar update email (if assigned)
+      //  tutor email for calendar update email (if assigned)
       tutor: { select: { email: true, name: true } },
     },
   });
@@ -174,7 +174,7 @@ export async function POST(
     return NextResponse.json({ message: "Not found" }, { status: 404 });
   }
 
-  // ✅ capture non-null values for TS (avoid "possibly null" inside helper)
+  //  capture non-null values for TS (avoid "possibly null" inside helper)
   const existingReminderId = session.studentReminderEmailId;
   const subjCode = session.subject.code;
   const subjTitle = session.subject.title;
@@ -194,7 +194,7 @@ export async function POST(
   const durationMin = session.durationMin ?? 60;
   const newEndsAt = new Date(newScheduledAt.getTime() + durationMin * 60_000);
 
-  // ✅ 1) Student overlap check (exclude this session)
+  //  1) Student overlap check (exclude this session)
   const studentClash = await prisma.session.findFirst({
     where: {
       id: { not: session.id },
@@ -213,7 +213,7 @@ export async function POST(
     );
   }
 
-  const prevTutorId = session.tutorId; // ✅ keep old tutor for notifications
+  const prevTutorId = session.tutorId; //  keep old tutor for notifications
 
   async function rescheduleReminderEmailSafe(
     finalSessionId: string,
@@ -244,7 +244,7 @@ export async function POST(
     }
   }
 
-  // ✅ helper: send UPDATED calendar invite to student + tutor
+  //  helper: send UPDATED calendar invite to student + tutor
   async function sendCalendarUpdateSafe(opts: {
     finalStart: Date;
     finalEnd: Date;
@@ -290,10 +290,10 @@ export async function POST(
     }
   }
 
-  // ✅ ensure calendar UID exists
+  //  ensure calendar UID exists
   const uid = session.calendarUid ?? `${session.id}@tutorlink`;
 
-  // ✅ If tutor is assigned, enforce tutor availability + overlap
+  //  If tutor is assigned, enforce tutor availability + overlap
   if (session.tutorId) {
     // 2) Tutor overlap check
     const tutorClash = await prisma.session.findFirst({
@@ -318,7 +318,7 @@ export async function POST(
           status: "PENDING",
           tutorId: null,
 
-          // ✅ calendar tracking
+          //  calendar tracking
           calendarUid: uid,
           calendarSequence: { increment: 1 },
         },
@@ -332,10 +332,10 @@ export async function POST(
         },
       });
 
-      // ✅ email: cancel old + schedule new (still meaningful for student)
+      //  email: cancel old + schedule new (still meaningful for student)
       await rescheduleReminderEmailSafe(updated.id, updated.scheduledAt.toISOString());
 
-      // ✅ calendar UPDATED invite to student only (tutor is unassigned now)
+      //  calendar UPDATED invite to student only (tutor is unassigned now)
       const end =
         updated.endsAt ??
         new Date(
@@ -352,12 +352,12 @@ export async function POST(
         sequence: updated.calendarSequence ?? 0,
       });
 
-      // ✅ Notify old tutor that student rescheduled and tutor was unassigned
+      //  Notify old tutor that student rescheduled and tutor was unassigned
       try {
         if (prevTutorId) {
           await notify.user({
             userId: prevTutorId,
-            viewer: "TUTOR", // ✅ FIX
+            viewer: "TUTOR", //  FIX
             type: "SESSION_RESCHEDULED_UNASSIGNED",
             title: "Session rescheduled 🔄",
             body: `Student rescheduled the session to ${newScheduledAt.toLocaleString()}. You’re no longer assigned due to a time conflict.`,
@@ -391,7 +391,7 @@ export async function POST(
           status: "PENDING",
           tutorId: null,
 
-          // ✅ calendar tracking
+          //  calendar tracking
           calendarUid: uid,
           calendarSequence: { increment: 1 },
         },
@@ -405,10 +405,10 @@ export async function POST(
         },
       });
 
-      // ✅ email: cancel old + schedule new
+      //  email: cancel old + schedule new
       await rescheduleReminderEmailSafe(updated.id, updated.scheduledAt.toISOString());
 
-      // ✅ calendar UPDATED invite to student only (tutor unassigned)
+      //  calendar UPDATED invite to student only (tutor unassigned)
       const end =
         updated.endsAt ??
         new Date(
@@ -425,12 +425,12 @@ export async function POST(
         sequence: updated.calendarSequence ?? 0,
       });
 
-      // ✅ Notify old tutor that student rescheduled and tutor was unassigned
+      //  Notify old tutor that student rescheduled and tutor was unassigned
       try {
         if (prevTutorId) {
           await notify.user({
             userId: prevTutorId,
-            viewer: "TUTOR", // ✅ FIX
+            viewer: "TUTOR", //  FIX
             type: "SESSION_RESCHEDULED_UNASSIGNED",
             title: "Session rescheduled 🔄",
             body: `Student rescheduled the session to ${newScheduledAt.toLocaleString()}. You’re no longer assigned because you’re unavailable at that time.`,
@@ -448,7 +448,7 @@ export async function POST(
     }
   }
 
-  // ✅ No tutor assigned OR tutor is fine -> normal reschedule
+  //  No tutor assigned OR tutor is fine -> normal reschedule
   const updated = await prisma.session.update({
     where: { id: session.id },
     data: {
@@ -457,7 +457,7 @@ export async function POST(
       rescheduledAt: new Date(),
       status: "PENDING",
 
-      // ✅ calendar tracking
+      //  calendar tracking
       calendarUid: uid,
       calendarSequence: { increment: 1 },
     },
@@ -472,10 +472,10 @@ export async function POST(
     },
   });
 
-  // ✅ email: cancel old + schedule new
+  //  email: cancel old + schedule new
   await rescheduleReminderEmailSafe(updated.id, updated.scheduledAt.toISOString());
 
-  // ✅ calendar UPDATED invite to student + (if assigned) tutor
+  //  calendar UPDATED invite to student + (if assigned) tutor
   const finalStart = new Date(updated.scheduledAt);
   const finalEnd =
     updated.endsAt ??
@@ -490,7 +490,7 @@ export async function POST(
     sequence: updated.calendarSequence ?? 0,
   });
 
-  // ✅ Notify tutor if still assigned (viewer must be TUTOR)
+  //  Notify tutor if still assigned (viewer must be TUTOR)
   try {
     if (updated.tutorId) {
       await notify.sessionRescheduled(

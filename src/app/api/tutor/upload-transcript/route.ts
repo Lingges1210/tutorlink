@@ -4,13 +4,13 @@ import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
 const adminSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!, // ✅ server only
+  process.env.SUPABASE_SERVICE_ROLE_KEY!, //  server only
   { auth: { persistSession: false } }
 );
 
 export async function POST(req: Request) {
   try {
-    // ✅ ensure user is logged in (your existing server component helper)
+    //  ensure user is logged in (your existing server component helper)
     const supabase = await supabaseServerComponent();
     const {
       data: { user },
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ validate file
+    //  validate file
     const maxMB = 8;
     const allowed = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
     if (!allowed.includes(file.type)) {
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ build storage path (scoped by userId so later you can do "read own" easily)
+    //  build storage path (scoped by userId so later you can do "read own" easily)
     const ext =
       file.name.split(".").pop()?.toLowerCase() ||
       (file.type === "application/pdf" ? "pdf" : "jpg");

@@ -120,7 +120,7 @@ export default function AvailabilityHeatmap({ value, onChange, stepMin = 30 }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, stepMin]);
 
-  /** ✅ 6-hour window */
+  /**  6-hour window */
   const WINDOW_MIN = 6 * 60;
 
   const [windowStartMin, setWindowStartMin] = useState(0);
@@ -293,7 +293,7 @@ export default function AvailabilityHeatmap({ value, onChange, stepMin = 30 }: P
   const opacity = phase === "idle" ? 1 : phase === "out" ? 0 : 1;
   const blurPx = phase === "idle" ? 0 : phase === "out" ? 3 : 0;
 
-  // ✅ detect dark mode from your Tailwind `.dark` class on <html>
+  //  detect dark mode from your Tailwind `.dark` class on <html>
   const [isDark, setIsDark] = useState(false);
   useEffect(() => {
     const root = document.documentElement;
@@ -306,7 +306,7 @@ export default function AvailabilityHeatmap({ value, onChange, stepMin = 30 }: P
     return () => mo.disconnect();
   }, []);
 
-  // ✅ brighter blocks in dark mode (both ON and OFF)
+  //  brighter blocks in dark mode (both ON and OFF)
   const OFF_BG = isDark ? "rgba(148,163,184,0.22)" : "rgb(var(--card2))";
   const OFF_BORDER = isDark ? "rgba(226,232,240,0.18)" : "rgba(148,163,184,0.22)";
 
@@ -353,7 +353,7 @@ export default function AvailabilityHeatmap({ value, onChange, stepMin = 30 }: P
               "radial-gradient(900px 420px at 20% 5%, rgb(var(--primary)/0.16), transparent 55%), radial-gradient(700px 380px at 80% 0%, rgb(var(--primary2)/0.10), transparent 55%), rgb(var(--card))",
           }}
         >
-          {/* ✅ Center + equal side breathing room */}
+          {/*  Center + equal side breathing room */}
           <div className="w-full flex justify-center">
             <div className="w-full max-w-[1100px] px-5">
               <div ref={wrapRef} className="w-full overflow-x-auto flex justify-center">
@@ -405,7 +405,7 @@ export default function AvailabilityHeatmap({ value, onChange, stepMin = 30 }: P
                                   height: cell,
                                   background: isOn ? ON_BG : OFF_BG,
                                   boxShadow: isOn ? ON_GLOW : `inset 0 0 0 1px ${OFF_BORDER}`,
-                                  opacity: isOn ? 1 : isDark ? 0.95 : 0.82, // ✅ off blocks brighter in dark mode
+                                  opacity: isOn ? 1 : isDark ? 0.95 : 0.82, //  off blocks brighter in dark mode
                                 }}
                                 title={`${day} ${label} ${isOn ? "Available" : "Unavailable"}`}
                               />

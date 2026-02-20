@@ -230,7 +230,7 @@ export default function TutorProfilePage() {
         </div>
       </div>
 
-      {/* ✅ Top section: Subjects stretches, Stats fixed at right */}
+      {/*  Top section: Subjects stretches, Stats fixed at right */}
       <div className="grid gap-4 md:grid-cols-[1fr_360px] md:items-start">
         {/* Subjects (stretch) */}
         <div className="min-w-0 rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-5">

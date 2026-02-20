@@ -132,7 +132,7 @@ export async function POST(
     },
   });
 
-  // ✅ Notify student (do not block propose)
+  //  Notify student (do not block propose)
   try {
     if (updated.studentId && updated.tutorId && updated.proposedAt) {
       await notify.proposalSentToStudent(

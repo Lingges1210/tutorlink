@@ -75,7 +75,7 @@ export default function TutorDashboardPage() {
             </div>
           </div>
 
-          {/* ✅ WOW: Rating pill */}
+          {/*  WOW: Rating pill */}
           {summary && summary.count > 0 && (
             <div className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1.5">
               <span className="text-sm leading-none">⭐</span>

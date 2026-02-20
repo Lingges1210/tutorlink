@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "New password must be different from current password." }, { status: 400 });
   }
 
-  // ✅ auth-only client (does NOT touch cookies/session)
+  //  auth-only client (does NOT touch cookies/session)
   const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     },
   });
 
-  // ✅ verify current password
+  //  verify current password
   const { error: signInErr } = await authOnly.auth.signInWithPassword({
     email: user.email,
     password: currentPassword,
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: signInErr.message }, { status: 400 });
   }
 
-  // ✅ update password using the CURRENT logged-in session (cookie-based)
+  //  update password using the CURRENT logged-in session (cookie-based)
   const { error: updateErr } = await supabase.auth.updateUser({
     password: newPassword,
   });

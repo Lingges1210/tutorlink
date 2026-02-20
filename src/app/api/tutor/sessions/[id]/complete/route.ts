@@ -102,7 +102,7 @@ export async function POST(
     select: { id: true, studentId: true },
   });
 
-  // ✅ keep chat open for 8 hours after session end
+  //  keep chat open for 8 hours after session end
   try {
     const closeAt = new Date(end.getTime() + 8 * 60 * 60 * 1000);
 
@@ -120,14 +120,14 @@ export async function POST(
     // ignore
   }
 
-  // ✅ Notify student (viewer must be STUDENT)
+  //  Notify student (viewer must be STUDENT)
   try {
     if (updated.studentId) {
       await notify.user({
         userId: updated.studentId,
         viewer: "STUDENT",
         type: "SESSION_COMPLETED",
-        title: "Session completed ✅",
+        title: "Session completed ",
         body: "Your tutoring session has been marked as completed. Chat stays open for 8 hours.",
         data: { sessionId: updated.id },
       });

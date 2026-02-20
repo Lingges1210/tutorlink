@@ -24,7 +24,7 @@ function normalizeTitle(input: string) {
   const cleaned = trimmed.replace(/^[:\-–—]+\s*/, "");
   const collapsed = cleaned.replace(/\s+/g, " ").trim();
 
-  if (!collapsed) return ""; // ✅ prevent ": " only
+  if (!collapsed) return ""; //  prevent ": " only
 
   return `: ${collapsed}`;
 }
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // ✅ 1) Upsert by unique code (dedupe)
+  //  1) Upsert by unique code (dedupe)
   const subject = await prisma.subject.upsert({
     where: { code },
     update: {
@@ -92,7 +92,7 @@ export async function POST(req: Request) {
     select: { id: true, code: true, title: true },
   });
 
-  // ✅ 2) Link tutor -> subject (dedupe via @@unique([tutorId, subjectId]))
+  //  2) Link tutor -> subject (dedupe via @@unique([tutorId, subjectId]))
   try {
     await prisma.tutorSubject.create({
       data: {

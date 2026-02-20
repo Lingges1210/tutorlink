@@ -34,10 +34,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
     {/* Right side */}
     <div className="flex items-center gap-2">
-      {/* ✅ Theme toggle FIRST (moved to "Home" position area) */}
+      {/*  Theme toggle FIRST (moved to "Home" position area) */}
       <ThemeToggle />
 
-      {/* ✅ Make Home & Find Tutor look like Dashboard (same pill style) */}
+      {/*  Make Home & Find Tutor look like Dashboard (same pill style) */}
       <div className="hidden items-center gap-2 md:flex">
         <Link
           href="/"

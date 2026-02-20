@@ -15,7 +15,7 @@ export default async function StudentDashboardPage() {
     redirect("/auth/login");
   }
 
-  // ✅ Read verificationStatus from Prisma using email
+  //  Read verificationStatus from Prisma using email
   const dbUser = await prisma.user.findUnique({
   where: { email: user.email.toLowerCase() },
   select: {

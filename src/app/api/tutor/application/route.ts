@@ -36,7 +36,7 @@ export async function GET() {
       status: true,
       subjects: true,
       cgpa: true,
-      transcriptPath: true, // ✅ include so rejected users can see old upload
+      transcriptPath: true, //  include so rejected users can see old upload
       createdAt: true,
       reviewedAt: true,
       rejectionReason: true,

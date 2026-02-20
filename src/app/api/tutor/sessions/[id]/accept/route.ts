@@ -7,7 +7,7 @@ import {
   scheduleSessionReminderEmail,
   computeOneHourBeforeISO,
   cancelScheduledEmail,
-  sendSessionInviteEmail, // ✅ add this
+  sendSessionInviteEmail, //  add this
 } from "@/lib/email";
 
 export async function POST(
@@ -29,7 +29,7 @@ export async function POST(
     where: { email: user.email.toLowerCase() },
     select: {
       id: true,
-      name: true, // ✅ add (for email greeting)
+      name: true, //  add (for email greeting)
       isDeactivated: true,
       verificationStatus: true,
       isTutorApproved: true,
@@ -51,7 +51,7 @@ export async function POST(
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
-  // ✅ Need scheduledAt + endsAt for conflict checks + studentId for notification
+  //  Need scheduledAt + endsAt for conflict checks + studentId for notification
   const session = await prisma.session.findUnique({
     where: { id },
     select: {
@@ -63,14 +63,14 @@ export async function POST(
       endsAt: true,
       durationMin: true,
 
-      // ✅ scheduled reminder tracking
+      //  scheduled reminder tracking
       studentReminderEmailId: true,
 
-      // ✅ calendar invite tracking
+      //  calendar invite tracking
       calendarUid: true,
       calendarSequence: true,
 
-      // ✅ for email contents
+      //  for email contents
       subject: { select: { code: true, title: true } },
       student: { select: { email: true, name: true } },
     },
@@ -92,7 +92,7 @@ export async function POST(
     session.endsAt ??
     new Date(start.getTime() + (session.durationMin ?? 60) * 60_000);
 
-  // ✅ Prevent double-booking: any ACCEPTED session overlap => block
+  //  Prevent double-booking: any ACCEPTED session overlap => block
   const clash = await prisma.session.findFirst({
     where: {
       tutorId: tutor.id,
@@ -113,7 +113,7 @@ export async function POST(
     );
   }
 
-  // ✅ ensure calendar UID exists (stable across updates)
+  //  ensure calendar UID exists (stable across updates)
   const uid =
     session.calendarUid?.trim() ||
     `tutorlink-session-${session.id}@tutorlink.local`;
@@ -126,9 +126,9 @@ export async function POST(
     where: { id: session.id },
     data: {
       status: "ACCEPTED",
-      // ✅ only set uid if it was missing
+      //  only set uid if it was missing
       ...(session.calendarUid ? {} : { calendarUid: uid }),
-      // ✅ keep sequence unchanged on first accept
+      //  keep sequence unchanged on first accept
       ...(typeof session.calendarSequence === "number"
         ? {}
         : { calendarSequence: 0 }),
@@ -141,7 +141,7 @@ export async function POST(
     },
   });
 
-  // ✅ Notifications (do not block accept if notification fails)
+  //  Notifications (do not block accept if notification fails)
   try {
     if (updated.studentId && updated.tutorId) {
       await notify.bookingConfirmed(
@@ -155,7 +155,7 @@ export async function POST(
     // ignore notification errors
   }
 
-  // ✅ Calendar invite email (.ics) (do not block accept if email fails)
+  //  Calendar invite email (.ics) (do not block accept if email fails)
   try {
     const studentEmail = session.student?.email;
     const studentName = session.student?.name ?? null;
@@ -176,7 +176,7 @@ export async function POST(
       });
     }
 
-    // ✅ optional: also send to tutor so tutor can add it to their calendar
+    //  optional: also send to tutor so tutor can add it to their calendar
     await sendSessionInviteEmail({
       mode: "ACCEPTED",
       toEmail: user.email.toLowerCase(),
@@ -194,7 +194,7 @@ export async function POST(
     // ignore calendar email errors
   }
 
-  // ✅ Existing reminder email logic (keep)
+  //  Existing reminder email logic (keep)
   try {
     const toEmail = session.student?.email;
     if (toEmail) {

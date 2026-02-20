@@ -8,7 +8,7 @@ export default async function SessionRedirectPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params; // ✅ FIX for Next.js dynamic params
+  const { id } = await params; //  FIX for Next.js dynamic params
 
   const supabase = await supabaseServerComponent();
   const { data } = await supabase.auth.getUser();
@@ -23,7 +23,7 @@ export default async function SessionRedirectPage({
   if (!me) redirect("/login");
 
   const session = await prisma.session.findUnique({
-    where: { id }, // ✅ use awaited id
+    where: { id }, //  use awaited id
     select: { id: true, tutorId: true, studentId: true },
   });
 

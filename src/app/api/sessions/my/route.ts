@@ -32,7 +32,7 @@ export async function GET() {
       cancelReason: true,
       tutorId: true,
 
-      // ✅ NEW: proposal fields
+      //  NEW: proposal fields
       proposedAt: true,
       proposedNote: true,
       proposalStatus: true,
@@ -54,7 +54,7 @@ export async function GET() {
     subject: s.subject,
     tutor: s.tutor ?? null,
 
-    // ✅ pass through proposal fields
+    //  pass through proposal fields
     proposedAt: s.proposedAt ?? null,
     proposedNote: s.proposedNote ?? null,
     proposalStatus: s.proposalStatus ?? null,

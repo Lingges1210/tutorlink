@@ -13,7 +13,7 @@ export async function autoCompleteSessionsIfNeeded() {
   const now = new Date();
   const cutoff = new Date(now.getTime() - 15 * 60 * 1000); // end + 15 min
 
-  // ✅ only pick sessions that are definitely due
+  //  only pick sessions that are definitely due
   const due = await prisma.$queryRaw<DueRow[]>`
     SELECT
       s."id",
@@ -37,7 +37,7 @@ export async function autoCompleteSessionsIfNeeded() {
   if (!due.length) return;
 
   for (const s of due) {
-    // ✅ idempotent (won’t double-complete)
+    //  idempotent (won’t double-complete)
     const upd = await prisma.session.updateMany({
       where: { id: s.id, status: "ACCEPTED" },
       data: { status: "COMPLETED" },
@@ -45,7 +45,7 @@ export async function autoCompleteSessionsIfNeeded() {
 
     if (upd.count === 0) continue;
 
-    // ✅ chat closes endAt + 8 hours
+    //  chat closes endAt + 8 hours
     const closeAt = new Date(s.endAt.getTime() + 8 * 60 * 60 * 1000);
 
     try {
@@ -63,13 +63,13 @@ export async function autoCompleteSessionsIfNeeded() {
       // ignore
     }
 
-    // ✅ notify both users (non-blocking)
+    //  notify both users (non-blocking)
     try {
       await notify.user({
         userId: s.studentId,
         viewer: "STUDENT",
         type: "SESSION_COMPLETED",
-        title: "Session auto-completed ✅",
+        title: "Session auto-completed ",
         body: "Your session was auto-completed 15 minutes after it ended. Chat stays open for 8 hours.",
         data: { sessionId: s.id, auto: true },
       });
@@ -80,7 +80,7 @@ export async function autoCompleteSessionsIfNeeded() {
         userId: s.tutorId,
         viewer: "TUTOR",
         type: "SESSION_COMPLETED",
-        title: "Session auto-completed ✅",
+        title: "Session auto-completed ",
         body: "This session was auto-completed 15 minutes after it ended. Chat stays open for 8 hours.",
         data: { sessionId: s.id, auto: true },
       });

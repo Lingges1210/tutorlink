@@ -45,7 +45,7 @@ export async function GET() {
       );
     }
 
-    // ✅ IMPORTANT: read from APPROVED application only
+    //  IMPORTANT: read from APPROVED application only
     const app = await prisma.tutorApplication.findFirst({
       where: { userId: dbUser.id, status: "APPROVED" },
       orderBy: { createdAt: "desc" },
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ IMPORTANT: only update APPROVED application
+    //  IMPORTANT: only update APPROVED application
     const approved = await prisma.tutorApplication.findFirst({
       where: { userId: dbUser.id, status: "APPROVED" },
       orderBy: { createdAt: "desc" },

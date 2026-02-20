@@ -70,7 +70,7 @@ export async function PATCH(req: Request) {
 
   const { name, programme } = parsed.data;
 
-  // ✅ Whitelist update only (matricNo, matricCardUrl etc locked)
+  //  Whitelist update only (matricNo, matricCardUrl etc locked)
   await prisma.user.update({
     where: { email: user.email.toLowerCase() },
     data: {

@@ -14,9 +14,9 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await context.params; // ✅ FIX (await params)
+    const { id } = await context.params; //  FIX (await params)
 
-    // ✅ ensure caller is logged in
+    //  ensure caller is logged in
     const supabase = await supabaseServerComponent();
     const {
       data: { user },
@@ -29,7 +29,7 @@ export async function GET(
       );
     }
 
-    // ✅ check admin role from your DB
+    //  check admin role from your DB
     const dbUser = await prisma.user.findUnique({
       where: { email: user.email.toLowerCase() },
       select: { role: true },
@@ -43,7 +43,7 @@ export async function GET(
     }
 
     const app = await prisma.tutorApplication.findUnique({
-      where: { id }, // ✅ use awaited id
+      where: { id }, //  use awaited id
       select: { transcriptPath: true },
     });
 
@@ -54,7 +54,7 @@ export async function GET(
       );
     }
 
-    // ✅ signed URL (1 minute)
+    //  signed URL (1 minute)
     const { data, error } = await adminSupabase.storage
       .from("tutor-documents")
       .createSignedUrl(app.transcriptPath, 60);

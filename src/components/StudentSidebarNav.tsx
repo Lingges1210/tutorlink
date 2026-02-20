@@ -94,7 +94,7 @@ export default function StudentSidebarNav({
           );
         }
 
-        // ✅ Active logic
+        //  Active logic
         const isDashboardRoot =
   it.href === "/dashboard/student" || it.href === "/dashboard/tutor";
         const active = isDashboardRoot

@@ -24,7 +24,7 @@ export default function LoginAnimation({
     autoplay: true,
   });
 
-  // ✅ Correct names from your file
+  //  Correct names from your file
   const check = useStateMachineInput(rive, STATE_MACHINE, "Check");
   const handsUp = useStateMachineInput(rive, STATE_MACHINE, "hands_up");
   const look = useStateMachineInput(rive, STATE_MACHINE, "Look"); // likely number

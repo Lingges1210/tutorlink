@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
-// ✅ ADD: booking notification helper (adjust path/name to match your existing notifier)
+//  ADD: booking notification helper (adjust path/name to match your existing notifier)
 import { notify } from "@/lib/notify";
 
 /** ---------- availability types ---------- */
@@ -283,7 +283,7 @@ export async function POST(req: Request) {
           durationMin: true,
           status: true,
 
-          // ✅ ADD: ids needed for notifications
+          //  ADD: ids needed for notifications
           tutorId: true,
           studentId: true,
 
@@ -294,11 +294,11 @@ export async function POST(req: Request) {
     });
 
 
-    // ✅ ADD: notify after booking is confirmed created
+    //  ADD: notify after booking is confirmed created
     // (wrapped so booking doesn't fail if notification fails)
     try {
       await notify.user({
-        userId: created.tutorId!, // ✅ notify the tutor
+        userId: created.tutorId!, //  notify the tutor
         type: "SESSION_BOOKED",
         title: "New booking request",
         body: `${created.subject?.code ?? "Subject"} ${

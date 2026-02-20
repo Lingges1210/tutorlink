@@ -20,7 +20,7 @@ export async function GET() {
 
   if (!dbUser) return NextResponse.json({ ok: false }, { status: 404 });
 
-  // ✅ NO-CRON automation
+  //  NO-CRON automation
   try {
     await autoCompleteSessionsIfNeeded();
   } catch {

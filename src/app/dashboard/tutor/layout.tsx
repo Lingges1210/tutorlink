@@ -28,7 +28,7 @@ export default async function TutorLayout({
       isTutorApproved: true,
       roleAssignments: { select: { role: true } },
 
-      // ✅ rating fields
+      //  rating fields
       avgRating: true,
       ratingCount: true,
     },

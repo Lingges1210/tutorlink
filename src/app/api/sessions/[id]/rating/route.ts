@@ -162,7 +162,7 @@ export async function POST(
     },
   });
 
-  // ✅ Option B: recompute and store avgRating + ratingCount on tutor
+  //  Option B: recompute and store avgRating + ratingCount on tutor
   const agg = await prisma.sessionRating.aggregate({
     where: { tutorId: session.tutorId },
     _avg: { rating: true },

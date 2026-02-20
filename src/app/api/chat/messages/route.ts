@@ -117,7 +117,7 @@ export async function GET(req: Request) {
       ? messages[messages.length - 1].id
       : null;
 
-  // ✅ include close window info for UI (no other behavior change)
+  //  include close window info for UI (no other behavior change)
   const isChatClosed =
     !!ch.closedAt ||
     (ch.closeAt ? new Date().getTime() >= ch.closeAt.getTime() : false);
@@ -199,7 +199,7 @@ export async function POST(req: Request) {
 
   const text = (textRaw ?? "").trim();
 
-  // ✅ allow: text-only OR attachment-only OR both
+  //  allow: text-only OR attachment-only OR both
   if (!channelId || (!text && attachments.length === 0)) {
     return NextResponse.json(
       { ok: false, message: "Missing channelId or content" },
@@ -238,7 +238,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // ✅ NEW: block sending if chat is closed / expired
+  //  NEW: block sending if chat is closed / expired
   const now = new Date();
   const isClosed =
     !!ch.closedAt || (ch.closeAt ? ch.closeAt.getTime() <= now.getTime() : false);
@@ -250,7 +250,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // ✅ basic server-side attachment validation (don’t trust client)
+  //  basic server-side attachment validation (don’t trust client)
   for (const a of attachments) {
     if (!a?.bucket || !a?.objectPath || !a?.fileName || !a?.contentType) {
       return NextResponse.json(
@@ -316,13 +316,13 @@ export async function POST(req: Request) {
     },
   });
 
-  // ✅ keep channel ordering correct (lastMessageAt drives channel list)
+  //  keep channel ordering correct (lastMessageAt drives channel list)
   await prisma.chatChannel.update({
     where: { id: channelId },
     data: { lastMessageAt: msg.createdAt },
   });
 
-  // ✅ sender has read up to now (including this sent message)
+  //  sender has read up to now (including this sent message)
   await prisma.chatRead.upsert({
     where: { channelId_userId: { channelId, userId: me.id } },
     update: { lastReadAt: new Date() },

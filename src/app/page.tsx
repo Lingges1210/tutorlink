@@ -83,7 +83,7 @@ export default function HomePage() {
       {/* Nav */}
 
       <main className="relative">
-        {/* ✅ HERO (layout unchanged, tokenized colors + gradient visible) */}
+        {/*  HERO (layout unchanged, tokenized colors + gradient visible) */}
         <section className="mx-auto max-w-6xl px-4 pb-16 pt-14 md:pt-20">
           <div className="grid items-center gap-10 md:grid-cols-2">
             <div className="fade-up-1">
@@ -113,7 +113,7 @@ export default function HomePage() {
               </p>
 
               <div className="mt-6 flex flex-wrap gap-3">
-                {/* ✅ correct path */}
+                {/*  correct path */}
                 <Link
                   href="/auth/register"
                   className="
@@ -394,7 +394,7 @@ export default function HomePage() {
             </p>
 
             <div className="mt-5 flex flex-wrap gap-3">
-              {/* ✅ correct path */}
+              {/*  correct path */}
               <Link
                 href="/auth/register"
                 className="

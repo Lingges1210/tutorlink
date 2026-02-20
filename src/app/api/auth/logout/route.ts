@@ -7,7 +7,7 @@ export async function POST() {
 
   const res = NextResponse.json({ ok: true });
 
-  // ✅ TEMP flag to allow auth pages after logout
+  //  TEMP flag to allow auth pages after logout
   res.cookies.set("just_logged_out", "1", {
     path: "/",
     maxAge: 5, // seconds (very short)
