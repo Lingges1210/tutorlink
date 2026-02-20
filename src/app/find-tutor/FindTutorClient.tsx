@@ -622,7 +622,7 @@ export default function FindTutorClient({
                     "
                   >
                     <div className="text-xs font-semibold text-[rgb(var(--fg))]">
-                      {s.code} — {s.title}
+                      {s.code} {s.title}
                     </div>
                     <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
                       Click to view booking options

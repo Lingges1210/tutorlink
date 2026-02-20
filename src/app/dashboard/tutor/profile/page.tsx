@@ -71,6 +71,10 @@ export default function TutorProfilePage() {
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
 
+  // custom subject inputs
+  const [customCode, setCustomCode] = useState("");
+  const [customTitle, setCustomTitle] = useState("");
+
   async function loadAll() {
     setLoading(true);
     setMsg(null);
@@ -122,6 +126,41 @@ export default function TutorProfilePage() {
       }
 
       setSelectedSubjectId("");
+      await loadAll();
+      setMsg("Subject added.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function addCustomSubject() {
+    const code = customCode.trim();
+    const title = customTitle.trim();
+
+    if (!code || !title) {
+      setMsg("Please enter both subject code and title.");
+      return;
+    }
+
+    setSaving(true);
+    setMsg(null);
+
+    try {
+      const res = await fetch("/api/tutor/subjects/custom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, title }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setMsg(data?.message ?? "Failed to add subject.");
+        return;
+      }
+
+      setCustomCode("");
+      setCustomTitle("");
       await loadAll();
       setMsg("Subject added.");
     } finally {
@@ -182,21 +221,19 @@ export default function TutorProfilePage() {
               <div className="text-xs font-semibold text-[rgb(var(--fg))]">
                 {tutor.avgRating.toFixed(1)}
                 <span className="ml-1 text-[rgb(var(--muted2))]">
-                  ({tutor.ratingCount} rating{tutor.ratingCount === 1 ? "" : "s"})
+                  ({tutor.ratingCount} rating
+                  {tutor.ratingCount === 1 ? "" : "s"})
                 </span>
               </div>
             </div>
           )}
         </div>
-
-        {msg && <div className="mt-3 text-xs text-[rgb(var(--muted2))]">{msg}</div>}
       </div>
 
-      {/* Top grid */}
-      <div className="grid gap-4 md:grid-cols-3">
-        {/* Subjects */}
-        <div className="md:col-span-2 rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-5">
-          {/* ✅ header single-line, no wrapping */}
+      {/* ✅ Top section: Subjects stretches, Stats fixed at right */}
+      <div className="grid gap-4 md:grid-cols-[1fr_360px] md:items-start">
+        {/* Subjects (stretch) */}
+        <div className="min-w-0 rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-[rgb(var(--fg))]">
               Subjects I Teach
@@ -209,10 +246,14 @@ export default function TutorProfilePage() {
                 disabled={saving || availableToAdd.length === 0}
                 className="h-9 rounded-md border px-2 text-xs outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]"
               >
-                <option value="">Select subject…</option>
+                <option value="">
+                  {availableToAdd.length === 0
+                    ? "All subjects added"
+                    : "Select subject…"}
+                </option>
                 {availableToAdd.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.code} — {s.title}
+                    {s.code} {s.title}
                   </option>
                 ))}
               </select>
@@ -228,6 +269,56 @@ export default function TutorProfilePage() {
             </div>
           </div>
 
+          {msg && (
+            <div className="mt-3 rounded-md bg-emerald-500/10 px-3 py-2 text-xs text-emerald-600">
+              {msg}
+            </div>
+          )}
+
+          <div className="mt-3 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[0.75rem] font-semibold text-[rgb(var(--fg))]">
+                Add a new subject
+              </div>
+
+              <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
+                Code will be standardized
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-2 md:grid-cols-3">
+              <input
+                value={customCode}
+                onChange={(e) => setCustomCode(e.target.value)}
+                placeholder="Code (e.g. CPT112)"
+                disabled={saving}
+                className="h-9 rounded-md border px-3 text-xs outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] disabled:opacity-60"
+              />
+
+              <input
+                value={customTitle}
+                onChange={(e) => setCustomTitle(e.target.value)}
+                placeholder="Title (e.g. Discrete Structures)"
+                disabled={saving}
+                className="h-9 rounded-md border px-3 text-xs outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] disabled:opacity-60 md:col-span-2"
+              />
+
+              <button
+                onClick={addCustomSubject}
+                disabled={saving || !customCode.trim() || !customTitle.trim()}
+                className="h-9 rounded-md px-3 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-95 disabled:opacity-60 md:col-span-3"
+              >
+                Add subject
+              </button>
+            </div>
+
+            <div className="mt-2 text-[0.7rem] text-[rgb(var(--muted2))]">
+              Example:{" "}
+              <span className="font-medium text-[rgb(var(--fg))]">CPT112</span>{" "}
+              — Discrete Structures
+            </div>
+          </div>
+
           <div className="mt-4 space-y-2">
             {mySubjects.length === 0 ? (
               <div className="text-xs text-[rgb(var(--muted2))]">
@@ -237,7 +328,7 @@ export default function TutorProfilePage() {
               mySubjects.map((s) => (
                 <div
                   key={s.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3 transition-all hover:bg-[rgb(var(--card)/0.6)]"
                 >
                   <div className="min-w-0">
                     <div className="text-xs font-semibold text-[rgb(var(--fg))]">
@@ -263,7 +354,7 @@ export default function TutorProfilePage() {
           </div>
         </div>
 
-        {/* Stats */}
+        {/* Stats (fixed right) */}
         <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-5">
           <h2 className="text-sm font-semibold text-[rgb(var(--fg))]">Stats</h2>
 
@@ -273,7 +364,7 @@ export default function TutorProfilePage() {
             </div>
           ) : (
             <div className="mt-4 space-y-3">
-              <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3">
+              <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3">
                 <div className="text-[0.65rem] uppercase tracking-wide text-[rgb(var(--muted2))]">
                   Total sessions
                 </div>
@@ -282,7 +373,7 @@ export default function TutorProfilePage() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3">
+              <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3">
                 <div className="text-[0.65rem] uppercase tracking-wide text-[rgb(var(--muted2))]">
                   Upcoming sessions
                 </div>
@@ -291,7 +382,7 @@ export default function TutorProfilePage() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3">
+              <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3">
                 <div className="text-[0.65rem] uppercase tracking-wide text-[rgb(var(--muted2))]">
                   Joined since
                 </div>
@@ -310,7 +401,9 @@ export default function TutorProfilePage() {
           <h2 className="text-sm font-semibold text-[rgb(var(--fg))]">
             Recent Reviews
           </h2>
-          <div className="text-xs text-[rgb(var(--muted2))]">Showing last 3</div>
+          <div className="text-xs text-[rgb(var(--muted2))]">
+            Showing last 3
+          </div>
         </div>
 
         <div className="mt-4 space-y-3">
