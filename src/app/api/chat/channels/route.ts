@@ -1,7 +1,7 @@
-// src/app/api/chat/channels/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { autoCompleteSessionsIfNeeded } from "@/lib/autoCompleteSessions";
 
 export async function GET() {
   const supabase = await supabaseServerComponent();
@@ -20,51 +20,54 @@ export async function GET() {
 
   if (!me) return NextResponse.json({ ok: false }, { status: 404 });
 
+  // ✅ NO-CRON automation
+  try {
+    await autoCompleteSessionsIfNeeded();
+  } catch {
+    // ignore
+  }
+
   const now = new Date();
 
-const channels = await prisma.chatChannel.findMany({
-  where: {
-    OR: [{ studentId: me.id }, { tutorId: me.id }],
-
-    // ✅ hide chats that have expired (your existing logic)
-    AND: [
-      {
-        OR: [{ closeAt: null }, { closeAt: { gt: now } }],
-      },
-
-      // ✅ NEW: hide chats whose session is cancelled/rejected
-      {
-        session: {
-          status: {
-            notIn: ["CANCELLED"],
+  const channels = await prisma.chatChannel.findMany({
+    where: {
+      OR: [{ studentId: me.id }, { tutorId: me.id }],
+      AND: [
+        {
+          OR: [{ closeAt: null }, { closeAt: { gt: now } }],
+        },
+        {
+          session: {
+            status: {
+              notIn: ["CANCELLED"],
+            },
           },
         },
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    include: {
+      session: {
+        select: {
+          id: true,
+          status: true,
+          subject: { select: { code: true, title: true } },
+          student: { select: { id: true, name: true } },
+          tutor: { select: { id: true, name: true } },
+        },
       },
-    ],
-  },
-  orderBy: { createdAt: "desc" },
-  include: {
-    session: {
-      select: {
-        id: true,
-        status: true,
-        subject: { select: { code: true, title: true } },
-        student: { select: { id: true, name: true } },
-        tutor: { select: { id: true, name: true } },
+      messages: {
+        take: 1,
+        orderBy: { createdAt: "desc" },
+        select: { id: true, text: true, createdAt: true, isDeleted: true },
+      },
+      reads: {
+        where: { userId: me.id },
+        select: { lastReadAt: true },
+        take: 1,
       },
     },
-    messages: {
-      take: 1,
-      orderBy: { createdAt: "desc" },
-      select: { id: true, text: true, createdAt: true, isDeleted: true },
-    },
-    reads: {
-      where: { userId: me.id },
-      select: { lastReadAt: true },
-      take: 1,
-    },
-  },
-});
+  });
 
   const items = await Promise.all(
     channels.map(async (c) => {
