@@ -7,7 +7,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["public", "auth"]
+  schemas  = ["public"]
 }
 
 enum UserRole {
@@ -51,10 +51,13 @@ model User {
 
   notifications Notification[]
 
+  rating SessionRating? @relation(fields: [sessionRatingId], references: [id])
+
   chatChannelsAsStudent ChatChannel[] @relation("ChatStudent")
   chatChannelsAsTutor   ChatChannel[] @relation("ChatTutor")
   chatMessagesSent      ChatMessage[] @relation("ChatSender")
   chatReads             ChatRead[]    @relation("ChatReader")
+  sessionRatingId       String?
 
   @@schema("public")
 }
@@ -67,7 +70,6 @@ model UserRoleAssignment {
   createdAt DateTime @default(now())
 
   @@unique([userId, role]) // prevents duplicates
-
   @@schema("public")
 }
 
@@ -126,7 +128,6 @@ model TutorSubject {
   createdAt DateTime @default(now())
 
   @@unique([tutorId, subjectId])
-
   @@schema("public")
 }
 
@@ -168,13 +169,13 @@ model Session {
   studentReminderEmailId String?
   tutorReminderEmailId   String?
 
-  calendarUid      String? @unique
-  calendarSequence Int     @default(0)
+  calendarUid      String?        @unique
+  calendarSequence Int            @default(0)
+  sessionRating    SessionRating?
 
   @@index([studentId, status])
   @@index([tutorId, status])
   @@index([scheduledAt])
-
   @@schema("public")
 }
 
@@ -209,7 +210,6 @@ model Notification {
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@index([userId, status])
-
   @@schema("public")
 }
 
@@ -235,7 +235,6 @@ model ChatChannel {
   @@index([studentId])
   @@index([tutorId])
   @@index([lastMessageAt])
-
   @@schema("public")
 }
 
@@ -258,7 +257,6 @@ model ChatMessage {
 
   @@index([channelId, createdAt])
   @@index([senderId])
-
   @@schema("public")
 }
 
@@ -273,7 +271,6 @@ model ChatRead {
 
   @@unique([channelId, userId])
   @@index([userId])
-
   @@schema("public")
 }
 
@@ -293,7 +290,6 @@ model ChatAttachment {
   message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@index([messageId])
-
   @@schema("public")
 }
 
@@ -305,6 +301,25 @@ model ChatTyping {
   updatedAt DateTime @updatedAt
 
   @@unique([channelId, userId])
+  @@schema("public")
+}
 
+model SessionRating {
+  id        String @id @default(cuid())
+  sessionId String @unique
+  studentId String
+  tutorId   String
+
+  rating  Int
+  comment String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  users   User[]
+
+  @@index([tutorId])
+  @@index([studentId])
   @@schema("public")
 }

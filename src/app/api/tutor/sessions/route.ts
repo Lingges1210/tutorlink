@@ -1,89 +1,81 @@
-// src/lib/autoCompleteSessions.ts
+// src/app/api/tutor/sessions/route.ts
+export const runtime = "nodejs";
+
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { notify } from "@/lib/notify";
+import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { autoCompleteSessionsIfNeeded } from "@/lib/autoCompleteSessions";
 
-type DueRow = {
-  id: string;
-  studentId: string;
-  tutorId: string;
-  endAt: Date;
-};
-
-export async function autoCompleteSessionsIfNeeded() {
-  const now = new Date();
-  const cutoff = new Date(now.getTime() - 15 * 60 * 1000); // end + 15 min
-
-  // ✅ only pick sessions that are definitely due
-  const due = await prisma.$queryRaw<DueRow[]>`
-    SELECT
-      s."id",
-      s."studentId",
-      s."tutorId",
-      COALESCE(
-        s."endsAt",
-        s."scheduledAt" + (COALESCE(s."durationMin", 60) || ' minutes')::interval
-      ) AS "endAt"
-    FROM "Session" s
-    WHERE s."status" = 'ACCEPTED'
-      AND s."tutorId" IS NOT NULL
-      AND COALESCE(
-        s."endsAt",
-        s."scheduledAt" + (COALESCE(s."durationMin", 60) || ' minutes')::interval
-      ) <= ${cutoff}
-    ORDER BY s."scheduledAt" ASC
-    LIMIT 25
-  `;
-
-  if (!due.length) return;
-
-  for (const s of due) {
-    // ✅ idempotent (won’t double-complete)
-    const upd = await prisma.session.updateMany({
-      where: { id: s.id, status: "ACCEPTED" },
-      data: { status: "COMPLETED" },
-    });
-
-    if (upd.count === 0) continue;
-
-    // ✅ chat closes endAt + 8 hours
-    const closeAt = new Date(s.endAt.getTime() + 8 * 60 * 60 * 1000);
-
-    try {
-      await prisma.chatChannel.upsert({
-        where: { sessionId: s.id },
-        create: {
-          sessionId: s.id,
-          studentId: s.studentId,
-          tutorId: s.tutorId,
-          closeAt,
-        },
-        update: { closeAt, closedAt: null },
-      });
-    } catch {
-      // ignore
-    }
-
-    // ✅ notify both users (non-blocking)
-    try {
-      await notify.user({
-        userId: s.studentId,
-        viewer: "STUDENT",
-        type: "SESSION_COMPLETED",
-        title: "Session auto-completed ✅",
-        body: "Your session was auto-completed 15 minutes after it ended. Chat stays open for 8 hours.",
-        data: { sessionId: s.id, auto: true },
-      });
-    } catch {}
-
-    try {
-      await notify.user({
-        userId: s.tutorId,
-        viewer: "TUTOR",
-        type: "SESSION_COMPLETED",
-        title: "Session auto-completed ✅",
-        body: "This session was auto-completed 15 minutes after it ended. Chat stays open for 8 hours.",
-        data: { sessionId: s.id, auto: true },
-      });
-    } catch {}
+export async function GET() {
+  // ✅ no-cron automation: run auto-complete opportunistically
+  // (silent, never blocks the tutor sessions page)
+  try {
+    await autoCompleteSessionsIfNeeded();
+  } catch {
+    // ignore
   }
+
+  const supabase = await supabaseServerComponent();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.email) return NextResponse.json({ items: [] });
+
+  const dbUser = await prisma.user.findUnique({
+    where: { email: user.email.toLowerCase() },
+    select: {
+      id: true,
+      isDeactivated: true,
+      verificationStatus: true,
+      isTutorApproved: true,
+      role: true,
+      roleAssignments: { select: { role: true } },
+    },
+  });
+
+  if (!dbUser || dbUser.isDeactivated) return NextResponse.json({ items: [] });
+
+  const isTutor =
+    dbUser.isTutorApproved ||
+    dbUser.role === "TUTOR" ||
+    dbUser.roleAssignments.some((r) => r.role === "TUTOR");
+
+  if (!isTutor || dbUser.verificationStatus !== "AUTO_VERIFIED") {
+    return NextResponse.json({ items: [] });
+  }
+
+  const items = await prisma.session.findMany({
+    where: { tutorId: dbUser.id },
+    orderBy: { scheduledAt: "asc" },
+    take: 50,
+    select: {
+      id: true,
+      scheduledAt: true,
+      endsAt: true,
+      durationMin: true,
+      status: true,
+      cancelReason: true,
+      cancelledAt: true,
+      rescheduledAt: true,
+
+      // ✅ proposal fields
+      proposedAt: true,
+      proposedNote: true,
+      proposalStatus: true,
+
+      subject: { select: { code: true, title: true } },
+      student: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          programme: true,
+          avatarUrl: true,
+        },
+      },
+    },
+  });
+
+  return NextResponse.json({ items });
 }
