@@ -57,9 +57,18 @@ function DisabledButton({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** --- consistent formatting helpers --- */
 function prettyDateTime(iso: string) {
   try {
-    return new Date(iso).toLocaleString();
+    const d = new Date(iso);
+    return d.toLocaleString([], {
+      weekday: "short",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   } catch {
     return iso;
   }
@@ -67,7 +76,8 @@ function prettyDateTime(iso: string) {
 
 function prettyTime(iso: string) {
   try {
-    return new Date(iso).toLocaleTimeString([], {
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -98,6 +108,31 @@ function prettyDayLabel(day: string) {
   } catch {
     return day;
   }
+}
+
+function todayKey() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+function tomorrowKey() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+/** Display helper: Today / Tomorrow + fallback label */
+function prettyDayLabelSmart(day: string) {
+  const t = todayKey();
+  const tm = tomorrowKey();
+  if (day === t) return "Today";
+  if (day === tm) return "Tomorrow";
+  return prettyDayLabel(day);
 }
 
 type ToastState =
@@ -152,6 +187,31 @@ export default function FindTutorClient({
   }, [toast]);
 
   const debounceRef = useRef<number | null>(null);
+
+  /** --- dropdown polish: click-outside + blur close --- */
+  const suggestWrapRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  function closeSuggestions() {
+    setSuggestions([]);
+    setLoadingSuggest(false);
+  }
+
+  useEffect(() => {
+    function onDocDown(e: MouseEvent | TouchEvent) {
+      const el = suggestWrapRef.current;
+      if (!el) return;
+      if (!el.contains(e.target as Node)) {
+        closeSuggestions();
+      }
+    }
+    document.addEventListener("mousedown", onDocDown);
+    document.addEventListener("touchstart", onDocDown);
+    return () => {
+      document.removeEventListener("mousedown", onDocDown);
+      document.removeEventListener("touchstart", onDocDown);
+    };
+  }, []);
 
   useEffect(() => {
     if (!canUse) return;
@@ -373,15 +433,94 @@ export default function FindTutorClient({
     "MAT100 Calculus",
   ];
 
+  /** --- Enhancement #1: Search status line --- */
+  const searchStatusText = useMemo(() => {
+    if (!authed) return "Login required to search & book.";
+    if (authed && !verified) return "Locked until verification.";
+    if (!q.trim()) return "Type a subject code or course name to search.";
+    if (loadingSuggest) return "Searching…";
+    if (q.trim() && suggestions.length === 0 && !selected)
+      return "No matches yet — try a different keyword.";
+    if (selected)
+      return `Showing ${slots.length} slot${slots.length === 1 ? "" : "s"}.`;
+    return "Pick a subject from the list below.";
+  }, [
+    authed,
+    verified,
+    q,
+    loadingSuggest,
+    suggestions.length,
+    selected,
+    slots.length,
+  ]);
+
+  /** --- Enhancement #2: Inline auth indicator chip (verified => nothing) --- */
+  const inlineAuthChip = useMemo(() => {
+    if (!authed) {
+      return (
+        <span className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[0.7rem] font-semibold border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))]">
+          Login required
+        </span>
+      );
+    }
+    if (!verified) {
+      return (
+        <span className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[0.7rem] font-semibold border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400">
+          Locked (pending verification)
+        </span>
+      );
+    }
+    return null; // <-- removed verified chip
+  }, [authed, verified]);
+
+  /** --- Enhancement #3: Duration segmented pills --- */
+  const durationOptions = [30, 45, 60, 90, 120];
+
+  /** --- Enhancement #6: skeleton blocks for slots loading --- */
+  function SlotsSkeleton() {
+    const blocks = [1, 2, 3, 4, 5];
+    return (
+      <div className="mt-4 space-y-3">
+        <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
+          <div className="flex items-center justify-between">
+            <div className="h-3 w-32 rounded bg-[rgb(var(--border))] opacity-60" />
+            <div className="h-3 w-16 rounded bg-[rgb(var(--border))] opacity-60" />
+          </div>
+          <div className="mt-3 h-12 rounded-xl bg-[rgb(var(--border))] opacity-50" />
+          <div className="mt-3 flex flex-wrap gap-2">
+            {blocks.slice(0, 4).map((b) => (
+              <div
+                key={b}
+                className="h-8 w-28 rounded-full bg-[rgb(var(--border))] opacity-45"
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
+          <div className="h-3 w-24 rounded bg-[rgb(var(--border))] opacity-60" />
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {blocks.map((b) => (
+              <div
+                key={b}
+                className="shrink-0 h-14 w-28 rounded-2xl bg-[rgb(var(--border))] opacity-45"
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6 pt-6 sm:pt-8">
       {/* Toast */}
       {toast && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           className="
-            fixed z-50 bottom-5 right-5
+            fixed z-[60] bottom-5 right-5
             w-[calc(100vw-2.5rem)] sm:w-[380px]
             rounded-2xl border p-4
             border-[rgb(var(--border))]
@@ -484,7 +623,13 @@ export default function FindTutorClient({
       {/*  Layout */}
       <div className="grid gap-6 lg:grid-cols-12">
         {/* LEFT panel (sticky on desktop) */}
-        <div className={selected ? "lg:col-span-5 space-y-4" : "lg:col-span-12"}>
+        <div
+          className={
+            selected
+              ? "lg:col-span-5 space-y-6"
+              : "lg:col-span-12 space-y-6"
+          }
+        >
           <section
             className="
               rounded-3xl border p-5
@@ -494,12 +639,16 @@ export default function FindTutorClient({
               lg:sticky lg:top-6
             "
           >
-            <div className="relative">
-              <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
-                Search Subject / Course
-              </label>
+            <div className="relative" ref={suggestWrapRef}>
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
+                  Search Subject / Course
+                </label>
+                <div className="mb-1 hidden sm:block">{inlineAuthChip}</div>
+              </div>
 
               <input
+                ref={inputRef}
                 value={q}
                 onChange={(e) => {
                   setQ(e.target.value);
@@ -509,6 +658,15 @@ export default function FindTutorClient({
                   setSlotsMsg(null);
                   setSelectedDay(null);
                   setDayLimit(9);
+                }}
+                onBlur={() => {
+                  // allow click on suggestion before closing
+                  window.setTimeout(() => {
+                    const active = document.activeElement;
+                    const wrap = suggestWrapRef.current;
+                    if (wrap && active && wrap.contains(active)) return;
+                    closeSuggestions();
+                  }, 120);
                 }}
                 disabled={!canUse}
                 placeholder="e.g. WIA2003, Data Structures"
@@ -520,7 +678,15 @@ export default function FindTutorClient({
                 ].join(" ")}
               />
 
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              {/* Enhancement #1: search status line */}
+              <div className="mt-2 flex items-start justify-between gap-3">
+                <div className="text-[0.75rem] text-[rgb(var(--muted2))]">
+                  {searchStatusText}
+                </div>
+                <div className="sm:hidden">{inlineAuthChip}</div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 {!authed ? (
                   <PrimaryButtonLink href="/auth/login">Login</PrimaryButtonLink>
                 ) : !verified ? (
@@ -550,83 +716,140 @@ export default function FindTutorClient({
                       Clear
                     </button>
 
-                    <div className="ml-auto flex items-center gap-2">
-                      <span className="text-[0.7rem] text-[rgb(var(--muted2))]">
-                        Duration
-                      </span>
-                      <select
-                        value={durationMin}
-                        onChange={(e) => {
-                          const v = Number(e.target.value);
-                          setDurationMin(v);
-                          setBookingMsg(null);
-                          setSelectedDay(null);
-                          setDayLimit(9);
-                          if (selected?.id) loadSlots(selected.id, v);
-                        }}
-                        disabled={!selected || slotsLoading}
-                        className="
-                          rounded-md border px-2 py-2 text-xs outline-none
-                          border-[rgb(var(--border))]
-                          bg-[rgb(var(--card2))]
-                          text-[rgb(var(--fg))]
-                          disabled:opacity-60
-                        "
-                      >
-                        <option value={30}>30 min</option>
-                        <option value={45}>45 min</option>
-                        <option value={60}>60 min</option>
-                        <option value={90}>90 min</option>
-                        <option value={120}>120 min</option>
-                      </select>
+                    {/* Enhancement #3: segmented duration pills + helper text */}
+                    <div className="ml-auto flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[0.7rem] text-[rgb(var(--muted2))]">
+                          Duration
+                        </span>
+
+                        <div className="hidden sm:flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-1">
+                          {durationOptions.map((opt) => {
+                            const active = durationMin === opt;
+                            return (
+                              <button
+                                key={opt}
+                                type="button"
+                                disabled={slotsLoading}
+                                onClick={() => {
+                                  const v = opt;
+                                  setDurationMin(v);
+                                  setBookingMsg(null);
+                                  setSelectedDay(null);
+                                  setDayLimit(9);
+                                  if (selected?.id) loadSlots(selected.id, v);
+                                }}
+                                className={[
+                                  "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                                  active
+                                    ? "bg-[rgb(var(--primary))] text-white"
+                                    : "text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
+                                  slotsLoading ? "opacity-60" : "",
+                                ].join(" ")}
+                              >
+                                {opt}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* keep original select for mobile + accessibility */}
+                        <select
+                          value={durationMin}
+                          onChange={(e) => {
+                            const v = Number(e.target.value);
+                            setDurationMin(v);
+                            setBookingMsg(null);
+                            setSelectedDay(null);
+                            setDayLimit(9);
+                            if (selected?.id) loadSlots(selected.id, v);
+                          }}
+                          disabled={slotsLoading}
+                          className="
+                            sm:hidden rounded-md border px-2 py-2 text-xs outline-none
+                            border-[rgb(var(--border))]
+                            bg-[rgb(var(--card2))]
+                            text-[rgb(var(--fg))]
+                            disabled:opacity-60
+                          "
+                        >
+                          <option value={30}>30 min</option>
+                          <option value={45}>45 min</option>
+                          <option value={60}>60 min</option>
+                          <option value={90}>90 min</option>
+                          <option value={120}>120 min</option>
+                        </select>
+                      </div>
+
+                      <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
+                        Changing duration refreshes available slots.
+                      </div>
                     </div>
                   </>
                 )}
               </div>
 
-              {/* Suggestions dropdown */}
+              {/* Suggestions dropdown (limited height + scroll; slight spacing) */}
               {canUse && (loadingSuggest || suggestions.length > 0) && (
                 <div
                   className="
-                    absolute z-20 mt-2 w-full overflow-hidden
+                    absolute z-20 mt-3 w-full overflow-hidden
                     rounded-2xl border border-[rgb(var(--border))]
                     bg-[rgb(var(--card2))]
                     shadow-[0_20px_60px_rgb(var(--shadow)/0.18)]
                   "
                 >
-                  {loadingSuggest && (
-                    <div className="px-3 py-3 text-xs text-[rgb(var(--muted2))]">
-                      Searching…
-                    </div>
-                  )}
+                  <div className="max-h-64 overflow-auto">
+                    {loadingSuggest && (
+                      <div className="px-3 py-3 text-xs text-[rgb(var(--muted2))]">
+                        Searching…
+                      </div>
+                    )}
 
-                  {!loadingSuggest && suggestions.length === 0 && (
-                    <div className="px-3 py-3 text-xs text-[rgb(var(--muted2))]">
-                      No matches
-                    </div>
-                  )}
+                    {!loadingSuggest && suggestions.length === 0 && (
+                      <div className="px-3 py-3 text-xs text-[rgb(var(--muted2))]">
+                        No matches
+                      </div>
+                    )}
 
-                  {!loadingSuggest &&
-                    suggestions.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => pickSubject(s)}
-                        className="
-                          w-full text-left px-3 py-3
-                          hover:bg-[rgb(var(--card)/0.6)]
-                          border-b border-[rgb(var(--border))]
-                          last:border-b-0
-                        "
-                      >
-                        <div className="text-xs font-semibold text-[rgb(var(--fg))]">
-                          {s.code} {s.title}
-                        </div>
-                        <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
-                          Click to view booking options
-                        </div>
-                      </button>
-                    ))}
+                    {!loadingSuggest &&
+                      suggestions.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => pickSubject(s)}
+                          className="
+                            w-full text-left px-3 py-3
+                            hover:bg-[rgb(var(--card)/0.6)]
+                            border-b border-[rgb(var(--border))]
+                            last:border-b-0
+                          "
+                        >
+                          <div className="text-xs font-semibold text-[rgb(var(--fg))]">
+                            {s.code} {s.title}
+                          </div>
+                          <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
+                            Click to view booking options
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+
+                  <div className="border-t border-[rgb(var(--border))] p-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => closeSuggestions()}
+                      className="
+                        rounded-md px-3 py-2 text-xs font-semibold
+                        border border-[rgb(var(--border))]
+                        bg-[rgb(var(--card))]
+                        text-[rgb(var(--fg))]
+                        hover:bg-[rgb(var(--card)/0.8)]
+                      "
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -652,12 +875,38 @@ export default function FindTutorClient({
                     </div>
                   </div>
 
-                  <Link
-                    href="/dashboard/student/sessions"
-                    className="text-xs font-medium text-[rgb(var(--primary))] hover:underline shrink-0"
-                  >
-                    My Bookings →
-                  </Link>
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <Link
+                      href="/dashboard/student/sessions"
+                      className="text-xs font-medium text-[rgb(var(--primary))] hover:underline"
+                    >
+                      My Bookings →
+                    </Link>
+
+                    {/* Enhancement #4: clear selection */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelected(null);
+                        setSlots([]);
+                        setSlotsMsg(null);
+                        setSelectedDay(null);
+                        setDayLimit(9);
+                        setBookingMsg(null);
+                        // keep q as-is so user can tweak quickly
+                        window.setTimeout(() => inputRef.current?.focus(), 0);
+                      }}
+                      className="
+                        rounded-md px-3 py-2 text-xs font-semibold
+                        border border-[rgb(var(--border))]
+                        bg-[rgb(var(--card))]
+                        text-[rgb(var(--fg))]
+                        hover:bg-[rgb(var(--card)/0.8)]
+                      "
+                    >
+                      Change subject
+                    </button>
+                  </div>
                 </div>
 
                 {bookingMsg && (
@@ -694,7 +943,9 @@ export default function FindTutorClient({
                     Start here 👇
                   </div>
                   <p className="mt-1 text-sm text-[rgb(var(--muted))]">
-                    Search a subject code (like <span className="font-semibold">WIA2003</span>) or course name. Then book the earliest slot instantly.
+                    Search a subject code (like{" "}
+                    <span className="font-semibold">WIA2003</span>) or course
+                    name. Then book the earliest slot instantly.
                   </p>
 
                   <div className="mt-4">
@@ -706,7 +957,13 @@ export default function FindTutorClient({
                         <button
                           key={chip}
                           type="button"
-                          onClick={() => setQ(chip)}
+                          onClick={() => {
+                            setQ(chip);
+                            window.setTimeout(
+                              () => inputRef.current?.focus(),
+                              0
+                            );
+                          }}
                           className="
                             rounded-full px-3 py-2 text-xs font-semibold
                             border border-[rgb(var(--border))]
@@ -739,7 +996,8 @@ export default function FindTutorClient({
                       Tip
                     </div>
                     <div className="mt-2 text-xs text-[rgb(var(--muted))]">
-                      If no slots appear, try changing duration (45/60/90 min) or check later.
+                      If no slots appear, try changing duration (45/60/90 min)
+                      or check later.
                     </div>
                   </div>
                 </div>
@@ -786,13 +1044,47 @@ export default function FindTutorClient({
                 </button>
               </div>
 
+              {/* Enhancement #6: skeleton when loading */}
               {slotsLoading ? (
-                <div className="mt-4 text-sm text-[rgb(var(--muted2))]">
-                  Loading slots…
-                </div>
+                <SlotsSkeleton />
               ) : slots.length === 0 ? (
-                <div className="mt-4 text-sm text-[rgb(var(--muted2))]">
-                  {slotsMsg ?? "No slots yet."}
+                /* Enhancement #7: nicer empty state */
+                <div className="mt-4 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                        No slots found
+                      </div>
+                      <div className="mt-1 text-sm text-[rgb(var(--muted))]">
+                        {slotsMsg ??
+                          "Try a different duration, or check again later."}
+                      </div>
+
+                      <div className="mt-3 text-xs text-[rgb(var(--muted2))]">
+                        Quick fixes:
+                        <ul className="mt-2 list-disc pl-5 space-y-1">
+                          <li>Try 45 / 60 / 90 minutes</li>
+                          <li>Refresh in a few minutes</li>
+                          <li>Try a broader keyword (e.g., “Data”)</li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        selected && loadSlots(selected.id, durationMin)
+                      }
+                      className="
+                        rounded-md px-3 py-2 text-xs font-semibold
+                        bg-[rgb(var(--primary))]
+                        text-white
+                        hover:opacity-95
+                      "
+                    >
+                      Refresh
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="mt-4 space-y-4">
@@ -825,7 +1117,8 @@ export default function FindTutorClient({
                         )} → ${prettyDateTime(earliest.end)}`}
                       >
                         <div className="text-sm font-bold">
-                          Book earliest: {prettyDayLabel(dayKey(earliest.start))} ·{" "}
+                          Book earliest:{" "}
+                          {prettyDayLabelSmart(dayKey(earliest.start))} ·{" "}
                           {prettyTime(earliest.start)}
                         </div>
                         <div className="mt-1 text-[0.75rem] opacity-90">
@@ -861,13 +1154,15 @@ export default function FindTutorClient({
                                   "bg-[rgb(var(--card) / 0.8)] text-[rgb(var(--fg))]",
                                   "hover:bg-[rgb(var(--card) / 1)]",
                                   busy ? "opacity-80" : "",
-                                  disabled ? "opacity-60 cursor-not-allowed" : "",
+                                  disabled
+                                    ? "opacity-60 cursor-not-allowed"
+                                    : "",
                                 ].join(" ")}
                                 title={`${prettyDateTime(
                                   s.start
                                 )} → ${prettyDateTime(s.end)}`}
                               >
-                                {prettyDayLabel(dayKey(s.start)).split(",")[0]} ·{" "}
+                                {prettyDayLabelSmart(dayKey(s.start))} ·{" "}
                                 {prettyTime(s.start)}
                               </button>
                             );
@@ -920,7 +1215,7 @@ export default function FindTutorClient({
                             ].join(" ")}
                           >
                             <div className="text-xs font-semibold">
-                              {prettyDayLabel(d).split(",")[0]}
+                              {prettyDayLabelSmart(d)}
                             </div>
                             <div className="mt-0.5 text-[0.7rem] opacity-80">
                               {count} slot{count === 1 ? "" : "s"}
@@ -936,7 +1231,10 @@ export default function FindTutorClient({
                     <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="text-xs font-semibold text-[rgb(var(--fg))]">
-                          {prettyDayLabel(selectedDay)}
+                          {prettyDayLabelSmart(selectedDay)}{" "}
+                          <span className="text-[0.7rem] font-medium text-[rgb(var(--muted2))]">
+                            · {prettyDayLabel(selectedDay)}
+                          </span>
                         </div>
                         <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
                           {selectedDaySlots.length} slots
@@ -950,41 +1248,48 @@ export default function FindTutorClient({
                       ) : (
                         <>
                           <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                            {selectedDaySlots.slice(0, dayLimit).map((slot) => {
-                              const busy = bookingSlotId === slot.id;
-                              const disabled = !!bookingSlotId && !busy;
+                            {selectedDaySlots
+                              .slice(0, dayLimit)
+                              .map((slot) => {
+                                const busy = bookingSlotId === slot.id;
+                                const disabled = !!bookingSlotId && !busy;
 
-                              return (
-                                <button
-                                  key={slot.id}
-                                  type="button"
-                                  disabled={disabled}
-                                  onClick={() => bookSlot(slot)}
-                                  className={[
-                                    "w-full text-left rounded-xl border px-4 py-3 transition",
-                                    "border-[rgb(var(--border))] bg-[rgb(var(--card) / 0.65)] text-[rgb(var(--fg))]",
-                                    "hover:bg-[rgb(var(--card) / 0.9)]",
-                                    busy ? "opacity-80" : "",
-                                    disabled ? "opacity-60 cursor-not-allowed" : "",
-                                  ].join(" ")}
-                                  title={`${prettyDateTime(
-                                    slot.start
-                                  )} → ${prettyDateTime(slot.end)}`}
-                                >
-                                  <div className="text-xs font-semibold">
-                                    {busy ? "Booking…" : prettyTime(slot.start)}
-                                  </div>
-                                  <div className="mt-1 text-[0.7rem] text-[rgb(var(--muted2))]">
-                                    ends {prettyTime(slot.end)} · {durationMin} min
-                                    {typeof slot.tutorCount === "number"
-                                      ? ` · ${slot.tutorCount} tutor${
-                                          slot.tutorCount === 1 ? "" : "s"
-                                        }`
-                                      : ""}
-                                  </div>
-                                </button>
-                              );
-                            })}
+                                return (
+                                  <button
+                                    key={slot.id}
+                                    type="button"
+                                    disabled={disabled}
+                                    onClick={() => bookSlot(slot)}
+                                    className={[
+                                      "w-full text-left rounded-xl border px-4 py-3 transition",
+                                      "border-[rgb(var(--border))] bg-[rgb(var(--card) / 0.65)] text-[rgb(var(--fg))]",
+                                      "hover:bg-[rgb(var(--card) / 0.9)]",
+                                      busy ? "opacity-80" : "",
+                                      disabled
+                                        ? "opacity-60 cursor-not-allowed"
+                                        : "",
+                                    ].join(" ")}
+                                    title={`${prettyDateTime(
+                                      slot.start
+                                    )} → ${prettyDateTime(slot.end)}`}
+                                  >
+                                    <div className="text-xs font-semibold">
+                                      {busy
+                                        ? "Booking…"
+                                        : prettyTime(slot.start)}
+                                    </div>
+                                    <div className="mt-1 text-[0.7rem] text-[rgb(var(--muted2))]">
+                                      ends {prettyTime(slot.end)} ·{" "}
+                                      {durationMin} min
+                                      {typeof slot.tutorCount === "number"
+                                        ? ` · ${slot.tutorCount} tutor${
+                                            slot.tutorCount === 1 ? "" : "s"
+                                          }`
+                                        : ""}
+                                    </div>
+                                  </button>
+                                );
+                              })}
                           </div>
 
                           {selectedDaySlots.length > dayLimit && (
@@ -1019,6 +1324,53 @@ export default function FindTutorClient({
           </div>
         )}
       </div>
+
+      {/* Enhancement #8: mobile sticky action bar (only when selected) */}
+      {selected && (
+        <div
+          className="
+            fixed bottom-0 left-0 right-0 z-40
+            border-t border-[rgb(var(--border))]
+            bg-[rgb(var(--card) / 0.92)]
+            backdrop-blur
+            px-4 py-3
+            sm:hidden
+          "
+        >
+          <div className="mx-auto max-w-6xl flex items-center gap-2">
+            <button
+              type="button"
+              disabled={slotsLoading || !!bookingSlotId}
+              onClick={() => selected && loadSlots(selected.id, durationMin)}
+              className="
+                flex-1 rounded-xl px-3 py-3 text-sm font-semibold
+                border border-[rgb(var(--border))]
+                bg-[rgb(var(--card2))]
+                text-[rgb(var(--fg))]
+                hover:bg-[rgb(var(--card)/0.6)]
+                disabled:opacity-60
+              "
+            >
+              {slotsLoading ? "Refreshing…" : "Refresh slots"}
+            </button>
+
+            <Link
+              href="/dashboard/student/sessions"
+              className="
+                flex-1 rounded-xl px-3 py-3 text-sm font-semibold text-center
+                bg-[rgb(var(--primary))]
+                text-white
+                hover:opacity-95
+              "
+            >
+              My Bookings
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Spacer so mobile sticky bar doesn't cover content */}
+      {selected && <div className="h-16 sm:hidden" />}
     </div>
   );
 }

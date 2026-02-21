@@ -4,7 +4,7 @@ import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
 export async function GET() {
   try {
-    // 🔐 Ensure admin
+    // Ensure admin
     const supabase = await supabaseServerComponent();
     const {
       data: { user },
