@@ -12,7 +12,7 @@ type Row = {
   status: "PENDING" | "ACCEPTED" | "COMPLETED" | "CANCELLED" | string;
   cancelReason: string | null;
 
-  //  proposal fields (return from API)
+  // proposal fields (return from API)
   proposedAt?: string | null;
   proposedNote?: string | null;
   proposalStatus?: "PENDING" | "ACCEPTED" | "REJECTED" | null;
@@ -132,7 +132,7 @@ function countdownLabel(s: Row) {
   return `${min}m ${sec}s remaining`;
 }
 
-/**  show only up to 7 buttons: 1 … 4 5 6 … last */
+/** show only up to 7 buttons: 1 … 4 5 6 … last */
 function getPastPageItems(current: number, total: number): (number | "…")[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
 
@@ -147,6 +147,19 @@ function getPastPageItems(current: number, total: number): (number | "…")[] {
 
   // middle
   return [1, "…", current - 1, current, current + 1, "…", last];
+}
+
+// ---------- NEW helpers for topic chips ----------
+function normalizeTopicLabel(s: string) {
+  return s
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s\-+.#/()]/gu, "");
+}
+
+function clampInt(n: number, min: number, max: number) {
+  if (Number.isNaN(n)) return min;
+  return Math.max(min, Math.min(max, n));
 }
 
 export default function TutorSessionsClient() {
@@ -168,12 +181,14 @@ export default function TutorSessionsClient() {
     "ALL" | "COMPLETED" | "CANCELLED"
   >("ALL");
 
-  //  Past pagination state (only for past)
+  // Past pagination state (only for past)
   const PAST_PAGE_SIZE = 5;
   const [pastPage, setPastPage] = useState(1);
 
-  //  modal state
-  const [mode, setMode] = useState<"CANCEL" | "PROPOSE" | null>(null);
+  // modal state
+  const [mode, setMode] = useState<"CANCEL" | "PROPOSE" | "COMPLETE" | null>(
+    null
+  );
   const [activeId, setActiveId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [proposedTime, setProposedTime] = useState(() =>
@@ -181,11 +196,34 @@ export default function TutorSessionsClient() {
   );
   const [note, setNote] = useState("");
 
+  // ---------- NEW: completion form state ----------
+  const [summary, setSummary] = useState("");
+  const [confidenceBefore, setConfidenceBefore] = useState(3);
+  const [confidenceAfter, setConfidenceAfter] = useState(4);
+  const [nextSteps, setNextSteps] = useState("");
+  const [topicInput, setTopicInput] = useState("");
+  const [topics, setTopics] = useState<string[]>([]);
+
+  const activeSession = useMemo(() => {
+    if (!activeId) return null;
+    return items.find((x) => x.id === activeId) ?? null;
+  }, [activeId, items]);
+
+  function resetCompleteForm() {
+    setSummary("");
+    setConfidenceBefore(3);
+    setConfidenceAfter(4);
+    setNextSteps("");
+    setTopicInput("");
+    setTopics([]);
+  }
+
   function closeModal() {
     setMode(null);
     setActiveId(null);
     setReason("");
     setNote("");
+    resetCompleteForm();
   }
 
   async function refresh(opts?: { silent?: boolean }) {
@@ -227,7 +265,7 @@ export default function TutorSessionsClient() {
     };
 
     const start = () => {
-      stop(); //  prevent duplicate intervals
+      stop(); // prevent duplicate intervals
       run(); // run immediately
       t = setInterval(run, 60_000);
     };
@@ -291,20 +329,50 @@ export default function TutorSessionsClient() {
     }
   }
 
-  async function complete(id: string) {
+  // ---------- UPDATED: complete now submits form ----------
+  async function submitComplete() {
+    if (!activeId) return;
+
+    const trimmedSummary = summary.trim();
+    if (!trimmedSummary) {
+      setMsg("Please write a short session summary.");
+      return;
+    }
+
+    const before = clampInt(Number(confidenceBefore), 1, 5);
+    const after = clampInt(Number(confidenceAfter), 1, 5);
+
+    // require at least 1 topic for cleaner analytics (optional: remove if you want)
+    const cleanedTopics = topics.map(normalizeTopicLabel).filter(Boolean);
+    if (cleanedTopics.length === 0) {
+      setMsg("Please add at least 1 topic covered.");
+      return;
+    }
+
     setActionLoading(true);
     setMsg(null);
 
     try {
-      const res = await fetch(`/api/tutor/sessions/${id}/complete`, {
+      const res = await fetch(`/api/tutor/sessions/${activeId}/complete`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          summary: trimmedSummary,
+          confidenceBefore: before,
+          confidenceAfter: after,
+          topics: cleanedTopics,
+          nextSteps: nextSteps.trim() ? nextSteps.trim() : undefined,
+        }),
       });
+
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) setMsg(data?.message ?? "Complete failed.");
       else {
+        closeModal();
         await refresh({ silent: true });
         await fetch("/api/reminders/pull", { cache: "no-store" });
+        setMsg("Session completed + progress updated.");
       }
     } finally {
       setActionLoading(false);
@@ -375,6 +443,35 @@ export default function TutorSessionsClient() {
       }
     } finally {
       setActionLoading(false);
+    }
+  }
+
+  // topic chip handlers
+  function addTopic(raw: string) {
+    const t = normalizeTopicLabel(raw);
+    if (!t) return;
+    setTopics((prev) => {
+      const exists = prev.some((x) => x.toLowerCase() === t.toLowerCase());
+      if (exists) return prev;
+      return [...prev, t].slice(0, 12); // cap to 12
+    });
+  }
+
+  function removeTopic(label: string) {
+    setTopics((prev) => prev.filter((x) => x !== label));
+  }
+
+  function onTopicKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" || e.key === "," || e.key === "Tab") {
+      e.preventDefault();
+      if (topicInput.trim()) {
+        addTopic(topicInput);
+        setTopicInput("");
+      }
+    }
+    if (e.key === "Backspace" && !topicInput && topics.length > 0) {
+      // quick remove last chip
+      removeTopic(topics[topics.length - 1]);
     }
   }
 
@@ -624,7 +721,7 @@ export default function TutorSessionsClient() {
                       {s.status}
                     </motion.span>
 
-                    {/*  START CHAT button (only when ACCEPTED) */}
+                    {/* START CHAT button (only when ACCEPTED) */}
                     {accepted && (
                       <button
                         disabled={actionLoading}
@@ -666,7 +763,12 @@ export default function TutorSessionsClient() {
                       {canComplete(s) && (
                         <button
                           disabled={actionLoading}
-                          onClick={() => complete(s.id)}
+                          onClick={() => {
+                            setActiveId(s.id);
+                            setMode("COMPLETE");
+                            setMsg(null);
+                            resetCompleteForm();
+                          }}
                           className={[
                             "rounded-md px-3 py-2 text-xs font-semibold text-white",
                             "bg-[rgb(var(--primary))]",
@@ -735,10 +837,10 @@ export default function TutorSessionsClient() {
     );
   }
 
-  //  helper counts for the “student-style” header row
+  // helper counts for the “student-style” header row
   const activeCount = grouped.ongoing.length + grouped.upcoming.length;
 
-  //  FIX: prevent "UPCOMING" appearing twice (header + Upcoming section)
+  // FIX: prevent "UPCOMING" appearing twice (header + Upcoming section)
   const leftPill = grouped.ongoing.length > 0 ? "ONGOING" : "SESSIONS";
 
   const leftMeta =
@@ -771,13 +873,13 @@ export default function TutorSessionsClient() {
         </motion.div>
       )}
 
-      {/*  Student-style main card wrapper */}
+      {/* Student-style main card wrapper */}
       <div className="rounded-3xl border p-5 border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]">
         {loading ? (
           <div className="text-sm text-[rgb(var(--muted2))]">Loading…</div>
         ) : (
           <div className="space-y-4">
-            {/*  Header row ALWAYS visible (like student page) */}
+            {/* Header row ALWAYS visible */}
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-[11px] font-semibold tracking-wide text-[rgb(var(--fg))]">
@@ -805,7 +907,6 @@ export default function TutorSessionsClient() {
               </button>
             </div>
 
-            {/*  When no active sessions & past hidden -> show same empty card as student page */}
             {activeCount === 0 && !showPast ? (
               <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-8 text-center text-sm text-[rgb(var(--muted2))]">
                 No active sessions at the moment.
@@ -815,7 +916,6 @@ export default function TutorSessionsClient() {
               </div>
             ) : (
               <>
-                {/*  Sections (unchanged) */}
                 <Section title="Ongoing" subtitle="Live now" list={grouped.ongoing} />
                 <Section
                   title="Upcoming"
@@ -825,7 +925,6 @@ export default function TutorSessionsClient() {
               </>
             )}
 
-            {/*  Past section (same behavior as before) */}
             {showPast && (
               <>
                 <Section
@@ -889,7 +988,7 @@ export default function TutorSessionsClient() {
         )}
       </div>
 
-      {/*  CANCEL MODAL (unchanged) */}
+      {/* CANCEL MODAL (unchanged) */}
       {mode === "CANCEL" && activeId && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
@@ -936,7 +1035,7 @@ export default function TutorSessionsClient() {
         </div>
       )}
 
-      {/*  PROPOSE MODAL (unchanged) */}
+      {/* PROPOSE MODAL (unchanged) */}
       {mode === "PROPOSE" && activeId && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
@@ -995,6 +1094,164 @@ export default function TutorSessionsClient() {
               >
                 {actionLoading ? "Sending…" : "Send proposal"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/*  COMPLETE MODAL (NEW) */}
+      {mode === "COMPLETE" && activeId && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
+          onMouseDown={() => !actionLoading && closeModal()}
+        >
+          <div
+            className="w-full max-w-xl rounded-3xl border p-5 border-[rgb(var(--border))] bg-[rgb(var(--card2))] shadow-[0_30px_120px_rgb(var(--shadow)/0.35)]"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                  Complete session
+                </div>
+                <div className="mt-1 text-xs text-[rgb(var(--muted2))]">
+                  {activeSession
+                    ? `${activeSession.subject.code} — ${activeSession.subject.title} · ${activeSession.student.name ?? "Student"}`
+                    : "Submit what was covered + confidence change + topics."}
+                </div>
+              </div>
+
+              <button
+                disabled={actionLoading}
+                onClick={closeModal}
+                className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              {/* Summary */}
+              <div>
+                <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
+                  Session summary *
+                </label>
+                <textarea
+                  value={summary}
+                  onChange={(e) => setSummary(e.target.value)}
+                  placeholder="What was covered? Key concepts, exercises, mistakes corrected, etc."
+                  rows={4}
+                  className="w-full rounded-xl border px-3 py-2 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))]"
+                />
+              </div>
+
+              {/* Confidence */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
+                    Confidence before (1–5) *
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={confidenceBefore}
+                    onChange={(e) => setConfidenceBefore(Number(e.target.value))}
+                    className="w-full rounded-md border px-3 py-2 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
+                    Confidence after (1–5) *
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={confidenceAfter}
+                    onChange={(e) => setConfidenceAfter(Number(e.target.value))}
+                    className="w-full rounded-md border px-3 py-2 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))]"
+                  />
+                </div>
+              </div>
+
+              {/* Topics chips */}
+              <div>
+                <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
+                  Topics covered * (press Enter/Comma)
+                </label>
+
+                <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2">
+                  <div className="flex flex-wrap gap-2">
+                    {topics.map((t) => (
+                      <span
+                        key={t}
+                        className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1 text-[11px] font-semibold text-[rgb(var(--fg))]"
+                      >
+                        {t}
+                        <button
+                          type="button"
+                          onClick={() => removeTopic(t)}
+                          className="text-[rgb(var(--muted2))] hover:text-rose-500"
+                          aria-label={`Remove ${t}`}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+
+                    <input
+                      value={topicInput}
+                      onChange={(e) => setTopicInput(e.target.value)}
+                      onKeyDown={onTopicKeyDown}
+                      onBlur={() => {
+                        if (topicInput.trim()) {
+                          addTopic(topicInput);
+                          setTopicInput("");
+                        }
+                      }}
+                      placeholder="e.g. Derivatives, Chain rule, Integrals"
+                      className="min-w-[180px] flex-1 bg-transparent text-sm outline-none text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))]"
+                    />
+                  </div>
+
+                  <div className="mt-2 text-[11px] text-[rgb(var(--muted2))]">
+                    Tip: Keep topics short. You can add up to 12.
+                  </div>
+                </div>
+              </div>
+
+              {/* Next steps */}
+              <div>
+                <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
+                  Next steps (optional)
+                </label>
+                <input
+                  value={nextSteps}
+                  onChange={(e) => setNextSteps(e.target.value)}
+                  placeholder="Homework / what to revise before next session"
+                  className="w-full rounded-md border px-3 py-2 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))]"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  disabled={actionLoading}
+                  onClick={closeModal}
+                  className="flex-1 rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
+                >
+                  Back
+                </button>
+
+                <button
+                  disabled={actionLoading}
+                  onClick={submitComplete}
+                  className="flex-1 rounded-md px-3 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-90 disabled:opacity-60"
+                >
+                  {actionLoading ? "Saving…" : "Submit & complete"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

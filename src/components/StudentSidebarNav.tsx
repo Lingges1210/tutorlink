@@ -10,6 +10,7 @@ import {
   GraduationCap,
   Lock,
   ShieldOff,
+  BarChart3, //  NEW
 } from "lucide-react";
 
 export type SidebarIconKey =
@@ -19,7 +20,8 @@ export type SidebarIconKey =
   | "calendar"
   | "graduation"
   | "lock"
-  | "shieldoff";
+  | "shieldoff"
+  | "progress"; //  NEW
 
 export type SidebarItem =
   | {
@@ -44,6 +46,7 @@ const ICONS: Record<SidebarIconKey, React.ElementType> = {
   graduation: GraduationCap,
   lock: Lock,
   shieldoff: ShieldOff,
+  progress: BarChart3, //  NEW
 };
 
 export default function StudentSidebarNav({
@@ -75,7 +78,6 @@ export default function StudentSidebarNav({
 
         const Icon = ICONS[it.icon];
 
-        // Disabled item
         if (it.type === "disabled") {
           return (
             <div
@@ -94,9 +96,8 @@ export default function StudentSidebarNav({
           );
         }
 
-        //  Active logic
         const isDashboardRoot =
-  it.href === "/dashboard/student" || it.href === "/dashboard/tutor";
+          it.href === "/dashboard/student" || it.href === "/dashboard/tutor";
         const active = isDashboardRoot
           ? pathname === it.href
           : pathname === it.href || pathname.startsWith(it.href + "/");

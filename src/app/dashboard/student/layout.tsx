@@ -16,18 +16,17 @@ export default async function StudentLayout({
   if (!user?.email) redirect("/auth/login");
 
   const dbUser = await prisma.user.findUnique({
-  where: { email: user.email.toLowerCase() },
-  select: {
-    name: true,
-    email: true,
-    role: true,
-    verificationStatus: true,
-    isDeactivated: true,
-    isTutorApproved: true,
-    roleAssignments: { select: { role: true } },
-  },
-});
-
+    where: { email: user.email.toLowerCase() },
+    select: {
+      name: true,
+      email: true,
+      role: true,
+      verificationStatus: true,
+      isDeactivated: true,
+      isTutorApproved: true,
+      roleAssignments: { select: { role: true } },
+    },
+  });
 
   if (!dbUser) redirect("/auth/login");
   if (dbUser.isDeactivated) redirect("/auth/deactivated");
@@ -35,10 +34,9 @@ export default async function StudentLayout({
   const verified = dbUser.verificationStatus === "AUTO_VERIFIED";
 
   const isTutor =
-  dbUser.isTutorApproved ||
-  dbUser.role === "TUTOR" ||
-  dbUser.roleAssignments.some((r) => r.role === "TUTOR");
-
+    dbUser.isTutorApproved ||
+    dbUser.role === "TUTOR" ||
+    dbUser.roleAssignments.some((r) => r.role === "TUTOR");
 
   const sidebarItems: SidebarItem[] = [
     {
@@ -53,46 +51,64 @@ export default async function StudentLayout({
       label: "Profile",
       icon: "profile",
     },
+
+    //  NEW: Progress link (inside student dashboard)
+    ...(verified
+      ? ([
+          {
+            type: "link",
+            href: "/dashboard/student/progress",
+            label: "Progress",
+            icon: "progress", // make sure your StudentSidebarNav supports this icon name
+          },
+        ] as SidebarItem[])
+      : ([
+          {
+            type: "disabled",
+            label: "Progress (locked)",
+            icon: "progress",
+          },
+        ] as SidebarItem[])),
+
     { type: "divider" },
 
     ...(verified
-  ? ([
-      {
-        type: "link",
-        href: "/find-tutor",
-        label: "Find Tutor",
-        icon: "search",
-      },
-      {
-        type: "link",
-        href: "/dashboard/student/sessions",
-        label: "My Bookings",
-        icon: "calendar",
-      },
-      !isTutor
-        ? {
+      ? ([
+          {
             type: "link",
-            href: "/dashboard/student/apply-tutor",
-            label: "Apply as Tutor",
-            icon: "graduation",
-          }
-        : {
+            href: "/find-tutor",
+            label: "Find Tutor",
+            icon: "search",
+          },
+          {
             type: "link",
-            href: "/dashboard/tutor",
-            label: "Tutor Dashboard",
+            href: "/dashboard/student/sessions",
+            label: "My Bookings",
+            icon: "calendar",
+          },
+          !isTutor
+            ? {
+                type: "link",
+                href: "/dashboard/student/apply-tutor",
+                label: "Apply as Tutor",
+                icon: "graduation",
+              }
+            : {
+                type: "link",
+                href: "/dashboard/tutor",
+                label: "Tutor Dashboard",
+                icon: "graduation",
+              },
+        ] as SidebarItem[])
+      : ([
+          { type: "disabled", label: "Find Tutor (locked)", icon: "search" },
+          { type: "disabled", label: "My Bookings (locked)", icon: "calendar" },
+          {
+            type: "disabled",
+            label: "Apply as Tutor (locked)",
             icon: "graduation",
           },
-    ] as SidebarItem[])
-  : ([
-      { type: "disabled", label: "Find Tutor (locked)", icon: "search" },
-      { type: "disabled", label: "My Bookings (locked)", icon: "calendar" },
-      {
-        type: "disabled",
-        label: "Apply as Tutor (locked)",
-        icon: "graduation",
-      },
-    ] as SidebarItem[])),
-
+        ] as SidebarItem[])),
 
     { type: "divider" },
     {
@@ -122,6 +138,25 @@ export default async function StudentLayout({
       label: "Profile",
       icon: "profile",
     },
+
+    //  NEW: Progress also in mobile
+    ...(verified
+      ? ([
+          {
+            type: "link",
+            href: "/dashboard/student/progress",
+            label: "Progress",
+            icon: "progress",
+          },
+        ] as SidebarItem[])
+      : ([
+          {
+            type: "disabled",
+            label: "Progress (locked)",
+            icon: "progress",
+          },
+        ] as SidebarItem[])),
+
     {
       type: "link",
       href: "/dashboard/student/security/change-password",
@@ -168,7 +203,7 @@ export default async function StudentLayout({
                 </div>
               </div>
 
-              {/*  Client nav renders icons + active state */}
+              {/* Client nav renders icons + active state */}
               <StudentSidebarNav items={sidebarItems} />
             </div>
           </aside>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 type VerificationStatus = "AUTO_VERIFIED" | "PENDING_REVIEW";
 
@@ -74,7 +75,7 @@ function PrimaryLinkButton({
   children,
 }: {
   href: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <Link
@@ -141,11 +142,9 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
           </div>
 
           <div className="flex items-center gap-2">
-          <DashboardSwitcher isTutor={isTutor} active="student" />
-          <VerificationBadge status={user.verificationStatus} />
+            <DashboardSwitcher isTutor={isTutor} active="student" />
+            <VerificationBadge status={user.verificationStatus} />
           </div>
-
-
         </div>
       </div>
 
@@ -192,7 +191,9 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
 
           <div className="mt-4 flex flex-wrap gap-3">
             {isVerified ? (
-              <PrimaryLinkButton href="/find-tutor">Find a Tutor</PrimaryLinkButton>
+              <PrimaryLinkButton href="/find-tutor">
+                Find a Tutor
+              </PrimaryLinkButton>
             ) : (
               <DisabledButton>Find a Tutor</DisabledButton>
             )}
@@ -206,40 +207,109 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
         </div>
 
         {/* Apply tutor card (hide if already tutor) */}
-{!isTutor && (
-  <div
-    className="
-      rounded-3xl border p-6
-      border-[rgb(var(--border))]
-      bg-[rgb(var(--card) / 0.7)]
-      shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]
-      transition-all duration-200
-      hover:-translate-y-0.5
-      hover:shadow-[0_28px_80px_rgb(var(--shadow)/0.14)]
-    "
-  >
-    <h2 className="text-sm font-semibold text-[rgb(var(--fg))]">
-      Want to become a tutor?
-    </h2>
-    <p className="mt-1 text-xs text-[rgb(var(--muted))]">
-      Apply and admins will review your application.
-    </p>
+        {!isTutor && (
+          <div
+            className="
+              rounded-3xl border p-6
+              border-[rgb(var(--border))]
+              bg-[rgb(var(--card) / 0.7)]
+              shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]
+              transition-all duration-200
+              hover:-translate-y-0.5
+              hover:shadow-[0_28px_80px_rgb(var(--shadow)/0.14)]
+            "
+          >
+            <h2 className="text-sm font-semibold text-[rgb(var(--fg))]">
+              Want to become a tutor?
+            </h2>
+            <p className="mt-1 text-xs text-[rgb(var(--muted))]">
+              Apply and admins will review your application.
+            </p>
 
-    <div className="mt-4">
-      {isVerified ? (
-        <PrimaryLinkButton href="/dashboard/student/apply-tutor">
-          Apply as Tutor
-        </PrimaryLinkButton>
-      ) : (
-        <DisabledButton>Apply as Tutor</DisabledButton>
-      )}
-    </div>
+            <div className="mt-4">
+              {isVerified ? (
+                <PrimaryLinkButton href="/dashboard/student/apply-tutor">
+                  Apply as Tutor
+                </PrimaryLinkButton>
+              ) : (
+                <DisabledButton>Apply as Tutor</DisabledButton>
+              )}
+            </div>
 
-    <p className="mt-3 text-[0.7rem] text-[rgb(var(--muted2))]">
-      Requires verification.
-    </p>
-  </div>
-)}
+            <p className="mt-3 text-[0.7rem] text-[rgb(var(--muted2))]">
+              Requires verification.
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/*  NEW: Progress Tracking card (inside dashboard) */}
+      <section className="grid gap-4 md:grid-cols-2">
+        <div
+          className="
+            rounded-3xl border p-6
+            border-[rgb(var(--border))]
+            bg-[rgb(var(--card) / 0.7)]
+            shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]
+            transition-all duration-200
+            hover:-translate-y-0.5
+            hover:shadow-[0_28px_80px_rgb(var(--shadow)/0.14)]
+          "
+        >
+          <h2 className="text-sm font-semibold text-[rgb(var(--fg))]">
+            Progress Tracking
+          </h2>
+          <p className="mt-1 text-xs text-[rgb(var(--muted))]">
+            View your progress by subject, study streak, and topics covered.
+            Export a progress report anytime.
+          </p>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            {isVerified ? (
+              <PrimaryLinkButton href="/dashboard/student/progress">
+                View Progress
+              </PrimaryLinkButton>
+            ) : (
+              <DisabledButton>View Progress</DisabledButton>
+            )}
+          </div>
+
+          {!isVerified && (
+            <p className="mt-3 text-[0.7rem] text-[rgb(var(--muted2))]">
+              Unlocks after verification.
+            </p>
+          )}
+        </div>
+
+        {/* optional second card placeholder (if you want later) */}
+        <div
+          className="
+            rounded-3xl border p-6
+            border-[rgb(var(--border))]
+            bg-[rgb(var(--card) / 0.7)]
+            shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]
+          "
+        >
+          <h2 className="text-sm font-semibold text-[rgb(var(--fg))]">
+            Session History
+          </h2>
+          <p className="mt-1 text-xs text-[rgb(var(--muted))]">
+            Quickly review what you learned in past sessions.
+          </p>
+
+          <div className="mt-4">
+            {isVerified ? (
+              <Link
+                href="/dashboard/student/progress?tab=history"
+                className="inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]"
+              >
+                Open History
+              </Link>
+            ) : (
+              <DisabledButton>Open History</DisabledButton>
+            )}
+          </div>
+        </div>
       </section>
     </div>
   );
