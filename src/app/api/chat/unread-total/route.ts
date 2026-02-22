@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
-import { autoCompleteSessionsIfNeeded } from "@/lib/autoCompleteSessions";
 
 export async function GET() {
   const supabase = await supabaseServerComponent();
@@ -19,13 +18,6 @@ export async function GET() {
   });
 
   if (!dbUser) return NextResponse.json({ ok: false }, { status: 404 });
-
-  //  NO-CRON automation
-  try {
-    await autoCompleteSessionsIfNeeded();
-  } catch {
-    // ignore
-  }
 
   const now = new Date();
 

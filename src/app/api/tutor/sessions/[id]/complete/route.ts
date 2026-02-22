@@ -148,7 +148,7 @@ export async function POST(
       // 1) Mark session completed
       const updated = await tx.session.update({
         where: { id: session.id },
-        data: { status: "COMPLETED" },
+        data: { status: "COMPLETED", completedAt: new Date() },
         select: { id: true, studentId: true },
       });
 
@@ -291,13 +291,13 @@ export async function POST(
   try {
     if (updatedSession?.studentId) {
       await notify.user({
-        userId: updatedSession.studentId,
-        viewer: "STUDENT",
-        type: "SESSION_COMPLETED",
-        title: "Session completed",
-        body: "Your tutoring session has been marked as completed. Chat stays open for 8 hours.",
-        data: { sessionId: updatedSession.id },
-      });
+  userId: updatedSession.studentId,
+  viewer: "STUDENT",
+  type: "SESSION_COMPLETED",
+  title: "Session Completed",
+  body: "Your tutor completed the session. Please rate your tutor and leave feedback.",
+  data: { sessionId: updatedSession.id, action: "RATE_SESSION" },
+});
     }
   } catch {
     // ignore

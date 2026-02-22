@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { notify } from "@/lib/notify"; //  NEW
 
 export async function GET(
   _req: Request,
@@ -43,6 +44,7 @@ export async function GET(
       tutorId: true,
       rating: true,
       comment: true,
+      confirmed: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -88,6 +90,10 @@ export async function POST(
   const ratingRaw = body?.rating;
   const commentRaw =
     typeof body?.comment === "string" ? body.comment.trim() : "";
+
+  //  NEW: optional confirmed (true/false/null)
+  const confirmed =
+    body?.confirmed === true ? true : body?.confirmed === false ? false : null;
 
   const rating = Number(ratingRaw);
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
@@ -152,11 +158,13 @@ export async function POST(
       tutorId: session.tutorId,
       rating,
       comment: commentRaw ? commentRaw : null,
+      confirmed, //  NEW
     },
     select: {
       id: true,
       rating: true,
       comment: true,
+      confirmed: true, //  NEW
       createdAt: true,
       tutorId: true,
     },
@@ -179,6 +187,20 @@ export async function POST(
       ratingCount: agg._count.rating,
     },
   });
+
+  //  NEW: notify tutor AFTER student submits rating
+  try {
+    await notify.user({
+      userId: session.tutorId,
+      viewer: "TUTOR",
+      type: "SESSION_RATED",
+      title: "New rating received",
+      body: `A student rated your session (${rating}/5).`,
+      data: { sessionId, rating, confirmed },
+    });
+  } catch {
+    // ignore
+  }
 
   return NextResponse.json({
     ok: true,
