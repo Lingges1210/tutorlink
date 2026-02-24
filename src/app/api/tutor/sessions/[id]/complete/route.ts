@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { notify } from "@/lib/notify";
 import { seedBadgesOnce, checkAndAwardBadges } from "@/lib/gamification/badges";
+import { GAMIFICATION_RULES } from "@/lib/gamification/rules";
 
 async function triggerAllocator() {
   const appUrl = process.env.APP_URL;
@@ -32,10 +33,6 @@ function clampInt(n: number, min: number, max: number) {
   if (Number.isNaN(n)) return min;
   return Math.max(min, Math.min(max, n));
 }
-
-// ===== Achievements rules (you can tune later) =====
-const STUDENT_POINTS_SESSION_COMPLETED = 30;
-const TUTOR_POINTS_SESSION_COMPLETED = 40;
 
 // Create a points transaction inside an existing tx (no nested transaction)
 async function awardPointsInTx(tx: any, args: {
@@ -323,7 +320,7 @@ export async function POST(
 if (studentId) {
   await awardPointsInTx(tx, {
     userId: studentId,
-    amount: STUDENT_POINTS_SESSION_COMPLETED,
+    amount: GAMIFICATION_RULES.student.sessionCompleted,    
     description: "Session completed",
     sessionId: session.id,
     type: "EARN",
@@ -338,7 +335,7 @@ if (!tutorId) {
 
 await awardPointsInTx(tx, {
   userId: tutorId,
-  amount: TUTOR_POINTS_SESSION_COMPLETED,
+  amount: GAMIFICATION_RULES.tutor.sessionCompleted,
   description: "Tutored a session",
   sessionId: session.id,
   type: "EARN",
@@ -382,6 +379,7 @@ if (tutorId) {
   await checkAndAwardBadges({
     userId: tutorId,
     completedSessionsCount: tutorCompleted,
+    tutoredSessionsCount: tutorCompleted,  
     totalPoints: tutorWallet?.total ?? 0,
   });
 }

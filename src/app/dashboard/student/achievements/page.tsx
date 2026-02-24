@@ -1,8 +1,22 @@
+// src/app/dashboard/student/achievements/page.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Award, Trophy, History, Sparkles, RefreshCcw, Medal, Users } from "lucide-react";
+import {
+  Award,
+  Trophy,
+  History,
+  Sparkles,
+  RefreshCcw,
+  Medal,
+  Users,
+  ChevronDown,
+  ChevronUp,
+  Info,
+  Star,
+} from "lucide-react";
+import { GAMIFICATION_RULES } from "@/lib/gamification/rules";
 
 type Scope = "ALL" | "STUDENTS" | "TUTORS";
 
@@ -87,6 +101,151 @@ function ScopePill({
   );
 }
 
+function RulesCard({
+  studentPointsPerCompletion,
+  tutorPointsPerCompletion,
+  weeklyBonus,
+}: {
+  studentPointsPerCompletion: number;
+  tutorPointsPerCompletion: number;
+  weeklyBonus?: { first: number; second: number; third: number };
+}) {
+  const [open, setOpen] = useState(false);
+
+  const bonus = weeklyBonus ?? { first: 100, second: 60, third: 30 };
+
+  return (
+    <div className="mt-4 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-4 shadow-[0_20px_60px_rgb(var(--shadow)/0.10)]">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-start justify-between gap-3 text-left"
+      >
+        <div className="flex items-start gap-2">
+          <div className="mt-0.5 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-2">
+            <Info className="h-4 w-4 text-[rgb(var(--primary))]" />
+          </div>
+
+          <div>
+            <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+              Rules: How Points & Leaderboard works
+            </div>
+            <div className="mt-0.5 text-xs text-[rgb(var(--muted))]">
+              Clear rules so users know exactly how to earn points.
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-1 inline-flex items-center gap-2 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] transition">
+          {open ? (
+            <>
+              Hide <ChevronUp className="h-4 w-4" />
+            </>
+          ) : (
+            <>
+              Show <ChevronDown className="h-4 w-4" />
+            </>
+          )}
+        </div>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="rules"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.18 }}
+            className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3"
+          >
+            {/* Points rules */}
+            <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[rgb(var(--muted2))]">
+                <Sparkles className="h-4 w-4 text-[rgb(var(--primary))]" />
+                Points
+              </div>
+
+              <div className="mt-2 space-y-2 text-sm text-[rgb(var(--fg))]">
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] px-3 py-2">
+                  <span className="text-xs text-[rgb(var(--muted))]">Student: session completed</span>
+                  <span className="text-xs font-semibold text-emerald-500">
+                    +{studentPointsPerCompletion}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] px-3 py-2">
+                  <span className="text-xs text-[rgb(var(--muted))]">Tutor: tutored a session</span>
+                  <span className="text-xs font-semibold text-emerald-500">
+                    +{tutorPointsPerCompletion}
+                  </span>
+                </div>
+
+                <div className="text-[11px] text-[rgb(var(--muted2))]">
+                  Points are stored in your wallet and shown in “Points History”.
+                </div>
+              </div>
+            </div>
+
+            {/* Leaderboard rules */}
+            <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[rgb(var(--muted2))]">
+                <Trophy className="h-4 w-4 text-[rgb(var(--primary))]" />
+                Weekly Leaderboard
+              </div>
+
+              <div className="mt-2 space-y-2">
+                <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] px-3 py-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[rgb(var(--muted))]">Top 1 bonus</span>
+                    <span className="text-xs font-semibold text-emerald-500">+{bonus.first}</span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className="text-xs text-[rgb(var(--muted))]">Top 2 bonus</span>
+                    <span className="text-xs font-semibold text-emerald-500">+{bonus.second}</span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className="text-xs text-[rgb(var(--muted))]">Top 3 bonus</span>
+                    <span className="text-xs font-semibold text-emerald-500">+{bonus.third}</span>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-[rgb(var(--muted2))]">
+                  Leaderboard resets every week (Monday start).
+                </div>
+              </div>
+            </div>
+
+            {/* Badges rules */}
+            <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[rgb(var(--muted2))]">
+                <Medal className="h-4 w-4 text-[rgb(var(--primary))]" />
+                Badges
+              </div>
+
+              <div className="mt-2 space-y-2">
+                <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] px-3 py-2">
+                  <div className="flex items-center gap-2 text-xs text-[rgb(var(--fg))]">
+                    <Star className="h-4 w-4 text-[rgb(var(--primary))]" />
+                    Badges unlock automatically when you hit milestones.
+                  </div>
+                  <div className="mt-1 text-[11px] text-[rgb(var(--muted2))]">
+                    Example: sessions completed, total points, streaks, tutor milestones.
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-[rgb(var(--muted2))]">
+                  Your latest earned badges appear in “My Badges”.
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function AchievementsPage() {
   const [meData, setMeData] = useState<MeRes | null>(null);
   const [lbData, setLbData] = useState<LeaderboardRes | null>(null);
@@ -122,7 +281,9 @@ export default function AchievementsPage() {
     try {
       if (isManual) setRefreshing(true);
 
-      const lbUrl = `/api/achievements/leaderboard/weekly?limit=10&mode=${encodeURIComponent(nextScope)}`;
+      const lbUrl = `/api/achievements/leaderboard/weekly?limit=10&mode=${encodeURIComponent(
+        nextScope
+      )}`;
 
       const [meRes, lbRes] = await Promise.all([
         fetch("/api/achievements/me", { cache: "no-store" }),
@@ -157,7 +318,9 @@ export default function AchievementsPage() {
     <div className="mx-auto w-full max-w-6xl px-4 py-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-[rgb(var(--fg))]">Achievements</h1>
+          <h1 className="text-xl font-semibold text-[rgb(var(--fg))]">
+            Achievements
+          </h1>
           <p className="mt-1 text-sm text-[rgb(var(--muted))]">
             Track your points, badges, and weekly ranking.
           </p>
@@ -181,6 +344,13 @@ export default function AchievementsPage() {
         </button>
       </div>
 
+      {/* ✅ NEW: Clear Rules (collapsible) */}
+      <RulesCard
+        studentPointsPerCompletion={Number(GAMIFICATION_RULES?.student?.sessionCompleted ?? 0)}
+        tutorPointsPerCompletion={Number(GAMIFICATION_RULES?.tutor?.sessionCompleted ?? 0)}
+        weeklyBonus={{ first: 100, second: 60, third: 30 }}
+      />
+
       {/* Overview cards */}
       <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-4">
         <motion.div
@@ -195,7 +365,9 @@ export default function AchievementsPage() {
           <div className="mt-2 text-2xl font-bold text-[rgb(var(--fg))]">
             {loading ? "—" : totalPoints}
           </div>
-          <div className="mt-1 text-xs text-[rgb(var(--muted2))]">Lifetime total</div>
+          <div className="mt-1 text-xs text-[rgb(var(--muted2))]">
+            Lifetime total
+          </div>
         </motion.div>
 
         <motion.div
@@ -211,7 +383,9 @@ export default function AchievementsPage() {
           <div className="mt-2 text-2xl font-bold text-[rgb(var(--fg))]">
             {loading ? "—" : badgesCount}
           </div>
-          <div className="mt-1 text-xs text-[rgb(var(--muted2))]">Achievements unlocked</div>
+          <div className="mt-1 text-xs text-[rgb(var(--muted2))]">
+            Achievements unlocked
+          </div>
         </motion.div>
 
         <motion.div
@@ -227,7 +401,9 @@ export default function AchievementsPage() {
           <div className="mt-2 text-2xl font-bold text-[rgb(var(--fg))]">
             {loading ? "—" : earnedThisWeek}
           </div>
-          <div className="mt-1 text-xs text-[rgb(var(--muted2))]">Points earned this week</div>
+          <div className="mt-1 text-xs text-[rgb(var(--muted2))]">
+            Points earned this week
+          </div>
         </motion.div>
 
         <motion.div
@@ -243,7 +419,9 @@ export default function AchievementsPage() {
           <div className="mt-2 text-2xl font-bold text-[rgb(var(--fg))]">
             {loading ? "—" : myRank ? `#${myRank}` : "—"}
           </div>
-          <div className="mt-1 text-xs text-[rgb(var(--muted2))]">In {scope.toLowerCase()} leaderboard</div>
+          <div className="mt-1 text-xs text-[rgb(var(--muted2))]">
+            In {scope.toLowerCase()} leaderboard
+          </div>
         </motion.div>
       </div>
 
@@ -268,8 +446,12 @@ export default function AchievementsPage() {
                   exit={{ opacity: 0 }}
                   className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3"
                 >
-                  <div className="text-sm font-semibold text-[rgb(var(--fg))]">{b.badge.name}</div>
-                  <div className="mt-1 text-xs text-[rgb(var(--muted))]">{b.badge.description}</div>
+                  <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                    {b.badge.name}
+                  </div>
+                  <div className="mt-1 text-xs text-[rgb(var(--muted))]">
+                    {b.badge.description}
+                  </div>
                   <div className="mt-2 text-[11px] text-[rgb(var(--muted2))]">
                     Earned: {formatDateTime(b.awardedAt)}
                   </div>
@@ -329,7 +511,9 @@ export default function AchievementsPage() {
                     <div className="text-sm font-semibold text-[rgb(var(--fg))]">
                       {r.user?.name ?? r.user?.email ?? "Unknown"}
                     </div>
-                    <div className="text-xs text-[rgb(var(--muted2))]">{r.user?.role ?? ""}</div>
+                    <div className="text-xs text-[rgb(var(--muted2))]">
+                      {r.user?.role ?? ""}
+                    </div>
                   </div>
                 </div>
 
@@ -368,7 +552,9 @@ export default function AchievementsPage() {
               key={h.id}
               className="grid grid-cols-12 border-t border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-xs"
             >
-              <div className="col-span-4 text-[rgb(var(--muted))]">{formatDateTime(h.createdAt)}</div>
+              <div className="col-span-4 text-[rgb(var(--muted))]">
+                {formatDateTime(h.createdAt)}
+              </div>
               <div className="col-span-6 text-[rgb(var(--fg))]">{h.description}</div>
               <div className={`col-span-2 text-right font-semibold ${amountBadge(h.amount)}`}>
                 {h.amount > 0 ? `+${h.amount}` : h.amount}
@@ -377,7 +563,9 @@ export default function AchievementsPage() {
           ))}
 
           {!loading && (meData?.history?.length ?? 0) === 0 && (
-            <div className="p-4 text-sm text-[rgb(var(--muted))]">No points transactions yet.</div>
+            <div className="p-4 text-sm text-[rgb(var(--muted))]">
+              No points transactions yet.
+            </div>
           )}
         </div>
       </div>

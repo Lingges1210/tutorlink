@@ -18,7 +18,8 @@ export async function GET() {
 
   if (!me || me.isDeactivated) return NextResponse.json({ ok: false }, { status: 401 });
 
-  await seedBadgesOnce();
+  const badgeCount = await prisma.badge.count();
+  if (badgeCount === 0) await seedBadgesOnce();
 
   await prisma.pointsWallet.upsert({
     where: { userId: me.id },
