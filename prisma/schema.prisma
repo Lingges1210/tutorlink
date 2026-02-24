@@ -65,6 +65,11 @@ model User {
   subjectProgress StudentSubjectProgress[]
   topicProgress   StudentTopicProgress[]
 
+  pointsWallet        PointsWallet?
+  pointsTransactions  PointsTransaction[]
+  userBadges          UserBadge[]
+  rewardRedemptions   RewardRedemption[]
+
   @@schema("public")
 }
 
@@ -446,6 +451,98 @@ model SessionReview {
 
   @@index([studentId])
   @@index([tutorId])
+
+  @@schema("public")
+}
+
+enum PointsType {
+  EARN
+  REDEEM
+  BONUS
+  PENALTY
+
+  @@schema("public")
+}
+
+model PointsWallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  total     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@schema("public")
+}
+
+model PointsTransaction {
+  id          String     @id @default(cuid())
+  userId      String
+  type        PointsType
+  amount      Int
+  description String
+  sessionId   String?
+  createdAt   DateTime   @default(now())
+
+  user        User       @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([sessionId])
+
+  @@schema("public")
+}
+
+model Badge {
+  id          String   @id @default(cuid())
+  key         String   @unique // e.g. "FIRST_SESSION"
+  name        String
+  description String
+  icon        String   // e.g. "trophy"
+  createdAt   DateTime @default(now())
+
+  userBadges UserBadge[]
+
+  @@schema("public")
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  badgeId   String
+  awardedAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  badge     Badge    @relation(fields: [badgeId], references: [id])
+
+  @@unique([userId, badgeId])
+
+  @@schema("public")
+}
+
+model Reward {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  pointsCost  Int
+  stock       Int?
+  createdAt   DateTime @default(now())
+
+  redemptions RewardRedemption[]
+
+  @@schema("public")
+}
+
+model RewardRedemption {
+  id        String   @id @default(cuid())
+  userId    String
+  rewardId  String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  reward    Reward   @relation(fields: [rewardId], references: [id])
+
+  @@index([userId, createdAt])
 
   @@schema("public")
 }

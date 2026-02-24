@@ -52,14 +52,20 @@ export default async function StudentLayout({
       icon: "profile",
     },
 
-    //  NEW: Progress link (inside student dashboard)
     ...(verified
       ? ([
           {
             type: "link",
             href: "/dashboard/student/progress",
             label: "Progress",
-            icon: "progress", // make sure your StudentSidebarNav supports this icon name
+            icon: "progress",
+          },
+          // ✅ NEW: Achievements link
+          {
+            type: "link",
+            href: "/dashboard/student/achievements",
+            label: "Achievements",
+            icon: "trophy", // if not supported, add mapping in StudentSidebarNav
           },
         ] as SidebarItem[])
       : ([
@@ -67,6 +73,12 @@ export default async function StudentLayout({
             type: "disabled",
             label: "Progress (locked)",
             icon: "progress",
+          },
+          // ✅ NEW: Achievements locked
+          {
+            type: "disabled",
+            label: "Achievements (locked)",
+            icon: "trophy",
           },
         ] as SidebarItem[])),
 
@@ -139,7 +151,6 @@ export default async function StudentLayout({
       icon: "profile",
     },
 
-    //  NEW: Progress also in mobile
     ...(verified
       ? ([
           {
@@ -148,12 +159,24 @@ export default async function StudentLayout({
             label: "Progress",
             icon: "progress",
           },
+          // ✅ NEW: Achievements in mobile
+          {
+            type: "link",
+            href: "/dashboard/student/achievements",
+            label: "Achievements",
+            icon: "trophy",
+          },
         ] as SidebarItem[])
       : ([
           {
             type: "disabled",
             label: "Progress (locked)",
             icon: "progress",
+          },
+          {
+            type: "disabled",
+            label: "Achievements (locked)",
+            icon: "trophy",
           },
         ] as SidebarItem[])),
 
@@ -203,16 +226,13 @@ export default async function StudentLayout({
                 </div>
               </div>
 
-              {/* Client nav renders icons + active state */}
               <StudentSidebarNav items={sidebarItems} />
             </div>
           </aside>
 
           {/* Right content */}
           <main className="min-w-0 flex-1 p-5 md:p-6">
-            {/* Mobile top menu (< md only) */}
             <StudentSidebarNav items={mobileItems} variant="mobile" />
-
             {children}
           </main>
         </div>

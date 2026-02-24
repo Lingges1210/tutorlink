@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { notify } from "@/lib/notify";
+import { seedBadgesOnce, checkAndAwardBadges } from "@/lib/gamification/badges";
 
 async function triggerAllocator() {
   const appUrl = process.env.APP_URL;
@@ -32,13 +33,62 @@ function clampInt(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
+// ===== Achievements rules (you can tune later) =====
+const STUDENT_POINTS_SESSION_COMPLETED = 30;
+const TUTOR_POINTS_SESSION_COMPLETED = 40;
+
+// Create a points transaction inside an existing tx (no nested transaction)
+async function awardPointsInTx(tx: any, args: {
+  userId: string;
+  amount: number; // > 0
+  description: string;
+  sessionId?: string | null;
+  type?: "EARN" | "BONUS";
+}) {
+  const { userId, amount, description, sessionId, type = "EARN" } = args;
+  if (!userId || amount <= 0) return { ok: false, skipped: true };
+
+  // ensure wallet exists
+  await tx.pointsWallet.upsert({
+    where: { userId },
+    create: { userId, total: 0 },
+    update: {},
+  });
+
+  // simple anti-dup guard (idempotency per session+desc+type)
+  if (sessionId) {
+    const existing = await tx.pointsTransaction.findFirst({
+      where: { userId, sessionId, description, type },
+      select: { id: true },
+    });
+    if (existing) return { ok: true, skipped: true };
+  }
+
+  await tx.pointsTransaction.create({
+    data: {
+      userId,
+      type,
+      amount,
+      description,
+      sessionId: sessionId ?? null,
+    },
+  });
+
+  await tx.pointsWallet.update({
+    where: { userId },
+    data: { total: { increment: amount } },
+  });
+
+  return { ok: true, skipped: false };
+}
+
 export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
 
-  //  Parse body (now required)
+  // Parse body (now required)
   const body = await req.json().catch(() => null);
   const summary = String(body?.summary ?? "").trim();
   const nextSteps =
@@ -140,7 +190,14 @@ export async function POST(
     );
   }
 
-  //  Transaction: completion + topics + progress + mark session completed
+  // Ensure badges exist (safe to call many times)
+  try {
+    await seedBadgesOnce();
+  } catch {
+    // ignore (if badges tables not migrated, etc.)
+  }
+
+  // Transaction: completion + topics + progress + mark session completed + award points
   let updatedSession: { id: string; studentId: string | null } | null = null;
 
   try {
@@ -242,7 +299,9 @@ export async function POST(
         // topic-level progress
         for (const t of topicRows) {
           await tx.studentTopicProgress.upsert({
-            where: { studentId_topicId: { studentId: session.studentId, topicId: t.id } },
+            where: {
+              studentId_topicId: { studentId: session.studentId, topicId: t.id },
+            },
             create: {
               studentId: session.studentId,
               subjectId: session.subjectId,
@@ -259,14 +318,75 @@ export async function POST(
         }
       }
 
+      // 6) Award achievements points (atomic with completion)
+     const studentId = session.studentId ?? null;
+if (studentId) {
+  await awardPointsInTx(tx, {
+    userId: studentId,
+    amount: STUDENT_POINTS_SESSION_COMPLETED,
+    description: "Session completed",
+    sessionId: session.id,
+    type: "EARN",
+  });
+}
+
+      const tutorId = session.tutorId ?? null;
+if (!tutorId) {
+  // should never happen for ACCEPTED sessions, but keeps TS + runtime safe
+  throw new Error("Missing tutorId on session");
+}
+
+await awardPointsInTx(tx, {
+  userId: tutorId,
+  amount: TUTOR_POINTS_SESSION_COMPLETED,
+  description: "Tutored a session",
+  sessionId: session.id,
+  type: "EARN",
+});
+
       return updated;
     });
   } catch (e: any) {
-    // If completion models not migrated yet, or constraint mismatch
     return NextResponse.json(
       { message: "Unable to save completion details. Check DB migrations." },
       { status: 500 }
     );
+  }
+
+  // Auto-award badges (after commit, idempotent via upsert)
+  try {
+    const studentId = updatedSession?.studentId ?? null;
+if (studentId) {
+  const [wallet, completedCount] = await Promise.all([
+    prisma.pointsWallet.findUnique({ where: { userId: studentId } }),
+    prisma.session.count({
+      where: { studentId, status: "COMPLETED" },
+    }),
+  ]);
+
+  await checkAndAwardBadges({
+    userId: studentId,
+    completedSessionsCount: completedCount,
+    totalPoints: wallet?.total ?? 0,
+  });
+}
+
+    // optional: tutor badges too
+const tutorId = session.tutorId ?? null;
+if (tutorId) {
+  const [tutorWallet, tutorCompleted] = await Promise.all([
+    prisma.pointsWallet.findUnique({ where: { userId: tutorId } }),
+    prisma.session.count({ where: { tutorId, status: "COMPLETED" } }),
+  ]);
+
+  await checkAndAwardBadges({
+    userId: tutorId,
+    completedSessionsCount: tutorCompleted,
+    totalPoints: tutorWallet?.total ?? 0,
+  });
+}
+  } catch {
+    // ignore
   }
 
   // keep chat open for 8 hours after session end
@@ -291,13 +411,13 @@ export async function POST(
   try {
     if (updatedSession?.studentId) {
       await notify.user({
-  userId: updatedSession.studentId,
-  viewer: "STUDENT",
-  type: "SESSION_COMPLETED",
-  title: "Session Completed",
-  body: "Your tutor completed the session. Please rate your tutor and leave feedback.",
-  data: { sessionId: updatedSession.id, action: "RATE_SESSION" },
-});
+        userId: updatedSession.studentId,
+        viewer: "STUDENT",
+        type: "SESSION_COMPLETED",
+        title: "Session Completed",
+        body: "Your tutor completed the session. Please rate your tutor and leave feedback.",
+        data: { sessionId: updatedSession.id, action: "RATE_SESSION" },
+      });
     }
   } catch {
     // ignore

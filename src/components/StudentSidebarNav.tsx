@@ -10,7 +10,8 @@ import {
   GraduationCap,
   Lock,
   ShieldOff,
-  BarChart3, //  NEW
+  BarChart3,
+  Trophy,  
 } from "lucide-react";
 
 export type SidebarIconKey =
@@ -21,7 +22,8 @@ export type SidebarIconKey =
   | "graduation"
   | "lock"
   | "shieldoff"
-  | "progress"; //  NEW
+  | "progress"
+  | "trophy";
 
 export type SidebarItem =
   | {
@@ -46,7 +48,8 @@ const ICONS: Record<SidebarIconKey, React.ElementType> = {
   graduation: GraduationCap,
   lock: Lock,
   shieldoff: ShieldOff,
-  progress: BarChart3, //  NEW
+  progress: BarChart3, 
+  trophy: Trophy,
 };
 
 export default function StudentSidebarNav({

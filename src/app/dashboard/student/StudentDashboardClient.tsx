@@ -243,8 +243,9 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
         )}
       </section>
 
-      {/*  NEW: Progress Tracking card (inside dashboard) */}
+      {/* Progress + Achievements */}
       <section className="grid gap-4 md:grid-cols-2">
+        {/* Progress */}
         <div
           className="
             rounded-3xl border p-6
@@ -281,7 +282,45 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
           )}
         </div>
 
-        {/* optional second card placeholder (if you want later) */}
+        {/* ✅ NEW: Achievements */}
+        <div
+          className="
+            rounded-3xl border p-6
+            border-[rgb(var(--border))]
+            bg-[rgb(var(--card) / 0.7)]
+            shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]
+            transition-all duration-200
+            hover:-translate-y-0.5
+            hover:shadow-[0_28px_80px_rgb(var(--shadow)/0.14)]
+          "
+        >
+          <h2 className="text-sm font-semibold text-[rgb(var(--fg))]">
+            Achievements
+          </h2>
+          <p className="mt-1 text-xs text-[rgb(var(--muted))]">
+            Track your points, unlock badges, and see your weekly leaderboard rank.
+          </p>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            {isVerified ? (
+              <PrimaryLinkButton href="/dashboard/student/achievements">
+                View Achievements
+              </PrimaryLinkButton>
+            ) : (
+              <DisabledButton>View Achievements</DisabledButton>
+            )}
+          </div>
+
+          {!isVerified && (
+            <p className="mt-3 text-[0.7rem] text-[rgb(var(--muted2))]">
+              Unlocks after verification.
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* Session History (kept as-is) */}
+      <section className="grid gap-4 md:grid-cols-2">
         <div
           className="
             rounded-3xl border p-6
@@ -299,12 +338,9 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
 
           <div className="mt-4">
             {isVerified ? (
-              <Link
-                href="/dashboard/student/progress?tab=history"
-                className="inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]"
-              >
+              <PrimaryLinkButton href="/dashboard/student/progress?tab=history">
                 Open History
-              </Link>
+              </PrimaryLinkButton>
             ) : (
               <DisabledButton>Open History</DisabledButton>
             )}
