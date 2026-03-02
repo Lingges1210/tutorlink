@@ -1,3 +1,5 @@
+// src/app/dashboard/student/layout.tsx
+
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
@@ -60,12 +62,18 @@ export default async function StudentLayout({
             label: "Progress",
             icon: "progress",
           },
-          // ✅ NEW: Achievements link
           {
             type: "link",
             href: "/dashboard/student/achievements",
             label: "Achievements",
-            icon: "trophy", // if not supported, add mapping in StudentSidebarNav
+            icon: "trophy",
+          },
+          // ✅ NEW: Rewards Shop
+          {
+            type: "link",
+            href: "/dashboard/student/rewards",
+            label: "Rewards Shop",
+            icon: "gift",
           },
         ] as SidebarItem[])
       : ([
@@ -74,11 +82,16 @@ export default async function StudentLayout({
             label: "Progress (locked)",
             icon: "progress",
           },
-          // ✅ NEW: Achievements locked
           {
             type: "disabled",
             label: "Achievements (locked)",
             icon: "trophy",
+          },
+          // ✅ NEW: Rewards Shop locked
+          {
+            type: "disabled",
+            label: "Rewards Shop (locked)",
+            icon: "gift",
           },
         ] as SidebarItem[])),
 
@@ -159,12 +172,18 @@ export default async function StudentLayout({
             label: "Progress",
             icon: "progress",
           },
-          // ✅ NEW: Achievements in mobile
           {
             type: "link",
             href: "/dashboard/student/achievements",
             label: "Achievements",
             icon: "trophy",
+          },
+          // ✅ NEW: Rewards Shop (mobile)
+          {
+            type: "link",
+            href: "/dashboard/student/rewards",
+            label: "Rewards Shop",
+            icon: "gift",
           },
         ] as SidebarItem[])
       : ([
@@ -177,6 +196,11 @@ export default async function StudentLayout({
             type: "disabled",
             label: "Achievements (locked)",
             icon: "trophy",
+          },
+          {
+            type: "disabled",
+            label: "Rewards Shop (locked)",
+            icon: "gift",
           },
         ] as SidebarItem[])),
 

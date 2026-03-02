@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { seedBadgesOnce } from "@/lib/gamification/badges";
+import { seedRewardsOnce } from "@/lib/gamification/rewards";
 
 export async function GET() {
   const supabase = await supabaseServerComponent();
@@ -40,6 +41,9 @@ export async function GET() {
     include: { badge: true },
     orderBy: { awardedAt: "desc" },
   });
+
+  const rewardCount = await prisma.reward.count();
+if (rewardCount === 0) await seedRewardsOnce();
 
   return NextResponse.json({
     ok: true,

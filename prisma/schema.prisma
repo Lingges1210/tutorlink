@@ -70,6 +70,12 @@ model User {
   userBadges          UserBadge[]
   rewardRedemptions   RewardRedemption[]
 
+  boostUntil        DateTime? 
+  doubleUntil       DateTime? 
+  streakShieldCount Int       @default(0) 
+  profileTitle      String?   
+  badgeFrame        String?  
+
   @@schema("public")
 }
 
@@ -522,13 +528,22 @@ model UserBadge {
 
 model Reward {
   id          String   @id @default(cuid())
+  key         String   @unique // ✅ add (BOOST_24H, DOUBLE_24H, etc.)
   name        String
   description String
   pointsCost  Int
   stock       Int?
+  durationHrs Int?     // ✅ for time-limited effects (24h, 7d, etc.)
   createdAt   DateTime @default(now())
 
   redemptions RewardRedemption[]
+
+  @@schema("public")
+}
+enum RedemptionStatus {
+  ACTIVE
+  USED
+  EXPIRED
 
   @@schema("public")
 }
@@ -539,10 +554,21 @@ model RewardRedemption {
   rewardId  String
   createdAt DateTime @default(now())
 
+  status    RedemptionStatus @default(ACTIVE) 
+  expiresAt DateTime? 
+
   user      User     @relation(fields: [userId], references: [id])
   reward    Reward   @relation(fields: [rewardId], references: [id])
 
   @@index([userId, createdAt])
 
+  @@schema("public")
+}
+
+model Keepalive {
+  id        BigInt   @id
+  createdAt DateTime @map("created_at")
+
+  @@map("keepalive")
   @@schema("public")
 }

@@ -1,3 +1,4 @@
+// src/lib/gamification/points.ts
 import { prisma } from "@/lib/prisma";
 
 export async function ensureWallet(userId: string) {
@@ -10,13 +11,24 @@ export async function ensureWallet(userId: string) {
 
 export async function awardPoints(args: {
   userId: string;
-  amount: number; // must be > 0
+  amount: number; // base amount (must be > 0)
   description: string;
   sessionId?: string | null;
   type?: "EARN" | "BONUS";
+  applyDouble?: boolean;
 }) {
-  const { userId, amount, description, sessionId, type = "EARN" } = args;
+  const {
+    userId,
+    amount,
+    description,
+    sessionId,
+    type = "EARN",
+    applyDouble = true,
+  } = args;
+
   if (amount <= 0) throw new Error("awardPoints amount must be > 0");
+
+  const now = new Date();
 
   return prisma.$transaction(async (tx) => {
     await tx.pointsWallet.upsert({
@@ -25,31 +37,43 @@ export async function awardPoints(args: {
       update: {},
     });
 
-    // prevent double-award for same session+description (simple anti-dup guard)
+    // ✅ dedupe (use stable description)
     if (sessionId) {
       const existing = await tx.pointsTransaction.findFirst({
         where: { userId, sessionId, description, type },
         select: { id: true },
       });
-      if (existing) return { ok: true, skipped: true };
+      if (existing) return { ok: true, skipped: true, multiplier: 1, finalAmount: 0 };
     }
+
+    // ✅ check x2
+    let multiplier = 1;
+    if (applyDouble) {
+      const u = await tx.user.findUnique({
+        where: { id: userId },
+        select: { doubleUntil: true },
+      });
+      if (u?.doubleUntil && u.doubleUntil > now) multiplier = 2;
+    }
+
+    const finalAmount = amount * multiplier;
 
     await tx.pointsTransaction.create({
       data: {
         userId,
         type,
-        amount,
-        description,
+        amount: finalAmount,
+        description, // ✅ keep stable
         sessionId: sessionId ?? null,
       },
     });
 
     await tx.pointsWallet.update({
       where: { userId },
-      data: { total: { increment: amount } },
+      data: { total: { increment: finalAmount } },
     });
 
-    return { ok: true, skipped: false };
+    return { ok: true, skipped: false, multiplier, finalAmount };
   });
 }
 
