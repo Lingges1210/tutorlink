@@ -1,6 +1,7 @@
 // src/app/dashboard/student/achievements/page.tsx
 "use client";
 
+import Link from "next/link";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -17,6 +18,7 @@ import {
   Star,
 } from "lucide-react";
 import { GAMIFICATION_RULES } from "@/lib/gamification/rules";
+import { LevelUpModal } from "@/lib/gamification/LevelUpModal";
 
 type Scope = "ALL" | "STUDENTS" | "TUTORS";
 
@@ -55,6 +57,23 @@ type LeaderboardRes = {
   }>;
 };
 
+type RecoRes = {
+  ok: boolean;
+  totalPoints: number;
+  recommendations: Array<{
+    id: string;
+    key: string;
+    name: string;
+    description: string;
+    icon: string;
+    supported: boolean;
+    pct: number;
+    remaining: number;
+    remainingText: string;
+    target: number | null;
+  }>;
+};
+
 function formatDateTime(iso: string) {
   const d = new Date(iso);
   return d.toLocaleString(undefined, {
@@ -75,6 +94,40 @@ function amountBadge(amount: number) {
 function clampPct(n: number) {
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(100, n));
+}
+
+function renderBadgeIcon(icon: string, locked = false) {
+  // If your DB stores emojis, show them directly
+  const isEmoji = /[\u{1F300}-\u{1FAFF}]/u.test(icon);
+  if (isEmoji) {
+    return (
+      <span
+        className={[
+          "text-base leading-none",
+          locked ? "opacity-60" : "",
+        ].join(" ")}
+        aria-hidden
+      >
+        {icon}
+      </span>
+    );
+  }
+
+  // Otherwise map string keys -> lucide icons
+  const key = (icon || "").toLowerCase();
+  const cls = [
+    "h-4 w-4",
+    locked ? "text-[rgb(var(--muted2))]" : "text-[rgb(var(--primary))]",
+  ].join(" ");
+
+  if (key.includes("trophy")) return <Trophy className={cls} />;
+  if (key.includes("award")) return <Award className={cls} />;
+  if (key.includes("medal")) return <Medal className={cls} />;
+  if (key.includes("spark")) return <Sparkles className={cls} />;
+  if (key.includes("star")) return <Star className={cls} />;
+
+  // fallback
+  return <Star className={cls} />;
 }
 
 function ScopePill({
@@ -107,7 +160,7 @@ function ScopePill({
 }
 
 /* =======================================================
-   RULES CARD (your provided component)
+   RULES CARD
    ======================================================= */
 
 function RulesCard({
@@ -120,7 +173,6 @@ function RulesCard({
   weeklyBonus?: { first: number; second: number; third: number };
 }) {
   const [open, setOpen] = useState(false);
-
   const bonus = weeklyBonus ?? { first: 100, second: 60, third: 30 };
 
   return (
@@ -416,12 +468,18 @@ function ConfettiBurst({ show }: { show: boolean }) {
 export default function AchievementsPage() {
   const [meData, setMeData] = useState<MeRes | null>(null);
   const [lbData, setLbData] = useState<LeaderboardRes | null>(null);
+  const [recoData, setRecoData] = useState<RecoRes | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [scope, setScope] = useState<Scope>("ALL");
 
   const totalPoints = meData?.wallet?.total ?? 0;
   const badgesCount = meData?.badges?.length ?? 0;
+
+  // ✅ Level-up modal state
+  const [levelUpOpen, setLevelUpOpen] = useState(false);
+  const [levelUpLevel, setLevelUpLevel] = useState(1);
 
   // Confetti when badge count increases
   const prevBadgesRef = useRef<number>(0);
@@ -464,6 +522,37 @@ export default function AchievementsPage() {
     [totalPoints]
   );
 
+  // ✅ Level-up trigger (only once per level, per user)
+  useEffect(() => {
+    if (loading) return;
+    const userId = meData?.me?.id;
+    if (!userId) return;
+
+    const currentLevel = levelInfo.current.level;
+    const storageKey = `tutorlink:lastLevelShown:${userId}`;
+
+    try {
+      const raw = localStorage.getItem(storageKey);
+      const lastShown = raw ? Number(raw) : null;
+
+      // first load: sync & don't show
+      if (lastShown == null || !Number.isFinite(lastShown)) {
+        localStorage.setItem(storageKey, String(currentLevel));
+        return;
+      }
+
+      // level increased: show modal once
+      if (currentLevel > lastShown) {
+        localStorage.setItem(storageKey, String(currentLevel));
+        setLevelUpLevel(currentLevel);
+        setLevelUpOpen(true);
+      }
+    } catch {
+      // ignore (private mode / blocked storage)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, meData?.me?.id, levelInfo.current.level]);
+
   async function fetchAll(isManual = false, nextScope: Scope = scope) {
     try {
       if (isManual) setRefreshing(true);
@@ -501,6 +590,26 @@ export default function AchievementsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope]);
 
+  // ✅ Fetch recommendations from backend (DB badges)
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch("/api/achievements/recommendations", {
+          cache: "no-store",
+        });
+        const j = (await r.json()) as RecoRes;
+        setRecoData(j);
+      } catch {
+        // ignore
+      }
+    })();
+  }, [totalPoints, badgesCount]);
+
+  const recommendations = useMemo(() => {
+    const arr = recoData?.ok ? recoData.recommendations : [];
+    return arr.slice(0, 3);
+  }, [recoData]);
+
   // weekly bonus (optional): if you later store in GAMIFICATION_RULES, wire it here.
   const weeklyBonus =
     (GAMIFICATION_RULES as any)?.weekly?.leaderboardBonus ??
@@ -510,6 +619,13 @@ export default function AchievementsPage() {
   return (
     <>
       <ConfettiBurst show={confetti} />
+
+      {/* ✅ Level-up modal */}
+      <LevelUpModal
+        open={levelUpOpen}
+        newLevel={levelUpLevel}
+        onClose={() => setLevelUpOpen(false)}
+      />
 
       <div className="mx-auto w-full max-w-6xl px-4 py-6">
         <div className="flex items-start justify-between gap-3">
@@ -542,10 +658,14 @@ export default function AchievementsPage() {
           </button>
         </div>
 
-        {/* ✅ Use your RulesCard exactly */}
+        {/* Rules */}
         <RulesCard
-          studentPointsPerCompletion={GAMIFICATION_RULES?.student?.sessionCompleted ?? 0}
-          tutorPointsPerCompletion={GAMIFICATION_RULES?.tutor?.sessionCompleted ?? 0}
+          studentPointsPerCompletion={
+            GAMIFICATION_RULES?.student?.sessionCompleted ?? 0
+          }
+          tutorPointsPerCompletion={
+            GAMIFICATION_RULES?.tutor?.sessionCompleted ?? 0
+          }
           weeklyBonus={weeklyBonus}
         />
 
@@ -707,9 +827,7 @@ export default function AchievementsPage() {
               </div>
 
               <div className="mt-2 flex items-center justify-between text-[11px] text-[rgb(var(--muted2))]">
-                <div>
-                  {loading ? "—" : `${Math.round(nextBadgeInfo.pct)}%`}
-                </div>
+                <div>{loading ? "—" : `${Math.round(nextBadgeInfo.pct)}%`}</div>
                 <div>
                   {loading
                     ? "—"
@@ -719,11 +837,72 @@ export default function AchievementsPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
 
-            <div className="mt-3 text-[11px] text-[rgb(var(--muted2))]">
-              Tip: This is points-based for now (fast + reliable). You can later
-              add “session badges” progress when your API returns session counts.
+        {/* Recommended Next Badges (now pulled from backend) */}
+        <div className="mt-4 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-4 shadow-[0_20px_60px_rgb(var(--shadow)/0.10)]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]">
+              <Sparkles className="h-4 w-4 text-[rgb(var(--primary))]" />
+              Recommended Next Badges
             </div>
+
+            <Link
+              href="/dashboard/student/badges"
+              className="text-xs font-semibold text-[rgb(var(--primary))] hover:underline"
+            >
+              View all
+            </Link>
+          </div>
+
+          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+            {recommendations.map((b) => (
+              <div
+                key={b.key}
+                className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-2">
+                        {renderBadgeIcon(b.icon, false)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-[rgb(var(--fg))]">
+                          {b.name}
+                        </div>
+                        <div className="mt-0.5 line-clamp-2 text-xs text-[rgb(var(--muted))]">
+                          {b.description}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-[rgb(var(--card))] border border-[rgb(var(--border))]">
+                  <div
+                    className="h-full bg-[rgb(var(--primary))]"
+                    style={{ width: `${loading ? 0 : b.pct}%` }}
+                  />
+                </div>
+
+                <div className="mt-2 flex items-center justify-between text-[11px] text-[rgb(var(--muted2))]">
+                  <div>{loading ? "—" : `${Math.round(b.pct)}%`}</div>
+                  <div>{loading ? "—" : b.remainingText}</div>
+                </div>
+
+                <div className="mt-2 text-[11px] text-[rgb(var(--muted2))]">
+                  Key: {b.key}
+                </div>
+              </div>
+            ))}
+
+            {!loading && recommendations.length === 0 && (
+              <div className="col-span-full rounded-xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 text-sm text-[rgb(var(--muted))]">
+                All recommended badges completed 🎉
+              </div>
+            )}
           </div>
         </div>
 
@@ -750,14 +929,21 @@ export default function AchievementsPage() {
                     exit={{ opacity: 0 }}
                     className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3"
                   >
-                    <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                      {b.badge.name}
-                    </div>
-                    <div className="mt-1 text-xs text-[rgb(var(--muted))]">
-                      {b.badge.description}
-                    </div>
-                    <div className="mt-2 text-[11px] text-[rgb(var(--muted2))]">
-                      Earned: {formatDateTime(b.awardedAt)}
+                    <div className="flex items-start gap-2">
+                      <div className="mt-0.5 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-2">
+                        {renderBadgeIcon(b.badge.icon, false)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                          {b.badge.name}
+                        </div>
+                        <div className="mt-1 text-xs text-[rgb(var(--muted))]">
+                          {b.badge.description}
+                        </div>
+                        <div className="mt-2 text-[11px] text-[rgb(var(--muted2))]">
+                          Earned: {formatDateTime(b.awardedAt)}
+                        </div>
+                      </div>
                     </div>
                   </motion.div>
                 ))}
@@ -765,8 +951,7 @@ export default function AchievementsPage() {
 
               {!loading && (meData?.badges?.length ?? 0) === 0 && (
                 <div className="col-span-full rounded-xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 text-sm text-[rgb(var(--muted))]">
-                  No badges yet — complete sessions to start unlocking
-                  achievements.
+                  No badges yet — complete sessions to start unlocking achievements.
                 </div>
               )}
             </div>
@@ -802,7 +987,6 @@ export default function AchievementsPage() {
               </div>
             </div>
 
-            {/* Top 3 highlight */}
             <div className="mt-3 space-y-2">
               {(lbData?.rows ?? []).map((r) => {
                 const top = r.rank <= 3;
@@ -868,8 +1052,7 @@ export default function AchievementsPage() {
             </div>
 
             <div className="mt-3 text-[11px] text-[rgb(var(--muted2))]">
-              Top 3 is highlighted (gold/silver/bronze) for instant “competitive
-              feel”.
+              Top 3 is highlighted (gold/silver/bronze) for instant “competitive feel”.
             </div>
           </div>
         </div>
