@@ -25,6 +25,24 @@ function isFutureISO(iso: string | null) {
   return !Number.isNaN(d.getTime()) && d > new Date();
 }
 
+function formatRemaining(iso: string | null) {
+  if (!iso) return null;
+  const now = new Date();
+  const end = new Date(iso);
+  const diff = end.getTime() - now.getTime();
+  if (Number.isNaN(end.getTime()) || diff <= 0) return null;
+
+  const totalSec = Math.floor(diff / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+
+  return `${String(h).padStart(2, "0")}h ${String(m).padStart(
+    2,
+    "0"
+  )}m ${String(s).padStart(2, "0")}s`;
+}
+
 export default function RewardsShopPage() {
   const [loading, setLoading] = useState(true);
   const [rewards, setRewards] = useState<Reward[]>([]);
@@ -35,6 +53,10 @@ export default function RewardsShopPage() {
   // used to disable redeem if already active
   const [doubleUntil, setDoubleUntil] = useState<string | null>(null);
   const [boostUntil, setBoostUntil] = useState<string | null>(null);
+
+  // ✅ countdown display state
+  const [doubleLeft, setDoubleLeft] = useState<string | null>(null);
+  const [boostLeft, setBoostLeft] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -78,6 +100,30 @@ export default function RewardsShopPage() {
   useEffect(() => {
     load();
   }, []);
+
+  // ✅ Premium countdown + auto-expire cleanup
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const dLeft = formatRemaining(doubleUntil);
+      const bLeft = formatRemaining(boostUntil);
+
+      setDoubleLeft(dLeft);
+      setBoostLeft(bLeft);
+
+      // 🔥 auto-expire cleanup (UI refresh + button becomes available again)
+      if (doubleUntil && !dLeft) {
+        setDoubleUntil(null);
+        load();
+      }
+      if (boostUntil && !bLeft) {
+        setBoostUntil(null);
+        load();
+      }
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+    // only depend on these two so countdown updates correctly
+  }, [doubleUntil, boostUntil]);
 
   if (loading) {
     return <div className="p-6 text-[rgb(var(--muted))]">Loading rewards…</div>;
@@ -129,6 +175,35 @@ export default function RewardsShopPage() {
         </div>
       )}
 
+      {/* ✅ Active buffs banner (premium feel) */}
+      {(doubleLeft || boostLeft) && (
+        <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 flex flex-col gap-2">
+          {doubleLeft && (
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 text-[rgb(var(--fg))] font-semibold">
+                <Sparkles className="h-4 w-4 text-[rgb(var(--primary))]" />
+                Double Points active
+              </div>
+              <div className="text-[rgb(var(--muted))]">
+                ⏳ <span className="font-mono">{doubleLeft}</span> left
+              </div>
+            </div>
+          )}
+
+          {boostLeft && (
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 text-[rgb(var(--fg))] font-semibold">
+                <Sparkles className="h-4 w-4 text-[rgb(var(--primary))]" />
+                Priority Boost active
+              </div>
+              <div className="text-[rgb(var(--muted))]">
+                ⏳ <span className="font-mono">{boostLeft}</span> left
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Grid */}
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {rewards.map((r) => {
@@ -144,6 +219,14 @@ export default function RewardsShopPage() {
           );
 
           const disabled = isBusy || outOfStock || notEnough || alreadyActive;
+
+          // ✅ show countdown inside card if it's the active one
+          const cardCountdown =
+            r.key === "DOUBLE_POINTS_24H"
+              ? doubleLeft
+              : r.key === "PRIORITY_BOOST_24H" || r.key === "PRIORITY_BOOST_7D"
+              ? boostLeft
+              : null;
 
           return (
             <div
@@ -189,6 +272,18 @@ export default function RewardsShopPage() {
 
                 <div>{r.stock === null ? "∞ stock" : `Stock: ${r.stock}`}</div>
               </div>
+
+              {/* ✅ countdown inside the card when active */}
+              {cardCountdown && (
+                <div className="mt-3 text-xs text-[rgb(var(--muted))] flex items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2">
+                  <span className="font-semibold text-[rgb(var(--fg))]">
+                    Active
+                  </span>
+                  <span>
+                    ⏳ <span className="font-mono">{cardCountdown}</span> left
+                  </span>
+                </div>
+              )}
 
               <button
                 onClick={() => redeem(r.key)}
