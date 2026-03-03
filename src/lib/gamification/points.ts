@@ -37,7 +37,7 @@ export async function awardPoints(args: {
       update: {},
     });
 
-    // ✅ dedupe (use stable description)
+    //  dedupe (use stable description)
     if (sessionId) {
       const existing = await tx.pointsTransaction.findFirst({
         where: { userId, sessionId, description, type },
@@ -46,7 +46,7 @@ export async function awardPoints(args: {
       if (existing) return { ok: true, skipped: true, multiplier: 1, finalAmount: 0 };
     }
 
-    // ✅ check x2
+    //  check x2
     let multiplier = 1;
     if (applyDouble) {
       const u = await tx.user.findUnique({
@@ -63,7 +63,7 @@ export async function awardPoints(args: {
         userId,
         type,
         amount: finalAmount,
-        description, // ✅ keep stable
+        description, //  keep stable
         sessionId: sessionId ?? null,
       },
     });

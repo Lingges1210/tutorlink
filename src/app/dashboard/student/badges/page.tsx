@@ -179,7 +179,7 @@ export default function AllBadgesPage() {
     [data]
   );
 
-  // ✅ Smart sort:
+  //  Smart sort:
   // 1) earned first
   // 2) then points badges by closest remaining points
   // 3) then everything else alphabetically

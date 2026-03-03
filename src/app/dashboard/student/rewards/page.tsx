@@ -54,7 +54,7 @@ export default function RewardsShopPage() {
   const [doubleUntil, setDoubleUntil] = useState<string | null>(null);
   const [boostUntil, setBoostUntil] = useState<string | null>(null);
 
-  // ✅ countdown display state
+  //  countdown display state
   const [doubleLeft, setDoubleLeft] = useState<string | null>(null);
   const [boostLeft, setBoostLeft] = useState<string | null>(null);
 
@@ -101,7 +101,7 @@ export default function RewardsShopPage() {
     load();
   }, []);
 
-  // ✅ Premium countdown + auto-expire cleanup
+  //  Premium countdown + auto-expire cleanup
   useEffect(() => {
     const interval = window.setInterval(() => {
       const dLeft = formatRemaining(doubleUntil);
@@ -175,7 +175,7 @@ export default function RewardsShopPage() {
         </div>
       )}
 
-      {/* ✅ Active buffs banner (premium feel) */}
+      {/*  Active buffs banner (premium feel) */}
       {(doubleLeft || boostLeft) && (
         <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 flex flex-col gap-2">
           {doubleLeft && (
@@ -211,7 +211,7 @@ export default function RewardsShopPage() {
           const outOfStock = r.stock !== null && r.stock <= 0;
           const notEnough = wallet < r.pointsCost;
 
-          // ✅ ALWAYS boolean
+          //  ALWAYS boolean
           const alreadyActive = Boolean(
             (r.key === "DOUBLE_POINTS_24H" && isFutureISO(doubleUntil)) ||
               ((r.key === "PRIORITY_BOOST_24H" || r.key === "PRIORITY_BOOST_7D") &&
@@ -220,7 +220,7 @@ export default function RewardsShopPage() {
 
           const disabled = isBusy || outOfStock || notEnough || alreadyActive;
 
-          // ✅ show countdown inside card if it's the active one
+          //  show countdown inside card if it's the active one
           const cardCountdown =
             r.key === "DOUBLE_POINTS_24H"
               ? doubleLeft
@@ -273,7 +273,7 @@ export default function RewardsShopPage() {
                 <div>{r.stock === null ? "∞ stock" : `Stock: ${r.stock}`}</div>
               </div>
 
-              {/* ✅ countdown inside the card when active */}
+              {/*  countdown inside the card when active */}
               {cardCountdown && (
                 <div className="mt-3 text-xs text-[rgb(var(--muted))] flex items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2">
                   <span className="font-semibold text-[rgb(var(--fg))]">

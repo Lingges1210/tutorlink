@@ -210,7 +210,7 @@ export default function MyBookingsClient() {
     Record<string, { rating: number; comment: string | null }>
   >({});
 
-  // ✅ prevent "Needs rating" flash on refresh
+  //  prevent "Needs rating" flash on refresh
   const [ratingsHydrated, setRatingsHydrated] = useState(false);
 
   function closeModal() {
@@ -285,7 +285,7 @@ export default function MyBookingsClient() {
 
       setItems(list);
 
-      // ✅ prevent flash: mark not hydrated, then hydrate, then mark hydrated
+      //  prevent flash: mark not hydrated, then hydrate, then mark hydrated
       setRatingsHydrated(false);
       await hydrateRatingsForCompleted(list);
       setRatingsHydrated(true);
@@ -341,14 +341,14 @@ export default function MyBookingsClient() {
     };
   }, []);
 
-  // ✅ auto-hide banner after 5 seconds
+  //  auto-hide banner after 5 seconds
   useEffect(() => {
     if (!msg) return;
     const t = window.setTimeout(() => setMsg(null), 5000);
     return () => window.clearTimeout(t);
   }, [msg]);
 
-  // ✅ Grouping: NEEDS_RATING + UPCOMING + PAST
+  //  Grouping: NEEDS_RATING + UPCOMING + PAST
   const grouped = useMemo(() => {
     const needsRating: Row[] = [];
     const upcoming: Row[] = [];
@@ -359,7 +359,7 @@ export default function MyBookingsClient() {
       const isCompleted = it.status === "COMPLETED";
       const hasTutor = !!it.tutor;
 
-      // ✅ while hydrating: treat as not-rated (but we won't put it into NeedsRating below)
+      //  while hydrating: treat as not-rated (but we won't put it into NeedsRating below)
       const rated = ratingsHydrated ? !!ratingBySession[it.id] : false;
 
       if (isCancelled) {
@@ -367,7 +367,7 @@ export default function MyBookingsClient() {
         continue;
       }
 
-      // ✅ prevent flash: while ratings are still hydrating, don't classify completed into needsRating yet
+      //  prevent flash: while ratings are still hydrating, don't classify completed into needsRating yet
       if (isCompleted && hasTutor && !ratingsHydrated) {
         past.push(it);
         continue;

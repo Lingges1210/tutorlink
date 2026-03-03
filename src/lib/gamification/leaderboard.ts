@@ -60,7 +60,7 @@ export async function getWeeklyLeaderboard(args?: {
       name: true,
       email: true,
       role: true,
-      roleAssignments: { select: { role: true } }, // ✅ needed for tutor detection
+      roleAssignments: { select: { role: true } }, //  needed for tutor detection
     },
   });
 

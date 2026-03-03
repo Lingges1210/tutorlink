@@ -75,7 +75,7 @@ export async function POST(req: Request) {
 
   const now = new Date();
 
-  // ✅ NEW: Disable redeem if already active (NO stacking)
+  //  NEW: Disable redeem if already active (NO stacking)
   if (reward.key === "DOUBLE_POINTS_24H") {
     if (me.doubleUntil && me.doubleUntil > now) {
       return NextResponse.json(
@@ -95,20 +95,20 @@ export async function POST(req: Request) {
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    // ✅ ensure wallet exists
+    //  ensure wallet exists
     await tx.pointsWallet.upsert({
       where: { userId: me.id },
       create: { userId: me.id, total: 0 },
       update: {},
     });
 
-    // ✅ deduct points
+    //  deduct points
     await tx.pointsWallet.update({
       where: { userId: me.id },
       data: { total: { decrement: reward.pointsCost } },
     });
 
-    // ✅ transaction should be NEGATIVE (points spent)
+    //  transaction should be NEGATIVE (points spent)
     await tx.pointsTransaction.create({
       data: {
         userId: me.id,
@@ -118,7 +118,7 @@ export async function POST(req: Request) {
       },
     });
 
-    // ✅ compute expiresAt + stacking for timed rewards
+    //  compute expiresAt + stacking for timed rewards
     let expiresAt: Date | null = null;
 
     if (reward.durationHrs) {

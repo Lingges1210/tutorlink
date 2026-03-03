@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE "ChatMessage" ADD COLUMN     "isDeleted" BOOLEAN NOT NULL DEFAULT false;

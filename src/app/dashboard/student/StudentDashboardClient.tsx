@@ -282,7 +282,7 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
           )}
         </div>
 
-        {/* ✅ NEW: Achievements */}
+        {/*  NEW: Achievements */}
         <div
           className="
             rounded-3xl border p-6

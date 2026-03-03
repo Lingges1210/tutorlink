@@ -169,10 +169,10 @@ export default function TutorSessionsClient() {
   const [items, setItems] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ global banner (top of page) — keep for success/info
+  //  global banner (top of page) — keep for success/info
   const [msg, setMsg] = useState<string | null>(null);
 
-  // ✅ modal-only message (for CANCEL / PROPOSE / COMPLETE validation/errors)
+  //  modal-only message (for CANCEL / PROPOSE / COMPLETE validation/errors)
   const [modalMsg, setModalMsg] = useState<string | null>(null);
 
   const [, setTick] = useState(0);
@@ -224,7 +224,7 @@ export default function TutorSessionsClient() {
     setActiveId(null);
     setReason("");
     setNote("");
-    setModalMsg(null); // ✅ clear modal message
+    setModalMsg(null); //  clear modal message
     resetCompleteForm();
   }
 
@@ -292,7 +292,7 @@ export default function TutorSessionsClient() {
     };
   }, []);
 
-  // ✅ auto-hide global banner after 5 seconds
+  //  auto-hide global banner after 5 seconds
   useEffect(() => {
     if (!msg) return;
     const t = window.setTimeout(() => setMsg(null), 5000);
@@ -343,7 +343,7 @@ export default function TutorSessionsClient() {
   async function submitComplete() {
     if (!activeId) return;
 
-    // ✅ clear modal message first
+    //  clear modal message first
     setModalMsg(null);
 
     const trimmedSummary = summary.trim();
@@ -920,7 +920,7 @@ export default function TutorSessionsClient() {
         </p>
       </motion.div>
 
-      {/* ✅ Global banner (success/info) */}
+      {/*  Global banner (success/info) */}
       {msg && (
         <motion.div
           layout="position"
@@ -1071,7 +1071,7 @@ export default function TutorSessionsClient() {
               Cancel session
             </div>
 
-            {/* ✅ modal message */}
+            {/*  modal message */}
             {modalMsg && (
               <div className="mt-3 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-700 dark:text-rose-300">
                 {modalMsg}
@@ -1125,7 +1125,7 @@ export default function TutorSessionsClient() {
               Propose a new time
             </div>
 
-            {/* ✅ modal message */}
+            {/*  modal message */}
             {modalMsg && (
               <div className="mt-3 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-700 dark:text-rose-300">
                 {modalMsg}
@@ -1215,7 +1215,7 @@ export default function TutorSessionsClient() {
               </button>
             </div>
 
-            {/* ✅ modal message */}
+            {/*  modal message */}
             {modalMsg && (
               <div className="mt-3 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-700 dark:text-rose-300">
                 {modalMsg}

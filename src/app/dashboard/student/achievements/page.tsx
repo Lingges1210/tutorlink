@@ -477,7 +477,7 @@ export default function AchievementsPage() {
   const totalPoints = meData?.wallet?.total ?? 0;
   const badgesCount = meData?.badges?.length ?? 0;
 
-  // ✅ Level-up modal state
+  //  Level-up modal state
   const [levelUpOpen, setLevelUpOpen] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState(1);
 
@@ -522,7 +522,7 @@ export default function AchievementsPage() {
     [totalPoints]
   );
 
-  // ✅ Level-up trigger (only once per level, per user)
+  //  Level-up trigger (only once per level, per user)
   useEffect(() => {
     if (loading) return;
     const userId = meData?.me?.id;
@@ -590,7 +590,7 @@ export default function AchievementsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope]);
 
-  // ✅ Fetch recommendations from backend (DB badges)
+  //  Fetch recommendations from backend (DB badges)
   useEffect(() => {
     (async () => {
       try {
@@ -620,7 +620,7 @@ export default function AchievementsPage() {
     <>
       <ConfettiBurst show={confetti} />
 
-      {/* ✅ Level-up modal */}
+      {/*  Level-up modal */}
       <LevelUpModal
         open={levelUpOpen}
         newLevel={levelUpLevel}

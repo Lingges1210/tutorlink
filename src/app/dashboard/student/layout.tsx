@@ -68,7 +68,7 @@ export default async function StudentLayout({
             label: "Achievements",
             icon: "trophy",
           },
-          // ✅ NEW: Rewards Shop
+          //  NEW: Rewards Shop
           {
             type: "link",
             href: "/dashboard/student/rewards",
@@ -87,7 +87,7 @@ export default async function StudentLayout({
             label: "Achievements (locked)",
             icon: "trophy",
           },
-          // ✅ NEW: Rewards Shop locked
+          //  NEW: Rewards Shop locked
           {
             type: "disabled",
             label: "Rewards Shop (locked)",
@@ -178,7 +178,7 @@ export default async function StudentLayout({
             label: "Achievements",
             icon: "trophy",
           },
-          // ✅ NEW: Rewards Shop (mobile)
+          //  NEW: Rewards Shop (mobile)
           {
             type: "link",
             href: "/dashboard/student/rewards",

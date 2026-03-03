@@ -65,16 +65,22 @@ model User {
   subjectProgress StudentSubjectProgress[]
   topicProgress   StudentTopicProgress[]
 
-  pointsWallet        PointsWallet?
-  pointsTransactions  PointsTransaction[]
-  userBadges          UserBadge[]
-  rewardRedemptions   RewardRedemption[]
+  pointsWallet       PointsWallet?
+  pointsTransactions PointsTransaction[]
+  userBadges         UserBadge[]
+  rewardRedemptions  RewardRedemption[]
 
-  boostUntil        DateTime? 
-  doubleUntil       DateTime? 
-  streakShieldCount Int       @default(0) 
-  profileTitle      String?   
-  badgeFrame        String?  
+  boostUntil        DateTime?
+  doubleUntil       DateTime?
+  streakShieldCount Int       @default(0)
+  profileTitle      String?
+  badgeFrame        String?
+
+  acceptedSosRequests  SOSRequest[]       @relation("SOSAcceptedTutor")
+  sosTutorResponses    SOSTutorResponse[] @relation("SOSTutor")
+  sosRequestsAsStudent SOSRequest[]       @relation("SOSStudent")
+
+  tutorPresence TutorPresence?
 
   @@schema("public")
 }
@@ -136,6 +142,7 @@ model Subject {
   topics                 Topic[]
   progress               StudentSubjectProgress[]
   studentTopicProgresses StudentTopicProgress[]
+  sosrequests            SOSRequest[]
 
   @@schema("public")
 }
@@ -194,8 +201,8 @@ model Session {
   calendarSequence Int            @default(0)
   sessionRating    SessionRating?
 
-  completion SessionCompletion?
-  review SessionReview?
+  completion  SessionCompletion?
+  review      SessionReview?
   completedAt DateTime?
 
   @@index([studentId, status])
@@ -341,7 +348,7 @@ model SessionRating {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  confirmed Boolean? 
+  confirmed Boolean?
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
@@ -442,22 +449,21 @@ model StudentTopicProgress {
 }
 
 model SessionReview {
-  id          String   @id @default(cuid())
-  sessionId   String   @unique
-  studentId   String
-  tutorId     String
+  id        String @id @default(cuid())
+  sessionId String @unique
+  studentId String
+  tutorId   String
 
-  rating      Int      // 1..5
-  feedback    String?  // optional
-  confirmed   Boolean? // optional: null = not answered, true/false = student confirmed/denied
+  rating    Int // 1..5
+  feedback  String? // optional
+  confirmed Boolean? // optional: null = not answered, true/false = student confirmed/denied
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([studentId])
   @@index([tutorId])
-
   @@schema("public")
 }
 
@@ -477,7 +483,7 @@ model PointsWallet {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user      User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@schema("public")
 }
@@ -491,11 +497,10 @@ model PointsTransaction {
   sessionId   String?
   createdAt   DateTime   @default(now())
 
-  user        User       @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@index([userId, createdAt])
   @@index([sessionId])
-
   @@schema("public")
 }
 
@@ -504,7 +509,7 @@ model Badge {
   key         String   @unique // e.g. "FIRST_SESSION"
   name        String
   description String
-  icon        String   // e.g. "trophy"
+  icon        String // e.g. "trophy"
   createdAt   DateTime @default(now())
 
   userBadges UserBadge[]
@@ -518,28 +523,28 @@ model UserBadge {
   badgeId   String
   awardedAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id])
-  badge     Badge    @relation(fields: [badgeId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+  badge Badge @relation(fields: [badgeId], references: [id])
 
   @@unique([userId, badgeId])
-
   @@schema("public")
 }
 
 model Reward {
   id          String   @id @default(cuid())
-  key         String   @unique // ✅ add (BOOST_24H, DOUBLE_24H, etc.)
+  key         String   @unique //  add (BOOST_24H, DOUBLE_24H, etc.)
   name        String
   description String
   pointsCost  Int
   stock       Int?
-  durationHrs Int?     // ✅ for time-limited effects (24h, 7d, etc.)
+  durationHrs Int? //  for time-limited effects (24h, 7d, etc.)
   createdAt   DateTime @default(now())
 
   redemptions RewardRedemption[]
 
   @@schema("public")
 }
+
 enum RedemptionStatus {
   ACTIVE
   USED
@@ -554,14 +559,13 @@ model RewardRedemption {
   rewardId  String
   createdAt DateTime @default(now())
 
-  status    RedemptionStatus @default(ACTIVE) 
-  expiresAt DateTime? 
+  status    RedemptionStatus @default(ACTIVE)
+  expiresAt DateTime?
 
-  user      User     @relation(fields: [userId], references: [id])
-  reward    Reward   @relation(fields: [rewardId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+  reward Reward @relation(fields: [rewardId], references: [id])
 
   @@index([userId, createdAt])
-
   @@schema("public")
 }
 
@@ -570,5 +574,105 @@ model Keepalive {
   createdAt DateTime @map("created_at")
 
   @@map("keepalive")
+  @@schema("public")
+}
+
+enum SOSStatus {
+  SEARCHING
+  ACCEPTED
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+  EXPIRED
+
+  @@schema("public")
+}
+
+enum SOSMode {
+  ONLINE
+  PHYSICAL
+  CHAT
+  VOICE
+  VIDEO
+  IN_PERSON
+
+  @@schema("public")
+}
+
+enum SOSTutorDecision {
+  ACCEPT
+  DECLINE
+
+  @@schema("public")
+}
+
+model SOSRequest {
+  id String @id @default(cuid())
+
+  student   User   @relation("SOSStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  subjectId String
+
+  description String
+  mode        SOSMode
+
+  status SOSStatus @default(SEARCHING)
+
+  acceptedTutor   User?   @relation("SOSAcceptedTutor", fields: [acceptedTutorId], references: [id], onDelete: SetNull)
+  acceptedTutorId String?
+
+  lockedAt    DateTime?
+  acceptedAt  DateTime?
+  startedAt   DateTime?
+  resolvedAt  DateTime?
+  cancelledAt DateTime?
+
+  cancelReason String?
+
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tutorResponses SOSTutorResponse[]
+
+  @@index([studentId, createdAt])
+  @@index([status, createdAt])
+  @@index([subjectId, status])
+  @@index([acceptedTutorId, status])
+  @@schema("public")
+}
+
+model SOSTutorResponse {
+  id String @id @default(cuid())
+
+  sos   SOSRequest @relation(fields: [sosId], references: [id], onDelete: Cascade)
+  sosId String
+
+  tutor   User   @relation("SOSTutor", fields: [tutorId], references: [id], onDelete: Cascade)
+  tutorId String
+
+  decision  SOSTutorDecision
+  reason    String? // optional “Busy now”, etc.
+  createdAt DateTime         @default(now())
+
+  @@unique([sosId, tutorId]) // tutor can respond once
+  @@index([tutorId, createdAt])
+  @@schema("public")
+}
+
+// OPTIONAL (recommended for “nearest/available”)
+// If you skip this, routing uses all matching tutors.
+model TutorPresence {
+  id      String @id @default(cuid())
+  tutor   User   @relation(fields: [tutorId], references: [id], onDelete: Cascade)
+  tutorId String @unique
+
+  isOnline   Boolean  @default(false)
+  lastSeenAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([isOnline, lastSeenAt])
   @@schema("public")
 }

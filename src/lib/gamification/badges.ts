@@ -100,7 +100,7 @@ export async function seedBadgesOnce() {
   }
 
   global.__badgesSeedingPromise = (async () => {
-    // ✅ sequential upserts = no pool explosion
+    //  sequential upserts = no pool explosion
     for (const b of badgeDefs) {
       await prisma.badge.upsert({
         where: { key: b.key },
@@ -179,7 +179,7 @@ export async function checkAndAwardBadges(args: {
     }
   }
 
-  // ✅ Tutor milestones
+  //  Tutor milestones
   const tutorMilestones = [5, 25, 75, 150];
   for (const n of tutorMilestones) {
     if (tutoredSessionsCount >= n) {
