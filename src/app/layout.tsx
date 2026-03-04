@@ -53,20 +53,29 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                       Find Tutor
                     </Link>
 
+                    {/* NEW: AI Hub */}
+                    <Link
+                      href="/study"
+                      className="rounded-xl px-3 py-2 text-sm font-medium hover:bg-[rgb(var(--card)/0.9)]"
+                      title="AI-powered study tools"
+                    >
+                      AI Hub
+                    </Link>
+
                     {/*  NEW: SOS Help in header */}
                       <Link
-    href="/sos"
-    className="
-      rounded-xl px-3 py-2 text-sm font-semibold text-white
-      bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary2))]
-      shadow-[0_8px_20px_rgba(0,0,0,0.25)]
-      hover:opacity-95
-      transition
-    "
-    title="Request urgent academic help"
-  >
-    SOS Help
-  </Link>
+                    href="/sos"
+                    className="
+                      rounded-xl px-3 py-2 text-sm font-semibold text-white
+                      bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary2))]
+                      shadow-[0_8px_20px_rgba(0,0,0,0.25)]
+                      hover:opacity-95
+                      transition
+                    "
+                    title="Request urgent academic help"
+                  >
+                    SOS Help
+                  </Link>
                   </div>
 
                   {/* Auth actions (will show Dashboard + Logout OR Login + Join) */}

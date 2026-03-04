@@ -82,6 +82,11 @@ model User {
 
   tutorPresence TutorPresence?
 
+  studyMaterials StudyMaterial[]
+  quizAttempts   QuizAttempt[]
+
+  studySubjects StudySubject[]
+
   @@schema("public")
 }
 
@@ -674,5 +679,80 @@ model TutorPresence {
   updatedAt  DateTime @updatedAt
 
   @@index([isOnline, lastSeenAt])
+  @@schema("public")
+}
+
+
+model StudyMaterial {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  rawText   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ✅ NEW (for subject-wise)
+  studySubjectId String?
+  studySubject   StudySubject? @relation(fields: [studySubjectId], references: [id], onDelete: SetNull)
+
+  // ✅ NEW (for PDF delete from storage)
+  objectPath String?
+  fileName   String?
+
+  user  User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  packs StudyPack[]
+
+  @@index([userId, createdAt])
+  @@index([userId, studySubjectId, updatedAt])
+  @@schema("public")
+}
+
+model StudyPack {
+  id         String   @id @default(cuid())
+  materialId String
+  createdAt  DateTime @default(now())
+
+  // store AI outputs as JSON (easy, flexible)
+  summary    String
+  concepts   Json
+  flashcards Json
+  quiz       Json
+
+  material StudyMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  attempts QuizAttempt[]
+
+  @@index([materialId, createdAt])
+  @@schema("public")
+}
+
+model QuizAttempt {
+  id        String   @id @default(cuid())
+  packId    String
+  userId    String
+  score     Int
+  total     Int
+  answers   Json
+  createdAt DateTime @default(now())
+
+  pack StudyPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([packId, createdAt])
+  @@schema("public")
+}
+
+model StudySubject {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  materials StudyMaterial[]
+
+  @@index([userId, updatedAt])
+  @@unique([userId, name])
   @@schema("public")
 }
