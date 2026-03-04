@@ -797,6 +797,8 @@ model StudyPlan {
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   items        StudyPlanItem[]
 
+  preferredTime PreferredStudyTime @default(NIGHT)
+
   @@index([userId, createdAt])
   @@schema("public")
 }
@@ -816,6 +818,7 @@ model StudyPlanItem {
   updatedAt   DateTime         @updatedAt
 
   plan        StudyPlan        @relation(fields: [planId], references: [id], onDelete: Cascade)
+  timeBlock   String?  // e.g. "Night • 7:00–10:00 PM"
 
   @@index([planId, date])
   @@index([planId, status])
@@ -842,5 +845,13 @@ enum StudyPlanItemStatus {
   PENDING
   DONE
   SKIPPED
+  @@schema("public")
+}
+
+enum PreferredStudyTime {
+  MORNING
+  AFTERNOON
+  NIGHT
+
   @@schema("public")
 }

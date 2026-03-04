@@ -16,6 +16,10 @@ import {
   Timer,
   GraduationCap,
   AlertCircle,
+  HelpCircle,
+  Moon,
+  Sun,
+  Sunset,
 } from "lucide-react";
 
 type DayKey = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
@@ -31,6 +35,7 @@ const DAY_LABEL: Record<DayKey, string> = {
 };
 
 type Style = "SHORT_BURSTS" | "DEEP_STUDY";
+type PreferredTime = "MORNING" | "AFTERNOON" | "NIGHT";
 
 type InputSubject = {
   name: string;
@@ -49,6 +54,9 @@ type PlanItem = {
   type: "STUDY" | "PRACTICE" | "REVIEW" | "TUTOR";
   reason?: string | null;
   status: "PENDING" | "DONE" | "SKIPPED" | string;
+
+  // ✅ NEW
+  timeBlock?: string | null;
 };
 
 type Plan = {
@@ -62,6 +70,11 @@ type Plan = {
   subjects: any;
   availability: any;
   items: PlanItem[];
+
+  // ✅ NEW
+  preferredTime?: PreferredTime;
+  aiExplanation?: string;
+  progress?: { done: number; total: number; pct: number };
 };
 
 function cx(...s: Array<string | false | null | undefined>) {
@@ -76,11 +89,7 @@ function startOfDayISO(iso: string) {
 
 function prettyDate(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
 function badgeForType(t: PlanItem["type"]) {
@@ -90,9 +99,14 @@ function badgeForType(t: PlanItem["type"]) {
   return { label: "Study", icon: Timer };
 }
 
+function prefLabel(p: PreferredTime) {
+  if (p === "MORNING") return "Morning (8–11am)";
+  if (p === "AFTERNOON") return "Afternoon (1–4pm)";
+  return "Night (7–10pm)";
+}
+
 export default function StudyPlanPage() {
-  // ✅ BOOT prevents showing FORM for a split second
-  const [step, setStep] = useState<"BOOT" | "FORM" | "RESULT">("BOOT");
+  const [step, setStep] = useState<"FORM" | "RESULT">("FORM");
 
   // FORM state
   const [title, setTitle] = useState("");
@@ -100,14 +114,10 @@ export default function StudyPlanPage() {
   const [hoursPerWeek, setHoursPerWeek] = useState<number>(8);
   const [style, setStyle] = useState<Style>("SHORT_BURSTS");
 
-  const [days, setDays] = useState<DayKey[]>([
-    "MON",
-    "TUE",
-    "WED",
-    "THU",
-    "FRI",
-    "SAT",
-  ]);
+  // ✅ NEW: Preferred study time
+  const [preferredTime, setPreferredTime] = useState<PreferredTime>("NIGHT");
+
+  const [days, setDays] = useState<DayKey[]>(["MON", "TUE", "WED", "THU", "FRI", "SAT"]);
   const [hoursByDay, setHoursByDay] = useState<Record<DayKey, number>>({
     MON: 1,
     TUE: 1,
@@ -128,42 +138,42 @@ export default function StudyPlanPage() {
   const [busyToggle, setBusyToggle] = useState<string | null>(null);
   const [error, setError] = useState<string>("");
 
-  // ✅ Fetch current plan (single-plan mode)
+  // ✅ NEW: “Why today?” modal
+  const [whyOpenItemId, setWhyOpenItemId] = useState<string | null>(null);
+
   async function fetchCurrentPlan() {
     const res = await fetch(`/api/study/plans`, { cache: "no-store" });
     const json = await res.json();
     if (!json?.ok) throw new Error(json?.error ?? "Failed to load plan");
     setPlan(json.plan ?? null);
+
+    // if a plan exists, keep form's preferredTime synced (nice UX)
+    if (json.plan?.preferredTime) setPreferredTime(json.plan.preferredTime);
+
     return json.plan ?? null;
   }
 
-  // ✅ Optimistic UI helper (instant green toggle)
-  function updateItemStatusLocal(
-    itemId: string,
-    nextStatus: "PENDING" | "DONE" | "SKIPPED"
-  ) {
+  // ✅ Optimistic UI helper
+  function updateItemStatusLocal(itemId: string, nextStatus: "PENDING" | "DONE" | "SKIPPED") {
     setPlan((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
-        items: prev.items.map((it) =>
-          it.id === itemId ? { ...it, status: nextStatus } : it
-        ),
+        items: prev.items.map((it) => (it.id === itemId ? { ...it, status: nextStatus } : it)),
       };
     });
   }
 
-  // ✅ Auto-load existing plan on page open
+  // ✅ Auto-load existing plan on page open → show RESULT if exists
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         const p = await fetchCurrentPlan();
         if (!mounted) return;
-        setStep(p ? "RESULT" : "FORM");
+        if (p) setStep("RESULT");
       } catch {
-        if (!mounted) return;
-        setStep("FORM");
+        // ignore
       }
     })();
     return () => {
@@ -184,23 +194,20 @@ export default function StudyPlanPage() {
             .filter(Boolean);
           return {
             name: s.name.trim(),
-            level0to10: Number.isFinite(Number(s.level0to10))
-              ? Number(s.level0to10)
-              : 5,
+            level0to10: Number.isFinite(Number(s.level0to10)) ? Number(s.level0to10) : 5,
             weakTopics,
           };
         })
         .filter((s) => s.name.length > 0);
 
-      if (cleanSubjects.length === 0) {
-        throw new Error("Add at least 1 subject.");
-      }
+      if (cleanSubjects.length === 0) throw new Error("Add at least 1 subject.");
 
       const payload = {
         title: title.trim() || undefined,
         examDate: examDate ? new Date(examDate).toISOString() : undefined,
         hoursPerWeek,
         style,
+        preferredTime, // ✅ NEW
         availability: { days, hoursByDay },
         subjects: cleanSubjects,
       };
@@ -223,12 +230,9 @@ export default function StudyPlanPage() {
     }
   }
 
-  // ✅ Optimistic toggle: instant UI, then sync API (no full refetch needed)
+  // ✅ Optimistic toggle
   async function toggleItem(item: PlanItem) {
-    const nextStatus: "PENDING" | "DONE" =
-      item.status === "DONE" ? "PENDING" : "DONE";
-
-    // instant UI
+    const nextStatus: "PENDING" | "DONE" = item.status === "DONE" ? "PENDING" : "DONE";
     updateItemStatusLocal(item.id, nextStatus);
 
     setBusyToggle(item.id);
@@ -240,12 +244,8 @@ export default function StudyPlanPage() {
       });
       const json = await res.json();
       if (!json?.ok) throw new Error(json?.error ?? "Failed to update");
-
-      // keep instant; don't refetch
-      // await fetchCurrentPlan();
     } catch (e: any) {
-      // revert if failed
-      updateItemStatusLocal(item.id, item.status as any);
+      updateItemStatusLocal(item.id, item.status as any); // revert
       setError(e?.message ?? "Failed to update task");
     } finally {
       setBusyToggle(null);
@@ -259,7 +259,6 @@ export default function StudyPlanPage() {
       const res = await fetch("/api/study/plans/rebalance", { method: "POST" });
       const json = await res.json();
       if (!json?.ok) throw new Error(json?.error ?? "Failed to rebalance");
-
       await fetchCurrentPlan();
     } catch (e: any) {
       setError(e?.message ?? "Failed to rebalance");
@@ -269,10 +268,7 @@ export default function StudyPlanPage() {
   }
 
   function addSubject() {
-    setSubjects((p) => [
-      ...p,
-      { name: "", level0to10: 5, weakTopics: [], weakInput: "" },
-    ]);
+    setSubjects((p) => [...p, { name: "", level0to10: 5, weakTopics: [], weakInput: "" }]);
   }
 
   function removeSubject(idx: number) {
@@ -293,16 +289,12 @@ export default function StudyPlanPage() {
     }
 
     const order = { TUTOR: 0, STUDY: 1, PRACTICE: 2, REVIEW: 3 } as any;
-    const daysSorted = [...map.entries()]
+    return [...map.entries()]
       .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
       .map(([date, items]) => ({
         date,
-        items: items.sort(
-          (a, b) => (order[a.type] ?? 99) - (order[b.type] ?? 99)
-        ),
+        items: items.sort((a, b) => (order[a.type] ?? 99) - (order[b.type] ?? 99)),
       }));
-
-    return daysSorted;
   }, [plan]);
 
   const progress = useMemo(() => {
@@ -313,16 +305,17 @@ export default function StudyPlanPage() {
     const pendingBySubject = new Map<string, number>();
     for (const it of all) {
       if (it.status !== "DONE") {
-        pendingBySubject.set(
-          it.subjectName,
-          (pendingBySubject.get(it.subjectName) ?? 0) + 1
-        );
+        pendingBySubject.set(it.subjectName, (pendingBySubject.get(it.subjectName) ?? 0) + 1);
       }
     }
-
     const worst = [...pendingBySubject.entries()].sort((a, b) => b[1] - a[1])[0];
     return { done, total: all.length, pct, weakSpot: worst?.[0] ?? null };
   }, [plan]);
+
+  const whyItem = useMemo(() => {
+    if (!whyOpenItemId || !plan?.items) return null;
+    return plan.items.find((x) => x.id === whyOpenItemId) ?? null;
+  }, [whyOpenItemId, plan]);
 
   return (
     <div className="pt-10 pb-12">
@@ -343,12 +336,9 @@ export default function StudyPlanPage() {
               AI Study Planner (MVP+)
             </div>
 
-            <h1 className="mt-3 text-2xl font-semibold text-[rgb(var(--fg))]">
-              Study Plan Generator
-            </h1>
+            <h1 className="mt-3 text-2xl font-semibold text-[rgb(var(--fg))]">Study Plan Generator</h1>
             <p className="text-sm text-[rgb(var(--muted))] max-w-2xl">
-              Build a weekly Mon–Sun plan with spaced repetition, smart task blocks,
-              and tutor session recommendations.
+              Build a weekly Mon–Sun plan with spaced repetition, smart task blocks, and clear “why” explanations.
             </p>
           </div>
 
@@ -371,15 +361,14 @@ export default function StudyPlanPage() {
           </div>
         )}
 
-        {/* ✅ BOOT */}
-        {step === "BOOT" && (
-          <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
-            <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-              Loading your study plan…
+        {/* ✅ Plan-level AI Explanation */}
+        {step === "RESULT" && plan?.aiExplanation && (
+          <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]">
+              <Sparkles className="h-4 w-4" />
+              Why this plan?
             </div>
-            <div className="mt-2 text-sm text-[rgb(var(--muted))]">
-              Checking if you already generated one.
-            </div>
+            <p className="mt-2 text-sm text-[rgb(var(--muted))]">{plan.aiExplanation}</p>
           </div>
         )}
 
@@ -395,9 +384,7 @@ export default function StudyPlanPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <label className="space-y-1">
-                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                    Plan title (optional)
-                  </div>
+                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">Plan title (optional)</div>
                   <input
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
@@ -407,9 +394,7 @@ export default function StudyPlanPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                    Exam/assignment date
-                  </div>
+                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">Exam/assignment date</div>
                   <input
                     type="date"
                     value={examDate}
@@ -419,9 +404,7 @@ export default function StudyPlanPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                    Hours per week
-                  </div>
+                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">Hours per week</div>
                   <input
                     type="range"
                     min={1}
@@ -430,15 +413,11 @@ export default function StudyPlanPage() {
                     onChange={(e) => setHoursPerWeek(Number(e.target.value))}
                     className="w-full"
                   />
-                  <div className="text-xs text-[rgb(var(--muted))]">
-                    {hoursPerWeek} hours/week
-                  </div>
+                  <div className="text-xs text-[rgb(var(--muted))]">{hoursPerWeek} hours/week</div>
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                    Preferred style
-                  </div>
+                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">Preferred style</div>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
@@ -468,11 +447,61 @@ export default function StudyPlanPage() {
                 </label>
               </div>
 
+              {/* ✅ Preferred Study Time */}
+              <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 space-y-2">
+                <div className="text-sm font-semibold text-[rgb(var(--fg))]">Preferred study time</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPreferredTime("MORNING")}
+                    className={cx(
+                      "rounded-xl border px-3 py-2 text-xs font-semibold transition inline-flex items-center justify-center gap-2",
+                      preferredTime === "MORNING"
+                        ? "border-[rgb(var(--primary))] bg-[rgb(var(--primary))/0.10] text-[rgb(var(--primary))]"
+                        : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:opacity-90"
+                    )}
+                  >
+                    <Sun className="h-4 w-4" />
+                    Morning
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPreferredTime("AFTERNOON")}
+                    className={cx(
+                      "rounded-xl border px-3 py-2 text-xs font-semibold transition inline-flex items-center justify-center gap-2",
+                      preferredTime === "AFTERNOON"
+                        ? "border-[rgb(var(--primary))] bg-[rgb(var(--primary))/0.10] text-[rgb(var(--primary))]"
+                        : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:opacity-90"
+                    )}
+                  >
+                    <Sunset className="h-4 w-4" />
+                    Afternoon
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPreferredTime("NIGHT")}
+                    className={cx(
+                      "rounded-xl border px-3 py-2 text-xs font-semibold transition inline-flex items-center justify-center gap-2",
+                      preferredTime === "NIGHT"
+                        ? "border-[rgb(var(--primary))] bg-[rgb(var(--primary))/0.10] text-[rgb(var(--primary))]"
+                        : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:opacity-90"
+                    )}
+                  >
+                    <Moon className="h-4 w-4" />
+                    Night
+                  </button>
+                </div>
+
+                <div className="text-xs text-[rgb(var(--muted))]">
+                  Planner will tag tasks with a time window: <span className="font-semibold">{prefLabel(preferredTime)}</span>
+                </div>
+              </div>
+
               {/* Availability */}
               <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 space-y-3">
-                <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                  Weekly availability
-                </div>
+                <div className="text-sm font-semibold text-[rgb(var(--fg))]">Weekly availability</div>
 
                 <div className="flex flex-wrap gap-2">
                   {DAY_KEYS.map((d) => {
@@ -513,12 +542,7 @@ export default function StudyPlanPage() {
                         max={8}
                         step={0.5}
                         value={hoursByDay[d]}
-                        onChange={(e) =>
-                          setHoursByDay((p) => ({
-                            ...p,
-                            [d]: Number(e.target.value),
-                          }))
-                        }
+                        onChange={(e) => setHoursByDay((p) => ({ ...p, [d]: Number(e.target.value) }))}
                         className="w-20 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-1 text-sm text-[rgb(var(--fg))] outline-none"
                       />
                     </label>
@@ -529,9 +553,7 @@ export default function StudyPlanPage() {
               {/* Subjects */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                    Subjects + weak topics
-                  </div>
+                  <div className="text-sm font-semibold text-[rgb(var(--fg))]">Subjects + weak topics</div>
                   <button
                     type="button"
                     onClick={addSubject}
@@ -548,9 +570,7 @@ export default function StudyPlanPage() {
                       className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 space-y-3"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                          Subject {idx + 1}
-                        </div>
+                        <div className="text-xs font-semibold text-[rgb(var(--muted2))]">Subject {idx + 1}</div>
                         {subjects.length > 1 && (
                           <button
                             type="button"
@@ -566,20 +586,14 @@ export default function StudyPlanPage() {
                         <input
                           value={s.name}
                           onChange={(e) =>
-                            setSubjects((p) =>
-                              p.map((x, i) =>
-                                i === idx ? { ...x, name: e.target.value } : x
-                              )
-                            )
+                            setSubjects((p) => p.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))
                           }
                           placeholder="e.g., CAT404 Web Engineering"
                           className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none"
                         />
 
                         <label className="space-y-1">
-                          <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                            Current level (0–10)
-                          </div>
+                          <div className="text-xs font-semibold text-[rgb(var(--muted2))]">Current level (0–10)</div>
                           <input
                             type="range"
                             min={0}
@@ -587,36 +601,21 @@ export default function StudyPlanPage() {
                             value={s.level0to10}
                             onChange={(e) =>
                               setSubjects((p) =>
-                                p.map((x, i) =>
-                                  i === idx
-                                    ? {
-                                        ...x,
-                                        level0to10: Number(e.target.value),
-                                      }
-                                    : x
-                                )
+                                p.map((x, i) => (i === idx ? { ...x, level0to10: Number(e.target.value) } : x))
                               )
                             }
                             className="w-full"
                           />
-                          <div className="text-xs text-[rgb(var(--muted))]">
-                            {s.level0to10}/10
-                          </div>
+                          <div className="text-xs text-[rgb(var(--muted))]">{s.level0to10}/10</div>
                         </label>
 
                         <div className="sm:col-span-2">
-                          <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                            Weak topics (comma separated)
-                          </div>
+                          <div className="text-xs font-semibold text-[rgb(var(--muted2))]">Weak topics (comma separated)</div>
                           <input
                             value={s.weakInput}
                             onChange={(e) =>
                               setSubjects((p) =>
-                                p.map((x, i) =>
-                                  i === idx
-                                    ? { ...x, weakInput: e.target.value }
-                                    : x
-                                )
+                                p.map((x, i) => (i === idx ? { ...x, weakInput: e.target.value } : x))
                               )
                             }
                             placeholder="e.g., SQL joins, React hooks, ERD normalization"
@@ -639,20 +638,14 @@ export default function StudyPlanPage() {
                   "bg-[rgb(var(--primary))]"
                 )}
               >
-                {loading
-                  ? "Generating..."
-                  : plan
-                  ? "Regenerate weekly plan"
-                  : "Generate weekly plan"}
+                {loading ? "Generating..." : plan ? "Regenerate weekly plan" : "Generate weekly plan"}
                 <Sparkles className="h-4 w-4" />
               </button>
             </section>
 
             {/* Right */}
             <aside className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.12)] space-y-4">
-              <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                What you’ll get
-              </div>
+              <div className="text-sm font-semibold text-[rgb(var(--fg))]">What you’ll get</div>
 
               <div className="space-y-3 text-sm text-[rgb(var(--muted))]">
                 <div className="flex gap-2">
@@ -661,20 +654,16 @@ export default function StudyPlanPage() {
                 </div>
                 <div className="flex gap-2">
                   <Flame className="h-4 w-4 mt-0.5" />
-                  <div>Spaced repetition reviews (+2 days / +7 days)</div>
+                  <div>Spaced repetition reviews (+2 days)</div>
                 </div>
                 <div className="flex gap-2">
-                  <GraduationCap className="h-4 w-4 mt-0.5" />
-                  <div>Suggested tutor sessions (when + why)</div>
-                </div>
-                <div className="flex gap-2">
-                  <RefreshCcw className="h-4 w-4 mt-0.5" />
-                  <div>Miss a day? Rebalance the week automatically</div>
+                  <HelpCircle className="h-4 w-4 mt-0.5" />
+                  <div>“Why today?” explanation per task</div>
                 </div>
               </div>
 
               <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 text-xs text-[rgb(var(--muted2))]">
-                Tip: Keep weak topics specific (e.g., “Normalization 2NF/3NF”, “JWT auth flow”, “SQL GROUP BY”). The plan becomes much smarter.
+                Tip: Keep weak topics specific (e.g., “Normalization 2NF/3NF”, “SQL GROUP BY”, “JWT auth flow”).
               </div>
             </aside>
           </div>
@@ -687,19 +676,18 @@ export default function StudyPlanPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
                 <div className="text-xs text-[rgb(var(--muted2))]">Plan</div>
-                <div className="mt-1 text-sm font-semibold text-[rgb(var(--fg))]">
-                  {plan.title}
-                </div>
+                <div className="mt-1 text-sm font-semibold text-[rgb(var(--fg))]">{plan.title}</div>
                 <div className="mt-2 text-xs text-[rgb(var(--muted))]">
                   {prettyDate(plan.startDate)} → {prettyDate(plan.endDate)}
+                </div>
+                <div className="mt-2 text-xs text-[rgb(var(--muted))]">
+                  Study time: <span className="font-semibold">{prefLabel(plan.preferredTime ?? preferredTime)}</span>
                 </div>
               </div>
 
               <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
                 <div className="text-xs text-[rgb(var(--muted2))]">Progress</div>
-                <div className="mt-1 text-2xl font-semibold text-[rgb(var(--fg))]">
-                  {progress.pct}%
-                </div>
+                <div className="mt-1 text-2xl font-semibold text-[rgb(var(--fg))]">{progress.pct}%</div>
                 <div className="mt-2 text-xs text-[rgb(var(--muted))]">
                   {progress.done}/{progress.total} tasks done
                 </div>
@@ -707,11 +695,9 @@ export default function StudyPlanPage() {
 
               <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
                 <div className="text-xs text-[rgb(var(--muted2))]">Weak spot (proxy)</div>
-                <div className="mt-1 text-sm font-semibold text-[rgb(var(--fg))]">
-                  {progress.weakSpot ?? "—"}
-                </div>
+                <div className="mt-1 text-sm font-semibold text-[rgb(var(--fg))]">{progress.weakSpot ?? "—"}</div>
                 <div className="mt-2 text-xs text-[rgb(var(--muted))]">
-                  Most remaining tasks are here → book tutor session if needed.
+                  Most remaining tasks are here → prioritize consistency.
                 </div>
               </div>
             </div>
@@ -757,13 +743,8 @@ export default function StudyPlanPage() {
 
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {grouped.map((day) => (
-                  <div
-                    key={day.date}
-                    className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4"
-                  >
-                    <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                      {prettyDate(day.date)}
-                    </div>
+                  <div key={day.date} className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
+                    <div className="text-sm font-semibold text-[rgb(var(--fg))]">{prettyDate(day.date)}</div>
 
                     <div className="mt-3 space-y-2">
                       {day.items.map((it) => {
@@ -771,53 +752,62 @@ export default function StudyPlanPage() {
                         const { label, icon: Icon } = badgeForType(it.type);
 
                         return (
-                          <button
-                            key={it.id}
-                            type="button"
-                            onClick={() => toggleItem(it)}
-                            disabled={busyToggle === it.id}
-                            className={cx(
-                              "w-full text-left rounded-xl border px-3 py-2 transition",
-                              done
-                                ? "border-emerald-500/30 bg-emerald-500/10"
-                                : "border-[rgb(var(--border))] bg-[rgb(var(--card))] hover:opacity-90"
-                            )}
-                          >
-                            <div className="flex items-start gap-2">
-                              {done ? (
-                                <CheckCircle2 className="h-4 w-4 mt-0.5 text-emerald-500" />
-                              ) : (
-                                <Circle className="h-4 w-4 mt-0.5 text-[rgb(var(--muted))]" />
+                          <div key={it.id} className="space-y-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleItem(it)}
+                              disabled={busyToggle === it.id}
+                              className={cx(
+                                "w-full text-left rounded-xl border px-3 py-2 transition",
+                                done
+                                  ? "border-emerald-500/30 bg-emerald-500/10"
+                                  : "border-[rgb(var(--border))] bg-[rgb(var(--card))] hover:opacity-90"
                               )}
-
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="text-xs font-semibold text-[rgb(var(--fg))] truncate">
-                                    {it.task}
-                                  </div>
-                                  <div className="text-[10px] text-[rgb(var(--muted))]">
-                                    {it.durationMin}m
-                                  </div>
-                                </div>
-
-                                <div className="mt-1 flex flex-wrap items-center gap-2">
-                                  <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-0.5 text-[10px] text-[rgb(var(--muted))]">
-                                    <Icon className="h-3 w-3" />
-                                    {label}
-                                  </span>
-                                  <span className="text-[10px] text-[rgb(var(--muted2))]">
-                                    {it.subjectName} • {it.topic}
-                                  </span>
-                                </div>
-
-                                {it.reason && (
-                                  <div className="mt-2 text-[10px] text-[rgb(var(--muted))]">
-                                    {it.reason}
-                                  </div>
+                            >
+                              <div className="flex items-start gap-2">
+                                {done ? (
+                                  <CheckCircle2 className="h-4 w-4 mt-0.5 text-emerald-500" />
+                                ) : (
+                                  <Circle className="h-4 w-4 mt-0.5 text-[rgb(var(--muted))]" />
                                 )}
+
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="text-xs font-semibold text-[rgb(var(--fg))] truncate">{it.task}</div>
+                                    <div className="text-[10px] text-[rgb(var(--muted))]">{it.durationMin}m</div>
+                                  </div>
+
+                                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-0.5 text-[10px] text-[rgb(var(--muted))]">
+                                      <Icon className="h-3 w-3" />
+                                      {label}
+                                    </span>
+
+                                    {/* ✅ time window tag */}
+                                    {it.timeBlock && (
+                                      <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-0.5 text-[10px] text-[rgb(var(--muted))]">
+                                        {it.timeBlock}
+                                      </span>
+                                    )}
+
+                                    <span className="text-[10px] text-[rgb(var(--muted2))]">
+                                      {it.subjectName} • {it.topic}
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          </button>
+                            </button>
+
+                            {/* ✅ “Why today?” */}
+                            <button
+                              type="button"
+                              onClick={() => setWhyOpenItemId(it.id)}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[rgb(var(--muted))] hover:underline"
+                            >
+                              <HelpCircle className="h-3.5 w-3.5" />
+                              Why am I studying this today?
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -825,17 +815,49 @@ export default function StudyPlanPage() {
                 ))}
               </div>
             </section>
+          </div>
+        )}
 
-            <section className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-5">
-              <div className="flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]">
-                <GraduationCap className="h-4 w-4" />
-                TutorLink loop (next upgrade)
+        {/* ✅ “Why today?” Modal */}
+        {whyItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setWhyOpenItemId(null)}
+            />
+            <div className="relative w-full max-w-lg rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.35)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-[rgb(var(--fg))]">Why this task today</div>
+                  <div className="mt-1 text-xs text-[rgb(var(--muted))]">
+                    {whyItem.subjectName} • {whyItem.topic} • {prettyDate(whyItem.date)}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setWhyOpenItemId(null)}
+                  className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1.5 text-xs font-semibold text-[rgb(var(--fg))] hover:opacity-90"
+                >
+                  Close
+                </button>
               </div>
-              <p className="mt-2 text-sm text-[rgb(var(--muted))]">
-                Next, we’ll add a “Book tutor” button on Tutor tasks → after session completes,
-                TutorLink auto-generates notes + next tasks for that topic.
-              </p>
-            </section>
+
+              <div className="mt-4 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
+                <div className="text-xs font-semibold text-[rgb(var(--fg))]">{whyItem.task}</div>
+                {whyItem.timeBlock && (
+                  <div className="mt-1 text-xs text-[rgb(var(--muted))]">Scheduled: {whyItem.timeBlock}</div>
+                )}
+                <div className="mt-3 text-sm text-[rgb(var(--muted))]">
+                  {whyItem.reason || "This task was scheduled to maintain weekly balance and improve retention."}
+                </div>
+              </div>
+
+              {plan?.aiExplanation && (
+                <div className="mt-4 text-xs text-[rgb(var(--muted))]">
+                  <span className="font-semibold">Plan context:</span> {plan.aiExplanation}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -843,9 +865,7 @@ export default function StudyPlanPage() {
         {step === "RESULT" && !plan && (
           <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5">
             <div className="text-sm font-semibold text-[rgb(var(--fg))]">No plan yet</div>
-            <p className="mt-2 text-sm text-[rgb(var(--muted))]">
-              Create your first plan to see your weekly schedule here.
-            </p>
+            <p className="mt-2 text-sm text-[rgb(var(--muted))]">Create your first plan to see your weekly schedule here.</p>
             <button
               type="button"
               onClick={() => setStep("FORM")}

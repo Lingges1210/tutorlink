@@ -6,6 +6,8 @@ import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 type DayKey = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
 const DAY_KEYS: DayKey[] = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 
+type PreferredTime = "MORNING" | "AFTERNOON" | "NIGHT";
+
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
@@ -60,6 +62,7 @@ type GenerateBody = {
   examDate?: string; // ISO
   hoursPerWeek: number;
   style: "SHORT_BURSTS" | "DEEP_STUDY";
+  preferredTime?: PreferredTime; // ✅ NEW
   availability: {
     days: DayKey[];
     hoursByDay: Partial<Record<DayKey, number>>;
@@ -130,6 +133,12 @@ function makeTaskText(type: "STUDY" | "PRACTICE" | "REVIEW" | "TUTOR", topic: st
   return `Tutor session: ${topic}`;
 }
 
+function preferredTimeLabel(pref: PreferredTime) {
+  if (pref === "MORNING") return "Morning • 8:00–11:00 AM";
+  if (pref === "AFTERNOON") return "Afternoon • 1:00–4:00 PM";
+  return "Night • 7:00–10:00 PM";
+}
+
 export async function POST(req: Request) {
   try {
     const me = await getMe();
@@ -140,6 +149,11 @@ export async function POST(req: Request) {
     const hoursPerWeek = clamp(Number(body.hoursPerWeek ?? 6), 1, 60);
     const style = body.style === "DEEP_STUDY" ? "DEEP_STUDY" : "SHORT_BURSTS";
     const subjects = (body.subjects ?? []).filter((s) => (s.name ?? "").trim().length > 0);
+
+    const preferredTime: PreferredTime =
+      body.preferredTime === "MORNING" || body.preferredTime === "AFTERNOON" || body.preferredTime === "NIGHT"
+        ? body.preferredTime
+        : "NIGHT";
 
     const availability = body.availability ?? { days: DAY_KEYS, hoursByDay: {} };
     const selectedDays = (availability.days ?? DAY_KEYS).filter((d) => DAY_KEYS.includes(d));
@@ -192,9 +206,11 @@ export async function POST(req: Request) {
       durationMin: number;
       type: "STUDY" | "PRACTICE" | "REVIEW" | "TUTOR";
       reason?: string;
+      timeBlock?: string;
     };
 
     const items: Item[] = [];
+    const timeBlock = preferredTimeLabel(preferredTime);
 
     function pushItem(
       date: Date,
@@ -212,6 +228,7 @@ export async function POST(req: Request) {
         durationMin,
         type,
         reason,
+        timeBlock,
       });
     }
 
@@ -219,12 +236,15 @@ export async function POST(req: Request) {
     const practiceMins = Math.round(totalMinutesTarget * 0.3);
     const recapMins = Math.max(0, totalMinutesTarget - weakMins - practiceMins);
 
+    // (still okay to keep tutor tasks internally; you just won’t have a booking button in UI)
     const daysToExam =
-      examDate ? Math.ceil((startOfDay(examDate).getTime() - startOfDay(today).getTime()) / (1000 * 60 * 60 * 24)) : 999;
+      examDate
+        ? Math.ceil((startOfDay(examDate).getTime() - startOfDay(today).getTime()) / (1000 * 60 * 60 * 24))
+        : 999;
 
     const tutorSlots: { day: DayKey; minutes: number; reason: string }[] = [];
     tutorSlots.push({ day: "WED", minutes: 60, reason: "Midweek checkpoint: fix confusion early." });
-    if (daysToExam <= 21) tutorSlots.push({ day: "SAT", minutes: 60, reason: "Exam is soon: do targeted drilling with a tutor." });
+    if (daysToExam <= 21) tutorSlots.push({ day: "SAT", minutes: 60, reason: "Exam is soon: do targeted drilling." });
 
     for (const t of tutorSlots) {
       if (dayRemaining[t.day] >= t.minutes) dayRemaining[t.day] -= t.minutes;
@@ -246,7 +266,11 @@ export async function POST(req: Request) {
 
         const dur = clamp(block, 15, 60);
         if (dayRemaining[dayKey] >= dur && remaining >= 15) {
-          pushItem(date, picked.subjectName, picked.topic, type, dur, labelReason);
+          const why =
+            `${labelReason} ` +
+            `Chosen because ${picked.topic} is a weaker area and it fits your ${preferredTime.toLowerCase()} study preference.`;
+
+          pushItem(date, picked.subjectName, picked.topic, type, dur, why);
           dayRemaining[dayKey] -= dur;
           remaining -= dur;
 
@@ -255,7 +279,14 @@ export async function POST(req: Request) {
           if (review2 <= end) {
             const dk2 = dayKeyFromDate(review2);
             if (dayRemaining[dk2] >= 15) {
-              pushItem(review2, picked.subjectName, picked.topic, "REVIEW", 15, "Spaced repetition (+2 days).");
+              pushItem(
+                review2,
+                picked.subjectName,
+                picked.topic,
+                "REVIEW",
+                15,
+                `Spaced repetition (+2 days) to lock in memory for ${picked.topic}.`
+              );
               dayRemaining[dk2] -= 15;
             }
           }
@@ -269,7 +300,14 @@ export async function POST(req: Request) {
         .map((r) => ({ ...r, score: priorityScore(r, examDate, date) }))
         .sort((a, b) => b.score - a.score)[0];
 
-      pushItem(date, picked.subjectName, picked.topic, "TUTOR", t.minutes, `Recommended tutor session: ${t.reason}`);
+      pushItem(
+        date,
+        picked.subjectName,
+        picked.topic,
+        "TUTOR",
+        t.minutes,
+        `Tutor-style checkpoint: ${t.reason} Focus topic: ${picked.topic}.`
+      );
     }
 
     scheduleBucket(weakMins, "STUDY", "Priority: weak topic focus (60%).");
@@ -295,6 +333,7 @@ export async function POST(req: Request) {
             style,
             subjects: subjects as any,
             availability: { days: selectedDays, hoursByDay } as any,
+            preferredTime, // ✅ NEW
             items: {
               create: items.map((it) => ({
                 date: it.date,
@@ -304,6 +343,7 @@ export async function POST(req: Request) {
                 durationMin: it.durationMin,
                 type: it.type,
                 reason: it.reason ?? null,
+                timeBlock: it.timeBlock ?? null, // ✅ NEW
                 status: "PENDING",
               })),
             },
@@ -314,7 +354,6 @@ export async function POST(req: Request) {
         return { planId: created.id };
       }
 
-      // overwrite header
       await tx.studyPlan.update({
         where: { id: existing.id },
         data: {
@@ -326,11 +365,11 @@ export async function POST(req: Request) {
           style,
           subjects: subjects as any,
           availability: { days: selectedDays, hoursByDay } as any,
+          preferredTime, // ✅ NEW
         },
         select: { id: true },
       });
 
-      // replace items
       await tx.studyPlanItem.deleteMany({ where: { planId: existing.id } });
 
       await tx.studyPlanItem.createMany({
@@ -343,6 +382,7 @@ export async function POST(req: Request) {
           durationMin: it.durationMin,
           type: it.type,
           reason: it.reason ?? null,
+          timeBlock: it.timeBlock ?? null, // ✅ NEW
           status: "PENDING",
         })),
       });
