@@ -20,7 +20,6 @@ import {
   Moon,
   Sun,
   Sunset,
-  X,
 } from "lucide-react";
 
 type DayKey = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
@@ -110,16 +109,43 @@ function prefLabel(p: PreferredTime) {
   return "Night (7–10pm)";
 }
 
-function softCard() {
-  return "rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_18px_48px_rgba(0,0,0,0.10)]";
+// ✅ local-day stamp (YYYY-MM-DD in the user's local timezone)
+function dayStamp(input: Date | string) {
+  const d = typeof input === "string" ? new Date(input) : input;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
 }
 
-function pill() {
-  return "inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-1 text-[10px] font-semibold text-[rgb(var(--muted))]";
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return { text: "Good Morning", Icon: Sun };
+  if (h < 18) return { text: "Good Afternoon", Icon: Sunset };
+  return { text: "Good Evening", Icon: Moon };
+}
+
+// ✅ streak = consecutive days with at least 1 DONE task, ending today
+function calcStreak(items: PlanItem[]) {
+  const doneDays = new Set<string>();
+  for (const it of items) {
+    if (it.status === "DONE") doneDays.add(dayStamp(it.date));
+  }
+
+  let streak = 0;
+  const cur = new Date();
+  // walk backwards from today
+  for (;;) {
+    const s = dayStamp(cur);
+    if (!doneDays.has(s)) break;
+    streak += 1;
+    cur.setDate(cur.getDate() - 1);
+  }
+  return streak;
 }
 
 export default function StudyPlanPage() {
-  const [step, setStep] = useState<"INIT" | "FORM" | "RESULT">("INIT");
+  const [step, setStep] = useState<"FORM" | "RESULT">("FORM");
 
   // FORM state
   const [title, setTitle] = useState("");
@@ -130,7 +156,14 @@ export default function StudyPlanPage() {
   // ✅ NEW: Preferred study time
   const [preferredTime, setPreferredTime] = useState<PreferredTime>("NIGHT");
 
-  const [days, setDays] = useState<DayKey[]>(["MON", "TUE", "WED", "THU", "FRI", "SAT"]);
+  const [days, setDays] = useState<DayKey[]>([
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT",
+  ]);
   const [hoursByDay, setHoursByDay] = useState<Record<DayKey, number>>({
     MON: 1,
     TUE: 1,
@@ -167,24 +200,30 @@ export default function StudyPlanPage() {
   }
 
   // ✅ Optimistic UI helper
-  function updateItemStatusLocal(itemId: string, nextStatus: "PENDING" | "DONE" | "SKIPPED") {
+  function updateItemStatusLocal(
+    itemId: string,
+    nextStatus: "PENDING" | "DONE" | "SKIPPED"
+  ) {
     setPlan((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
-        items: prev.items.map((it) => (it.id === itemId ? { ...it, status: nextStatus } : it)),
+        items: prev.items.map((it) =>
+          it.id === itemId ? { ...it, status: nextStatus } : it
+        ),
       };
     });
   }
 
   // ✅ Auto-load existing plan on page open → show RESULT if exists
+  // (This already loads plan first; UI will still render once, but you’ll see plan quickly)
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         const p = await fetchCurrentPlan();
         if (!mounted) return;
-        setStep(p ? "RESULT" : "FORM");
+        if (p) setStep("RESULT");
       } catch {
         // ignore
       }
@@ -207,7 +246,9 @@ export default function StudyPlanPage() {
             .filter(Boolean);
           return {
             name: s.name.trim(),
-            level0to10: Number.isFinite(Number(s.level0to10)) ? Number(s.level0to10) : 5,
+            level0to10: Number.isFinite(Number(s.level0to10))
+              ? Number(s.level0to10)
+              : 5,
             weakTopics,
           };
         })
@@ -245,7 +286,8 @@ export default function StudyPlanPage() {
 
   // ✅ Optimistic toggle
   async function toggleItem(item: PlanItem) {
-    const nextStatus: "PENDING" | "DONE" = item.status === "DONE" ? "PENDING" : "DONE";
+    const nextStatus: "PENDING" | "DONE" =
+      item.status === "DONE" ? "PENDING" : "DONE";
     updateItemStatusLocal(item.id, nextStatus);
 
     setBusyToggle(item.id);
@@ -281,7 +323,10 @@ export default function StudyPlanPage() {
   }
 
   function addSubject() {
-    setSubjects((p) => [...p, { name: "", level0to10: 5, weakTopics: [], weakInput: "" }]);
+    setSubjects((p) => [
+      ...p,
+      { name: "", level0to10: 5, weakTopics: [], weakInput: "" },
+    ]);
   }
 
   function removeSubject(idx: number) {
@@ -318,11 +363,36 @@ export default function StudyPlanPage() {
     const pendingBySubject = new Map<string, number>();
     for (const it of all) {
       if (it.status !== "DONE") {
-        pendingBySubject.set(it.subjectName, (pendingBySubject.get(it.subjectName) ?? 0) + 1);
+        pendingBySubject.set(
+          it.subjectName,
+          (pendingBySubject.get(it.subjectName) ?? 0) + 1
+        );
       }
     }
     const worst = [...pendingBySubject.entries()].sort((a, b) => b[1] - a[1])[0];
     return { done, total: all.length, pct, weakSpot: worst?.[0] ?? null };
+  }, [plan]);
+
+  // ✅ Today’s dashboard data
+  const todayPack = useMemo(() => {
+    if (!plan?.items) return null;
+    const today = dayStamp(new Date());
+    const todays = plan.items
+      .filter((it) => dayStamp(it.date) === today)
+      .sort((a, b) => a.status.localeCompare(b.status));
+
+    const pending = todays.filter((x) => x.status !== "DONE");
+    const streak = calcStreak(plan.items);
+
+    const totalMin = pending.reduce((sum, x) => sum + (x.durationMin || 0), 0);
+
+    return {
+      today,
+      todays,
+      pending,
+      streak,
+      totalMin,
+    };
   }, [plan]);
 
   const whyItem = useMemo(() => {
@@ -330,118 +400,296 @@ export default function StudyPlanPage() {
     return plan.items.find((x) => x.id === whyOpenItemId) ?? null;
   }, [whyOpenItemId, plan]);
 
+  const greeting = useMemo(() => getGreeting(), []);
+
   return (
     <div className="pt-10 pb-12">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 space-y-6">
-        {/* HERO Header (UI only) */}
-        <div className={cx("p-6 sm:p-7", softCard())}>
-          <header className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <Link
-                href="/study?tab=plan"
-                className="inline-flex items-center gap-2 text-sm text-[rgb(var(--muted))] hover:underline"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to AI Learning Suite
-              </Link>
+        {/* Header */}
+        <header className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <Link
+              href="/study?tab=plan"
+              className="inline-flex items-center gap-2 text-sm text-[rgb(var(--muted))] hover:underline"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to AI Learning Suite
+            </Link>
 
-              <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1.5 text-xs text-[rgb(var(--muted2))]">
-                <Sparkles className="h-4 w-4" />
-                AI Study Planner (MVP+)
-              </div>
-
-              <h1 className="mt-3 text-2xl sm:text-3xl font-semibold text-[rgb(var(--fg))] tracking-tight">
-                Study Plan Generator
-              </h1>
-              <p className="mt-1 text-sm text-[rgb(var(--muted))] max-w-2xl">
-                Build a weekly Mon–Sun plan with spaced repetition, smart task blocks, and clear “why” explanations.
-              </p>
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1.5 text-xs text-[rgb(var(--muted2))]">
+              <Sparkles className="h-4 w-4" />
+              AI Study Planner (MVP+)
             </div>
 
-            {step === "RESULT" && (
-              <button
-                type="button"
-                onClick={() => setStep("FORM")}
-                className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:opacity-90"
-              >
-                <Wand2 className="h-4 w-4" />
-                Adjust inputs
-              </button>
-            )}
-          </header>
+            <h1 className="mt-3 text-2xl font-semibold text-[rgb(var(--fg))]">
+              Study Plan Generator
+            </h1>
+            <p className="text-sm text-[rgb(var(--muted))] max-w-2xl">
+              Build a weekly Mon–Sun plan with spaced repetition, smart task blocks, and
+              clear “why” explanations.
+            </p>
+          </div>
 
-          {error && (
-            <div className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-500 flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 mt-0.5" />
-              <div>{error}</div>
-            </div>
+          {step === "RESULT" && (
+            <button
+              type="button"
+              onClick={() => setStep("FORM")}
+              className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:opacity-90"
+            >
+              <Wand2 className="h-4 w-4" />
+              Adjust inputs
+            </button>
           )}
-        </div>
+        </header>
 
-        {/* ✅ INIT state: show a loading card so FORM doesn’t flash */}
-        {step === "INIT" && (
-          <div className={cx("p-6", softCard())}>
-            <div className="flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]">
-              <RefreshCcw className="h-4 w-4 animate-spin" />
-              Loading your latest plan…
-            </div>
-            <div className="mt-2 text-sm text-[rgb(var(--muted))]">
-              If you already generated one before, we’ll open it automatically.
-            </div>
+        {error && (
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-500 flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 mt-0.5" />
+            <div>{error}</div>
           </div>
         )}
 
-        {/* ✅ Plan-level AI Explanation (nicer card) */}
+        {/* ✅ Plan-level AI Explanation */}
         {step === "RESULT" && plan?.aiExplanation && (
-          <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.08)]">
+          <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]">
               <Sparkles className="h-4 w-4" />
               Why this plan?
             </div>
-            <p className="mt-2 text-sm text-[rgb(var(--muted))] leading-relaxed">{plan.aiExplanation}</p>
+            <p className="mt-2 text-sm text-[rgb(var(--muted))]">{plan.aiExplanation}</p>
           </div>
+        )}
+
+        {/* ✅ TODAY’S STUDY DASHBOARD (Killer Feature) */}
+        {step === "RESULT" && plan && todayPack && (
+          <section
+            className={cx(
+              "rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5",
+              "shadow-[0_18px_40px_rgba(0,0,0,0.12)]",
+              "transition hover:-translate-y-0.5 hover:shadow-[0_24px_60px_rgba(0,0,0,0.18)]"
+            )}
+          >
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+              <div className="min-w-0">
+                <div className="inline-flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]">
+                  <greeting.Icon className="h-4 w-4" />
+                  {greeting.text}
+                  <span className="text-[rgb(var(--muted))] font-semibold">—</span>
+                  <span className="text-[rgb(var(--muted))]">{prettyDate(new Date().toISOString())}</span>
+                </div>
+
+                <div className="mt-2 text-xs text-[rgb(var(--muted))]">
+                  Study window:{" "}
+                  <span className="font-semibold text-[rgb(var(--fg))]">
+                    {prefLabel(plan.preferredTime ?? preferredTime)}
+                  </span>
+                  {todayPack.pending.length > 0 && (
+                    <>
+                      {" "}
+                      • Estimated{" "}
+                      <span className="font-semibold text-[rgb(var(--fg))]">
+                        {todayPack.totalMin} min
+                      </span>{" "}
+                      today
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <div className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2">
+                  <Flame className="h-4 w-4 text-[rgb(var(--primary))]" />
+                  <div className="text-xs">
+                    <div className="font-semibold text-[rgb(var(--fg))]">Streak</div>
+                    <div className="text-[rgb(var(--muted))]">{todayPack.streak} days</div>
+                  </div>
+                </div>
+
+                <div className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  <div className="text-xs">
+                    <div className="font-semibold text-[rgb(var(--fg))]">Progress</div>
+                    <div className="text-[rgb(var(--muted))]">{progress.pct}%</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* progress bar */}
+            <div className="mt-4">
+              <div className="h-2 w-full rounded-full bg-[rgb(var(--card2))] border border-[rgb(var(--border))] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-[rgb(var(--primary))] transition-all duration-500"
+                  style={{ width: `${progress.pct}%` }}
+                />
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11px] text-[rgb(var(--muted))]">
+                <span>
+                  {progress.done}/{progress.total} tasks done
+                </span>
+                <span>Keep it consistent ✨</span>
+              </div>
+            </div>
+
+            {/* Today’s tasks */}
+            <div className="mt-5">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                  Today’s Tasks
+                </div>
+                <div className="text-xs text-[rgb(var(--muted))]">
+                  {todayPack.pending.length === 0
+                    ? "All done 🎉"
+                    : `${todayPack.pending.length} remaining`}
+                </div>
+              </div>
+
+              {todayPack.todays.length === 0 ? (
+                <div className="mt-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 text-sm text-[rgb(var(--muted))]">
+                  No tasks scheduled for today. Tap <span className="font-semibold">Rebalance</span> if you missed days,
+                  or regenerate with more hours/week.
+                </div>
+              ) : (
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {todayPack.todays.map((it) => {
+                    const done = it.status === "DONE";
+                    const { label, icon: Icon } = badgeForType(it.type);
+
+                    return (
+                      <button
+                        key={it.id}
+                        type="button"
+                        onClick={() => toggleItem(it)}
+                        disabled={busyToggle === it.id}
+                        className={cx(
+                          "group w-full text-left rounded-2xl border p-4 transition",
+                          "hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(0,0,0,0.12)]",
+                          done
+                            ? "border-emerald-500/30 bg-emerald-500/10"
+                            : "border-[rgb(var(--border))] bg-[rgb(var(--card2))]"
+                        )}
+                      >
+                        <div className="flex items-start gap-3">
+                          {done ? (
+                            <CheckCircle2 className="h-5 w-5 mt-0.5 text-emerald-500" />
+                          ) : (
+                            <Circle className="h-5 w-5 mt-0.5 text-[rgb(var(--muted))]" />
+                          )}
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold text-[rgb(var(--fg))] truncate">
+                                  {it.task}
+                                </div>
+                                <div className="mt-1 text-[11px] text-[rgb(var(--muted2))]">
+                                  {it.subjectName} • {it.topic}
+                                </div>
+                              </div>
+
+                              <div className="shrink-0 text-[11px] text-[rgb(var(--muted))]">
+                                {it.durationMin}m
+                              </div>
+                            </div>
+
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2 py-0.5 text-[10px] text-[rgb(var(--muted))]">
+                                <Icon className="h-3 w-3" />
+                                {label}
+                              </span>
+
+                              {it.timeBlock && (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2 py-0.5 text-[10px] text-[rgb(var(--muted))]">
+                                  {it.timeBlock}
+                                </span>
+                              )}
+
+                              <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-[rgb(var(--muted))] group-hover:underline">
+                                <HelpCircle className="h-4 w-4" />
+                                Why today?
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* actions row */}
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => fetchCurrentPlan()}
+                disabled={loading}
+                className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:opacity-90"
+              >
+                <RefreshCcw className="h-4 w-4" />
+                Refresh
+              </button>
+
+              <button
+                type="button"
+                onClick={rebalanceWeek}
+                disabled={loading}
+                className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:opacity-90"
+              >
+                <Wand2 className="h-4 w-4" />
+                Rebalance week
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStep("FORM")}
+                className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-90"
+              >
+                Adjust inputs
+                <Sparkles className="h-4 w-4" />
+              </button>
+            </div>
+          </section>
         )}
 
         {/* FORM */}
         {step === "FORM" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: form */}
-            <section className={cx("lg:col-span-2 p-5 space-y-5", softCard())}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]">
-                  <CalendarClock className="h-4 w-4" />
-                  Your Inputs
-                </div>
-                <div className="text-[11px] text-[rgb(var(--muted))]">AI weights weak topics higher.</div>
+            <section className="lg:col-span-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.12)] space-y-5">
+              <div className="flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]">
+                <CalendarClock className="h-4 w-4" />
+                Your Inputs
               </div>
-
-              <div className="h-px bg-[rgb(var(--border))]" />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <label className="space-y-1">
-                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">Plan title (optional)</div>
+                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
+                    Plan title (optional)
+                  </div>
                   <input
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="e.g., CALC Final Sprint"
-                    className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.20]"
+                    className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none"
                   />
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">Exam/assignment date</div>
+                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
+                    Exam/assignment date
+                  </div>
                   <input
                     type="date"
                     value={examDate}
                     onChange={(e) => setExamDate(e.target.value)}
-                    className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.20]"
+                    className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none"
                   />
                 </label>
 
-                <label className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs font-semibold text-[rgb(var(--muted2))]">Hours per week</div>
-                    <div className="text-xs font-semibold text-[rgb(var(--fg))]">{hoursPerWeek}h</div>
+                <label className="space-y-1">
+                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
+                    Hours per week
                   </div>
                   <input
                     type="range"
@@ -451,11 +699,15 @@ export default function StudyPlanPage() {
                     onChange={(e) => setHoursPerWeek(Number(e.target.value))}
                     className="w-full"
                   />
-                  <div className="text-[11px] text-[rgb(var(--muted))]">More hours → more practice & reviews.</div>
+                  <div className="text-xs text-[rgb(var(--muted))]">
+                    {hoursPerWeek} hours/week
+                  </div>
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">Preferred style</div>
+                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
+                    Preferred style
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
@@ -485,13 +737,11 @@ export default function StudyPlanPage() {
                 </label>
               </div>
 
-              {/* Preferred Study Time */}
+              {/* ✅ Preferred Study Time */}
               <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-[rgb(var(--fg))]">Preferred study time</div>
-                  <div className="text-[11px] text-[rgb(var(--muted))]">tag tasks with window</div>
+                <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                  Preferred study time
                 </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
                     type="button"
@@ -537,14 +787,16 @@ export default function StudyPlanPage() {
                 </div>
 
                 <div className="text-xs text-[rgb(var(--muted))]">
-                  Planner will tag tasks with:{" "}
+                  Planner will tag tasks with a time window:{" "}
                   <span className="font-semibold">{prefLabel(preferredTime)}</span>
                 </div>
               </div>
 
               {/* Availability */}
               <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 space-y-3">
-                <div className="text-sm font-semibold text-[rgb(var(--fg))]">Weekly availability</div>
+                <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                  Weekly availability
+                </div>
 
                 <div className="flex flex-wrap gap-2">
                   {DAY_KEYS.map((d) => {
@@ -586,9 +838,12 @@ export default function StudyPlanPage() {
                         step={0.5}
                         value={hoursByDay[d]}
                         onChange={(e) =>
-                          setHoursByDay((p) => ({ ...p, [d]: Number(e.target.value) }))
+                          setHoursByDay((p) => ({
+                            ...p,
+                            [d]: Number(e.target.value),
+                          }))
                         }
-                        className="w-20 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-1 text-sm text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.20]"
+                        className="w-20 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-1 text-sm text-[rgb(var(--fg))] outline-none"
                       />
                     </label>
                   ))}
@@ -598,7 +853,9 @@ export default function StudyPlanPage() {
               {/* Subjects */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-[rgb(var(--fg))]">Subjects + weak topics</div>
+                  <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                    Subjects + weak topics
+                  </div>
                   <button
                     type="button"
                     onClick={addSubject}
@@ -615,7 +872,9 @@ export default function StudyPlanPage() {
                       className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 space-y-3"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="text-xs font-semibold text-[rgb(var(--muted2))]">Subject {idx + 1}</div>
+                        <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
+                          Subject {idx + 1}
+                        </div>
                         {subjects.length > 1 && (
                           <button
                             type="button"
@@ -632,15 +891,19 @@ export default function StudyPlanPage() {
                           value={s.name}
                           onChange={(e) =>
                             setSubjects((p) =>
-                              p.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x))
+                              p.map((x, i) =>
+                                i === idx ? { ...x, name: e.target.value } : x
+                              )
                             )
                           }
                           placeholder="e.g., CAT404 Web Engineering"
-                          className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.20]"
+                          className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none"
                         />
 
                         <label className="space-y-1">
-                          <div className="text-xs font-semibold text-[rgb(var(--muted2))]">Current level (0–10)</div>
+                          <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
+                            Current level (0–10)
+                          </div>
                           <input
                             type="range"
                             min={0}
@@ -649,13 +912,20 @@ export default function StudyPlanPage() {
                             onChange={(e) =>
                               setSubjects((p) =>
                                 p.map((x, i) =>
-                                  i === idx ? { ...x, level0to10: Number(e.target.value) } : x
+                                  i === idx
+                                    ? {
+                                        ...x,
+                                        level0to10: Number(e.target.value),
+                                      }
+                                    : x
                                 )
                               )
                             }
                             className="w-full"
                           />
-                          <div className="text-xs text-[rgb(var(--muted))]">{s.level0to10}/10</div>
+                          <div className="text-xs text-[rgb(var(--muted))]">
+                            {s.level0to10}/10
+                          </div>
                         </label>
 
                         <div className="sm:col-span-2">
@@ -666,11 +936,15 @@ export default function StudyPlanPage() {
                             value={s.weakInput}
                             onChange={(e) =>
                               setSubjects((p) =>
-                                p.map((x, i) => (i === idx ? { ...x, weakInput: e.target.value } : x))
+                                p.map((x, i) =>
+                                  i === idx
+                                    ? { ...x, weakInput: e.target.value }
+                                    : x
+                                )
                               )
                             }
                             placeholder="e.g., SQL joins, React hooks, ERD normalization"
-                            className="mt-1 w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.20]"
+                            className="mt-1 w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none"
                           />
                         </div>
                       </div>
@@ -684,19 +958,25 @@ export default function StudyPlanPage() {
                 onClick={generatePlan}
                 disabled={loading}
                 className={cx(
-                  "w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition shadow-[0_14px_30px_rgb(var(--shadow)/0.35)]",
+                  "w-full inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white transition",
                   loading ? "opacity-60" : "hover:-translate-y-0.5",
                   "bg-[rgb(var(--primary))]"
                 )}
               >
-                {loading ? "Generating..." : plan ? "Regenerate weekly plan" : "Generate weekly plan"}
+                {loading
+                  ? "Generating..."
+                  : plan
+                  ? "Regenerate weekly plan"
+                  : "Generate weekly plan"}
                 <Sparkles className="h-4 w-4" />
               </button>
             </section>
 
             {/* Right */}
-            <aside className={cx("p-5 space-y-4", softCard())}>
-              <div className="text-sm font-semibold text-[rgb(var(--fg))]">What you’ll get</div>
+            <aside className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.12)] space-y-4">
+              <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                What you’ll get
+              </div>
 
               <div className="space-y-3 text-sm text-[rgb(var(--muted))]">
                 <div className="flex gap-2">
@@ -713,215 +993,188 @@ export default function StudyPlanPage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 text-xs text-[rgb(var(--muted2))] leading-relaxed">
+              <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 text-xs text-[rgb(var(--muted2))]">
                 Tip: Keep weak topics specific (e.g., “Normalization 2NF/3NF”, “SQL GROUP BY”, “JWT auth flow”).
               </div>
             </aside>
           </div>
         )}
 
-        {/* RESULT */}
+        {/* RESULT (your original calendar view stays the same) */}
         {step === "RESULT" && plan && (
           <div className="space-y-6">
             {/* Top stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className={cx("p-4", softCard())}>
+              <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
                 <div className="text-xs text-[rgb(var(--muted2))]">Plan</div>
-                <div className="mt-1 text-sm font-semibold text-[rgb(var(--fg))]">{plan.title}</div>
+                <div className="mt-1 text-sm font-semibold text-[rgb(var(--fg))]">
+                  {plan.title}
+                </div>
                 <div className="mt-2 text-xs text-[rgb(var(--muted))]">
                   {prettyDate(plan.startDate)} → {prettyDate(plan.endDate)}
                 </div>
                 <div className="mt-2 text-xs text-[rgb(var(--muted))]">
                   Study time:{" "}
-                  <span className="font-semibold">{prefLabel(plan.preferredTime ?? preferredTime)}</span>
+                  <span className="font-semibold">
+                    {prefLabel(plan.preferredTime ?? preferredTime)}
+                  </span>
                 </div>
               </div>
 
-              <div className={cx("p-4", softCard())}>
+              <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
                 <div className="text-xs text-[rgb(var(--muted2))]">Progress</div>
-                <div className="mt-1 text-2xl font-semibold text-[rgb(var(--fg))]">{progress.pct}%</div>
+                <div className="mt-1 text-2xl font-semibold text-[rgb(var(--fg))]">
+                  {progress.pct}%
+                </div>
                 <div className="mt-2 text-xs text-[rgb(var(--muted))]">
                   {progress.done}/{progress.total} tasks done
                 </div>
               </div>
 
-              <div className={cx("p-4", softCard())}>
+              <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
                 <div className="text-xs text-[rgb(var(--muted2))]">Weak spot (proxy)</div>
-                <div className="mt-1 text-sm font-semibold text-[rgb(var(--fg))]">{progress.weakSpot ?? "—"}</div>
+                <div className="mt-1 text-sm font-semibold text-[rgb(var(--fg))]">
+                  {progress.weakSpot ?? "—"}
+                </div>
                 <div className="mt-2 text-xs text-[rgb(var(--muted))]">
                   Most remaining tasks are here → prioritize consistency.
                 </div>
               </div>
             </div>
 
-            {/* Actions (slightly nicer) */}
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => fetchCurrentPlan()}
-                disabled={loading}
-                className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:opacity-90"
-              >
-                <RefreshCcw className="h-4 w-4" />
-                Refresh
-              </button>
-
-              <button
-                type="button"
-                onClick={rebalanceWeek}
-                disabled={loading}
-                className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:opacity-90"
-              >
-                <Wand2 className="h-4 w-4" />
-                Rebalance week (missed days)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setStep("FORM")}
-                className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-90"
-              >
-                Regenerate
-                <Sparkles className="h-4 w-4" />
-              </button>
-            </div>
-
             {/* Calendar */}
-            <section className={cx("p-5", softCard())}>
+            <section className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-[rgb(var(--fg))]">Your week</div>
                 <div className="text-xs text-[rgb(var(--muted))]">Tap a task to mark done.</div>
               </div>
 
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {grouped.map((day) => {
-                  const doneCount = day.items.filter((x) => x.status === "DONE").length;
-                  const totalCount = day.items.length;
+                {grouped.map((day) => (
+                  <div
+                    key={day.date}
+                    className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4"
+                  >
+                    <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                      {prettyDate(day.date)}
+                    </div>
 
-                  return (
-                    <div
-                      key={day.date}
-                      className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                          {prettyDate(day.date)}
-                        </div>
-                        <span className={pill()}>
-                          {doneCount}/{totalCount}
-                        </span>
-                      </div>
+                    <div className="mt-3 space-y-2">
+                      {day.items.map((it) => {
+                        const done = it.status === "DONE";
+                        const { label, icon: Icon } = badgeForType(it.type);
 
-                      <div className="mt-3 space-y-2">
-                        {day.items.map((it) => {
-                          const done = it.status === "DONE";
-                          const { label, icon: Icon } = badgeForType(it.type);
-
-                          return (
-                            <div key={it.id} className="space-y-2">
-                              <button
-                                type="button"
-                                onClick={() => toggleItem(it)}
-                                disabled={busyToggle === it.id}
-                                className={cx(
-                                  "w-full text-left rounded-2xl border px-3 py-2 transition",
-                                  "shadow-[0_10px_22px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(0,0,0,0.10)]",
-                                  done
-                                    ? "border-emerald-500/30 bg-emerald-500/10"
-                                    : "border-[rgb(var(--border))] bg-[rgb(var(--card))]"
+                        return (
+                          <div key={it.id} className="space-y-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleItem(it)}
+                              disabled={busyToggle === it.id}
+                              className={cx(
+                                "w-full text-left rounded-xl border px-3 py-2 transition",
+                                done
+                                  ? "border-emerald-500/30 bg-emerald-500/10"
+                                  : "border-[rgb(var(--border))] bg-[rgb(var(--card))] hover:opacity-90"
+                              )}
+                            >
+                              <div className="flex items-start gap-2">
+                                {done ? (
+                                  <CheckCircle2 className="h-4 w-4 mt-0.5 text-emerald-500" />
+                                ) : (
+                                  <Circle className="h-4 w-4 mt-0.5 text-[rgb(var(--muted))]" />
                                 )}
-                              >
-                                <div className="flex items-start gap-2">
-                                  {done ? (
-                                    <CheckCircle2 className="h-4 w-4 mt-0.5 text-emerald-500" />
-                                  ) : (
-                                    <Circle className="h-4 w-4 mt-0.5 text-[rgb(var(--muted))]" />
-                                  )}
 
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div className="text-xs font-semibold text-[rgb(var(--fg))] truncate">
-                                        {it.task}
-                                      </div>
-                                      <div className="text-[10px] text-[rgb(var(--muted))]">{it.durationMin}m</div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="text-xs font-semibold text-[rgb(var(--fg))] truncate">
+                                      {it.task}
                                     </div>
-
-                                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                                      <span className={pill()}>
-                                        <Icon className="h-3 w-3" />
-                                        {label}
-                                      </span>
-
-                                      {it.timeBlock && <span className={pill()}>{it.timeBlock}</span>}
-
-                                      <span className="text-[10px] text-[rgb(var(--muted2))]">
-                                        {it.subjectName} • {it.topic}
-                                      </span>
+                                    <div className="text-[10px] text-[rgb(var(--muted))]">
+                                      {it.durationMin}m
                                     </div>
                                   </div>
-                                </div>
-                              </button>
 
-                              {/* “Why today?” as a small pill button */}
-                              <button
-                                type="button"
-                                onClick={() => setWhyOpenItemId(it.id)}
-                                className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1.5 text-[11px] font-semibold text-[rgb(var(--muted))] hover:bg-[rgb(var(--card2))] transition"
-                              >
-                                <HelpCircle className="h-4 w-4" />
-                                Why today?
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
+                                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-0.5 text-[10px] text-[rgb(var(--muted))]">
+                                      <Icon className="h-3 w-3" />
+                                      {label}
+                                    </span>
+
+                                    {it.timeBlock && (
+                                      <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-0.5 text-[10px] text-[rgb(var(--muted))]">
+                                        {it.timeBlock}
+                                      </span>
+                                    )}
+
+                                    <span className="text-[10px] text-[rgb(var(--muted2))]">
+                                      {it.subjectName} • {it.topic}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setWhyOpenItemId(it.id)}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[rgb(var(--muted))] hover:underline"
+                            >
+                              <HelpCircle className="h-3.5 w-3.5" />
+                              Why am I studying this today?
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             </section>
           </div>
         )}
 
-        {/* ✅ “Why today?” Modal (nicer close button) */}
+        {/* ✅ “Why today?” Modal */}
         {whyItem && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" onClick={() => setWhyOpenItemId(null)} />
-            <div className="relative w-full max-w-lg rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_28px_80px_rgba(0,0,0,0.45)]">
+            <div
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setWhyOpenItemId(null)}
+            />
+            <div className="relative w-full max-w-lg rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.35)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold text-[rgb(var(--fg))]">Why this task today</div>
+                  <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                    Why this task today
+                  </div>
                   <div className="mt-1 text-xs text-[rgb(var(--muted))]">
                     {whyItem.subjectName} • {whyItem.topic} • {prettyDate(whyItem.date)}
                   </div>
                 </div>
-
                 <button
                   type="button"
                   onClick={() => setWhyOpenItemId(null)}
-                  className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-2 text-[rgb(var(--fg))] hover:opacity-90"
-                  aria-label="Close"
+                  className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1.5 text-xs font-semibold text-[rgb(var(--fg))] hover:opacity-90"
                 >
-                  <X className="h-4 w-4" />
+                  Close
                 </button>
               </div>
 
-              <div className="mt-4 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
+              <div className="mt-4 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
                 <div className="text-xs font-semibold text-[rgb(var(--fg))]">{whyItem.task}</div>
-
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  {whyItem.timeBlock && <span className={pill()}>{whyItem.timeBlock}</span>}
-                  <span className={pill()}>{whyItem.durationMin}m</span>
-                </div>
-
-                <div className="mt-3 text-sm text-[rgb(var(--muted))] leading-relaxed">
-                  {whyItem.reason || "This task was scheduled to maintain weekly balance and improve retention."}
+                {whyItem.timeBlock && (
+                  <div className="mt-1 text-xs text-[rgb(var(--muted))]">
+                    Scheduled: {whyItem.timeBlock}
+                  </div>
+                )}
+                <div className="mt-3 text-sm text-[rgb(var(--muted))]">
+                  {whyItem.reason ||
+                    "This task was scheduled to maintain weekly balance and improve retention."}
                 </div>
               </div>
 
               {plan?.aiExplanation && (
-                <div className="mt-4 text-xs text-[rgb(var(--muted))] leading-relaxed">
-                  <span className="font-semibold text-[rgb(var(--fg))]">Plan context:</span> {plan.aiExplanation}
+                <div className="mt-4 text-xs text-[rgb(var(--muted))]">
+                  <span className="font-semibold">Plan context:</span> {plan.aiExplanation}
                 </div>
               )}
             </div>
@@ -930,7 +1183,7 @@ export default function StudyPlanPage() {
 
         {/* No plan yet */}
         {step === "RESULT" && !plan && (
-          <div className={cx("p-5", softCard())}>
+          <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5">
             <div className="text-sm font-semibold text-[rgb(var(--fg))]">No plan yet</div>
             <p className="mt-2 text-sm text-[rgb(var(--muted))]">
               Create your first plan to see your weekly schedule here.
