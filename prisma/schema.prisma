@@ -86,6 +86,9 @@ model User {
   quizAttempts   QuizAttempt[]
 
   studySubjects StudySubject[]
+  
+  studyPlans       StudyPlan[]
+  topicConfidences TopicConfidence[]
 
   @@schema("public")
 }
@@ -754,5 +757,90 @@ model StudySubject {
 
   @@index([userId, updatedAt])
   @@unique([userId, name])
+  @@schema("public")
+}
+
+// ================================
+// Study Planner (TutorLink)
+// ================================
+enum StudyPlanStyle {
+  SHORT_BURSTS
+  DEEP_STUDY
+  @@schema("public")
+}
+
+enum StudyPlanItemType {
+  STUDY
+  PRACTICE
+  REVIEW
+  TUTOR
+  @@schema("public")
+}
+
+model StudyPlan {
+  id           String @id @default(cuid())
+  userId       String @unique
+  title        String
+  startDate    DateTime
+  endDate      DateTime
+  examDate     DateTime?
+  hoursPerWeek Int
+  style        StudyPlanStyle @default(SHORT_BURSTS)
+
+  // Store structured input as JSON so MVP is fast + flexible
+  subjects     Json           // [{ name, level0to10, weakTopics: string[] }]
+  availability Json           // { days: ["MON"...], hoursByDay: { MON: 2, ... } }
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items        StudyPlanItem[]
+
+  @@index([userId, createdAt])
+  @@schema("public")
+}
+
+model StudyPlanItem {
+  id          String           @id @default(cuid())
+  planId      String
+  date        DateTime
+  subjectName String
+  topic       String
+  task        String
+  durationMin Int
+  type        StudyPlanItemType @default(STUDY)
+  reason      String?          // why this task exists (priority/spaced repetition/tutor rec)
+  status      String           @default("PENDING") // PENDING | DONE | SKIPPED
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  plan        StudyPlan        @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId, date])
+  @@index([planId, status])
+  @@schema("public")
+}
+
+// Optional (enhancement): per-user topic confidence
+model TopicConfidence {
+  id          String   @id @default(cuid())
+  userId      String
+  subjectName String
+  topic       String
+  confidence0to10 Int  @default(5)
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subjectName, topic])
+  @@schema("public")
+}
+
+enum StudyPlanItemStatus {
+  PENDING
+  DONE
+  SKIPPED
   @@schema("public")
 }
