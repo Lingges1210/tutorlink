@@ -1,6 +1,6 @@
-// src/app/api/auth/forgot-password/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServerAnon } from "@/lib/supabaseServerAnon";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { sendPasswordResetEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,24 +24,50 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    //  FIX: await (because supabaseServerAnon returns Promise<SupabaseClient>)
-    const supabase = await supabaseServerAnon();
-
     const origin =
       req.headers.get("origin") ||
       process.env.NEXT_PUBLIC_APP_URL ||
       "http://localhost:3000";
 
-    console.log("RESET redirectTo:", `${origin}/auth/reset-password`);
+    const redirectTo = `${origin}/auth/reset-password`;
+    console.log("RESET redirectTo:", redirectTo);
 
-    const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail, {
-      redirectTo: `${origin}/auth/reset-password`,
+    // ✅ Generate a recovery link (Supabase will NOT email it)
+    const supabase = supabaseAdmin();
+
+    const { data, error } = await supabase.auth.admin.generateLink({
+      type: "recovery",
+      email: cleanedEmail,
+      options: { redirectTo },
     });
 
-    // Keep success response even if user doesn't exist (security best practice)
+    // ✅ Security: never reveal if user exists
     if (error) {
-      console.warn("resetPasswordForEmail error:", error.message);
+      console.warn("generateLink(recovery) error:", error.message);
+      return NextResponse.json({
+        success: true,
+        message:
+          "If an account exists with this email, a reset link has been sent.",
+      });
     }
+
+    const resetLink = (data as any)?.properties?.action_link as string | undefined;
+
+    if (!resetLink) {
+      console.warn("generateLink returned no action_link");
+      return NextResponse.json({
+        success: true,
+        message:
+          "If an account exists with this email, a reset link has been sent.",
+      });
+    }
+
+    // ✅ Send your branded email
+    await sendPasswordResetEmail({
+      toEmail: cleanedEmail,
+      toName: null,
+      resetLink,
+    });
 
     return NextResponse.json({
       success: true,
