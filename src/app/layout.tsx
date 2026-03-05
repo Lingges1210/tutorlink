@@ -5,6 +5,7 @@ import Link from "next/link";
 import ThemeProvider from "@/components/ThemeProvider";
 import ThemeToggle from "@/components/ThemeToggle";
 import NavbarActions from "@/components/NavbarActions";
+import Image from "next/image";
 
 export const metadata: Metadata = {
   title: "TutorLink – USM Peer Tutoring",
@@ -22,15 +23,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <header className="sticky top-0 z-50 border-b border-[rgb(var(--border))] bg-[rgb(var(--bg) / 0.75)] backdrop-blur">
               <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
                 {/* Brand */}
-                <Link href="/" className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-[rgb(var(--primary))] to-[rgb(var(--primary2))]" />
-                  <div className="leading-tight">
-                    <div className="text-sm font-semibold">TutorLink</div>
-                    <div className="text-[11px] text-[rgb(var(--muted2))]">
-                      USM Peer Tutoring
-                    </div>
-                  </div>
-                </Link>
+                <Link href="/" className="flex items-center">
+                <div className="relative h-9 w-[155px] flex-shrink-0">
+                  <Image
+                  src="/logo.png"
+                  alt="TutorLink Logo"
+                  width={130}
+                  height={32}
+                  className="h-10 w-auto object-contain flex-shrink-0"
+                  priority
+                />
+                </div>
+              </Link>
 
                 {/* Right side */}
                 <div className="flex items-center gap-2">
