@@ -34,5 +34,5 @@ export async function GET(req: Request) {
 
   const rows = await getWeeklyLeaderboard({ limit, mode });
 
-  return NextResponse.json({ ok: true, mode, rows });
+  return NextResponse.json({ ok: true, mode, rows, meUserId: me.id });
 }

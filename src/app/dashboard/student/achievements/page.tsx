@@ -960,10 +960,20 @@ export default function AchievementsPage() {
           {/* Weekly leaderboard */}
           <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-4 shadow-[0_20px_60px_rgb(var(--shadow)/0.10)]">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]">
-                <Trophy className="h-4 w-4 text-[rgb(var(--primary))]" />
-                Weekly Leaderboard
-              </div>
+              <div className="flex items-center justify-between gap-3 w-full">
+  <div className="flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]">
+    <Trophy className="h-4 w-4 text-[rgb(var(--primary))]" />
+    Weekly Leaderboard
+  </div>
+
+  <Link
+    href="/dashboard/student/leaderboard"
+    className="text-xs font-semibold text-[rgb(var(--primary))] hover:underline"
+  >
+    View full →
+  </Link>
+</div>
+              
 
               <div className="flex flex-wrap items-center gap-2">
                 <ScopePill
@@ -1051,9 +1061,7 @@ export default function AchievementsPage() {
               )}
             </div>
 
-            <div className="mt-3 text-[11px] text-[rgb(var(--muted2))]">
-              Top 3 is highlighted (gold/silver/bronze) for instant “competitive feel”.
-            </div>
+            
           </div>
         </div>
 

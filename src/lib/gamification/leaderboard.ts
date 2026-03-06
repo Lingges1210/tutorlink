@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 export type LeaderboardMode = "ALL" | "STUDENTS" | "TUTORS";
 
 function startOfWeek(d: Date) {
-  // Monday start (common for apps); adjust if you want Sunday start
   const date = new Date(d);
   const day = (date.getDay() + 6) % 7; // Mon=0 ... Sun=6
   date.setDate(date.getDate() - day);
@@ -31,6 +30,18 @@ function isTutorUser(u: {
   return false;
 }
 
+function isStudentUser(u: {
+  role?: string | null;
+  roleAssignments?: Array<{ role: string }>;
+}) {
+  const r = String(u.role ?? "").toUpperCase();
+  if (r === "STUDENT") return true;
+  if (Array.isArray(u.roleAssignments)) {
+    return u.roleAssignments.some((a) => String(a.role).toUpperCase() === "STUDENT");
+  }
+  return false;
+}
+
 export async function getWeeklyLeaderboard(args?: {
   limit?: number;
   mode?: LeaderboardMode;
@@ -40,7 +51,6 @@ export async function getWeeklyLeaderboard(args?: {
   const mode: LeaderboardMode = args?.mode ?? "ALL";
   const { start, end } = getWeekRange(args?.now ?? new Date());
 
-  // We may need to fetch more than 'limit' so filtering doesn't empty results.
   const preLimit = mode === "ALL" ? limit : Math.min(limit * 6, 300);
 
   const grouped = await prisma.pointsTransaction.groupBy({
@@ -60,7 +70,8 @@ export async function getWeeklyLeaderboard(args?: {
       name: true,
       email: true,
       role: true,
-      roleAssignments: { select: { role: true } }, //  needed for tutor detection
+      avatarUrl: true,
+      roleAssignments: { select: { role: true } },
     },
   });
 
@@ -73,10 +84,12 @@ export async function getWeeklyLeaderboard(args?: {
     if (!u) return false;
 
     const tutor = isTutorUser(u);
+    const student = isStudentUser(u);
 
     if (mode === "TUTORS") return tutor;
-    // STUDENTS: treat "not tutor" as student bucket (keeps it simple)
-    return !tutor;
+    if (mode === "STUDENTS") return student;
+
+    return true;
   });
 
   const sliced = filtered.slice(0, limit);
