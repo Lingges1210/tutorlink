@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, BellRing, X, ChevronRight } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
-import { channel } from "process";
 
 type Props = {
   userId: string;
@@ -156,16 +155,16 @@ export default function TutorSOSNotificationListener({ userId }: Props) {
                     </button>
 
                     <button
-                      type="button"
-                      onClick={() => {
-                        dismiss(item.id);
-                        router.push("/sos");
-                      }}
-                      className="inline-flex h-9 items-center gap-1 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-3 text-xs font-semibold text-white shadow-[0_10px_25px_rgba(124,58,237,0.35)] hover:opacity-95"
-                    >
-                      View
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
+                    type="button"
+                    onClick={() => {
+                      dismiss(item.id);
+                      router.push("/sos?tab=TUTOR");
+                    }}
+                    className="inline-flex h-9 items-center gap-1 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-3 text-xs font-semibold text-white shadow-[0_10px_25px_rgba(124,58,237,0.35)] hover:opacity-95"
+                  >
+                    View
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
                   </div>
                 </div>
               </div>

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Video } from "lucide-react";
 
 type Row = {
   id: string;
@@ -656,6 +657,8 @@ export default function TutorSessionsClient() {
             const showEndedAmber =
               isNeedsCompletion && endedNeedsCompletion && !proposalPending;
 
+            const showCall = accepted;
+
             return (
               <motion.div
                 key={s.id}
@@ -740,9 +743,11 @@ export default function TutorSessionsClient() {
                         Reason: {s.cancelReason}
                       </div>
                     )}
+
+            
                   </div>
 
-                  <div className="flex gap-2 items-center">
+                  <div className="flex flex-col items-end gap-2 self-end">
                     <motion.span
                       layout="position"
                       initial={{ scale: 0.95, opacity: 0.6 }}
@@ -777,111 +782,131 @@ export default function TutorSessionsClient() {
                       </button>
                     ) : (
                       <>
-                        {accepted && (
-                          <button
-                            disabled={actionLoading}
-                            onClick={() => startChat(s.id)}
-                            className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
-                          >
-                            Start chat
-                          </button>
-                        )}
+                        <div className="flex flex-wrap justify-end items-center gap-2">
+                          {accepted && ongoing && (
+  <button
+    disabled={actionLoading}
+    onClick={() => router.push(`/call/${s.id}`)}
+    className={[
+      "rounded-md p-2 border",
+      "border-[rgb(var(--primary))] bg-[rgb(var(--primary))] text-white",
+      actionLoading
+        ? "opacity-60 cursor-not-allowed"
+        : "hover:opacity-90",
+    ].join(" ")}
+    title="Join call"
+    aria-label="Join call"
+  >
+    <Video className="h-4 w-4" />
+  </button>
+)}
 
-                        <div className="flex items-center gap-2">
-                          {pending && conflict && (
-                            <span className="text-[0.65rem] text-rose-500 font-semibold">
-                              Time conflict
-                            </span>
-                          )}
+  {accepted && ongoing && (
+    <button
+      disabled={actionLoading}
+      onClick={() => startChat(s.id)}
+      className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
+    >
+      Start chat
+    </button>
+  )}
 
-                          {pending && !proposalPending && (
-                            <button
-                              disabled={actionLoading || conflict}
-                              onClick={() => accept(s.id)}
-                              className={[
-                                "rounded-md px-3 py-2 text-xs font-semibold text-white",
-                                "bg-[rgb(var(--primary))]",
-                                actionLoading || conflict
-                                  ? "opacity-60 cursor-not-allowed"
-                                  : "hover:opacity-90",
-                              ].join(" ")}
-                              title={
-                                conflict
-                                  ? "Time conflict: you already have a session overlapping this slot."
-                                  : ""
-                              }
-                            >
-                              Accept
-                            </button>
-                          )}
+  {pending && conflict && (
+    <span className="text-[0.65rem] text-rose-500 font-semibold">
+      Time conflict
+    </span>
+  )}
 
-                          {canComplete(s) && (
-                            <button
-                              disabled={actionLoading}
-                              onClick={() => {
-                                setActiveId(s.id);
-                                setMode("COMPLETE");
-                                setModalMsg(null);
-                                resetCompleteForm();
-                              }}
-                              className={[
-                                "rounded-md px-3 py-2 text-xs font-semibold text-white",
-                                "bg-[rgb(var(--primary))]",
-                                actionLoading
-                                  ? "opacity-60 cursor-not-allowed"
-                                  : "hover:opacity-90",
-                              ].join(" ")}
-                            >
-                              Complete
-                            </button>
-                          )}
+  {pending && !proposalPending && (
+    <button
+      disabled={actionLoading || conflict}
+      onClick={() => accept(s.id)}
+      className={[
+        "rounded-md px-3 py-2 text-xs font-semibold text-white",
+        "bg-[rgb(var(--primary))]",
+        actionLoading || conflict
+          ? "opacity-60 cursor-not-allowed"
+          : "hover:opacity-90",
+      ].join(" ")}
+      title={
+        conflict
+          ? "Time conflict: you already have a session overlapping this slot."
+          : ""
+      }
+    >
+      Accept
+    </button>
+  )}
 
-                          {active && (
-                            <button
-                              disabled={actionLoading}
-                              onClick={() => {
-                                setActiveId(s.id);
-                                setMode("PROPOSE");
-                                setModalMsg(null);
-                                setNote("");
-                                setProposedTime(
-                                  formatLocalInputValue(new Date(s.scheduledAt))
-                                );
-                              }}
-                              className={[
-                                "rounded-md px-3 py-2 text-xs font-semibold border",
-                                "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]",
-                                actionLoading
-                                  ? "opacity-60 cursor-not-allowed"
-                                  : "hover:bg-[rgb(var(--card)/0.6)]",
-                              ].join(" ")}
-                            >
-                              Propose time
-                            </button>
-                          )}
+  {canComplete(s) && (
+    <button
+      disabled={actionLoading}
+      onClick={() => {
+        setActiveId(s.id);
+        setMode("COMPLETE");
+        setModalMsg(null);
+        resetCompleteForm();
+      }}
+      className={[
+        "rounded-md px-3 py-2 text-xs font-semibold text-white",
+        "bg-[rgb(var(--primary))]",
+        actionLoading
+          ? "opacity-60 cursor-not-allowed"
+          : "hover:opacity-90",
+      ].join(" ")}
+    >
+      Complete
+    </button>
+  )}
 
-                          {active && (
-                            <button
-                              disabled={actionLoading}
-                              onClick={() => {
-                                setActiveId(s.id);
-                                setMode("CANCEL");
-                                setModalMsg(null);
-                                setReason("");
-                              }}
-                              className={[
-                                "rounded-md px-3 py-2 text-xs font-semibold border",
-                                "border-rose-500/60 text-rose-600 dark:text-rose-400",
-                                "bg-[rgb(var(--card))]",
-                                actionLoading
-                                  ? "opacity-60 cursor-not-allowed"
-                                  : "hover:bg-rose-500/10",
-                              ].join(" ")}
-                            >
-                              Cancel
-                            </button>
-                          )}
-                        </div>
+  {active && (
+    <button
+      disabled={actionLoading}
+      onClick={() => {
+        setActiveId(s.id);
+        setMode("PROPOSE");
+        setModalMsg(null);
+        setNote("");
+        setProposedTime(
+          formatLocalInputValue(new Date(s.scheduledAt))
+        );
+      }}
+      className={[
+        "rounded-md px-3 py-2 text-xs font-semibold border",
+        "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]",
+        actionLoading
+          ? "opacity-60 cursor-not-allowed"
+          : "hover:bg-[rgb(var(--card)/0.6)]",
+      ].join(" ")}
+    >
+      Propose time
+    </button>
+  )}
+
+  {active && (
+    <button
+      disabled={actionLoading}
+      onClick={() => {
+        setActiveId(s.id);
+        setMode("CANCEL");
+        setModalMsg(null);
+        setReason("");
+      }}
+      className={[
+        "rounded-md px-3 py-2 text-xs font-semibold border",
+        "border-rose-500/60 text-rose-600 dark:text-rose-400",
+        "bg-[rgb(var(--card))]",
+        actionLoading
+          ? "opacity-60 cursor-not-allowed"
+          : "hover:bg-rose-500/10",
+      ].join(" ")}
+    >
+      Cancel
+    </button>
+  )}
+
+  
+</div>
                       </>
                     )}
                   </div>

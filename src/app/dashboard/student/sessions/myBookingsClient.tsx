@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, CheckCircle, Star } from "lucide-react";
+import { Calendar, CheckCircle, Star, Video } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -56,6 +56,35 @@ function formatLocalInputValue(d: Date) {
 
 function prettyDate(iso: string) {
   return new Date(iso).toLocaleString();
+}
+
+function getEndTime(s: Row) {
+  const start = new Date(s.scheduledAt).getTime();
+  if (s.endsAt) return new Date(s.endsAt).getTime();
+  return start + (s.durationMin ?? 60) * 60_000;
+}
+
+function isOngoing(s: Row) {
+  const now = Date.now();
+  const start = new Date(s.scheduledAt).getTime();
+  const end = getEndTime(s);
+  return s.status === "ACCEPTED" && now >= start && now < end;
+}
+
+function isStartingSoon(s: Row) {
+  const start = new Date(s.scheduledAt).getTime();
+  const diff = start - Date.now();
+  return diff > 0 && diff <= 5 * 60_000;
+}
+
+function countdownLabel(s: Row) {
+  const end = getEndTime(s);
+  const diff = end - Date.now();
+  if (diff <= 0) return "Session ended";
+
+  const min = Math.floor(diff / 60000);
+  const sec = Math.floor((diff % 60000) / 1000);
+  return `${min}m ${sec}s remaining`;
 }
 
 function statusBadgeClass(status: string) {
@@ -167,7 +196,7 @@ export default function MyBookingsClient() {
   const pathname = usePathname();
   const sp = useSearchParams();
   const focusId = sp.get("focus");
-  const rateParam = sp.get("rate"); // NEW
+  const rateParam = sp.get("rate");
 
   const [items, setItems] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -189,11 +218,9 @@ export default function MyBookingsClient() {
     "ALL"
   );
 
-  // Past pagination state (only for past)
   const PAST_PAGE_SIZE = 5;
   const [pastPage, setPastPage] = useState(1);
 
-  // Rating state
   const [rateOpen, setRateOpen] = useState(false);
   const [rateSessionId, setRateSessionId] = useState<string | null>(null);
   const [rateTutorName, setRateTutorName] = useState<string>("Tutor");
@@ -202,16 +229,14 @@ export default function MyBookingsClient() {
   const [rateComment, setRateComment] = useState<string>("");
   const [rateLoading, setRateLoading] = useState(false);
 
-  // optional confirmation checkbox
   const [rateConfirmed, setRateConfirmed] = useState(false);
 
-  // cache ratings so UI can show “Rated” without refetch spam
   const [ratingBySession, setRatingBySession] = useState<
     Record<string, { rating: number; comment: string | null }>
   >({});
 
-  //  prevent "Needs rating" flash on refresh
   const [ratingsHydrated, setRatingsHydrated] = useState(false);
+  const [, setTick] = useState(0);
 
   function closeModal() {
     setMode(null);
@@ -265,7 +290,6 @@ export default function MyBookingsClient() {
         map[r[0]] = r[1];
       }
 
-      // merge into state (don’t wipe existing)
       setRatingBySession((prev) => ({ ...prev, ...map }));
     } catch {
       // ignore
@@ -285,7 +309,6 @@ export default function MyBookingsClient() {
 
       setItems(list);
 
-      //  prevent flash: mark not hydrated, then hydrate, then mark hydrated
       setRatingsHydrated(false);
       await hydrateRatingsForCompleted(list);
       setRatingsHydrated(true);
@@ -305,6 +328,11 @@ export default function MyBookingsClient() {
     }, 10_000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const t = setInterval(() => setTick((x) => x + 1), 1000);
+    return () => clearInterval(t);
   }, []);
 
   useEffect(() => {
@@ -341,14 +369,12 @@ export default function MyBookingsClient() {
     };
   }, []);
 
-  //  auto-hide banner after 5 seconds
   useEffect(() => {
     if (!msg) return;
     const t = window.setTimeout(() => setMsg(null), 5000);
     return () => window.clearTimeout(t);
   }, [msg]);
 
-  //  Grouping: NEEDS_RATING + UPCOMING + PAST
   const grouped = useMemo(() => {
     const needsRating: Row[] = [];
     const upcoming: Row[] = [];
@@ -359,7 +385,6 @@ export default function MyBookingsClient() {
       const isCompleted = it.status === "COMPLETED";
       const hasTutor = !!it.tutor;
 
-      //  while hydrating: treat as not-rated (but we won't put it into NeedsRating below)
       const rated = ratingsHydrated ? !!ratingBySession[it.id] : false;
 
       if (isCancelled) {
@@ -367,25 +392,21 @@ export default function MyBookingsClient() {
         continue;
       }
 
-      //  prevent flash: while ratings are still hydrating, don't classify completed into needsRating yet
       if (isCompleted && hasTutor && !ratingsHydrated) {
         past.push(it);
         continue;
       }
 
-      // completed + not rated => needs rating
       if (isCompleted && hasTutor && !rated) {
         needsRating.push(it);
         continue;
       }
 
-      // active bucket
       if (it.status === "PENDING" || it.status === "ACCEPTED") {
         upcoming.push(it);
         continue;
       }
 
-      // completed + rated => past
       if (isCompleted) {
         past.push(it);
         continue;
@@ -428,7 +449,6 @@ export default function MyBookingsClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalPastPages]);
 
-  // Focus UX: scroll + glow + clear focus after 3s
   useEffect(() => {
     if (!focusId) return;
     if (loading) return;
@@ -648,7 +668,6 @@ export default function MyBookingsClient() {
     }
   }
 
-  // auto-open Rate modal when coming from notification/dashboard
   useEffect(() => {
     if (loading) return;
     if (!focusId) return;
@@ -735,12 +754,17 @@ export default function MyBookingsClient() {
     const canRate = s.status === "COMPLETED" && !!s.tutor;
     const rated = !!ratingBySession[s.id];
 
+    const ongoing = isOngoing(s);
+    const showCall = s.status === "ACCEPTED" && !!s.tutor && ongoing;
+
     return (
       <div
         id={`session-${s.id}`}
         className={[
           "rounded-2xl border p-4 border-[rgb(var(--border))] bg-[rgb(var(--card2))] transition-all duration-300",
           closed ? "opacity-80" : "",
+          ongoing ? "ring-2 ring-[rgb(var(--primary))]" : "",
+          isStartingSoon(s) && !ongoing ? "ring-2 ring-amber-400 animate-pulse" : "",
           isFocused ? "ring-2 ring-[rgb(var(--primary))]" : "",
         ].join(" ")}
       >
@@ -770,6 +794,17 @@ export default function MyBookingsClient() {
             <div className="mt-1 text-xs text-[rgb(var(--muted2))]">
               {prettyDate(s.scheduledAt)} · {s.durationMin} min
             </div>
+
+            {ongoing && (
+              <motion.div
+                initial={{ opacity: 0.6, y: 2 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                className="mt-1 text-xs text-[rgb(var(--primary))] font-medium"
+              >
+                {countdownLabel(s)}
+              </motion.div>
+            )}
 
             <AnimatePresence initial={false}>
               {proposalPending && (
@@ -815,7 +850,7 @@ export default function MyBookingsClient() {
             </AnimatePresence>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col items-end gap-2 self-end">
             <span
               className={[
                 "rounded-full px-3 py-1 text-[11px] font-semibold border tracking-wide uppercase",
@@ -825,62 +860,83 @@ export default function MyBookingsClient() {
               {s.status}
             </span>
 
-            {s.status === "ACCEPTED" && !!s.tutor && (
+            <div className="flex flex-wrap justify-end items-center gap-2">
+              {showCall && (
+                <button
+                  disabled={actionLoading}
+                  onClick={() => router.push(`/call/${s.id}`)}
+                  className={[
+                    "rounded-md p-2 border",
+                    "border-[rgb(var(--primary))] bg-[rgb(var(--primary))] text-white",
+                    actionLoading
+                      ? "opacity-60 cursor-not-allowed"
+                      : "hover:opacity-90",
+                  ].join(" ")}
+                  title="Join call"
+                  aria-label="Join call"
+                >
+                  <Video className="h-4 w-4" />
+                </button>
+              )}
+
+              {s.status === "ACCEPTED" && !!s.tutor && ongoing && (
+                <button
+                  disabled={actionLoading}
+                  onClick={() => startChat(s.id)}
+                  className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
+                >
+                  Start chat
+                </button>
+              )}
+
+              {canRate && (
+                <button
+                  disabled={rated}
+                  onClick={() => openRateModal(s)}
+                  className={[
+                    "rounded-md px-3 py-2 text-xs font-semibold border flex items-center gap-2",
+                    rated
+                      ? "border-slate-500/40 bg-slate-500/10 text-slate-600 dark:text-slate-400 cursor-not-allowed"
+                      : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
+                  ].join(" ")}
+                  title={rated ? "You already rated this session." : "Rate tutor"}
+                >
+                  <Star size={14} />
+                  {rated ? "Rated" : "Rate"}
+                </button>
+              )}
+
               <button
-                onClick={() => startChat(s.id)}
-                className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]"
+                disabled={closed || proposalPending}
+                onClick={() => {
+                  setActiveId(s.id);
+                  setMode("RESCHEDULE");
+                  setNewTime(formatLocalInputValue(new Date(s.scheduledAt)));
+                  setMsg(null);
+                }}
+                className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
+                title={
+                  proposalPending
+                    ? "You have a pending proposal. Accept/Reject it first."
+                    : ""
+                }
               >
-                Start chat
+                Reschedule
               </button>
-            )}
 
-            {canRate && (
               <button
-                disabled={rated}
-                onClick={() => openRateModal(s)}
-                className={[
-                  "rounded-md px-3 py-2 text-xs font-semibold border flex items-center gap-2",
-                  rated
-                    ? "border-slate-500/40 bg-slate-500/10 text-slate-600 dark:text-slate-400 cursor-not-allowed"
-                    : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
-                ].join(" ")}
-                title={rated ? "You already rated this session." : "Rate tutor"}
+                disabled={closed}
+                onClick={() => {
+                  setActiveId(s.id);
+                  setMode("CANCEL");
+                  setReason("");
+                  setMsg(null);
+                }}
+                className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
               >
-                <Star size={14} />
-                {rated ? "Rated" : "Rate"}
+                Cancel
               </button>
-            )}
-
-            <button
-              disabled={closed || proposalPending}
-              onClick={() => {
-                setActiveId(s.id);
-                setMode("RESCHEDULE");
-                setNewTime(formatLocalInputValue(new Date(s.scheduledAt)));
-                setMsg(null);
-              }}
-              className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
-              title={
-                proposalPending
-                  ? "You have a pending proposal. Accept/Reject it first."
-                  : ""
-              }
-            >
-              Reschedule
-            </button>
-
-            <button
-              disabled={closed}
-              onClick={() => {
-                setActiveId(s.id);
-                setMode("CANCEL");
-                setReason("");
-                setMsg(null);
-              }}
-              className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
-            >
-              Cancel
-            </button>
+            </div>
           </div>
         </div>
 
@@ -893,7 +949,6 @@ export default function MyBookingsClient() {
     );
   }
 
-  // Header meta like Tutor page (counts active: upcoming + needs rating)
   const leftPill = grouped.upcoming.length > 0 ? "SESSIONS" : "SESSIONS";
   const leftMeta =
     activeCount > 0
@@ -937,7 +992,6 @@ export default function MyBookingsClient() {
           <div className="text-sm text-[rgb(var(--muted2))]">No bookings yet.</div>
         ) : (
           <div className="space-y-4">
-            {/* ===== HEADER ROW (like Tutor page) ===== */}
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-[11px] font-semibold tracking-wide text-[rgb(var(--fg))]">
@@ -965,7 +1019,6 @@ export default function MyBookingsClient() {
               </button>
             </div>
 
-            {/* ===== EMPTY STATE (only when no active and not showing past) ===== */}
             {activeCount === 0 && !showPast ? (
               <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-8 text-center text-sm text-[rgb(var(--muted2))]">
                 No active sessions at the moment.
@@ -975,7 +1028,6 @@ export default function MyBookingsClient() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* ===== UPCOMING (inside main area) ===== */}
                 <Section
                   kind="UPCOMING"
                   title="Upcoming"
@@ -989,7 +1041,6 @@ export default function MyBookingsClient() {
                   </div>
                 </Section>
 
-                {/* ===== NEEDS RATING ===== */}
                 <Section
                   kind="NEEDS_RATING"
                   title="Needs rating"
@@ -1005,7 +1056,6 @@ export default function MyBookingsClient() {
               </div>
             )}
 
-            {/* ===== PAST (only when toggled) ===== */}
             {showPast && (
               <div className="pt-2">
                 <div className="mb-3 flex items-center justify-between gap-3">
@@ -1087,7 +1137,6 @@ export default function MyBookingsClient() {
         )}
       </div>
 
-      {/* RESCHEDULE / CANCEL modal (unchanged) */}
       {mode && activeId && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
@@ -1154,7 +1203,6 @@ export default function MyBookingsClient() {
         </div>
       )}
 
-      {/* RATE MODAL (unchanged) */}
       {rateOpen && rateSessionId && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
