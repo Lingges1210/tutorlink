@@ -90,6 +90,8 @@ model User {
   studyPlans       StudyPlan[]
   topicConfidences TopicConfidence[]
 
+  presence UserPresence?
+
   @@schema("public")
 }
 
@@ -852,6 +854,16 @@ enum PreferredStudyTime {
   MORNING
   AFTERNOON
   NIGHT
+
+  @@schema("public")
+}
+
+model UserPresence {
+  userId     String   @id
+  isOnline   Boolean  @default(false)
+  lastSeenAt DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@schema("public")
 }

@@ -6,6 +6,7 @@ import ThemeProvider from "@/components/ThemeProvider";
 import ThemeToggle from "@/components/ThemeToggle";
 import NavbarActions from "@/components/NavbarActions";
 import Image from "next/image";
+import UserPresenceBeacon from "@/components/presence/UserPresenceBeacon";
 
 export const metadata: Metadata = {
   title: "TutorLink – USM Peer Tutoring",
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen antialiased bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
         <ThemeProvider>
+          <UserPresenceBeacon />
           <div className="relative flex min-h-screen flex-col">
             {/* GLOBAL HEADER */}
             <header className="sticky top-0 z-50 border-b border-[rgb(var(--border))] bg-[rgb(var(--bg) / 0.75)] backdrop-blur">

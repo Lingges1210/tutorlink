@@ -1,174 +1,113 @@
-// src/app/dashboard/tutor/layout.tsx
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
-import StudentSidebarNav, { SidebarItem } from "@/components/StudentSidebarNav";
-import { Star } from "lucide-react";
+import type { Metadata } from "next";
+import "./globals.css";
+import Link from "next/link";
+import ThemeProvider from "@/components/ThemeProvider";
+import ThemeToggle from "@/components/ThemeToggle";
+import NavbarActions from "@/components/NavbarActions";
+import Image from "next/image";
+import UserPresenceBeacon from "@/components/presence/UserPresenceBeacon";
 
-export default async function TutorLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const supabase = await supabaseServerComponent();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export const metadata: Metadata = {
+  title: "TutorLink – USM Peer Tutoring",
+  description:
+    "TutorLink is a campus-exclusive peer tutoring platform for Universiti Sains Malaysia students.",
+};
 
-  if (!user?.email) redirect("/auth/login");
-
-  const dbUser = await prisma.user.findUnique({
-    where: { email: user.email.toLowerCase() },
-    select: {
-      name: true,
-      email: true,
-      role: true,
-      verificationStatus: true,
-      isDeactivated: true,
-      isTutorApproved: true,
-      roleAssignments: { select: { role: true } },
-
-      //  rating fields
-      avgRating: true,
-      ratingCount: true,
-    },
-  });
-
-  if (!dbUser) redirect("/auth/login");
-  if (dbUser.isDeactivated) redirect("/auth/deactivated");
-
-  const verified = dbUser.verificationStatus === "AUTO_VERIFIED";
-  const isTutor =
-    dbUser.isTutorApproved ||
-    dbUser.role === "TUTOR" ||
-    dbUser.roleAssignments.some((r) => r.role === "TUTOR");
-
-  // Extra safety: if not tutor, kick back
-  if (!isTutor) redirect("/dashboard/student");
-
-  const tutorItems: SidebarItem[] = [
-    {
-      type: "link",
-      href: "/dashboard/tutor",
-      label: "Tutor Home",
-      icon: "dashboard",
-    },
-    {
-      type: "link",
-      href: "/dashboard/tutor/profile",
-      label: "Tutor Profile",
-      icon: "profile",
-    },
-    {
-      type: "link",
-      href: "/dashboard/tutor/availability",
-      label: "Availability",
-      icon: "calendar",
-    },
-    {
-      type: "link",
-      href: "/dashboard/tutor/sessions",
-      label: "Sessions",
-      icon: "calendar",
-    },
-
-    { type: "divider" },
-    {
-      type: "link",
-      href: "/dashboard/student",
-      label: "Student Dashboard",
-      icon: "dashboard",
-    },
-  ];
-
-  const mobileItems: SidebarItem[] = [
-    {
-      type: "link",
-      href: "/dashboard/tutor",
-      label: "Tutor Home",
-      icon: "dashboard",
-    },
-    {
-      type: "link",
-      href: "/dashboard/tutor/requests",
-      label: "Requests",
-      icon: "calendar",
-    },
-    {
-      type: "link",
-      href: "/dashboard/tutor/profile",
-      label: "Profile",
-      icon: "profile",
-    },
-  ];
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 lg:px-8">
-      <div
-        className="
-          overflow-hidden rounded-3xl border
-          border-[rgb(var(--border))]
-          bg-[rgb(var(--card) / 0.7)]
-          shadow-[0_20px_60px_rgb(var(--shadow)/0.10)]
-        "
-      >
-        <div className="flex">
-          {/* Sidebar (md+) */}
-          <aside
-            className="
-              hidden w-[280px] shrink-0 md:block
-              border-r border-[rgb(var(--border))]
-              bg-[rgb(var(--card2))]
-            "
-          >
-            <div className="p-5">
-              <div className="mb-4">
-                <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                  {dbUser.name ?? "Tutor"}
-                </div>
-                <div className="text-xs text-[rgb(var(--muted2))]">
-                  {dbUser.email}
-                </div>
+    <html lang="en" suppressHydrationWarning>
+      <body className="min-h-screen antialiased bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
+        <ThemeProvider>
+          <UserPresenceBeacon />
 
-                <div className="mt-2 text-[0.7rem] text-[rgb(var(--muted))]">
-                  Status:{" "}
-                  <span
-                    className={verified ? "text-emerald-500" : "text-amber-500"}
-                  >
-                    {verified ? "Verified" : "Pending"}
-                  </span>{" "}
-                  • <span className="text-[rgb(var(--primary))]">Tutor</span>
-                </div>
-
-                {/* Rating pill */}
-                {(dbUser.ratingCount ?? 0) > 0 && (
-                  <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2.5 py-1">
-                    <Star
-  size={14}
-  className="fill-amber-400 text-amber-400"
-/>
-                    <span className="text-xs font-semibold text-[rgb(var(--fg))]">
-                      {(dbUser.avgRating ?? 0).toFixed(1)}
-                      <span className="ml-1 text-[rgb(var(--muted2))]">
-                        ({dbUser.ratingCount} rating
-                        {dbUser.ratingCount === 1 ? "" : "s"})
-                      </span>
-                    </span>
+          <div className="relative flex min-h-screen flex-col">
+            {/* GLOBAL HEADER */}
+            <header className="sticky top-0 z-50 border-b border-[rgb(var(--border))] bg-[rgb(var(--bg) / 0.75)] backdrop-blur">
+              <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
+                {/* Brand */}
+                <Link href="/" className="flex items-center">
+                  <div className="relative h-9 w-[155px] flex-shrink-0">
+                    <Image
+                      src="/logo.png"
+                      alt="TutorLink Logo"
+                      width={130}
+                      height={32}
+                      className="h-10 w-auto object-contain flex-shrink-0"
+                      priority
+                    />
                   </div>
-                )}
+                </Link>
+
+                {/* Right side */}
+                <div className="flex items-center gap-2">
+                  <ThemeToggle />
+
+                  <div className="hidden items-center gap-2 md:flex">
+                    <Link
+                      href="/"
+                      className="rounded-xl px-3 py-2 text-sm font-medium hover:bg-[rgb(var(--card)/0.9)]"
+                    >
+                      Home
+                    </Link>
+
+                    <Link
+                      href="/find-tutor"
+                      className="rounded-xl px-3 py-2 text-sm font-medium hover:bg-[rgb(var(--card)/0.9)]"
+                    >
+                      Find Tutor
+                    </Link>
+
+                    <Link
+                      href="/study"
+                      className="rounded-xl px-3 py-2 text-sm font-medium hover:bg-[rgb(var(--card)/0.9)]"
+                      title="AI-powered study tools"
+                    >
+                      AI Hub
+                    </Link>
+
+                    <Link
+                      href="/sos"
+                      className="
+                        rounded-xl px-3 py-2 text-sm font-semibold text-white
+                        bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary2))]
+                        shadow-[0_8px_20px_rgba(0,0,0,0.25)]
+                        hover:opacity-95
+                        transition
+                      "
+                      title="Request urgent academic help"
+                    >
+                      SOS Help
+                    </Link>
+                  </div>
+
+                  <NavbarActions />
+                </div>
+              </nav>
+            </header>
+
+            {/* PAGE CONTENT */}
+            <main className="flex-1">{children}</main>
+
+            {/* GLOBAL FOOTER */}
+            <footer className="border-t border-[rgb(var(--border))] bg-[rgb(var(--bg) / 0.6)]">
+              <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-xs text-[rgb(var(--muted2))] md:flex-row md:items-center md:justify-between">
+                <div>© {new Date().getFullYear()} TutorLink • Built for USM</div>
+                <div className="flex gap-4">
+                  <Link className="hover:text-[rgb(var(--fg))]" href="/privacy">
+                    Privacy
+                  </Link>
+                  <Link className="hover:text-[rgb(var(--fg))]" href="/terms">
+                    Terms
+                  </Link>
+                  <Link className="hover:text-[rgb(var(--fg))]" href="/contact">
+                    Contact
+                  </Link>
+                </div>
               </div>
-
-              <StudentSidebarNav items={tutorItems} />
-            </div>
-          </aside>
-
-          {/* Right content */}
-          <main className="min-w-0 flex-1 p-5 md:p-6">
-            <StudentSidebarNav items={mobileItems} variant="mobile" />
-            {children}
-          </main>
-        </div>
-      </div>
-    </div>
+            </footer>
+          </div>
+        </ThemeProvider>
+      </body>
+    </html>
   );
 }

@@ -79,6 +79,11 @@ export async function GET() {
       const otherName = isMeStudent
         ? c.session.tutor?.name ?? "Tutor"
         : c.session.student?.name ?? "Student";
+        const otherUserId = isMeStudent
+  ? c.session.tutor?.id ?? null
+  : c.session.student?.id ?? null;
+
+const otherRoleLabel = isMeStudent ? "Tutor" : "Student";
 
       const subj = c.session.subject;
       const subjectName = `${subj.code} ${subj.title}`;
@@ -87,21 +92,24 @@ export async function GET() {
       const isChatClosed = chatCloseAt ? new Date() > chatCloseAt : false;
 
       return {
-        id: c.id,
-        sessionId: c.sessionId,
-        name: otherName,
-        subjectName,
-        lastMessage: last
-          ? last.isDeleted
-            ? "This message was deleted"
-            : last.text
-          : "No messages yet",
-        lastAt: (last?.createdAt ?? c.lastMessageAt).toISOString(),
-        unread,
-        viewerIsStudent: isMeStudent,
-        chatCloseAt: chatCloseAt ? chatCloseAt.toISOString() : null,
-        isChatClosed,
-      };
+  id: c.id,
+  sessionId: c.sessionId,
+  name: otherName,
+  subjectName,
+  lastMessage: last
+    ? last.isDeleted
+      ? "This message was deleted"
+      : last.text
+    : "No messages yet",
+  lastAt: (last?.createdAt ?? c.lastMessageAt).toISOString(),
+  unread,
+  viewerIsStudent: isMeStudent,
+  tutorId: c.session.tutor?.id ?? null, // can keep temporarily if you want
+  otherUserId,
+  otherRoleLabel,
+  chatCloseAt: chatCloseAt ? chatCloseAt.toISOString() : null,
+  isChatClosed,
+};
     })
   );
 

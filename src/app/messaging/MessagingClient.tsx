@@ -2,16 +2,20 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 type Conv = {
   id: string;
   sessionId: string;
-  name: string; // other person's name
+  name: string;
   subjectName: string;
   lastMessage: string;
   lastAt: string;
   unread: number;
-  viewerIsStudent: boolean; // true => you are Student in this chat, false => you are Tutor in this chat
+  viewerIsStudent: boolean;
+  tutorId?: string | null;
+  otherUserId?: string | null;
+  otherRoleLabel?: "Student" | "Tutor" | null;
 };
 
 type Attachment = {
@@ -33,6 +37,16 @@ type Msg = {
   attachments?: Attachment[];
 };
 
+type RoleFilter = "ALL" | "STUDENT" | "TUTOR";
+
+type UploadPayload = {
+  bucket: string;
+  objectPath: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+};
+
 function timeAgo(iso: string) {
   const d = new Date(iso);
   const diff = Date.now() - d.getTime();
@@ -44,16 +58,6 @@ function timeAgo(iso: string) {
   const days = Math.floor(hrs / 24);
   return days === 1 ? "Yesterday" : `${days} days ago`;
 }
-
-type RoleFilter = "ALL" | "STUDENT" | "TUTOR";
-
-type UploadPayload = {
-  bucket: string;
-  objectPath: string;
-  fileName: string;
-  contentType: string;
-  sizeBytes: number;
-};
 
 export default function MessagingClient() {
   const [meId, setMeId] = useState<string | null>(null);
@@ -76,7 +80,6 @@ export default function MessagingClient() {
   const sp = useSearchParams();
   const qsChannelId = sp.get("channelId");
 
-  //  search + role filter (UI only, no backend changes)
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("ALL");
 
@@ -84,7 +87,6 @@ export default function MessagingClient() {
     const needle = q.trim().toLowerCase();
 
     return conversations.filter((c) => {
-      // Role filter: viewerIsStudent tells what role YOU are in that chat
       if (roleFilter === "STUDENT" && !c.viewerIsStudent) return false;
       if (roleFilter === "TUTOR" && c.viewerIsStudent) return false;
 
@@ -98,36 +100,36 @@ export default function MessagingClient() {
     });
   }, [conversations, q, roleFilter]);
 
-  //  read receipt timestamps from API
   const [readInfo, setReadInfo] = useState<{
     meLastReadAt: string;
     otherLastReadAt: string;
   } | null>(null);
 
-  //  typing indicator state
   const [otherTyping, setOtherTyping] = useState(false);
-  const typingStopTimer = useRef<any>(null);
+  const typingStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSentAt = useRef(0);
 
-  //  chat close window info
   const [chatMeta, setChatMeta] = useState<{
     isChatClosed: boolean;
     chatCloseAt: string | null;
   }>({ isChatClosed: false, chatCloseAt: null });
 
-  //  inline error for send failures (e.g., closed)
+  const [userPresence, setUserPresence] = useState<{
+  isOnline: boolean;
+  lastSeenAt: string | null;
+} | null>(null);
+
   const [sendErr, setSendErr] = useState<string | null>(null);
 
-  //  attachments state
   const [pickedFiles, setPickedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
 
-  //  WhatsApp-like image preview modal (open in chat)
   const [imgViewer, setImgViewer] = useState<{
     open: boolean;
     urls: string[];
@@ -167,6 +169,22 @@ export default function MessagingClient() {
     setImgViewerMounted(false);
   }
 
+  function formatLastSeen(iso: string | null) {
+  if (!iso) return "Offline";
+
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+
+  if (mins < 1) return "Last seen just now";
+  if (mins < 60) return `Last seen ${mins} min ago`;
+
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `Last seen ${hrs} hr ago`;
+
+  const days = Math.floor(hrs / 24);
+  return `Last seen ${days} day${days > 1 ? "s" : ""} ago`;
+}
+
   function nextImage() {
     setImgViewer((p) => {
       if (!p.urls.length) return p;
@@ -181,7 +199,6 @@ export default function MessagingClient() {
     });
   }
 
-  // Esc + Arrow nav like WhatsApp
   useEffect(() => {
     if (!imgViewer.open) return;
 
@@ -193,11 +210,9 @@ export default function MessagingClient() {
 
     window.addEventListener("keydown", onKeyDown);
 
-    // prevent background scroll
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
-    // zoom-in animation (mount tick)
     const t = window.setTimeout(() => setImgViewerMounted(true), 10);
 
     return () => {
@@ -205,10 +220,41 @@ export default function MessagingClient() {
       window.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = prevOverflow;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imgViewer.open]);
 
-  //  Typing now uses DB route (ChatTyping table) via your API
+  useEffect(() => {
+  if (!active?.otherUserId) {
+    setUserPresence(null);
+    return;
+  }
+
+  const otherUserId = active.otherUserId;
+  let stop = false;
+
+  async function loadPresence() {
+    const j = await fetch(`/api/presence/${otherUserId}`, {
+      cache: "no-store",
+    })
+      .then((r) => r.json())
+      .catch(() => null);
+
+    if (stop || !j?.ok) return;
+
+    setUserPresence({
+      isOnline: !!j.presence?.isOnline,
+      lastSeenAt: j.presence?.lastSeenAt ?? null,
+    });
+  }
+
+  loadPresence();
+  const t = setInterval(loadPresence, 30000);
+
+  return () => {
+    stop = true;
+    clearInterval(t);
+  };
+}, [active?.otherUserId]);
+
   async function pingTyping(isTyping: boolean) {
     if (!activeId || !meId) return;
 
@@ -225,8 +271,10 @@ export default function MessagingClient() {
   function validateFile(file: File) {
     const okType = file.type.startsWith("image/") || file.type === "application/pdf";
     if (!okType) return "Only images or PDFs allowed";
-    const maxBytes = 10 * 1024 * 1024; // 10MB
+
+    const maxBytes = 10 * 1024 * 1024;
     if (file.size > maxBytes) return "File too large (max 10MB)";
+
     return null;
   }
 
@@ -244,7 +292,7 @@ export default function MessagingClient() {
     }
 
     setPickedFiles((prev) => [...prev, ...files]);
-    e.target.value = ""; // allow reselect same file later
+    e.target.value = "";
   }
 
   function removePickedFile(idx: number) {
@@ -323,19 +371,51 @@ export default function MessagingClient() {
     }
   }
 
-  // helper: refresh left list (unread + preview)
-  async function refreshConversations() {
-    const r = await fetch("/api/chat/channels", { cache: "no-store" });
-    const j = await r.json().catch(() => null);
-    if (j?.ok) {
-      const sorted = [...j.items].sort(
-        (a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()
+  function mergeMessages(incoming: Msg[]) {
+    setMessages((prev) => {
+      const map = new Map(prev.map((m) => [m.id, m]));
+      for (const m of incoming) {
+        map.set(m.id, { ...(map.get(m.id) ?? {}), ...m });
+      }
+
+      const arr = Array.from(map.values());
+      arr.sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
-      setConversations(sorted);
-    }
+      return arr;
+    });
   }
 
-  // 0) Load current user (Prisma user id) for message alignment
+  async function markChatRead(channelId: string) {
+    await fetch("/api/chat/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId }),
+    }).catch(() => {});
+
+    setConversations((prev) =>
+      prev.map((c) => (c.id === channelId ? { ...c, unread: 0 } : c))
+    );
+
+    window.dispatchEvent(new Event("chat:unread-refresh"));
+  }
+
+  async function refreshConversations(openChannelId?: string | null) {
+    const r = await fetch("/api/chat/channels", { cache: "no-store" });
+    const j = await r.json().catch(() => null);
+
+    if (!j?.ok) return;
+
+    const sorted = [...j.items]
+      .sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
+      .map((c) =>
+        openChannelId && c.id === openChannelId ? { ...c, unread: 0 } : c
+      );
+
+    setConversations(sorted);
+  }
+
   useEffect(() => {
     (async () => {
       const r = await fetch("/api/me", { cache: "no-store" });
@@ -349,15 +429,12 @@ export default function MessagingClient() {
     setOffset({ x: 0, y: 0 });
   }, [imgViewer.idx]);
 
-  // 1) Load conversations (left list)
   useEffect(() => {
     (async () => {
       await refreshConversations();
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // If conversations loaded and no active selected, set first
   useEffect(() => {
     if (activeId) return;
 
@@ -367,10 +444,8 @@ export default function MessagingClient() {
     }
 
     if (conversations[0]?.id) setActiveId(conversations[0].id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, qsChannelId, activeId]);
 
-  //  NEW: if active chat disappears (e.g. cancelled), clear right panel and move to next
   useEffect(() => {
     if (!activeId) return;
 
@@ -378,24 +453,14 @@ export default function MessagingClient() {
     if (stillExists) return;
 
     const next = conversations[0]?.id ?? null;
-
     setActiveId(next);
 
-    // clear right panel state so UI doesn't keep showing removed chat
     setMessages([]);
     setNextCursor(null);
     setReadInfo(null);
     setChatMeta({ isChatClosed: true, chatCloseAt: null });
     setSendErr("This chat is no longer available (session cancelled/closed).");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, activeId]);
-
-  // helper used by polling to decide mark read
-  function isNearBottom() {
-    const el = bottomRef.current?.parentElement; // scroll container
-    if (!el) return true;
-    return el.scrollHeight - (el.scrollTop + el.clientHeight) < 20;
-  }
 
   function timeLeft(iso: string) {
     const ms = new Date(iso).getTime() - Date.now();
@@ -418,7 +483,9 @@ export default function MessagingClient() {
 
   useEffect(() => {
     const onPageShow = (e: PageTransitionEvent) => {
-      const nav = performance.getEntriesByType("navigation")[0] as any;
+      const nav = performance.getEntriesByType("navigation")[0] as
+        | PerformanceNavigationTiming
+        | undefined;
       const isBackForward = nav?.type === "back_forward";
 
       if (e.persisted || isBackForward) {
@@ -430,37 +497,30 @@ export default function MessagingClient() {
     return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
+  // Initial load for currently opened chat
   useEffect(() => {
     if (!activeId || !meId) return;
 
-    let stop = false;
+    const channelId = activeId;
+    let cancelled = false;
 
-    // helper: merge new messages (avoid duplicates)
-    function mergeMessages(incoming: Msg[]) {
-      setMessages((prev) => {
-        const map = new Map(prev.map((m) => [m.id, m]));
-        for (const m of incoming) map.set(m.id, { ...(map.get(m.id) as any), ...m });
-        const arr = Array.from(map.values());
-        arr.sort(
-          (a, b) =>
-            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        );
-        return arr;
-      });
-    }
+    async function loadInitialMessages() {
+      setLoadingMsgs(true);
 
-    async function pollMessages() {
-      if (stop) return;
-      const j = await fetch(`/api/chat/messages?channelId=${activeId}&take=30`, {
+      const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
         cache: "no-store",
       })
         .then((r) => r.json())
         .catch(() => null);
 
-      if (stop || !j?.ok) return;
+      if (cancelled || !j?.ok) {
+        setLoadingMsgs(false);
+        return;
+      }
 
       const items = (j.items as Msg[]).slice().reverse();
-      mergeMessages(items);
+      setMessages(items);
+      setNextCursor(j.nextCursor ?? null);
 
       if (j.read) setReadInfo(j.read);
 
@@ -471,33 +531,162 @@ export default function MessagingClient() {
         });
       }
 
-      // mark read if user is at bottom
-      if (isNearBottom()) {
-        const rr = await fetch("/api/chat/read", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ channelId: activeId }),
+      setLoadingMsgs(false);
+
+      setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "auto" });
+      }, 30);
+
+      await markChatRead(channelId);
+      await refreshConversations(channelId);
+    }
+
+    loadInitialMessages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeId, meId]);
+
+  // Realtime messages
+  useEffect(() => {
+  if (!activeId || !meId) return;
+
+  const channelId = activeId;
+  const supabase = supabaseBrowser;
+
+  const channel = supabase
+    .channel(`chat-messages-${channelId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "ChatMessage",
+      },
+      async (payload: { new: Record<string, unknown> }) => {
+        console.log("realtime message payload", payload);
+
+        const row = payload.new as {
+          id: string;
+          channelId: string;
+          senderId: string;
+          text: string;
+          createdAt: string;
+          isDeleted?: boolean;
+          deletedAt?: string | null;
+        };
+
+        if (row.channelId !== channelId) return;
+
+        let alreadyExists = false;
+
+        setMessages((prev) => {
+          alreadyExists = prev.some((m) => m.id === row.id);
+          return prev;
+        });
+
+        if (alreadyExists) return;
+
+        const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
+          cache: "no-store",
         })
           .then((r) => r.json())
           .catch(() => null);
 
-        if (rr?.ok) {
-          setConversations((prev) =>
-            prev.map((c) => (c.id === activeId ? { ...c, unread: 0 } : c))
-          );
-          window.dispatchEvent(new Event("chat:unread-refresh"));
+        if (!j?.ok) return;
+
+        const items = (j.items as Msg[]).slice().reverse();
+        mergeMessages(items);
+        setNextCursor(j.nextCursor ?? null);
+
+        if (j.read) setReadInfo(j.read);
+
+        if (typeof j.isChatClosed === "boolean") {
+          setChatMeta({
+            isChatClosed: !!j.isChatClosed,
+            chatCloseAt: j.chatCloseAt ?? null,
+          });
         }
+
+        if (row.senderId !== meId) {
+          await markChatRead(channelId);
+        }
+
+        await refreshConversations(channelId);
+
+        setTimeout(() => {
+          bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 30);
       }
+    )
+    .subscribe((status: string) => {
+      console.log("chat realtime status", channelId, status);
+    });
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [activeId, meId]);
+
+
+useEffect(() => {
+  if (!activeId || !meId) return;
+
+  const channelId = activeId;
+  let stop = false;
+
+  async function pollMessages() {
+    if (stop) return;
+
+    const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
+      cache: "no-store",
+    })
+      .then((r) => r.json())
+      .catch(() => null);
+
+    if (stop || !j?.ok) return;
+
+    const items = (j.items as Msg[]).slice().reverse();
+    mergeMessages(items);
+    setNextCursor(j.nextCursor ?? null);
+
+    if (j.read) setReadInfo(j.read);
+
+    if (typeof j.isChatClosed === "boolean") {
+      setChatMeta({
+        isChatClosed: !!j.isChatClosed,
+        chatCloseAt: j.chatCloseAt ?? null,
+      });
     }
+  }
+
+  pollMessages();
+  const t = setInterval(pollMessages, 1500);
+
+  return () => {
+    stop = true;
+    clearInterval(t);
+  };
+}, [activeId, meId]);
+
+
+  // Polling for left list + typing only
+  useEffect(() => {
+    if (!activeId || !meId) return;
+
+    const channelId = activeId;
+    let stop = false;
 
     async function pollConversations() {
       if (stop) return;
-      await refreshConversations().catch(() => {});
+      await refreshConversations(channelId).catch(() => {});
     }
 
     async function pollTyping() {
       if (stop) return;
-      const j = await fetch(`/api/chat/typing?channelId=${activeId}`, {
+
+      const j = await fetch(`/api/chat/typing?channelId=${channelId}`, {
         cache: "no-store",
       })
         .then((r) => r.json())
@@ -507,34 +696,27 @@ export default function MessagingClient() {
       setOtherTyping(!!j.otherTyping);
     }
 
-    // poll immediately once
-    pollMessages();
     pollConversations();
     pollTyping();
 
-    // intervals
-    const msgT = setInterval(pollMessages, 1500);
     const convT = setInterval(pollConversations, 4500);
     const typT = setInterval(pollTyping, 1200);
 
-    // pause polling when tab not visible (optional but good)
     const onVis = () => {
       if (document.visibilityState === "visible") {
-        pollMessages();
         pollConversations();
         pollTyping();
       }
     };
+
     document.addEventListener("visibilitychange", onVis);
 
     return () => {
       stop = true;
-      clearInterval(msgT);
       clearInterval(convT);
       clearInterval(typT);
       document.removeEventListener("visibilitychange", onVis);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, meId]);
 
   const [ctx, setCtx] = useState<{
@@ -549,6 +731,7 @@ export default function MessagingClient() {
     window.addEventListener("click", close);
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
+
     return () => {
       window.removeEventListener("click", close);
       window.removeEventListener("scroll", close, true);
@@ -568,11 +751,22 @@ export default function MessagingClient() {
 
     if (j?.ok) {
       const older = (j.items as Msg[]).slice().reverse();
-      setMessages((prev) => [...older, ...prev]);
+      setMessages((prev) => {
+        const map = new Map(prev.map((m) => [m.id, m]));
+        for (const m of older) {
+          map.set(m.id, { ...(map.get(m.id) ?? {}), ...m });
+        }
+        const arr = Array.from(map.values());
+        arr.sort(
+          (a, b) =>
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+        return arr;
+      });
+
       setNextCursor(j.nextCursor ?? null);
       if (j.read) setReadInfo(j.read);
 
-      // keep close info fresh
       if (typeof j.isChatClosed === "boolean") {
         setChatMeta({
           isChatClosed: !!j.isChatClosed,
@@ -590,24 +784,26 @@ export default function MessagingClient() {
     });
     const j = await r.json().catch(() => null);
 
-    if (j?.ok) {
-      const items = (j.items as Msg[]).slice().reverse();
-      setMessages(items);
-      setNextCursor(j.nextCursor ?? null);
-      if (j.read) setReadInfo(j.read);
+    if (!j?.ok) return;
 
-      if (typeof j.isChatClosed === "boolean") {
-        setChatMeta({
-          isChatClosed: !!j.isChatClosed,
-          chatCloseAt: j.chatCloseAt ?? null,
-        });
-      }
+    const items = (j.items as Msg[]).slice().reverse();
+    mergeMessages(items);
+    setNextCursor(j.nextCursor ?? null);
 
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
+    if (j.read) setReadInfo(j.read);
+
+    if (typeof j.isChatClosed === "boolean") {
+      setChatMeta({
+        isChatClosed: !!j.isChatClosed,
+        chatCloseAt: j.chatCloseAt ?? null,
+      });
     }
+
+    setTimeout(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 30);
   }
 
-  //  CHANGE #3 (optional but recommended): optimistic render created message if API returns it
   async function send() {
     if (!activeId) return;
 
@@ -617,26 +813,21 @@ export default function MessagingClient() {
     }
 
     const t = text.trim();
-
-    // allow attachment-only messages
     if (!t && pickedFiles.length === 0) return;
 
     if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
-    pingTyping(false);
+    void pingTyping(false);
 
-    // Clear input immediately for snappy UX (keep files until upload succeeds)
     setText("");
     setSendErr(null);
-
     setUploading(true);
+
     try {
-      // 1) upload files (sequential)
       const uploaded: UploadPayload[] = [];
       for (const f of pickedFiles) {
         uploaded.push(await uploadAttachment(activeId, f));
       }
 
-      // 2) send message with attachments
       const r = await fetch("/api/chat/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -648,41 +839,26 @@ export default function MessagingClient() {
       });
 
       const j = await r.json().catch(() => null);
-      console.log("SEND RESP:", j);
-      console.log("HAS MESSAGE?", !!j?.message);
 
       if (!r.ok) {
         setSendErr(j?.message ?? "Failed to send");
 
-        // if server says closed, lock UI
         if (r.status === 403 && (j?.message?.toLowerCase?.() ?? "").includes("closed")) {
           setChatMeta((p) => ({ ...p, isChatClosed: true }));
         }
 
-        // restore typed text if send failed (optional)
         setText(t);
         return;
       }
 
       if (j?.ok) {
-        //  optimistic append if server returns created message
         if (j.message) {
           const created = j.message as Msg;
+          mergeMessages([created]);
 
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === created.id)) return prev;
-            const next = [...prev, created];
-            next.sort(
-              (a, b) =>
-                new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-            );
-            return next;
-          });
-
-          setTimeout(
-            () => bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
-            30
-          );
+          setTimeout(() => {
+            bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+          }, 30);
         }
 
         setConversations((prev) =>
@@ -690,6 +866,7 @@ export default function MessagingClient() {
             c.id === activeId
               ? {
                   ...c,
+                  unread: 0,
                   lastMessage: t || (pickedFiles.length ? "📎 Attachment" : ""),
                   lastAt: new Date().toISOString(),
                 }
@@ -698,10 +875,14 @@ export default function MessagingClient() {
         );
 
         setPickedFiles([]);
-        refetchLatest(activeId);
+
+        await markChatRead(activeId);
+        await refreshConversations(activeId);
+        await refetchLatest(activeId);
       }
-    } catch (e: any) {
-      setSendErr(e?.message ?? "Failed to send");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed to send";
+      setSendErr(message);
       setText(t);
     } finally {
       setUploading(false);
@@ -723,13 +904,11 @@ export default function MessagingClient() {
       <button
         type="button"
         onClick={() => setRoleFilter(key)}
-        className={`rounded-full px-3 py-1 text-[0.7rem] font-semibold transition
-          ${
-            activeBtn
-              ? "border border-[rgb(var(--primary))] bg-[rgb(var(--primary))/0.10] text-[rgb(var(--primary))]"
-              : "border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))] hover:bg-[rgb(var(--card))]"
-          }
-        `}
+        className={`rounded-full px-3 py-1 text-[0.7rem] font-semibold transition ${
+          activeBtn
+            ? "border border-[rgb(var(--primary))] bg-[rgb(var(--primary))/0.10] text-[rgb(var(--primary))]"
+            : "border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))] hover:bg-[rgb(var(--card))]"
+        }`}
       >
         {label}
       </button>
@@ -740,18 +919,17 @@ export default function MessagingClient() {
 
   return (
     <div className="pt-12 pb-10">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6 px-4 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-2">
           <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">Messages</h1>
-          <p className="text-sm text-[rgb(var(--muted))] max-w-2xl">
-            Real-time messaging between students and tutors for session coordination, file
-            sharing, and follow-up questions.
+          <p className="max-w-2xl text-sm text-[rgb(var(--muted))]">
+            Real-time messaging between students and tutors for session coordination,
+            file sharing, and follow-up questions.
           </p>
         </header>
 
-        <section className="grid gap-4 lg:grid-cols-3 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.12)] h-[calc(100vh-260px)] overflow-hidden">
-          {/* Left: conversation list */}
-          <div className="flex flex-col gap-3 border-b border-[rgb(var(--border))] pb-3 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4 min-h-0 overflow-hidden">
+        <section className="grid h-[calc(100vh-260px)] gap-4 overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.12)] lg:grid-cols-3">
+          <div className="flex min-h-0 flex-col gap-3 overflow-hidden border-b border-[rgb(var(--border))] pb-3 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-[rgb(var(--fg))]">
                 Recent Conversations
@@ -776,7 +954,7 @@ export default function MessagingClient() {
               />
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-2 text-xs">
+            <div className="flex-1 space-y-2 overflow-y-auto pr-1 text-xs">
               {filteredConversations.map((conv) => {
                 const isActive = conv.id === activeId;
 
@@ -793,15 +971,11 @@ export default function MessagingClient() {
                   <div
                     key={conv.id}
                     onClick={() => setActiveId(conv.id)}
-                    className={`cursor-pointer rounded-xl px-3 py-2 transition
-                      hover:shadow-[0_10px_24px_rgba(0,0,0,0.08)]
-                      border-l-4 ${roleBorder}
-                      ${
-                        isActive
-                          ? "border border-[rgb(var(--primary))] bg-[rgb(var(--primary))/0.06]"
-                          : "border border-[rgb(var(--border))] bg-[rgb(var(--card2))]"
-                      }
-                    `}
+                    className={`cursor-pointer rounded-xl px-3 py-2 transition hover:shadow-[0_10px_24px_rgba(0,0,0,0.08)] border-l-4 ${roleBorder} ${
+                      isActive
+                        ? "border border-[rgb(var(--primary))] bg-[rgb(var(--primary))/0.06]"
+                        : "border border-[rgb(var(--border))] bg-[rgb(var(--card2))]"
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-[0.75rem] font-semibold text-[rgb(var(--fg))]">
@@ -825,7 +999,7 @@ export default function MessagingClient() {
                       </span>
 
                       {conv.unread > 0 && (
-                        <span className="rounded-full bg-[rgb(var(--primary))] text-[0.6rem] font-semibold text-white px-2 py-0.5">
+                        <span className="rounded-full bg-[rgb(var(--primary))] px-2 py-0.5 text-[0.6rem] font-semibold text-white">
                           {conv.unread} new
                         </span>
                       )}
@@ -842,8 +1016,7 @@ export default function MessagingClient() {
             </div>
           </div>
 
-          {/* Right: chat window */}
-          <div className="lg:col-span-2 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex min-h-0 flex-col overflow-hidden lg:col-span-2">
             <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] pb-3">
               <div>
                 <p className="text-sm font-semibold text-[rgb(var(--fg))]">
@@ -851,23 +1024,45 @@ export default function MessagingClient() {
                 </p>
 
                 {active && (
-                  <p className="text-[0.7rem] text-[rgb(var(--muted))]">
-                    with {active.name}
-                  </p>
-                )}
+  <div className="mt-1 flex items-center gap-2">
+    <p className="text-[0.7rem] text-[rgb(var(--muted))]">
+      with {active.name}
+    </p>
+
+    {active.otherUserId && (
+      <>
+        <span
+          className={`inline-block h-2.5 w-2.5 rounded-full ${
+            userPresence?.isOnline ? "bg-emerald-500" : "bg-gray-400"
+          }`}
+          title={userPresence?.isOnline ? "online" : "offline"}
+        />
+        <span
+          className={`text-[0.68rem] font-medium ${
+            userPresence?.isOnline
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-[rgb(var(--muted2))]"
+          }`}
+        >
+          {userPresence?.isOnline
+            ? "Online"
+            : formatLastSeen(userPresence?.lastSeenAt ?? null)}
+        </span>
+      </>
+    )}
+  </div>
+)}
 
                 {active && chatMeta.chatCloseAt && !chatMeta.isChatClosed && (
                   <div className="mt-1 flex items-center gap-2">
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[0.65rem] font-semibold border
-                        ${
-                          closeUrgency(chatMeta.chatCloseAt) === "danger"
-                            ? "border-red-500/40 bg-red-500/10 text-red-600"
-                            : closeUrgency(chatMeta.chatCloseAt) === "warn"
-                            ? "border-amber-500/40 bg-amber-500/10 text-amber-700"
-                            : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))]"
-                        }
-                      `}
+                      className={`rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold ${
+                        closeUrgency(chatMeta.chatCloseAt) === "danger"
+                          ? "border-red-500/40 bg-red-500/10 text-red-600"
+                          : closeUrgency(chatMeta.chatCloseAt) === "warn"
+                          ? "border-amber-500/40 bg-amber-500/10 text-amber-700"
+                          : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))]"
+                      }`}
                     >
                       {closeUrgency(chatMeta.chatCloseAt) === "danger"
                         ? `Closing soon • ${timeLeft(chatMeta.chatCloseAt)}`
@@ -917,7 +1112,7 @@ export default function MessagingClient() {
               </div>
             )}
 
-            <div className="mt-3 flex-1 min-h-0 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3 text-xs overflow-y-auto">
+            <div className="mt-3 flex-1 overflow-y-auto rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3 text-xs">
               {nextCursor && (
                 <button
                   onClick={loadOlder}
@@ -930,7 +1125,6 @@ export default function MessagingClient() {
 
               {messages.map((msg) => {
                 const isMe = msg.senderId === meId;
-
                 const isLastMine = isMe && msg.id === lastMyMsgId;
                 const isSeen =
                   isLastMine && new Date(msg.createdAt).getTime() <= otherReadAtMs;
@@ -951,10 +1145,10 @@ export default function MessagingClient() {
                     }}
                   >
                     <div
-                      className={`group max-w-[70%] rounded-2xl px-3 py-2 relative ${
+                      className={`group relative max-w-[70%] rounded-2xl px-3 py-2 ${
                         isMe
                           ? "bg-[rgb(var(--primary))] text-white"
-                          : "bg-[rgb(var(--card))] text-[rgb(var(--fg))] border border-[rgb(var(--border))]"
+                          : "border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]"
                       }`}
                     >
                       {msg.isDeleted ? (
@@ -963,7 +1157,6 @@ export default function MessagingClient() {
                         <>
                           {msg.text ? <p>{msg.text}</p> : null}
 
-                          {/* Attachments */}
                           {msg.attachments?.map((a) => {
                             const isImg = a.contentType?.startsWith("image/");
                             const isPdf = a.contentType === "application/pdf";
@@ -987,68 +1180,24 @@ export default function MessagingClient() {
 
                             const IconOpen = () => (
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="opacity-90">
-                                <path
-                                  d="M14 5h5v5"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                                <path
-                                  d="M10 14L19 5"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                                <path
-                                  d="M19 14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
+                                <path d="M14 5h5v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M10 14L19 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M19 14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                               </svg>
                             );
 
                             const IconDownload = () => (
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="opacity-90">
-                                <path
-                                  d="M12 3v12"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                />
-                                <path
-                                  d="M7 10l5 5 5-5"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                                <path
-                                  d="M5 21h14"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                />
+                                <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                <path d="M7 10l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                               </svg>
                             );
 
                             const IconPdf = () => (
                               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="opacity-95">
-                                <path
-                                  d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5z"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinejoin="round"
-                                />
-                                <path
-                                  d="M14 2v5h5"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinejoin="round"
-                                />
+                                <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                                <path d="M14 2v5h5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
                               </svg>
                             );
 
@@ -1056,9 +1205,7 @@ export default function MessagingClient() {
                               return (
                                 <div key={a.id} className="mt-2">
                                   {a.url ? (
-                                    <div
-                                      className={`relative overflow-hidden rounded-xl border ${cardShell} shadow-[0_10px_22px_rgba(0,0,0,0.10)]`}
-                                    >
+                                    <div className={`relative overflow-hidden rounded-xl border ${cardShell} shadow-[0_10px_22px_rgba(0,0,0,0.10)]`}>
                                       <button
                                         type="button"
                                         onClick={() => openImageInChat(a.url!)}
@@ -1068,19 +1215,16 @@ export default function MessagingClient() {
                                         <img
                                           src={a.url}
                                           alt={a.fileName}
-                                          className="block w-full max-w-[360px] h-auto"
+                                          className="block h-auto w-full max-w-[360px]"
                                         />
                                       </button>
 
-                                      <div className={`flex items-center justify-between gap-2 px-2.5 py-2 border-t ${rowDivider}`}>
-                                        <span
-                                          className={`truncate text-[0.68rem] ${subText}`}
-                                          title={a.fileName}
-                                        >
+                                      <div className={`flex items-center justify-between gap-2 border-t px-2.5 py-2 ${rowDivider}`}>
+                                        <span className={`truncate text-[0.68rem] ${subText}`} title={a.fileName}>
                                           {a.fileName}
                                         </span>
 
-                                        <div className="flex items-center gap-1 shrink-0">
+                                        <div className="flex shrink-0 items-center gap-1">
                                           <button
                                             type="button"
                                             onClick={() => openImageInChat(a.url!)}
@@ -1095,8 +1239,8 @@ export default function MessagingClient() {
                                             onClick={() => forceDownload(a.url!, a.fileName)}
                                             className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 transition ${
                                               isMe
-                                                ? "bg-white text-black hover:bg-white/90 border-white/30"
-                                                : "bg-[rgb(var(--primary))] text-white hover:opacity-95 border-transparent"
+                                                ? "border-white/30 bg-white text-black hover:bg-white/90"
+                                                : "border-transparent bg-[rgb(var(--primary))] text-white hover:opacity-95"
                                             }`}
                                             title="Download"
                                           >
@@ -1115,9 +1259,7 @@ export default function MessagingClient() {
                             if (isPdf) {
                               return (
                                 <div key={a.id} className="mt-2">
-                                  <div
-                                    className={`rounded-xl border ${cardShell} shadow-[0_10px_22px_rgba(0,0,0,0.10)] overflow-hidden`}
-                                  >
+                                  <div className={`overflow-hidden rounded-xl border ${cardShell} shadow-[0_10px_22px_rgba(0,0,0,0.10)]`}>
                                     <div className="flex items-center gap-3 px-3 py-3">
                                       <div
                                         className={`flex h-11 w-11 items-center justify-center rounded-xl border ${
@@ -1139,7 +1281,7 @@ export default function MessagingClient() {
                                         </div>
                                       </div>
 
-                                      <div className="flex items-center gap-1 shrink-0">
+                                      <div className="flex shrink-0 items-center gap-1">
                                         <button
                                           type="button"
                                           onClick={() => a.url && window.open(a.url, "_blank")}
@@ -1156,8 +1298,8 @@ export default function MessagingClient() {
                                           disabled={!a.url}
                                           className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 transition disabled:opacity-50 ${
                                             isMe
-                                              ? "bg-white text-black hover:bg-white/90 border-white/30"
-                                              : "bg-[rgb(var(--primary))] text-white hover:opacity-95 border-transparent"
+                                              ? "border-white/30 bg-white text-black hover:bg-white/90"
+                                              : "border-transparent bg-[rgb(var(--primary))] text-white hover:opacity-95"
                                           }`}
                                           title="Download"
                                         >
@@ -1199,13 +1341,13 @@ export default function MessagingClient() {
               {active && otherTyping && (
                 <div className="mb-3 flex justify-start">
                   <div className="max-w-[70%] rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-[rgb(var(--fg))]">
-                    <p className="text-[0.75rem] text-[rgb(var(--muted))] italic">Typing…</p>
+                    <p className="text-[0.75rem] italic text-[rgb(var(--muted))]">Typing…</p>
                   </div>
                 </div>
               )}
 
               {messages.length === 0 && active && !loadingMsgs && (
-                <div className="text-[rgb(var(--muted))] text-[0.75rem]">
+                <div className="text-[0.75rem] text-[rgb(var(--muted))]">
                   No messages yet. Say hi 👋
                 </div>
               )}
@@ -1213,11 +1355,10 @@ export default function MessagingClient() {
               <div ref={bottomRef} />
             </div>
 
-            {/* Context menu */}
             {ctx.open && ctx.messageId && (
               <div
                 style={{ left: ctx.x, top: ctx.y }}
-                className="fixed z-50 min-w-[140px] rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_18px_40px_rgba(0,0,0,0.18)] p-1"
+                className="fixed z-50 min-w-[140px] rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-1 shadow-[0_18px_40px_rgba(0,0,0,0.18)]"
                 onClick={(e) => e.stopPropagation()}
               >
                 <button
@@ -1287,12 +1428,12 @@ export default function MessagingClient() {
                   const now = Date.now();
                   if (now - lastTypingSentAt.current > 800) {
                     lastTypingSentAt.current = now;
-                    pingTyping(true);
+                    void pingTyping(true);
                   }
 
                   if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
                   typingStopTimer.current = setTimeout(() => {
-                    pingTyping(false);
+                    void pingTyping(false);
                   }, 1200);
                 }}
                 onKeyDown={(e) => e.key === "Enter" && send()}
@@ -1320,7 +1461,6 @@ export default function MessagingClient() {
           </div>
         </section>
 
-        {/* WhatsApp-style image viewer modal */}
         {imgViewer.open && (
           <div
             className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-[3px]"
@@ -1328,9 +1468,8 @@ export default function MessagingClient() {
               if (e.target === e.currentTarget) closeImageViewer();
             }}
           >
-            {/* Top Bar */}
-            <div className="absolute top-0 left-0 right-0 z-30 pointer-events-auto flex items-center justify-between px-4 py-3">
-              <div className="text-white/80 text-xs">
+            <div className="absolute left-0 right-0 top-0 z-30 flex items-center justify-between px-4 py-3 pointer-events-auto">
+              <div className="text-xs text-white/80">
                 {imgViewer.urls.length > 0
                   ? `${imgViewer.idx + 1} / ${imgViewer.urls.length}`
                   : ""}
@@ -1345,7 +1484,7 @@ export default function MessagingClient() {
                     if (!url) return;
                     forceDownload(url, prettyNameFromUrl(url));
                   }}
-                  className="inline-flex items-center gap-2 rounded-full bg-white/10 hover:bg-white/20 text-white px-3 py-2 text-xs transition"
+                  className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-2 text-xs text-white transition hover:bg-white/20"
                 >
                   Download
                 </button>
@@ -1356,14 +1495,13 @@ export default function MessagingClient() {
                     e.stopPropagation();
                     closeImageViewer();
                   }}
-                  className="h-9 w-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
                 >
                   ✕
                 </button>
               </div>
             </div>
 
-            {/* Arrows */}
             {imgViewer.urls.length > 1 && (
               <>
                 <button
@@ -1372,7 +1510,7 @@ export default function MessagingClient() {
                     e.stopPropagation();
                     prevImage();
                   }}
-                  className="absolute z-30 pointer-events-auto left-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white text-lg transition"
+                  className="absolute left-3 top-1/2 z-30 h-10 w-10 -translate-y-1/2 rounded-full bg-white/10 text-lg text-white transition hover:bg-white/20 pointer-events-auto"
                 >
                   ‹
                 </button>
@@ -1383,14 +1521,13 @@ export default function MessagingClient() {
                     e.stopPropagation();
                     nextImage();
                   }}
-                  className="absolute z-30 pointer-events-auto right-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white text-lg transition"
+                  className="absolute right-3 top-1/2 z-30 h-10 w-10 -translate-y-1/2 rounded-full bg-white/10 text-lg text-white transition hover:bg-white/20 pointer-events-auto"
                 >
                   ›
                 </button>
               </>
             )}
 
-            {/* Image Layer */}
             <div className="absolute inset-0 z-10 flex items-center justify-center p-6 pb-24 pointer-events-none">
               <img
                 src={imgViewer.urls[imgViewer.idx] ?? ""}
@@ -1428,7 +1565,7 @@ export default function MessagingClient() {
                 }}
                 onMouseUp={() => setDragging(false)}
                 onMouseLeave={() => setDragging(false)}
-                className="pointer-events-auto max-h-[82vh] max-w-[92vw] rounded-xl shadow-2xl select-none transition-transform duration-100 ease-out"
+                className="pointer-events-auto max-h-[82vh] max-w-[92vw] select-none rounded-xl shadow-2xl transition-transform duration-100 ease-out"
                 style={{
                   transform: `scale(${zoom}) translate(${offset.x / zoom}px, ${offset.y / zoom}px)`,
                   cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "zoom-in",
@@ -1436,13 +1573,12 @@ export default function MessagingClient() {
               />
             </div>
 
-            {/* Thumbnail Strip */}
             {imgViewer.urls.length > 1 && (
               <div
-                className="absolute z-30 pointer-events-auto left-0 right-0 bottom-4 px-4"
+                className="absolute bottom-4 left-0 right-0 z-30 px-4 pointer-events-auto"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="mx-auto max-w-4xl rounded-xl bg-black/60 border border-white/10 backdrop-blur px-3 py-2">
+                <div className="mx-auto max-w-4xl rounded-xl border border-white/10 bg-black/60 px-3 py-2 backdrop-blur">
                   <div className="flex gap-2 overflow-x-auto pb-1">
                     {imgViewer.urls.map((u, i) => {
                       const activeThumb = i === imgViewer.idx;
@@ -1451,12 +1587,11 @@ export default function MessagingClient() {
                           key={`${u}-${i}`}
                           type="button"
                           onClick={() => setImgViewer((p) => ({ ...p, idx: i }))}
-                          className={`relative shrink-0 rounded-lg overflow-hidden border transition
-                            ${
-                              activeThumb
-                                ? "border-white ring-2 ring-white/30"
-                                : "border-white/20 hover:border-white/40"
-                            }`}
+                          className={`relative shrink-0 overflow-hidden rounded-lg border transition ${
+                            activeThumb
+                              ? "border-white ring-2 ring-white/30"
+                              : "border-white/20 hover:border-white/40"
+                          }`}
                         >
                           <img
                             src={u}
