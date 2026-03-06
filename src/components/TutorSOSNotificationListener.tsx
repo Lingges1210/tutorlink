@@ -159,7 +159,7 @@ export default function TutorSOSNotificationListener({ userId }: Props) {
                       type="button"
                       onClick={() => {
                         dismiss(item.id);
-                        router.push("/sos?tab=TUTOR");
+                        router.push("/sos");
                       }}
                       className="inline-flex h-9 items-center gap-1 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-3 text-xs font-semibold text-white shadow-[0_10px_25px_rgba(124,58,237,0.35)] hover:opacity-95"
                     >
