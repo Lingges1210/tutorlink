@@ -1,28 +1,46 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth/requireUser";
+import { requireDbUser } from "@/lib/auth/requireDbUser";
 
-export async function POST(req: Request, ctx: { params: { id: string } }) {
+export async function POST(
+  req: Request,
+  ctx: { params: Promise<{ id: string }> }
+) {
   try {
-    const user = await requireUser();
-    const sosId = ctx.params.id;
+    const user = await requireDbUser();
+    const { id: sosId } = await ctx.params;
 
     const body = await req.json();
-    const decision = String(body.decision || "").toUpperCase(); // ACCEPT | DECLINE
+    const decision = String(body.decision || "").toUpperCase();
     const reason = body.reason ? String(body.reason).trim() : null;
 
     if (decision !== "ACCEPT" && decision !== "DECLINE") {
       return NextResponse.json({ error: "Invalid decision" }, { status: 400 });
     }
 
-    const me = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { role: true, isTutorApproved: true, isDeactivated: true, name: true },
-    });
+   const me = await prisma.user.findUnique({
+  where: { id: user.id },
+  select: {
+    role: true,
+    isTutorApproved: true,
+    isDeactivated: true,
+    name: true,
+    roleAssignments: { select: { role: true } },
+  },
+});
 
-    if (!me || me.role !== "TUTOR" || !me.isTutorApproved || me.isDeactivated) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+if (!me || me.isDeactivated) {
+  return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+}
+
+const isTutor =
+  me.isTutorApproved ||
+  me.role === "TUTOR" ||
+  (me.roleAssignments ?? []).some((r) => r.role === "TUTOR");
+
+if (!isTutor) {
+  return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+}
 
     const result = await prisma.$transaction(async (tx) => {
       await tx.sOSTutorResponse.upsert({
@@ -82,7 +100,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
         data: {
           userId: sos.studentId,
           type: "SOS_ACCEPTED",
-          title: "Tutor found ",
+          title: "Tutor found",
           body: `${me.name ?? "A tutor"} accepted your SOS request.`,
           data: { sosId: sos.id, sessionId: session.id, channelId: channel.id },
           dedupeKey: `sos:${sos.id}:accepted`,
@@ -104,6 +122,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
         { status: 409 }
       );
     }
+
     if (result.status === "NOT_FOUND") {
       return NextResponse.json({ error: "SOS not found" }, { status: 404 });
     }

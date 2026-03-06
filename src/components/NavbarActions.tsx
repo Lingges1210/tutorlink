@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import UserMenuClient from "@/components/UserMenuClient";
 import NotificationsBellClient from "@/components/NotificationsBellClient";
 import ChatInboxIconClient from "@/components/ChatInboxIconClient";
+import TutorSOSNotificationListener from "@/components/TutorSOSNotificationListener";
 
 export default async function NavbarActions() {
   const supabase = await supabaseServerComponent();
@@ -38,9 +39,25 @@ export default async function NavbarActions() {
   }
 
   const dbUser = await prisma.user.findUnique({
-    where: { email: user.email.toLowerCase() },
-    select: { id: true, role: true, name: true, email: true, avatarUrl: true },
-  });
+  where: { email: user.email.toLowerCase() },
+  select: {
+    id: true,
+    role: true,
+    name: true,
+    email: true,
+    avatarUrl: true,
+    isTutorApproved: true,
+    roleAssignments: { select: { role: true } },
+  },
+});
+
+  const isTutor =
+  !!dbUser &&
+  (
+    dbUser.role === "TUTOR" ||
+    dbUser.isTutorApproved ||
+    (dbUser.roleAssignments ?? []).some((r) => r.role === "TUTOR")
+  );
 
   const dashboardHref =
     dbUser?.role === "TUTOR" ? "/dashboard/tutor" : "/dashboard/student";
@@ -69,6 +86,10 @@ export default async function NavbarActions() {
 
   return (
     <div className="flex items-center gap-2">
+      {dbUser?.id && isTutor && (
+        <TutorSOSNotificationListener userId={dbUser.id} />
+      )}
+
       <ChatInboxIconClient initialUnread={initialChatUnread} />
 
       <NotificationsBellClient

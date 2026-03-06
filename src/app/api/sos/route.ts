@@ -77,14 +77,17 @@ export async function POST(req: Request) {
 
     if (tutorIds.length) {
       const tutors = await prisma.user.findMany({
-        where: {
-          id: { in: tutorIds },
-          role: "TUTOR",
-          isTutorApproved: true,
-          isDeactivated: false,
-        },
-        select: { id: true },
-      });
+  where: {
+    id: { in: tutorIds },
+    isDeactivated: false,
+    OR: [
+      { role: "TUTOR" },
+      { isTutorApproved: true },
+      { roleAssignments: { some: { role: "TUTOR" } } },
+    ],
+  },
+  select: { id: true },
+});
 
       await prisma.notification.createMany({
         data: tutors.map((t) => ({

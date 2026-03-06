@@ -15,6 +15,7 @@ import {
   Timer,
   ChevronRight,
 } from "lucide-react";
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 type Subject = { id: string; code: string; title: string };
 type Tutor = { id: string; name: string | null; email: string; avatarUrl: string | null };
@@ -123,6 +124,35 @@ export default function SOSDetailPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+  if (!id) return;
+
+  const supabase = supabaseBrowser;
+
+  const channel = supabase
+    .channel(`sos-detail-${id}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "SOSRequest",
+        filter: `id=eq.${id}`,
+      },
+      (payload) => {
+        console.log("SOS detail realtime payload:", payload);
+        void load({ silent: true });
+      }
+    )
+    .subscribe((status) => {
+      console.log("SOS detail realtime status:", status);
+    });
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}, [id]);
 
   //  If ACCEPTED and channelId is ready, send student straight to chat
   useEffect(() => {
