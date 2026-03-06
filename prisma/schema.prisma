@@ -215,6 +215,11 @@ model Session {
   review      SessionReview?
   completedAt DateTime?
 
+  dailyRoomName         String?         @unique
+  dailyRoomUrl          String?
+  dailyRoomCreatedAt    DateTime?
+  dailyRoomExpiresAt    DateTime?
+
   @@index([studentId, status])
   @@index([tutorId, status])
   @@index([scheduledAt])
