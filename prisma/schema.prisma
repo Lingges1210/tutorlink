@@ -92,6 +92,14 @@ model User {
 
   presence UserPresence?
 
+  accountLockStatus AccountLockStatus @default(ACTIVE)
+  lockedAt          DateTime?
+  lockReason        String?
+  lockedByAdminId   String?
+
+  adminAuditLogs        AdminAuditLog[] @relation("AdminActor")
+  adminAuditLogsTarget  AdminAuditLog[] @relation("AdminTargetUser")
+
   @@schema("public")
 }
 
@@ -870,5 +878,44 @@ model UserPresence {
 
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@schema("public")
+}
+
+enum AccountLockStatus {
+  ACTIVE
+  LOCKED
+
+  @@schema("public")
+}
+
+enum AdminActionType {
+  VERIFY_USER_APPROVE
+  VERIFY_USER_REJECT
+  TUTOR_APP_APPROVE
+  TUTOR_APP_REJECT
+  USER_LOCK
+  USER_UNLOCK
+  USER_ROLE_CHANGE
+
+  @@schema("public")
+}
+
+model AdminAuditLog {
+  id           String          @id @default(cuid())
+  adminId      String
+  targetUserId String?
+  actionType   AdminActionType
+  entityType   String
+  entityId     String?
+  reason       String?
+  metadata     Json?
+  createdAt    DateTime        @default(now())
+
+  admin      User  @relation("AdminActor", fields: [adminId], references: [id], onDelete: Cascade)
+  targetUser User? @relation("AdminTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([adminId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([actionType, createdAt])
   @@schema("public")
 }

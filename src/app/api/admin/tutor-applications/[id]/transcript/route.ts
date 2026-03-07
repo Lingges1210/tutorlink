@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@supabase/supabase-js";
-import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { requireAdminUser } from "@/lib/requireAdminUser";
 
 const adminSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,36 +14,12 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await context.params; //  FIX (await params)
+    await requireAdminUser();
 
-    //  ensure caller is logged in
-    const supabase = await supabaseServerComponent();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user?.email) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
-    //  check admin role from your DB
-    const dbUser = await prisma.user.findUnique({
-      where: { email: user.email.toLowerCase() },
-      select: { role: true },
-    });
-
-    if (dbUser?.role !== "ADMIN") {
-      return NextResponse.json(
-        { success: false, message: "Forbidden" },
-        { status: 403 }
-      );
-    }
+    const { id } = await context.params;
 
     const app = await prisma.tutorApplication.findUnique({
-      where: { id }, //  use awaited id
+      where: { id },
       select: { transcriptPath: true },
     });
 
@@ -54,7 +30,6 @@ export async function GET(
       );
     }
 
-    //  signed URL (1 minute)
     const { data, error } = await adminSupabase.storage
       .from("tutor-documents")
       .createSignedUrl(app.transcriptPath, 60);
@@ -67,10 +42,14 @@ export async function GET(
     }
 
     return NextResponse.redirect(data.signedUrl);
-  } catch (e: any) {
+  } catch (error: any) {
+    const message = error?.message || "Server error";
+    const status =
+      message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
+
     return NextResponse.json(
-      { success: false, message: e?.message ?? "Server error" },
-      { status: 500 }
+      { success: false, message },
+      { status }
     );
   }
 }

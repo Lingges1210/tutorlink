@@ -1,56 +1,70 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { requireAdminUser } from "@/lib/requireAdminUser";
+import { logAdminAction } from "@/lib/admin-audit";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  try {
+    const admin = await requireAdminUser();
+    const { id } = await params;
 
-  const supabase = await supabaseServerComponent();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    const body = await req.json().catch(() => ({} as any));
+    const reason =
+      typeof body.reason === "string" && body.reason.trim()
+        ? body.reason.trim()
+        : null;
 
-  if (!user?.email) {
+    const app = await prisma.tutorApplication.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+      },
+    });
+
+    if (!app) {
+      return NextResponse.json(
+        { success: false, message: "Application not found" },
+        { status: 404 }
+      );
+    }
+
+    await prisma.tutorApplication.update({
+      where: { id },
+      data: {
+        status: "REJECTED",
+        reviewedAt: new Date(),
+        rejectionReason: reason,
+      },
+    });
+
+    await logAdminAction({
+      adminId: admin.id,
+      targetUserId: app.userId,
+      actionType: "TUTOR_APP_REJECT",
+      entityType: "TUTOR_APPLICATION",
+      entityId: app.id,
+      reason,
+      metadata: {
+        previousStatus: app.status,
+        newStatus: "REJECTED",
+      },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    const message = error?.message || "Failed to reject tutor application";
+    const status =
+      message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
+
     return NextResponse.json(
-      { success: false, message: "Unauthorized" },
-      { status: 401 }
+      { success: false, message },
+      { status }
     );
   }
-
-  const admin = await prisma.user.findUnique({
-    where: { email: user.email.toLowerCase() },
-    select: { role: true, roleAssignments: { select: { role: true } } },
-  });
-
-  const isAdmin =
-    admin?.role === "ADMIN" ||
-    admin?.roleAssignments?.some((r) => r.role === "ADMIN");
-
-  if (!isAdmin) {
-    return NextResponse.json(
-      { success: false, message: "Forbidden" },
-      { status: 403 }
-    );
-  }
-
-  const body = await req.json().catch(() => ({} as any));
-  const reason =
-    typeof body.reason === "string" && body.reason.trim()
-      ? body.reason.trim()
-      : null;
-
-  await prisma.tutorApplication.update({
-    where: { id },
-    data: {
-      status: "REJECTED",
-      reviewedAt: new Date(),
-      rejectionReason: reason,
-    },
-  });
-
-  return NextResponse.json({ success: true });
 }

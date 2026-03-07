@@ -1,47 +1,37 @@
-// src/app/api/admin/tutor-applications/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { requireAdminUser } from "@/lib/requireAdminUser";
 
 export async function GET() {
-  const supabase = await supabaseServerComponent();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    await requireAdminUser();
 
-  if (!user?.email) {
-    return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
-  }
-
-  const dbUser = await prisma.user.findUnique({
-    where: { email: user.email.toLowerCase() },
-    select: { role: true, roleAssignments: { select: { role: true } } },
-  });
-
-  const roles = new Set<string>();
-  if (dbUser?.role) roles.add(dbUser.role);
-  for (const r of dbUser?.roleAssignments ?? []) roles.add(r.role);
-
-  if (!roles.has("ADMIN")) {
-    return NextResponse.json({ success: false, message: "Forbidden" }, { status: 403 });
-  }
-
-  const applications = await prisma.tutorApplication.findMany({
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      subjects: true,
-      cgpa: true,
-      transcriptPath: true,
-      status: true,
-      createdAt: true,
-      reviewedAt: true,
-      rejectionReason: true,
-      user: {
-        select: { id: true, name: true, email: true, matricNo: true },
+    const applications = await prisma.tutorApplication.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        subjects: true,
+        cgpa: true,
+        transcriptPath: true,
+        status: true,
+        createdAt: true,
+        reviewedAt: true,
+        rejectionReason: true,
+        user: {
+          select: { id: true, name: true, email: true, matricNo: true },
+        },
       },
-    },
-  });
+    });
 
-  return NextResponse.json({ success: true, applications });
+    return NextResponse.json({ success: true, applications });
+  } catch (error: any) {
+    const message = error?.message || "Failed to load tutor applications";
+    const status =
+      message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
+
+    return NextResponse.json(
+      { success: false, message },
+      { status }
+    );
+  }
 }

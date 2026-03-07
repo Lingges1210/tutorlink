@@ -1,55 +1,58 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { requireAdminUser } from "@/lib/requireAdminUser";
 
 export async function GET() {
   try {
-    // Ensure admin
-    const supabase = await supabaseServerComponent();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    await requireAdminUser();
 
-    if (!user?.email) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    const day = startOfWeek.getDay(); // 0 Sun, 1 Mon...
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    startOfWeek.setDate(startOfWeek.getDate() + diffToMonday);
+    startOfWeek.setHours(0, 0, 0, 0);
 
-    const dbUser = await prisma.user.findUnique({
-      where: { email: user.email.toLowerCase() },
-      select: { role: true },
-    });
-
-    if (dbUser?.role !== "ADMIN") {
-      return NextResponse.json(
-        { success: false, message: "Forbidden" },
-        { status: 403 }
-      );
-    }
-
-    // 📊 Real stats
     const totalUsers = await prisma.user.count();
 
     const activeTutors = await prisma.userRoleAssignment.count({
-  where: {
-    role: "TUTOR",
-    user: { isTutorApproved: true },
-  },
-});
+      where: {
+        role: "TUTOR",
+        user: { isTutorApproved: true },
+      },
+    });
 
+    const sessionsThisWeek = await prisma.session.count({
+      where: {
+        status: "COMPLETED",
+        completedAt: {
+          gte: startOfWeek,
+        },
+      },
+    });
+
+    const sosRequestsThisWeek = await prisma.sOSRequest.count({
+      where: {
+        createdAt: {
+          gte: startOfWeek,
+        },
+      },
+    });
 
     return NextResponse.json({
       success: true,
       totalUsers,
       activeTutors,
+      sessionsThisWeek,
+      sosRequestsThisWeek,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Admin stats error:", error);
-    return NextResponse.json(
-      { success: false, message: "Server error" },
-      { status: 500 }
-    );
+
+    const message = error?.message || "Server error";
+    const status =
+      message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
+
+    return NextResponse.json({ success: false, message }, { status });
   }
 }

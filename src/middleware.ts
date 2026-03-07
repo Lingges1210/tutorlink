@@ -2,15 +2,27 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-async function getRoles(request: NextRequest, accessToken: string) {
-  const url = new URL("/api/me/roles", request.url);
+type AccessRes = {
+  success: boolean;
+  user?: {
+    id: string;
+    roles: string[];
+    accountLockStatus: string;
+    isDeactivated: boolean;
+    verificationStatus: string;
+  };
+};
+
+async function getAccessState(request: NextRequest, accessToken: string) {
+  const url = new URL("/api/me/access", request.url);
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
   });
+
   if (!res.ok) return null;
-  const data = (await res.json()) as { roles: string[] };
-  return data.roles ?? null;
+  const data = (await res.json()) as AccessRes;
+  return data.user ?? null;
 }
 
 export async function middleware(request: NextRequest) {
@@ -42,32 +54,40 @@ export async function middleware(request: NextRequest) {
   const needsDashboard = pathname.startsWith("/dashboard");
   const needsTutor = pathname.startsWith("/dashboard/tutor");
   const needsAdmin = pathname.startsWith("/admin");
+  const needsMessaging = pathname === "/messaging" || pathname.startsWith("/messaging/");
+  const needsProtectedArea = needsDashboard || needsAdmin || needsMessaging;
 
-  // 🚫 Must be logged in for dashboard + admin
-  if (!session && (needsDashboard || needsAdmin)) {
+  if (!session && needsProtectedArea) {
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  //  Not protected area
   if (!session) return response;
 
-  // 🔒 Tutor sub-dashboard
-if (needsTutor) {
-  const roles = await getRoles(request, session.access_token);
-  if (!roles?.includes("TUTOR")) {
-    return NextResponse.redirect(new URL("/dashboard/student", request.url));
-  }
-}
+  const access = await getAccessState(request, session.access_token);
 
-// 🔒 Admin area
-if (needsAdmin) {
-  const roles = await getRoles(request, session.access_token);
-  if (!roles?.includes("ADMIN")) {
+  if (!access && needsProtectedArea) {
+    const loginUrl = new URL("/auth/login", request.url);
+    loginUrl.searchParams.set("redirect", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (access?.isDeactivated) {
+    return NextResponse.redirect(new URL("/auth/login?error=deactivated", request.url));
+  }
+
+  if (access?.accountLockStatus === "LOCKED") {
+    return NextResponse.redirect(new URL("/account-locked", request.url));
+  }
+
+  if (needsTutor && !access?.roles.includes("TUTOR")) {
     return NextResponse.redirect(new URL("/dashboard/student", request.url));
   }
-}
+
+  if (needsAdmin && !access?.roles.includes("ADMIN")) {
+    return NextResponse.redirect(new URL("/dashboard/student", request.url));
+  }
 
   return response;
 }

@@ -33,24 +33,6 @@ type TutorAppRow = {
   };
 };
 
-const weeklySessions = [
-  { day: "Mon", value: 18 },
-  { day: "Tue", value: 24 },
-  { day: "Wed", value: 29 },
-  { day: "Thu", value: 21 },
-  { day: "Fri", value: 16 },
-  { day: "Sat", value: 14 },
-  { day: "Sun", value: 10 },
-];
-
-const subjectDemand = [
-  { name: "Programming I / II", value: 86 },
-  { name: "Data Structures & Algorithms", value: 74 },
-  { name: "Discrete Mathematics", value: 63 },
-  { name: "Calculus", value: 51 },
-  { name: "Circuit Theory", value: 38 },
-];
-
 function StatusBadge({ status }: { status: string }) {
   const s = (status || "").toUpperCase();
 
@@ -65,21 +47,21 @@ function StatusBadge({ status }: { status: string }) {
   if (s === "REJECTED") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/15 px-3 py-1 text-xs font-medium text-rose-700 dark:text-rose-400">
-        ❌ Rejected
+        Rejected
       </span>
     );
   }
 
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/15 px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
-      ⏳ Pending
+      Pending
     </span>
   );
 }
 
 
 export default function AdminPage() {
-  const maxSessions = Math.max(...weeklySessions.map((s) => s.value));
+  
 
   // --- Verification queue state ---
   const [queue, setQueue] = useState<QueueUser[]>([]);
@@ -117,17 +99,27 @@ export default function AdminPage() {
   const [totalUsers, setTotalUsers] = useState<number>(0);
   const [activeTutors, setActiveTutors] = useState<number>(0);
 
+  const [weeklySessions, setWeeklySessions] = useState<{ day: string; value: number }[]>([]);
+  const [subjectDemand, setSubjectDemand] = useState<{ name: string; value: number }[]>([]);
+  const [sessionsThisWeek, setSessionsThisWeek] = useState<number>(0);
+  const [sosRequestsThisWeek, setSosRequestsThisWeek] = useState<number>(0);
+
+  const maxSessions = Math.max(1, ...weeklySessions.map((s) => s.value));
+  const maxSubjectDemand = Math.max(1, ...subjectDemand.map((s) => s.value));
+
   useEffect(() => {
   const fetchStats = async () => {
     try {
-      const res = await fetch("/api/admin/stats");
+      const res = await fetch("/api/admin/stats", { cache: "no-store" });
       const data = await res.json();
 
       if (data.success) {
-        setTotalUsers(data.totalUsers);
-        setActiveTutors(data.activeTutors);
+        setTotalUsers(data.totalUsers ?? 0);
+        setActiveTutors(data.activeTutors ?? 0);
+        setSessionsThisWeek(data.sessionsThisWeek ?? 0);
+        setSosRequestsThisWeek(data.sosRequestsThisWeek ?? 0);
       }
-    } catch (err) {
+    } catch {
       console.error("Failed to load stats");
     }
   };
@@ -135,12 +127,33 @@ export default function AdminPage() {
   fetchStats();
 }, []);
 
+useEffect(() => {
+  const fetchAnalytics = async () => {
+    try {
+      const res = await fetch("/api/admin/analytics", { cache: "no-store" });
+      const data = await res.json();
+
+      if (data.success) {
+        setWeeklySessions(Array.isArray(data.weeklySessions) ? data.weeklySessions : []);
+        setSubjectDemand(Array.isArray(data.subjectDemand) ? data.subjectDemand : []);
+      }
+    } catch {
+      console.error("Failed to load analytics");
+    }
+  };
+
+  fetchAnalytics();
+}, []);
+
+
+
 const statCards = [
-  { label: "Total Users", value: totalUsers },
-  { label: "Active Tutors", value: activeTutors },
-  { label: "Sessions This Week", value: "132", subtitle: "Completed peer tutoring sessions" },
-  { label: "SOS Requests", value: "9", subtitle: "Urgent academic help requests" },
+  { label: "Total Users", value: totalUsers, subtitle: "Registered TutorLink users" },
+  { label: "Active Tutors", value: activeTutors, subtitle: "Approved peer tutors" },
+  { label: "Sessions This Week", value: sessionsThisWeek, subtitle: "Completed peer tutoring sessions" },
+  { label: "SOS Requests", value: sosRequestsThisWeek, subtitle: "Urgent academic help requests" },
 ];
+
 
   async function loadQueue() {
     setQueueLoading(true);
@@ -253,19 +266,19 @@ const statCards = [
   );
 
   const ActionLink = ({
-    href,
-    children,
-  }: {
-    href: string;
-    children: React.ReactNode;
-  }) => (
-    <a
-      href={href}
-      className="inline-flex items-center rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:border-[rgb(var(--primary))]"
-    >
-      {children}
-    </a>
-  );
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) => (
+  <Link
+    href={href}
+    className="inline-flex items-center rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:border-[rgb(var(--primary))]"
+  >
+    {children}
+  </Link>
+);
 
   const ActionBtn = ({
     children,
@@ -292,35 +305,34 @@ const statCards = [
         {/* Header */}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">Admin Analytics</h1>
+            <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">Admin Dashboard</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[rgb(var(--muted))]">
-              Overview of TutorLink usage, tutoring activity and demand trends. This dashboard uses
-              sample analytics data to illustrate how the admin can monitor the platform.
+              Overview of TutorLink users, activity, moderation workflows, and live platform trends.
             </p>
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <ActionLink href="/admin/verification-queue">
-              Verification Queue
-              {pendingVerificationCount > 0 && (
-<span className="ml-2 rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-400">
-                  {pendingVerificationCount}
-                </span>
-              )}
-            </ActionLink>
+  <ActionLink href="/admin/verification-queue">
+    Verification Queue
+    {pendingVerificationCount > 0 && (
+      <span className="ml-2 rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-400">
+        {pendingVerificationCount}
+      </span>
+    )}
+  </ActionLink>
 
-            <Link
-              href="/admin/tutor-applications"
-              className="inline-flex items-center rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:border-[rgb(var(--primary))]"
-            >
-              Tutor Applications
-              {pendingTutorCount > 0 && (
-<span className="ml-2 rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-400">
-                  {pendingTutorCount}
-                </span>
-              )}
-            </Link>
-          </div>
+  <ActionLink href="/admin/tutor-applications">
+    Tutor Applications
+    {pendingTutorCount > 0 && (
+      <span className="ml-2 rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-400">
+        {pendingTutorCount}
+      </span>
+    )}
+  </ActionLink>
+
+  <ActionLink href="/admin/users">Manage Users</ActionLink>
+  <ActionLink href="/admin/audit-logs">Audit Logs</ActionLink>
+</div>
         </header>
 
         {/* Notice */}
@@ -367,32 +379,38 @@ const statCards = [
                 <div className="min-w-0">
                   <h2 className="text-sm font-semibold text-[rgb(var(--fg))]">Weekly Tutoring Sessions</h2>
                   <p className="text-xs text-[rgb(var(--muted))]">
-                    Sample data showing completed sessions by day.
+                    Completed tutoring sessions over the last 7 days.
                   </p>
                 </div>
 
                 <span className="shrink-0 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[0.65rem] font-semibold text-emerald-700 dark:text-emerald-300">
-                  +12% vs last week (mock)
+                  Live weekly data
                 </span>
               </div>
 
-              <div className="mt-4 flex h-52 items-end gap-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 pb-4 pt-3">
-                {weeklySessions.map((s) => {
-                  const height = (s.value / maxSessions) * 100;
-                  return (
-                    <div key={s.day} className="flex flex-1 flex-col items-center justify-end">
-                      <div
-                        className="mb-1 w-full rounded-t-lg bg-[rgb(var(--primary))] opacity-80"
-                        style={{ height: `${height}%` }}
-                      />
-                      <span className="mt-1 text-[0.65rem] font-semibold text-[rgb(var(--fg))]">
-                        {s.day}
-                      </span>
-                      <span className="text-[0.6rem] text-[rgb(var(--muted))]">{s.value} sessions</span>
-                    </div>
-                  );
-                })}
-              </div>
+              {weeklySessions.length === 0 || weeklySessions.every((s) => s.value === 0) ? (
+  <div className="mt-4 flex h-52 items-center justify-center rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-sm text-[rgb(var(--muted))]">
+    No completed sessions recorded in the last 7 days.
+  </div>
+) : (
+  <div className="mt-4 flex h-52 items-end gap-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 pb-4 pt-3">
+    {weeklySessions.map((s) => {
+      const height = s.value > 0 ? Math.max((s.value / maxSessions) * 100, 12) : 0;
+      return (
+        <div key={s.day} className="flex h-full flex-1 flex-col items-center justify-end">
+          <div
+            className="mb-1 w-full rounded-t-lg bg-[rgb(var(--primary))] opacity-80"
+            style={{ height: `${height}%` }}
+          />
+          <span className="mt-1 text-[0.65rem] font-semibold text-[rgb(var(--fg))]">
+            {s.day}
+          </span>
+          <span className="text-[0.6rem] text-[rgb(var(--muted))]">{s.value} sessions</span>
+        </div>
+      );
+    })}
+  </div>
+)}
             </div>
           </Card>
 
@@ -401,36 +419,34 @@ const statCards = [
             <div className="px-5 py-4">
               <h2 className="text-sm font-semibold text-[rgb(var(--fg))]">Top Subjects by Demand</h2>
               <p className="mt-1 text-xs text-[rgb(var(--muted))]">
-                Sample breakdown of student requests across key courses.
+                Top subjects based on completed tutoring activity.
               </p>
 
-              <div className="mt-4 space-y-3">
-                {subjectDemand.map((item) => (
-                  <div key={item.name} className="space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-[rgb(var(--fg))]">{item.name}</p>
-                      <p className="text-[0.7rem] text-[rgb(var(--muted))]">{item.value}%</p>
-                    </div>
+              {subjectDemand.length === 0 ? (
+  <div className="mt-4 flex h-40 items-center justify-center rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-sm text-[rgb(var(--muted))]">
+    No subject demand data available yet.
+  </div>
+) : (
+  <div className="mt-4 space-y-3">
+    {subjectDemand.map((item) => (
+      <div key={item.name} className="space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold text-[rgb(var(--fg))]">{item.name}</p>
+          <p className="text-[0.7rem] text-[rgb(var(--muted))]">{item.value}</p>
+        </div>
 
-                    <div className="h-2 overflow-hidden rounded-full bg-[rgb(var(--border))]">
-                      <div
-                        className="h-full rounded-full bg-[rgb(var(--primary))] opacity-80"
-                        style={{ width: `${item.value}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
+        <div className="h-2 overflow-hidden rounded-full bg-[rgb(var(--border))]">
+          <div
+            className="h-full rounded-full bg-[rgb(var(--primary))] opacity-80"
+            style={{ width: `${(item.value / maxSubjectDemand) * 100}%` }}
+          />
+        </div>
+      </div>
+    ))}
+  </div>
+)}
 
-              <div className="mt-4 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2">
-                <p className="text-[0.7rem] font-semibold text-emerald-700 dark:text-emerald-300">
-  Insight (mock)
-</p>
-                <p className="mt-1 text-[0.7rem] leading-5 text-[rgb(var(--muted))]">
-                  CS fundamentals (Programming, DSA, Discrete Math) contribute to the majority of tutor
-                  requests, suggesting these areas should have higher tutor allocation.
-                </p>
-              </div>
+             
             </div>
           </Card>
         </section>
