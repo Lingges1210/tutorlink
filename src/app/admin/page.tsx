@@ -264,6 +264,7 @@ export default function AdminPage() {
             <ActionLink href="/admin/users">Manage Users</ActionLink>
             <ActionLink href="/admin/audit-logs">Audit Logs</ActionLink>
             <ActionLink href="/admin/reports">Activity Reports</ActionLink>
+            <ActionLink href="/admin/user-reports">User Reports</ActionLink>
 
             <button onClick={load} type="button" className={softBtn} disabled={loading}>
               {loading ? "Refreshing..." : "Refresh"}

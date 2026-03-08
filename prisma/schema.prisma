@@ -100,6 +100,10 @@ model User {
   adminAuditLogs        AdminAuditLog[] @relation("AdminActor")
   adminAuditLogsTarget  AdminAuditLog[] @relation("AdminTargetUser")
 
+  reportsSubmitted      UserReport[] @relation("UserReportReporter")
+  reportsReceived       UserReport[] @relation("UserReportReported")
+  reportsReviewedAdmin  UserReport[] @relation("UserReportReviewedByAdmin")
+
   @@schema("public")
 }
 
@@ -228,6 +232,8 @@ model Session {
   dailyRoomCreatedAt    DateTime?
   dailyRoomExpiresAt    DateTime?
 
+  userReports UserReport[]
+
   @@index([studentId, status])
   @@index([tutorId, status])
   @@index([scheduledAt])
@@ -286,6 +292,8 @@ model ChatChannel {
 
   closeAt  DateTime? // when it should auto-close
   closedAt DateTime? // when it actually closed
+
+  userReports UserReport[]
 
   @@index([studentId])
   @@index([tutorId])
@@ -917,5 +925,78 @@ model AdminAuditLog {
   @@index([adminId, createdAt])
   @@index([targetUserId, createdAt])
   @@index([actionType, createdAt])
+  @@schema("public")
+}
+
+enum UserReportCategory {
+  ACCOUNT_LOCK_APPEAL
+  MISCONDUCT
+  NO_SHOW
+  INAPPROPRIATE_CHAT
+  SESSION_ISSUE
+  TECHNICAL_ISSUE
+  GENERAL_COMPLAINT
+
+  @@schema("public")
+}
+
+enum UserReportStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  DISMISSED
+
+  @@schema("public")
+}
+
+enum UserReportPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+
+  @@schema("public")
+}
+
+model UserReport {
+  id String @id @default(cuid())
+
+  reporterUserId String
+  reportedUserId String?
+
+  sessionId     String?
+  chatChannelId String?
+
+  category    UserReportCategory
+  status      UserReportStatus   @default(OPEN)
+  priority    UserReportPriority @default(MEDIUM)
+
+  subject     String
+  description String
+
+  evidenceUrl String?
+  adminNotes  String?
+
+  reviewedByAdminId String?
+  reviewedAt        DateTime?
+  resolvedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reporterUser User        @relation("UserReportReporter", fields: [reporterUserId], references: [id], onDelete: Cascade)
+  reportedUser User?       @relation("UserReportReported", fields: [reportedUserId], references: [id], onDelete: SetNull)
+  session      Session?    @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  chatChannel  ChatChannel? @relation(fields: [chatChannelId], references: [id], onDelete: SetNull)
+
+  reviewedByAdmin User?    @relation("UserReportReviewedByAdmin", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([reporterUserId, createdAt])
+  @@index([reportedUserId, createdAt])
+  @@index([status, createdAt])
+  @@index([category, createdAt])
+  @@index([priority, createdAt])
+  @@index([sessionId])
+  @@index([chatChannelId])
   @@schema("public")
 }

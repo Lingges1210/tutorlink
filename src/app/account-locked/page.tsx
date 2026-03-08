@@ -15,10 +15,17 @@ export default function AccountLockedPage() {
             if you think this is a mistake.
           </p>
 
-          <div className="mt-6">
+          <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link
+              href="/report?category=ACCOUNT_LOCK_APPEAL"
+              className="inline-flex rounded-2xl border border-[rgb(var(--border))] px-4 py-3 text-sm font-medium hover:bg-[rgb(var(--bg))]"
+            >
+              Submit Appeal
+            </Link>
+
             <Link
               href="/auth/login"
-              className="inline-flex rounded-md bg-[rgb(var(--primary))] px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+              className="inline-flex rounded-2xl bg-[rgb(var(--primary))] px-4 py-3 text-sm font-semibold text-white hover:opacity-90"
             >
               Back to Login
             </Link>

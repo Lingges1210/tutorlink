@@ -1,5 +1,3 @@
-// src/app/dashboard/student/layout.tsx
-
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
@@ -68,7 +66,6 @@ export default async function StudentLayout({
             label: "Achievements",
             icon: "trophy",
           },
-          //  NEW: Rewards Shop
           {
             type: "link",
             href: "/dashboard/student/rewards",
@@ -87,7 +84,6 @@ export default async function StudentLayout({
             label: "Achievements (locked)",
             icon: "trophy",
           },
-          //  NEW: Rewards Shop locked
           {
             type: "disabled",
             label: "Rewards Shop (locked)",
@@ -111,6 +107,12 @@ export default async function StudentLayout({
             label: "My Bookings",
             icon: "calendar",
           },
+          {
+            type: "link",
+            href: "/my-reports",
+            label: "My Reports",
+            icon: "shieldoff",
+          },
           !isTutor
             ? {
                 type: "link",
@@ -128,6 +130,7 @@ export default async function StudentLayout({
       : ([
           { type: "disabled", label: "Find Tutor (locked)", icon: "search" },
           { type: "disabled", label: "My Bookings (locked)", icon: "calendar" },
+          { type: "disabled", label: "My Reports (locked)", icon: "shieldoff" },
           {
             type: "disabled",
             label: "Apply as Tutor (locked)",
@@ -178,12 +181,17 @@ export default async function StudentLayout({
             label: "Achievements",
             icon: "trophy",
           },
-          //  NEW: Rewards Shop (mobile)
           {
             type: "link",
             href: "/dashboard/student/rewards",
             label: "Rewards Shop",
             icon: "gift",
+          },
+          {
+            type: "link",
+            href: "/my-reports",
+            label: "My Reports",
+            icon: "shieldoff",
           },
         ] as SidebarItem[])
       : ([
@@ -201,6 +209,11 @@ export default async function StudentLayout({
             type: "disabled",
             label: "Rewards Shop (locked)",
             icon: "gift",
+          },
+          {
+            type: "disabled",
+            label: "My Reports (locked)",
+            icon: "shieldoff",
           },
         ] as SidebarItem[])),
 
@@ -223,7 +236,6 @@ export default async function StudentLayout({
         "
       >
         <div className="flex">
-          {/* Sidebar (md+) */}
           <aside
             className="
               hidden w-[280px] shrink-0 md:block
@@ -254,7 +266,6 @@ export default async function StudentLayout({
             </div>
           </aside>
 
-          {/* Right content */}
           <main className="min-w-0 flex-1 p-5 md:p-6">
             <StudentSidebarNav items={mobileItems} variant="mobile" />
             {children}
