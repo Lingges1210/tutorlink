@@ -16,6 +16,7 @@ import {
   Paperclip,
   Search,
   Archive,
+  Plus,
 } from "lucide-react";
 
 type ReportItem = {
@@ -298,13 +299,15 @@ export default function MyReportsPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
-      <Link
-        href="/dashboard/student"
-        className="mb-6 inline-flex items-center gap-2 text-sm text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--fg))]"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Dashboard
-      </Link>
+      <div className="mb-6 min-w-0 space-y-3">
+  <Link
+    href="/dashboard/student"
+    className="inline-flex items-center gap-2 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:border-[rgb(var(--primary))]"
+  >
+    <ArrowLeft size={14} />
+    Back
+  </Link>
+</div>
 
       <section className="mb-6 rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-sm">
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
@@ -322,19 +325,33 @@ export default function MyReportsPage() {
 
           <div className="flex flex-wrap gap-2">
             <Link
-              href="/report"
-              className="inline-flex items-center rounded-2xl border border-[rgb(var(--border))] px-4 py-2.5 text-sm font-medium hover:bg-[rgb(var(--bg))]"
-            >
-              Submit New Report
-            </Link>
-            <button
-              type="button"
-              onClick={loadReports}
-              className="inline-flex items-center gap-2 rounded-2xl bg-[rgb(var(--fg))] px-4 py-2.5 text-sm font-semibold text-[rgb(var(--bg))]"
-            >
+            href="/report"
+            className="inline-flex items-center gap-2 rounded-2xl border border-[rgb(var(--border))] px-4 py-2.5 text-sm font-medium hover:bg-[rgb(var(--bg))]"
+          >
+            <Plus className="h-4 w-4" />
+            Submit New Report
+          </Link>
+
+                      <button
+            type="button"
+            onClick={loadReports}
+            disabled={loading}
+            className={[
+              "inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-200",
+              "bg-[rgb(var(--fg))] text-[rgb(var(--bg))]",
+              "shadow-[0_10px_30px_rgb(var(--shadow)/0.12)]",
+              "hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgb(var(--shadow)/0.18)]",
+              "active:translate-y-0 active:scale-[0.98]",
+              "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-[0_10px_30px_rgb(var(--shadow)/0.12)]",
+            ].join(" ")}
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
               <RefreshCcw className="h-4 w-4" />
-              Refresh
-            </button>
+            )}
+            {loading ? "Refreshing..." : "Refresh"}
+          </button>
           </div>
         </div>
       </section>

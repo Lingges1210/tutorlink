@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 type AppStatus = "PENDING" | "APPROVED" | "REJECTED";
 
@@ -300,12 +301,14 @@ export default function ApplyTutorPage() {
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-[rgb(var(--fg))]">
           ⏳ Your application is <b>Pending</b>. Please wait for admin review.
         </div>
+        
         <Link
-          href="/dashboard/student"
-          className="text-xs text-[rgb(var(--primary))] hover:underline"
-        >
-          Back to dashboard
-        </Link>
+    href="/dashboard/student"
+    className="inline-flex items-center gap-2 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:border-[rgb(var(--primary))]"
+  >
+    <ArrowLeft size={14} />
+    Back
+  </Link>
       </div>
     );
   }

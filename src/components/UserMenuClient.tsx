@@ -15,6 +15,7 @@ import {
   Gift,
   Search,
   Shield,
+  ShieldOff,
 } from "lucide-react";
 
 type Props = {
@@ -237,13 +238,6 @@ export default function UserMenuClient({
             <SectionLabel>Bookings</SectionLabel>
 
             <MenuItem
-              href={`${dashboardHref}/find-tutor`}
-              onClick={() => setOpen(false)}
-              icon={<Search size={16} />}
-              label="Find Tutor"
-            />
-
-            <MenuItem
               href={`${dashboardHref}/sessions`}
               onClick={() => setOpen(false)}
               icon={<CalendarClock size={16} />}
@@ -258,6 +252,13 @@ export default function UserMenuClient({
                   </span>
                 ) : null
               }
+            />
+
+            <MenuItem
+              href="/my-reports"
+              onClick={() => setOpen(false)}
+              icon={<ShieldOff size={16} />}
+              label="My Reports"
             />
 
             <div className="my-2 border-t border-[rgb(var(--border))]" />

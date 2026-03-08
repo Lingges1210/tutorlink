@@ -235,43 +235,146 @@ export default function AdminPage() {
     <div className="mx-auto mt-6 w-full max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
       <div className="space-y-6">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">Admin Dashboard</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[rgb(var(--muted))]">
-              Overview of TutorLink users, activity, moderation workflows, and live platform trends.
+  <div className="min-w-0">
+    <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">Admin Dashboard</h1>
+    <p className="mt-2 max-w-2xl text-sm leading-6 text-[rgb(var(--muted))]">
+      Overview of TutorLink users, activity, moderation workflows, and live platform trends.
+    </p>
+  </div>
+
+  <div className="flex shrink-0 items-center">
+    <button onClick={load} type="button" className={softBtn} disabled={loading}>
+      {loading ? "Refreshing..." : "Refresh"}
+    </button>
+  </div>
+</header>
+
+<section className={cardShell}>
+  <div className="px-5 py-4">
+    <div className="mb-4 flex items-start justify-between gap-3">
+      <div>
+        <h2 className="text-sm font-semibold text-[rgb(var(--fg))]">
+          Quick Actions
+        </h2>
+        <p className="mt-1 text-xs text-[rgb(var(--muted))]">
+          Administrative shortcuts for moderation, user management and reports.
+        </p>
+      </div>
+
+      <span className="shrink-0 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2.5 py-1 text-[0.65rem] font-semibold text-[rgb(var(--muted))]">
+        Admin tools
+      </span>
+    </div>
+
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      <Link
+        href="/admin/verification-queue"
+        className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgb(var(--primary))] hover:bg-[rgb(var(--card))] hover:shadow-[0_16px_40px_rgb(var(--shadow)/0.10)]"
+      >
+        <div className="absolute inset-x-0 top-0 h-1 bg-amber-500/80" />
+        <div className="flex items-start justify-between gap-3 pt-1">
+          <div>
+            <p className="text-sm font-semibold text-[rgb(var(--fg))]">
+              Verification Queue
+            </p>
+            <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">
+              Review pending student verifications.
             </p>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <ActionLink href="/admin/verification-queue">
-              Verification Queue
-              {pendingVerificationCount > 0 && (
-                <span className="ml-2 rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-400">
-                  {pendingVerificationCount}
-                </span>
-              )}
-            </ActionLink>
+          {pendingVerificationCount > 0 && (
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-400">
+              {pendingVerificationCount}
+            </span>
+          )}
+        </div>
+      </Link>
 
-            <ActionLink href="/admin/tutor-applications">
+      <Link
+        href="/admin/tutor-applications"
+        className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgb(var(--primary))] hover:bg-[rgb(var(--card))] hover:shadow-[0_16px_40px_rgb(var(--shadow)/0.10)]"
+      >
+        <div className="absolute inset-x-0 top-0 h-1 bg-sky-500/80" />
+        <div className="flex items-start justify-between gap-3 pt-1">
+          <div>
+            <p className="text-sm font-semibold text-[rgb(var(--fg))]">
               Tutor Applications
-              {pendingTutorCount > 0 && (
-                <span className="ml-2 rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-400">
-                  {pendingTutorCount}
-                </span>
-              )}
-            </ActionLink>
-
-            <ActionLink href="/admin/users">Manage Users</ActionLink>
-            <ActionLink href="/admin/sos-moderation">SOS Moderation</ActionLink>
-            <ActionLink href="/admin/audit-logs">Audit Logs</ActionLink>
-            <ActionLink href="/admin/reports">Activity Reports</ActionLink>
-            <ActionLink href="/admin/user-reports">User Reports</ActionLink>
-
-            <button onClick={load} type="button" className={softBtn} disabled={loading}>
-              {loading ? "Refreshing..." : "Refresh"}
-            </button>
+            </p>
+            <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">
+              Approve or reject tutor onboarding.
+            </p>
           </div>
-        </header>
+
+          {pendingTutorCount > 0 && (
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[0.65rem] font-bold text-amber-700 dark:text-amber-400">
+              {pendingTutorCount}
+            </span>
+          )}
+        </div>
+      </Link>
+
+      <Link
+        href="/admin/users"
+        className="group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgb(var(--primary))] hover:bg-[rgb(var(--card))] hover:shadow-[0_16px_40px_rgb(var(--shadow)/0.10)]"
+      >
+        <p className="text-sm font-semibold text-[rgb(var(--fg))]">
+          Manage Users
+        </p>
+        <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">
+          Search and manage platform users.
+        </p>
+      </Link>
+
+      <Link
+        href="/admin/sos-moderation"
+        className="group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgb(var(--primary))] hover:bg-[rgb(var(--card))] hover:shadow-[0_16px_40px_rgb(var(--shadow)/0.10)]"
+      >
+        <p className="text-sm font-semibold text-[rgb(var(--fg))]">
+          SOS Moderation
+        </p>
+        <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">
+          Review urgent help requests.
+        </p>
+      </Link>
+
+      <Link
+        href="/admin/user-reports"
+        className="group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgb(var(--primary))] hover:bg-[rgb(var(--card))] hover:shadow-[0_16px_40px_rgb(var(--shadow)/0.10)]"
+      >
+        <p className="text-sm font-semibold text-[rgb(var(--fg))]">
+          User Reports
+        </p>
+        <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">
+          Review user-submitted reports.
+        </p>
+      </Link>
+
+      <Link
+        href="/admin/audit-logs"
+        className="group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgb(var(--primary))] hover:bg-[rgb(var(--card))] hover:shadow-[0_16px_40px_rgb(var(--shadow)/0.10)]"
+      >
+        <p className="text-sm font-semibold text-[rgb(var(--fg))]">
+          Audit Logs
+        </p>
+        <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">
+          Inspect admin activity logs.
+        </p>
+      </Link>
+
+      <Link
+        href="/admin/reports"
+        className="group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgb(var(--primary))] hover:bg-[rgb(var(--card))] hover:shadow-[0_16px_40px_rgb(var(--shadow)/0.10)]"
+      >
+        <p className="text-sm font-semibold text-[rgb(var(--fg))]">
+          Activity Reports
+        </p>
+        <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted))]">
+          Generate system activity summaries.
+        </p>
+      </Link>
+    </div>
+  </div>
+</section>
 
         {err && (
           <div className="rounded-2xl border border-rose-300 bg-rose-100 px-4 py-3 text-xs text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
