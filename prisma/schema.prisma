@@ -99,6 +99,7 @@ model User {
 
   adminAuditLogs        AdminAuditLog[] @relation("AdminActor")
   adminAuditLogsTarget  AdminAuditLog[] @relation("AdminTargetUser")
+  moderatedSOSRequests SOSRequest[] @relation("SOSModeratedByAdmin")
 
   reportsSubmitted      UserReport[] @relation("UserReportReporter")
   reportsReceived       UserReport[] @relation("UserReportReported")
@@ -668,10 +669,35 @@ model SOSRequest {
 
   tutorResponses SOSTutorResponse[]
 
+  // =========================
+  // Admin moderation fields
+  // =========================
+  isFlagged         Boolean   @default(false)
+  moderationStatus  SOSModerationStatus @default(VISIBLE)
+  moderationReason  String?
+  moderatedAt       DateTime?
+  moderatedByAdminId String?
+  adminNotes        String?
+
+  moderatedByAdmin User? @relation("SOSModeratedByAdmin", fields: [moderatedByAdminId], references: [id], onDelete: SetNull)
+
   @@index([studentId, createdAt])
   @@index([status, createdAt])
   @@index([subjectId, status])
   @@index([acceptedTutorId, status])
+
+  @@index([moderationStatus, createdAt])
+  @@index([isFlagged, createdAt])
+  @@index([moderatedByAdminId, createdAt])
+
+  @@schema("public")
+}
+
+enum SOSModerationStatus {
+  VISIBLE
+  FLAGGED
+  REMOVED_BY_ADMIN
+
   @@schema("public")
 }
 
@@ -904,6 +930,9 @@ enum AdminActionType {
   USER_LOCK
   USER_UNLOCK
   USER_ROLE_CHANGE
+  SOS_FLAG
+  SOS_REMOVE
+  SOS_RESTORE
 
   @@schema("public")
 }
