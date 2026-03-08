@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, CheckCircle, Star, Video } from "lucide-react";
+import { AlertTriangle, Calendar, CheckCircle, Star, Video } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -624,6 +624,20 @@ export default function MyBookingsClient() {
     }
   }
 
+  function openReportForm(s: Row) {
+  if (!s.tutor) return;
+
+  const params = new URLSearchParams({
+    sessionId: s.id,
+    reportedUserId: s.tutor.id,
+    reportedRole: "TUTOR",
+    subject: `${s.subject.code} — ${s.subject.title}`,
+    source: "SESSION",
+  });
+
+  router.push(`/report?${params.toString()}`);
+}
+
   async function openRateModal(s: Row) {
     if (s.status !== "COMPLETED") return;
     if (!s.tutor) return;
@@ -923,6 +937,17 @@ export default function MyBookingsClient() {
               >
                 Reschedule
               </button>
+
+              {s.tutor && (
+            <button
+              onClick={() => openReportForm(s)}
+              className="rounded-md p-2 border border-red-500/40 bg-red-500/10 text-red-600 transition hover:bg-red-500/15 dark:text-red-300"
+              title="Report this session or tutor"
+              aria-label="Report this session or tutor"
+            >
+              <AlertTriangle className="h-4 w-4" />
+            </button>
+          )}
 
               <button
                 disabled={closed}

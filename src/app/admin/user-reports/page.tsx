@@ -8,6 +8,7 @@ import {
   FileText,
   Loader2,
   Lock,
+  RefreshCcw,
   Search,
   ShieldAlert,
   Unlock,
@@ -379,52 +380,64 @@ export default function AdminUserReportsPage() {
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8">
-      <div className="mb-6 flex items-start gap-3">
-        <div className="rounded-2xl bg-red-500/10 p-3">
-          <ShieldAlert className="h-5 w-5 text-red-500" />
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="rounded-2xl bg-red-500/10 p-3">
+            <ShieldAlert className="h-5 w-5 text-red-500" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">User Reports</h1>
+            <p className="mt-1 text-sm text-[rgb(var(--muted-foreground))]">
+              Review complaints, appeals, and reported incidents from students and tutors.
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">User Reports</h1>
-          <p className="mt-1 text-sm text-[rgb(var(--muted-foreground))]">
-            Review complaints, appeals, and reported incidents from students and tutors.
-          </p>
-        </div>
+
+        <button
+          type="button"
+          onClick={() => load()}
+          disabled={loading}
+          className="inline-flex h-12 items-center justify-center gap-2 self-start rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--bg-secondary))] px-4 text-sm font-semibold shadow-sm transition hover:-translate-y-0.5 hover:bg-[rgb(var(--card))] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          Refresh
+        </button>
       </div>
 
       <div className="mb-5 rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5">
-  <div className="grid gap-4 xl:grid-cols-[auto_1fr] xl:items-center xl:gap-5">
-    <div className="flex flex-wrap gap-3">
-      <ViewTab
-        active={viewMode === "ACTIVE"}
-        label="Active"
-        count={counts.active}
-        onClick={() => setViewMode("ACTIVE")}
-      />
-      <ViewTab
-        active={viewMode === "PAST"}
-        label="Past"
-        count={counts.past}
-        onClick={() => setViewMode("PAST")}
-      />
-      <ViewTab
-        active={viewMode === "ALL"}
-        label="All"
-        count={counts.all}
-        onClick={() => setViewMode("ALL")}
-      />
-    </div>
+        <div className="grid gap-4 xl:grid-cols-[auto_1fr] xl:items-center xl:gap-5">
+          <div className="flex flex-wrap gap-3">
+            <ViewTab
+              active={viewMode === "ACTIVE"}
+              label="Active"
+              count={counts.active}
+              onClick={() => setViewMode("ACTIVE")}
+            />
+            <ViewTab
+              active={viewMode === "PAST"}
+              label="Past"
+              count={counts.past}
+              onClick={() => setViewMode("PAST")}
+            />
+            <ViewTab
+              active={viewMode === "ALL"}
+              label="All"
+              count={counts.all}
+              onClick={() => setViewMode("ALL")}
+            />
+          </div>
 
-   <div className="flex h-12 w-full min-w-0 items-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--bg-secondary))] px-4 transition focus-within:border-[rgb(var(--fg))] focus-within:bg-[rgb(var(--card))]">
-  <Search className="h-4 w-4 shrink-0 text-[rgb(var(--muted-foreground))]" />
-  <input
-    value={q}
-    onChange={(e) => setQ(e.target.value)}
-    placeholder="Search subject, description, reporter..."
-    className="w-full min-w-0 bg-transparent pl-3 text-sm outline-none placeholder:text-[rgb(var(--muted-foreground))]"
-  />
-</div>
-  </div>
-</div>
+          <div className="flex h-12 w-full min-w-0 items-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--bg-secondary))] px-4 transition focus-within:border-[rgb(var(--fg))] focus-within:bg-[rgb(var(--card))]">
+            <Search className="h-4 w-4 shrink-0 text-[rgb(var(--muted-foreground))]" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search subject, description, reporter..."
+              className="w-full min-w-0 bg-transparent pl-3 text-sm outline-none placeholder:text-[rgb(var(--muted-foreground))]"
+            />
+          </div>
+        </div>
+      </div>
 
       <div className="overflow-hidden rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))]">
         {loading ? (
@@ -433,47 +446,47 @@ export default function AdminUserReportsPage() {
           </div>
         ) : filteredRows.length === 0 ? (
           <div className="flex min-h-[230px] items-center justify-center px-6 py-10">
-  <div className="mx-auto flex max-w-xl flex-col items-center text-center">
-    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--bg-secondary))] shadow-sm">
-      {viewMode === "ACTIVE" ? (
-        <AlertCircle className="h-6 w-6 text-[rgb(var(--muted-foreground))]" />
-      ) : viewMode === "PAST" ? (
-        <Archive className="h-6 w-6 text-[rgb(var(--muted-foreground))]" />
-      ) : (
-        <FileText className="h-6 w-6 text-[rgb(var(--muted-foreground))]" />
-      )}
-    </div>
+            <div className="mx-auto flex max-w-xl flex-col items-center text-center">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--bg-secondary))] shadow-sm">
+                {viewMode === "ACTIVE" ? (
+                  <AlertCircle className="h-6 w-6 text-[rgb(var(--muted-foreground))]" />
+                ) : viewMode === "PAST" ? (
+                  <Archive className="h-6 w-6 text-[rgb(var(--muted-foreground))]" />
+                ) : (
+                  <FileText className="h-6 w-6 text-[rgb(var(--muted-foreground))]" />
+                )}
+              </div>
 
-    <h3 className="text-lg font-semibold text-[rgb(var(--fg))]">
-      {viewMode === "ACTIVE"
-        ? "No active reports"
-        : viewMode === "PAST"
-        ? "No past reports"
-        : "No reports found"}
-    </h3>
+              <h3 className="text-lg font-semibold text-[rgb(var(--fg))]">
+                {viewMode === "ACTIVE"
+                  ? "No active reports"
+                  : viewMode === "PAST"
+                  ? "No past reports"
+                  : "No reports found"}
+              </h3>
 
-    <p className="mt-2 max-w-lg text-sm leading-6 text-[rgb(var(--muted-foreground))]">
-      {viewMode === "ACTIVE"
-        ? "There are currently no active user reports that need moderation."
-        : viewMode === "PAST"
-        ? "Archived and older resolved reports will appear here once reports have been reviewed over time."
-        : "No reports matched the current search or selected filters."}
-    </p>
+              <p className="mt-2 max-w-lg text-sm leading-6 text-[rgb(var(--muted-foreground))]">
+                {viewMode === "ACTIVE"
+                  ? "There are currently no active user reports that need moderation."
+                  : viewMode === "PAST"
+                  ? "Archived and older resolved reports will appear here once reports have been reviewed over time."
+                  : "No reports matched the current search or selected filters."}
+              </p>
 
-    {(q || viewMode !== "ALL") && (
-      <button
-        type="button"
-        onClick={() => {
-          setQ("");
-          setViewMode("ALL");
-        }}
-        className="mt-5 inline-flex items-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--bg-secondary))] px-4 py-2 text-sm font-medium transition hover:bg-[rgb(var(--card))]"
-      >
-        Clear filters
-      </button>
-    )}
-  </div>
-</div>
+              {(q || viewMode !== "ALL") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQ("");
+                    setViewMode("ALL");
+                  }}
+                  className="mt-5 inline-flex items-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--bg-secondary))] px-4 py-2 text-sm font-medium transition hover:bg-[rgb(var(--card))]"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <div className="px-4 py-3 text-sm text-[rgb(var(--muted-foreground))]">

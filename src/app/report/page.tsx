@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
@@ -12,6 +12,7 @@ import {
   Send,
   ShieldAlert,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 const CATEGORY_OPTIONS = [
   { value: "ACCOUNT_LOCK_APPEAL", label: "Account Lock Appeal" },
@@ -27,16 +28,35 @@ function getCategoryLabel(value: string) {
   return CATEGORY_OPTIONS.find((c) => c.value === value)?.label ?? value;
 }
 
+function getDefaultCategoryFromSource(source: string, existing: string | null) {
+  if (existing) return existing;
+  if (source === "SESSION") return "SESSION_ISSUE";
+  if (source === "CHAT") return "INAPPROPRIATE_CHAT";
+  return "GENERAL_COMPLAINT";
+}
+
 export default function ReportPage() {
   const searchParams = useSearchParams();
-  const presetCategory = searchParams.get("category") || "GENERAL_COMPLAINT";
+
+  const presetSource = searchParams.get("source") || "";
+  const presetCategory = getDefaultCategoryFromSource(
+    presetSource,
+    searchParams.get("category")
+  );
+  const presetSubject = searchParams.get("subject") || "";
+  const presetReportedUserId = searchParams.get("reportedUserId") || "";
+  const presetReportedRole = searchParams.get("reportedRole") || "";
+  const presetSessionId = searchParams.get("sessionId") || "";
+  const presetChatChannelId = searchParams.get("chatChannelId") || "";
+
+  const router = useRouter();
 
   const [category, setCategory] = useState(presetCategory);
-  const [subject, setSubject] = useState("");
+  const [subject, setSubject] = useState(presetSubject);
   const [description, setDescription] = useState("");
-  const [reportedUserId, setReportedUserId] = useState("");
-  const [sessionId, setSessionId] = useState("");
-  const [chatChannelId, setChatChannelId] = useState("");
+  const [reportedUserId, setReportedUserId] = useState(presetReportedUserId);
+  const [sessionId, setSessionId] = useState(presetSessionId);
+  const [chatChannelId, setChatChannelId] = useState(presetChatChannelId);
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -44,6 +64,27 @@ export default function ReportPage() {
   const [err, setErr] = useState<string | null>(null);
 
   const categoryLabel = useMemo(() => getCategoryLabel(category), [category]);
+
+  const hasContext =
+    !!presetSource ||
+    !!presetSubject ||
+    !!presetReportedUserId ||
+    !!presetSessionId ||
+    !!presetChatChannelId;
+
+  useEffect(() => {
+    setCategory(presetCategory);
+    setSubject(presetSubject);
+    setReportedUserId(presetReportedUserId);
+    setSessionId(presetSessionId);
+    setChatChannelId(presetChatChannelId);
+  }, [
+    presetCategory,
+    presetSubject,
+    presetReportedUserId,
+    presetSessionId,
+    presetChatChannelId,
+  ]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -54,8 +95,8 @@ export default function ReportPage() {
     try {
       const formData = new FormData();
       formData.append("category", category);
-      formData.append("subject", subject);
-      formData.append("description", description);
+      formData.append("subject", subject.trim());
+      formData.append("description", description.trim());
 
       if (reportedUserId) formData.append("reportedUserId", reportedUserId);
       if (sessionId) formData.append("sessionId", sessionId);
@@ -67,20 +108,22 @@ export default function ReportPage() {
         body: formData,
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok || !data?.ok) {
         throw new Error(data?.error || "Failed to submit report");
       }
 
       setMsg("Your report has been submitted successfully.");
-      setSubject("");
       setDescription("");
-      setReportedUserId("");
-      setSessionId("");
-      setChatChannelId("");
       setEvidenceFile(null);
-      setCategory(presetCategory || "GENERAL_COMPLAINT");
+
+      // keep contextual fields if report came from session/chat
+      setCategory(presetCategory);
+      setSubject(presetSubject);
+      setReportedUserId(presetReportedUserId);
+      setSessionId(presetSessionId);
+      setChatChannelId(presetChatChannelId);
     } catch (error: any) {
       setErr(error?.message || "Something went wrong");
     } finally {
@@ -90,13 +133,13 @@ export default function ReportPage() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8">
-      <Link
-        href="/dashboard"
-        className="mb-6 inline-flex items-center gap-2 text-sm text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--fg))]"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back
-      </Link>
+      <button
+  onClick={() => router.back()}
+  className="mb-6 inline-flex items-center gap-2 text-sm text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--fg))]"
+>
+  <ArrowLeft className="h-4 w-4" />
+  Back
+</button>
 
       <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
         <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-sm">
@@ -112,6 +155,55 @@ export default function ReportPage() {
               </p>
             </div>
           </div>
+
+          {hasContext && (
+            <div className="mb-5 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+              <div className="mb-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
+                Report Context
+              </div>
+
+              <div className="grid gap-3 text-sm md:grid-cols-2">
+                {presetSource ? (
+                  <div>
+                    <div className="text-xs text-[rgb(var(--muted-foreground))]">Source</div>
+                    <div className="font-medium">{presetSource}</div>
+                  </div>
+                ) : null}
+
+                {presetReportedRole ? (
+                  <div>
+                    <div className="text-xs text-[rgb(var(--muted-foreground))]">
+                      Reported Role
+                    </div>
+                    <div className="font-medium">{presetReportedRole}</div>
+                  </div>
+                ) : null}
+
+                {presetSubject ? (
+                  <div className="md:col-span-2">
+                    <div className="text-xs text-[rgb(var(--muted-foreground))]">Subject</div>
+                    <div className="font-medium">{presetSubject}</div>
+                  </div>
+                ) : null}
+
+                {presetSessionId ? (
+                  <div>
+                    <div className="text-xs text-[rgb(var(--muted-foreground))]">Session ID</div>
+                    <div className="font-mono text-xs">{presetSessionId}</div>
+                  </div>
+                ) : null}
+
+                {presetChatChannelId ? (
+                  <div>
+                    <div className="text-xs text-[rgb(var(--muted-foreground))]">
+                      Chat Channel ID
+                    </div>
+                    <div className="font-mono text-xs">{presetChatChannelId}</div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
 
           <form onSubmit={onSubmit} className="space-y-5">
             <div>
@@ -152,37 +244,10 @@ export default function ReportPage() {
               />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <div>
-                <label className="mb-2 block text-sm font-medium">Reported User ID</label>
-                <input
-                  value={reportedUserId}
-                  onChange={(e) => setReportedUserId(e.target.value)}
-                  placeholder="Optional"
-                  className="w-full rounded-2xl border border-[rgb(var(--border))] bg-transparent px-4 py-3 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium">Session ID</label>
-                <input
-                  value={sessionId}
-                  onChange={(e) => setSessionId(e.target.value)}
-                  placeholder="Optional"
-                  className="w-full rounded-2xl border border-[rgb(var(--border))] bg-transparent px-4 py-3 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium">Chat Channel ID</label>
-                <input
-                  value={chatChannelId}
-                  onChange={(e) => setChatChannelId(e.target.value)}
-                  placeholder="Optional"
-                  className="w-full rounded-2xl border border-[rgb(var(--border))] bg-transparent px-4 py-3 outline-none"
-                />
-              </div>
-            </div>
+            {/* Hidden contextual values */}
+            <input type="hidden" value={reportedUserId} readOnly />
+            <input type="hidden" value={sessionId} readOnly />
+            <input type="hidden" value={chatChannelId} readOnly />
 
             <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--bg-secondary))] p-4">
               <label className="mb-2 flex items-center gap-2 text-sm font-medium">
@@ -231,7 +296,11 @@ export default function ReportPage() {
               disabled={loading}
               className="inline-flex items-center gap-2 rounded-2xl bg-[rgb(var(--fg))] px-5 py-3 text-sm font-semibold text-[rgb(var(--bg))] disabled:opacity-60"
             >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
               {loading ? "Submitting..." : "Submit Report"}
             </button>
           </form>
@@ -260,7 +329,7 @@ export default function ReportPage() {
             <h2 className="text-lg font-semibold">Tips</h2>
             <ul className="mt-3 space-y-3 text-sm text-[rgb(var(--muted-foreground))]">
               <li>Be specific about what happened.</li>
-              <li>Add session or chat IDs if the issue is linked to them.</li>
+              <li>Explain when and where the issue happened.</li>
               <li>Upload screenshots or PDFs if you have proof.</li>
               <li>Use the subject field as a short summary.</li>
             </ul>

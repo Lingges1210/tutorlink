@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Video } from "lucide-react";
+import { AlertTriangle, Video } from "lucide-react";
 
 type Row = {
   id: string;
@@ -340,6 +340,18 @@ export default function TutorSessionsClient() {
       setMsg("Unable to start chat.");
     }
   }
+
+  function openReportForm(s: Row) {
+  const params = new URLSearchParams({
+    sessionId: s.id,
+    reportedUserId: s.student.id,
+    reportedRole: "STUDENT",
+    subject: `${s.subject.code} — ${s.subject.title}`,
+    source: "SESSION",
+  });
+
+  router.push(`/report?${params.toString()}`);
+}
 
   async function submitComplete() {
     if (!activeId) return;
@@ -882,6 +894,15 @@ export default function TutorSessionsClient() {
       Propose time
     </button>
   )}
+
+  <button
+  onClick={() => openReportForm(s)}
+  className="rounded-md p-2 border border-red-500/40 bg-red-500/10 text-red-600 transition hover:bg-red-500/15 dark:text-red-300"
+  title="Report this session or student"
+  aria-label="Report this session or student"
+>
+  <AlertTriangle className="h-4 w-4" />
+</button>
 
   {active && (
     <button

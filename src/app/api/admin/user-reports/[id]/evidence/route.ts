@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { prisma } from "@/lib/prisma";
-import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { requireAdminUser } from "@/lib/requireAdminUser";
 
 const adminSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,32 +14,13 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await supabaseServerComponent();
-    const {
-      data: { user: authUser },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !authUser) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
-
-    const dbUser = await prisma.user.findUnique({
-      where: { email: authUser.email! },
-      select: { id: true },
-    });
-
-    if (!dbUser) {
-      return NextResponse.json({ ok: false, error: "User not found" }, { status: 404 });
-    }
+    // ✅ Ensure requester is admin
+    await requireAdminUser();
 
     const { id } = await context.params;
 
-    const report = await prisma.userReport.findFirst({
-      where: {
-        id,
-        reporterUserId: dbUser.id,
-      },
+    const report = await prisma.userReport.findUnique({
+      where: { id },
       select: {
         id: true,
         evidenceUrl: true,
@@ -47,16 +28,22 @@ export async function GET(
     });
 
     if (!report) {
-      return NextResponse.json({ ok: false, error: "Report not found" }, { status: 404 });
+      return NextResponse.json(
+        { ok: false, error: "Report not found" },
+        { status: 404 }
+      );
     }
 
     if (!report.evidenceUrl) {
-      return NextResponse.json({ ok: false, error: "No evidence uploaded" }, { status: 404 });
+      return NextResponse.json(
+        { ok: false, error: "No evidence uploaded" },
+        { status: 404 }
+      );
     }
 
     const { data, error } = await adminSupabase.storage
       .from("report-evidence")
-      .createSignedUrl(report.evidenceUrl, 60 * 10);
+      .createSignedUrl(report.evidenceUrl, 60 * 10); // 10 minutes
 
     if (error || !data?.signedUrl) {
       return NextResponse.json(
@@ -65,9 +52,13 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ ok: true, signedUrl: data.signedUrl });
+    return NextResponse.json({
+      ok: true,
+      signedUrl: data.signedUrl,
+    });
   } catch (error) {
-    console.error("GET /api/reports/[id]/evidence error:", error);
+    console.error("GET /api/admin/user-reports/[id]/evidence error:", error);
+
     return NextResponse.json(
       { ok: false, error: "Failed to load evidence" },
       { status: 500 }
