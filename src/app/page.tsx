@@ -68,57 +68,282 @@ const tutors = [
   { name: "Syafiq", rating: "4.7", time: "10–12 am", badge: null, active: false },
 ];
 
+
+
 /* ─── COMPONENT ───────────────────────────────────────────── */
 
 export default function HomePage() {
-  const reviewTrack = useRef<HTMLDivElement>(null);
-  const [activeIdx, setActiveIdx] = useState(0);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [isPaused, setIsPaused] = useState(false);
+  const [realIdx, setRealIdx] = useState(0); // index in original reviews[]
   const CARD_W = 320;
   const GAP = 20;
-  const REVIEW_W = CARD_W + GAP;
-  const activeIdxRef = useRef(0);
-  activeIdxRef.current = activeIdx;
+  const STEP = CARD_W + GAP;
 
-  // scroll so card[idx] is centered in the track
-  const scrollTo = useCallback((idx: number) => {
-    const el = reviewTrack.current;
+  // Build infinite clone list: [last, ...all, first]
+  // We render: clone_of_last | review[0..n-1] | clone_of_first
+  // Total = reviews.length + 2
+  const total = reviews.length + 2;
+  const trackRef = useRef<HTMLDivElement>(null);
+  const isJumping = useRef(false);
+
+  // Initial scroll: position at real index 0 (which is position 1 in cloned list)
+  useEffect(() => {
+    const el = trackRef.current;
     if (!el) return;
-    // padding-left = calc(50vw - 160px), so center of card[0] is at 160px from left
-    // center of card[i] = i * REVIEW_W + 160px from track start
-    // we want that at el center: scrollLeft = i * REVIEW_W
-    el.scrollTo({ left: idx * REVIEW_W, behavior: "smooth" });
-    setActiveIdx(idx);
-  }, []);
+    el.scrollLeft = 1 * STEP;
+  }, [STEP]);
 
-  const scrollReview = useCallback((dir: number) => {
-    const next = Math.max(0, Math.min(reviews.length - 1, activeIdxRef.current + dir));
-    scrollTo(next);
-  }, [scrollTo]);
+  // Map scroll position → real index
+  const posToReal = useCallback((scrollLeft: number) => {
+    const pos = Math.round(scrollLeft / STEP);
+    // pos 0 = clone of last → real index n-1
+    // pos 1..n = real indices 0..n-1
+    // pos n+1 = clone of first → real index 0
+    if (pos === 0) return reviews.length - 1;
+    if (pos === total - 1) return 0;
+    return pos - 1;
+  }, [STEP, total]);
 
-  // auto-scroll every 2s, loops back to start
+  // Teleport without animation when hitting clones
   useEffect(() => {
-    const tick = () => {
-      if (isPaused) return;
-      const next = (activeIdxRef.current + 1) % reviews.length;
-      scrollTo(next);
-    };
-    const id = setInterval(tick, 2000);
-    return () => clearInterval(id);
-  }, [isPaused, scrollTo]);
-
-  // sync activeIdx when user manually scrolls
-  useEffect(() => {
-    const el = reviewTrack.current;
+    const el = trackRef.current;
     if (!el) return;
     const handler = () => {
-      const idx = Math.round(el.scrollLeft / REVIEW_W);
-      setActiveIdx(Math.max(0, Math.min(reviews.length - 1, idx)));
+      const pos = Math.round(el.scrollLeft / STEP);
+      setRealIdx(posToReal(el.scrollLeft));
+
+      if (isJumping.current) return;
+
+      if (pos === 0) {
+        // hit left clone → jump to real last
+        isJumping.current = true;
+        el.style.scrollBehavior = "auto";
+        el.scrollLeft = reviews.length * STEP;
+        el.style.scrollBehavior = "";
+        setTimeout(() => { isJumping.current = false; }, 50);
+      } else if (pos === total - 1) {
+        // hit right clone → jump to real first
+        isJumping.current = true;
+        el.style.scrollBehavior = "auto";
+        el.scrollLeft = 1 * STEP;
+        el.style.scrollBehavior = "";
+        setTimeout(() => { isJumping.current = false; }, 50);
+      }
     };
     el.addEventListener("scroll", handler, { passive: true });
     return () => el.removeEventListener("scroll", handler);
-  }, [REVIEW_W]);
+  }, [STEP, total, posToReal]);
+
+  // Auto-scroll every 2.4s
+  useEffect(() => {
+    if (isPaused) return;
+    const id = setInterval(() => {
+      const el = trackRef.current;
+      if (!el || isJumping.current) return;
+      el.scrollBy({ left: STEP, behavior: "smooth" });
+    }, 2400);
+    return () => clearInterval(id);
+  }, [isPaused, STEP]);
+
+  const scrollTo = useCallback((targetReal: number) => {
+    const el = trackRef.current;
+    if (!el) return;
+    el.scrollTo({ left: (targetReal + 1) * STEP, behavior: "smooth" });
+    setRealIdx(targetReal);
+  }, [STEP]);
+
+  const scrollReview = useCallback((dir: number) => {
+    const el = trackRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * STEP, behavior: "smooth" });
+  }, [STEP]);
+
+  // ── Canvas shooting stars + static star field ──
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let animId: number;
+
+    // detect light vs dark — re-check on every frame so it reacts live
+    const isDark = () =>
+      document.documentElement.classList.contains("dark") ||
+      window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight * 1.6;
+    };
+    resize();
+    window.addEventListener("resize", resize);
+
+    // ── Static star field (dots) ──
+    interface Dot { x:number; y:number; r:number; alpha:number; twinkleSpeed:number; twinkleOffset:number; }
+    const dots: Dot[] = Array.from({ length: 120 }, () => ({
+      x: Math.random(),
+      y: Math.random(),
+      r: 0.4 + Math.random() * 1.4,
+      alpha: 0.2 + Math.random() * 0.55,
+      twinkleSpeed: 0.008 + Math.random() * 0.018,
+      twinkleOffset: Math.random() * Math.PI * 2,
+    }));
+
+    // ── Shooting star ──
+    interface Shooter {
+      // start top-left area, travel bottom-right at ~35–50° angle
+      x: number; y: number;       // current head position
+      sx: number; sy: number;     // start
+      vx: number; vy: number;     // velocity per frame
+      tailX: number[]; tailY: number[]; // ring buffer of last N positions
+      tailMax: number;
+      progress: number;
+      totalFrames: number;
+      opacity: number;
+      delay: number; active: boolean;
+      size: number;               // tail width at head
+    }
+
+    const W = () => canvas.width;
+    const H = () => canvas.height;
+
+    const makeShooter = (): Shooter => {
+      // start anywhere along top 60% of screen, left 80%
+      const sx = Math.random() * W() * 0.82;
+      const sy = Math.random() * H() * 0.52;
+      // angle 30–50 deg downward-right
+      const angle = (30 + Math.random() * 20) * Math.PI / 180;
+      const speed = 6 + Math.random() * 7;
+      const vx = Math.cos(angle) * speed;
+      const vy = Math.sin(angle) * speed;
+      const totalFrames = Math.round(55 + Math.random() * 45);
+      const tailMax = Math.round(18 + Math.random() * 18);
+      return {
+        x: sx, y: sy, sx, sy, vx, vy,
+        tailX: [], tailY: [],
+        tailMax,
+        progress: 0,
+        totalFrames,
+        opacity: 0.55 + Math.random() * 0.35,
+        delay: Math.round(Math.random() * 200),
+        active: false,
+        size: 1.4 + Math.random() * 1.2,
+      };
+    };
+
+    const shooters: Shooter[] = Array.from({ length: 12 }, makeShooter);
+
+    let frame = 0;
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      frame++;
+
+      // draw static dots
+      for (const d of dots) {
+        const tw = Math.sin(frame * d.twinkleSpeed + d.twinkleOffset) * 0.3;
+        const a = Math.max(0.05, d.alpha + tw);
+        ctx.beginPath();
+        ctx.arc(d.x * canvas.width, d.y * canvas.height, d.r, 0, Math.PI * 2);
+        // light mode: dark navy dots; dark mode: pale blue-white dots
+        const dotColor = isDark()
+          ? `rgba(200,210,255,${a})`
+          : `rgba(60,70,140,${a * 1.6})`;
+        ctx.fillStyle = dotColor;
+        ctx.fill();
+      }
+
+      // draw shooters
+      for (const s of shooters) {
+        if (!s.active) {
+          s.delay--;
+          if (s.delay <= 0) { s.active = true; }
+          continue;
+        }
+
+        // advance
+        s.x += s.vx;
+        s.y += s.vy;
+        s.tailX.push(s.x);
+        s.tailY.push(s.y);
+        if (s.tailX.length > s.tailMax) { s.tailX.shift(); s.tailY.shift(); }
+        s.progress++;
+
+        if (s.progress >= s.totalFrames) {
+          Object.assign(s, makeShooter());
+          continue;
+        }
+
+        // fade in/out envelope
+        const env = s.progress < 10
+          ? s.progress / 10
+          : s.progress > s.totalFrames - 14
+            ? (s.totalFrames - s.progress) / 14
+            : 1;
+        const alpha = s.opacity * env;
+
+        // draw tail — gradient from transparent at tip to bright at head
+        const len = s.tailX.length;
+        if (len < 2) continue;
+        for (let i = 1; i < len; i++) {
+          const t = i / len;           // 0 = oldest (tail tip), 1 = head
+          const x1 = s.tailX[i - 1];
+          const y1 = s.tailY[i - 1];
+          const x2 = s.tailX[i];
+          const y2 = s.tailY[i];
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          // colour: pale white-gold, matching the reference image
+          const tailColor = isDark()
+            ? `rgba(230,235,255,${alpha * t * t})`
+            : `rgba(40,50,160,${alpha * t * t * 1.5})`;
+          ctx.strokeStyle = tailColor;
+          ctx.lineWidth = s.size * t;
+          ctx.lineCap = "round";
+          ctx.stroke();
+        }
+
+        // glowing head — small radial gradient
+        const gx = s.x, gy = s.y;
+        const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, s.size * 3.5);
+        if (isDark()) {
+          grad.addColorStop(0,   `rgba(255,255,255,${alpha})`);
+          grad.addColorStop(0.3, `rgba(200,210,255,${alpha * 0.7})`);
+          grad.addColorStop(1,   `rgba(180,190,255,0)`);
+        } else {
+          grad.addColorStop(0,   `rgba(30,40,180,${alpha})`);
+          grad.addColorStop(0.3, `rgba(60,80,200,${alpha * 0.7})`);
+          grad.addColorStop(1,   `rgba(80,100,220,0)`);
+        }
+        ctx.beginPath();
+        ctx.arc(gx, gy, s.size * 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // solid bright core
+        ctx.beginPath();
+        ctx.arc(gx, gy, s.size * 0.7, 0, Math.PI * 2);
+        ctx.fillStyle = isDark()
+          ? `rgba(255,255,255,${alpha})`
+          : `rgba(20,30,160,${alpha})`;
+        ctx.fill();
+      }
+
+      animId = requestAnimationFrame(draw);
+    };
+    draw();
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener("resize", resize);
+    };
+  }, []);
+
+  // Cloned list for rendering
+  const clonedReviews = [reviews[reviews.length - 1], ...reviews, reviews[0]];
 
   return (
     <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))] overflow-x-hidden">
@@ -151,6 +376,46 @@ export default function HomePage() {
           0%,100% { transform:translateY(0px); }
           50%     { transform:translateY(-10px); }
         }
+        @keyframes spinSlow {
+          from { transform:rotate(0deg); }
+          to   { transform:rotate(360deg); }
+        }
+        @keyframes popIn {
+          0%   { transform:scale(0) rotate(-15deg); opacity:0; }
+          70%  { transform:scale(1.1) rotate(3deg); opacity:1; }
+          100% { transform:scale(1) rotate(0deg); opacity:1; }
+        }
+        @keyframes slideInLeft {
+          from { transform:translateX(-30px); opacity:0; }
+          to   { transform:translateX(0); opacity:1; }
+        }
+        @keyframes slideInRight {
+          from { transform:translateX(30px); opacity:0; }
+          to   { transform:translateX(0); opacity:1; }
+        }
+        @keyframes heartbeat {
+          0%,100% { transform:scale(1); }
+          14%     { transform:scale(1.15); }
+          28%     { transform:scale(1); }
+          42%     { transform:scale(1.1); }
+          56%     { transform:scale(1); }
+        }
+        @keyframes pencilWrite {
+          0%,100% { transform:rotate(-10deg) translateY(0); }
+          50%     { transform:rotate(-5deg) translateY(-4px); }
+        }
+        @keyframes bookBounce {
+          0%,100% { transform:translateY(0) scale(1); }
+          50%     { transform:translateY(-8px) scale(1.05); }
+        }
+        @keyframes starTwinkle {
+          0%,100% { opacity:1; transform:scale(1) rotate(0deg); }
+          50%     { opacity:.5; transform:scale(0.7) rotate(30deg); }
+        }
+        @keyframes orbitDot {
+          from { transform:rotate(0deg) translateX(28px) rotate(0deg); }
+          to   { transform:rotate(360deg) translateX(28px) rotate(-360deg); }
+        }
         @keyframes walkBody {
           0%,100% { transform:translateY(0px); }
           50%     { transform:translateY(-3px); }
@@ -182,12 +447,41 @@ export default function HomePage() {
           0%,100% { transform:translateY(0) rotate(-8deg); }
           50%     { transform:translateY(-6px) rotate(-4deg); }
         }
+        @keyframes countUp {
+          from { transform:translateY(8px); opacity:0; }
+          to   { transform:translateY(0); opacity:1; }
+        }
+        @keyframes ripple {
+          0%   { transform:scale(1); opacity:.6; }
+          100% { transform:scale(2.4); opacity:0; }
+        }
+        @keyframes dash {
+          to { stroke-dashoffset: 0; }
+        }
+        @keyframes fadeInScale {
+          from { opacity:0; transform:scale(.92); }
+          to   { opacity:1; transform:scale(1); }
+        }
+        @keyframes wobble {
+          0%,100% { transform:rotate(0deg); }
+          25%     { transform:rotate(-6deg); }
+          75%     { transform:rotate(6deg); }
+        }
+        @keyframes typing {
+          0%,100% { width:0; }
+          40%,60% { width:100%; }
+        }
 
         .anim-1 { animation:fadeUp .65s cubic-bezier(.22,1,.36,1) both .05s; }
         .anim-2 { animation:fadeUp .65s cubic-bezier(.22,1,.36,1) both .2s; }
         .glow-blob { animation:pulseGlow 7s ease-in-out infinite; }
         .live-dot  { animation:dotBlink 2s ease-in-out infinite; }
         .float-card { animation:floatCard 4s ease-in-out infinite; }
+        .heartbeat  { animation:heartbeat 2.4s ease-in-out infinite; }
+        .pencil-anim { animation:pencilWrite 1.5s ease-in-out infinite; }
+        .book-bounce { animation:bookBounce 2s ease-in-out infinite; }
+        .wobble-anim { animation:wobble 3s ease-in-out infinite; }
+        .spin-slow   { animation:spinSlow 12s linear infinite; }
 
         .shimmer-text {
           background:linear-gradient(90deg,
@@ -266,16 +560,15 @@ export default function HomePage() {
 
         .glass { border:1px solid rgb(var(--border)); background:rgb(var(--card)/.6); }
 
-        /* ── Review carousel ── */
-        .review-section { overflow:hidden; }
+        /* ── Review carousel — infinite loop ── */
         .review-track {
           display:flex; gap:20px;
           overflow-x:auto; scroll-snap-type:x mandatory;
           scrollbar-width:none; -ms-overflow-style:none;
           padding-top:24px; padding-bottom:28px;
-          /* center padding = half viewport minus half card (160px) */
           padding-left:calc(50vw - 160px);
           padding-right:calc(50vw - 160px);
+          scroll-behavior:smooth;
         }
         .review-track::-webkit-scrollbar { display:none; }
         .review-card {
@@ -301,17 +594,28 @@ export default function HomePage() {
           transform:scale(.91); opacity:.7;
         }
 
-        /* ── FAQ accordion ── */
+        /* ── FAQ — two independent flex columns ── */
+        .faq-grid {
+          display:grid;
+          grid-template-columns:1fr;
+          gap:12px;
+          align-items:start;
+        }
+        @media(min-width:640px){
+          .faq-grid { grid-template-columns:1fr 1fr; }
+        }
+        .faq-col { display:flex; flex-direction:column; gap:12px; }
         .faq-item {
           border:1px solid rgb(var(--border));
           background:rgb(var(--card)/.6);
           border-radius:20px;
           overflow:hidden;
-          transition:border-color .2s,background .2s;
+          transition:border-color .2s,background .2s,box-shadow .2s;
         }
         .faq-item.open {
           border-color:rgb(var(--primary)/.35);
           background:rgb(var(--card)/.85);
+          box-shadow:0 8px 32px rgb(var(--primary)/.1);
         }
         .faq-trigger {
           width:100%; text-align:left; background:none; border:none; cursor:pointer;
@@ -335,16 +639,113 @@ export default function HomePage() {
           color:rgb(var(--primary));
         }
         .faq-body {
-          max-height:0; overflow:hidden;
-          transition:max-height .35s cubic-bezier(.22,1,.36,1), padding .25s;
-          padding:0 22px;
+          display:grid;
+          grid-template-rows:0fr;
+          transition:grid-template-rows .35s cubic-bezier(.22,1,.36,1);
         }
         .faq-item.open .faq-body {
-          max-height:200px;
-          padding:0 22px 18px;
+          grid-template-rows:1fr;
         }
-        .faq-body-inner { animation:accordionOpen .25s ease both; }
+        .faq-body-inner {
+          overflow:hidden;
+        }
+        .faq-body-content {
+          padding:0 22px 18px;
+          animation:accordionOpen .25s ease both;
+        }
+
+        /* ── Canvas shooting stars ── */
+        .stars-canvas {
+          position:fixed; top:0; left:0;
+          width:100vw; height:100vh;
+          pointer-events:none; z-index:0;
+          opacity:0.85;
+        }
+        @media (prefers-color-scheme: light) {
+          .stars-canvas { opacity:1; }
+        }
+        :root:not(.dark) .stars-canvas { opacity:1; }
+
+        /* star sparkles */
+        .sparkle {
+          position:absolute; pointer-events:none;
+          animation:starTwinkle var(--dur,2s) ease-in-out infinite;
+          animation-delay:var(--delay,0s);
+          font-size:var(--sz,14px);
+          opacity:.7;
+        }
+
+        /* ripple pulse around SOS */
+        .ripple-ring {
+          position:absolute; inset:-6px; border-radius:50%;
+          border:1.5px solid rgb(34 197 94 / .5);
+          animation:ripple 2s ease-out infinite;
+        }
+        .ripple-ring:nth-child(2) { animation-delay:.7s; }
+        .ripple-ring:nth-child(3) { animation-delay:1.4s; }
+
+        /* orbit dot on avatar */
+        .orbit-wrap {
+          position:relative; display:inline-block;
+        }
+        .orbit-dot {
+          position:absolute; top:50%; left:50%;
+          width:6px; height:6px; margin:-3px;
+          border-radius:50%;
+          background:rgb(var(--primary2));
+          animation:orbitDot 3s linear infinite;
+          transform-origin:0 0;
+        }
+
+        /* outcome card hover icon bounce */
+        .card-lift:hover .icon-box {
+          animation:bookBounce .6s ease-in-out;
+        }
+
+        /* stat card pop */
+        .stat-card { transition:transform .2s,box-shadow .2s; }
+        .stat-card:hover { transform:translateY(-3px) scale(1.03); box-shadow:0 12px 36px rgb(var(--primary)/.18); }
+
+        /* typing cursor blink */
+        .cursor-blink {
+          display:inline-block; width:2px; height:1em;
+          background:rgb(var(--primary)); margin-left:2px;
+          animation:dotBlink .7s ease-in-out infinite;
+          vertical-align:text-bottom;
+        }
+
+        /* trust card hover */
+        .trust-card { transition:transform .22s,box-shadow .22s,border-color .22s; }
+        .trust-card:hover {
+          transform:translateY(-4px);
+          box-shadow:0 16px 44px rgb(var(--primary)/.16);
+          border-color:rgb(var(--primary)/.3) !important;
+        }
+        .trust-card:hover .icon-box { animation:wobble .5s ease-in-out; }
+
+        /* CTA section glow pulse */
+        @keyframes ctaGlow {
+          0%,100% { opacity:.5; }
+          50%     { opacity:.9; }
+        }
+        .cta-glow { animation:ctaGlow 3.5s ease-in-out infinite; }
+
+        /* number counter */
+        .stat-num { animation:countUp .8s cubic-bezier(.22,1,.36,1) both; }
+        .stat-num:nth-child(1) { animation-delay:.1s; }
+        .stat-num:nth-child(2) { animation-delay:.25s; }
+        .stat-num:nth-child(3) { animation-delay:.4s; }
+
+        /* hero card sparkle stars */
+        @keyframes twinkleA {
+          0%,100% { opacity:0; transform:scale(0) rotate(0deg); }
+          50%     { opacity:1; transform:scale(1) rotate(180deg); }
+        }
+        .twinkle-star { animation:twinkleA var(--dur,2.5s) ease-in-out infinite; animation-delay:var(--delay,0s); }
       `}</style>
+
+      {/* ── Canvas shooting stars ── */}
+      <canvas ref={canvasRef} className="stars-canvas" />
 
       {/* ── Background atmosphere ── */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -359,7 +760,7 @@ export default function HomePage() {
       <main className="relative">
 
         {/* ══════════════════════════════════════════════════════
-            HERO — side-by-side layout
+            HERO
         ══════════════════════════════════════════════════════ */}
         <section className="mx-auto max-w-6xl px-4 pt-10 pb-16">
           <div className="grid items-center gap-10 md:grid-cols-2">
@@ -410,7 +811,7 @@ export default function HomePage() {
                   <div key={l} className="flex items-center gap-5">
                     {i>0 && <div style={{ width:1,height:26,background:"rgb(var(--border))" }} />}
                     <div>
-                      <div style={{ fontSize:"1.3rem",fontWeight:800,letterSpacing:"-0.02em",lineHeight:1,color:"rgb(var(--fg))" }}>{v}</div>
+                      <div className="stat-num" style={{ fontSize:"1.3rem",fontWeight:800,letterSpacing:"-0.02em",lineHeight:1,color:"rgb(var(--fg))" }}>{v}</div>
                       <div style={{ fontSize:11,color:"rgb(var(--muted2))",marginTop:2 }}>{l}</div>
                     </div>
                   </div>
@@ -418,8 +819,8 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Right — tutor card */}
-            <div className="anim-2 float-card rounded-3xl p-5"
+            {/* Right — tutor card with sparkles */}
+            <div className="anim-2 float-card rounded-3xl p-5 relative"
               style={{
                 border:"1px solid rgb(var(--border))",
                 background:"rgb(var(--card)/.68)",
@@ -427,6 +828,19 @@ export default function HomePage() {
                 WebkitBackdropFilter:"blur(20px)",
                 boxShadow:"0 0 0 1px rgb(var(--border)/.3),0 20px 64px rgb(var(--primary)/.13),0 4px 16px rgb(0,0,0/.1)",
               }}>
+
+              {/* Sparkle stars around card */}
+              {[
+                { top:"-12px", left:"20%", delay:"0s", dur:"2.5s" },
+                { top:"-8px",  right:"15%", delay:"0.8s", dur:"3s" },
+                { bottom:"10%", right:"-14px", delay:"1.4s", dur:"2.2s" },
+                { bottom:"-10px", left:"30%", delay:"0.4s", dur:"2.8s" },
+              ].map((s,i)=>(
+                <div key={i} className="twinkle-star" style={{
+                  position:"absolute", fontSize:16,
+                  ...s, ["--dur" as string]:s.dur, ["--delay" as string]:s.delay,
+                }}>✦</div>
+              ))}
 
               <div className="flex items-start justify-between mb-4">
                 <div>
@@ -443,15 +857,19 @@ export default function HomePage() {
               </div>
 
               <div className="space-y-2">
-                {tutors.map(t=>(
+                {tutors.map((t,ti)=>(
                   <div key={t.name} className="flex items-center gap-3 rounded-2xl border px-3.5 py-2.5"
                     style={{
                       borderColor:t.active?"rgb(var(--primary)/.3)":"rgb(var(--border))",
                       background:t.active
                         ?"linear-gradient(135deg,rgb(var(--primary)/.1),rgb(var(--primary2)/.07))"
                         :"rgb(var(--card2)/.45)",
+                      animation:`fadeInScale .5s cubic-bezier(.22,1,.36,1) both ${0.3 + ti*0.12}s`,
                     }}>
-                    <div className="av">{t.name[0]}</div>
+                    <div className="orbit-wrap">
+                      <div className="av">{t.name[0]}</div>
+                      {t.active && <div className="orbit-dot" />}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm font-semibold">{t.name}</span>
@@ -476,7 +894,7 @@ export default function HomePage() {
               <div className="mt-4">
                 <div className="flex items-center justify-between text-xs mb-1.5">
                   <span style={{ color:"rgb(var(--muted))" }}>Your study streak</span>
-                  <span className="font-semibold" style={{ color:"rgb(var(--primary))" }}>🔥 5 days</span>
+                  <span className="font-semibold heartbeat inline-block" style={{ color:"rgb(var(--primary))" }}>🔥 5 days</span>
                 </div>
                 <div className="progress-bar"><div className="progress-fill" /></div>
                 <div className="flex justify-between text-[10px] mt-1" style={{ color:"rgb(var(--muted2))" }}>
@@ -484,10 +902,15 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div className="mt-3 rounded-2xl border px-3.5 py-2.5 flex items-center gap-3"
+              <div className="mt-3 rounded-2xl border px-3.5 py-2.5 flex items-center gap-3 relative"
                 style={{ borderColor:"rgb(var(--border))", background:"linear-gradient(135deg,rgb(var(--primary)/.09),rgb(var(--primary2)/.06))" }}>
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl text-[10px] font-black text-white"
-                  style={{ background:"linear-gradient(135deg,rgb(var(--primary)),rgb(var(--primary2)))" }}>SOS</div>
+                <div className="relative flex-shrink-0">
+                  <div className="ripple-ring" />
+                  <div className="ripple-ring" />
+                  <div className="ripple-ring" />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl text-[10px] font-black text-white relative z-10"
+                    style={{ background:"linear-gradient(135deg,rgb(var(--primary)),rgb(var(--primary2)))" }}>SOS</div>
+                </div>
                 <div className="flex-1">
                   <div className="text-[11px]" style={{ color:"rgb(var(--muted))" }}>Need urgent help?</div>
                   <div className="text-sm font-semibold">SOS Academic Help</div>
@@ -515,9 +938,10 @@ export default function HomePage() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
-            {outcomes.map(o=>(
-              <div key={o.title} className="card-lift glass rounded-3xl p-6">
-                <div className="icon-box mb-4" dangerouslySetInnerHTML={{ __html:o.svg }} />
+            {outcomes.map((o,oi)=>(
+              <div key={o.title} className="card-lift glass rounded-3xl p-6"
+                style={{ animation:`fadeUp .6s cubic-bezier(.22,1,.36,1) both ${0.1+oi*0.12}s` }}>
+                <div className="icon-box mb-4 transition-all duration-300" dangerouslySetInnerHTML={{ __html:o.svg }} />
                 <div className="text-sm font-bold mb-1.5">{o.title}</div>
                 <p className="text-sm leading-relaxed" style={{ color:"rgb(var(--muted))" }}>{o.desc}</p>
               </div>
@@ -525,9 +949,12 @@ export default function HomePage() {
           </div>
 
           <div className="mt-4 grid gap-3 md:grid-cols-4">
-            {stats.map(s=>(
-              <div key={s.label} className="card-lift glass rounded-2xl p-4 flex items-center gap-3"
-                style={{ background:"rgb(var(--card2)/.5)" }}>
+            {stats.map((s,si)=>(
+              <div key={s.label} className="stat-card card-lift glass rounded-2xl p-4 flex items-center gap-3"
+                style={{
+                  background:"rgb(var(--card2)/.5)",
+                  animation:`popIn .5s cubic-bezier(.22,1,.36,1) both ${0.2+si*0.08}s`,
+                }}>
                 <div className="icon-box" style={{ width:36,height:36,borderRadius:10,fontSize:17 }}>{s.icon}</div>
                 <div>
                   <div className="text-sm font-bold">{s.value}</div>
@@ -541,7 +968,7 @@ export default function HomePage() {
         <div className="px-4"><div className="divider-line" /></div>
 
         {/* ══════════════════════════════════════════════════════
-            REVIEWS — focus carousel (center = big, sides = small)
+            REVIEWS — infinite loop carousel
         ══════════════════════════════════════════════════════ */}
         <section id="reviews" className="py-16 overflow-hidden">
           <div className="mx-auto max-w-6xl px-4 mb-6 flex items-end justify-between gap-4">
@@ -553,22 +980,26 @@ export default function HomePage() {
               </p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <button onClick={()=>scrollReview(-1)} disabled={activeIdx===0} type="button"
+              <button onClick={()=>scrollReview(-1)} type="button"
                 style={{
                   width:38,height:38,borderRadius:"50%",border:"1px solid rgb(var(--border))",
                   background:"rgb(var(--card)/.7)",cursor:"pointer",
                   display:"flex",alignItems:"center",justifyContent:"center",
                   fontSize:14,color:"rgb(var(--fg))",
-                  opacity:activeIdx===0?.35:1,transition:"opacity .2s,background .2s",
-                }}>←</button>
-              <button onClick={()=>scrollReview(1)} disabled={activeIdx>=reviews.length-1} type="button"
+                  transition:"opacity .2s,background .2s,transform .15s",
+                }}
+                onMouseEnter={e=>(e.currentTarget.style.transform="scale(1.1)")}
+                onMouseLeave={e=>(e.currentTarget.style.transform="scale(1)")}>←</button>
+              <button onClick={()=>scrollReview(1)} type="button"
                 style={{
                   width:38,height:38,borderRadius:"50%",border:"1px solid rgb(var(--border))",
                   background:"rgb(var(--card)/.7)",cursor:"pointer",
                   display:"flex",alignItems:"center",justifyContent:"center",
                   fontSize:14,color:"rgb(var(--fg))",
-                  opacity:activeIdx>=reviews.length-1?.35:1,transition:"opacity .2s,background .2s",
-                }}>→</button>
+                  transition:"opacity .2s,background .2s,transform .15s",
+                }}
+                onMouseEnter={e=>(e.currentTarget.style.transform="scale(1.1)")}
+                onMouseLeave={e=>(e.currentTarget.style.transform="scale(1)")}>→</button>
             </div>
           </div>
 
@@ -578,38 +1009,60 @@ export default function HomePage() {
               <button key={i} type="button"
                 onClick={()=>scrollTo(i)}
                 style={{
-                  width:i===activeIdx?20:6, height:6, borderRadius:3, border:"none", padding:0, cursor:"pointer",
-                  background:i===activeIdx?"rgb(var(--primary))":"rgb(var(--border))",
+                  width:i===realIdx?20:6, height:6, borderRadius:3, border:"none", padding:0, cursor:"pointer",
+                  background:i===realIdx?"rgb(var(--primary))":"rgb(var(--border))",
                   transition:"width .25s,background .25s",
                 }} />
             ))}
           </div>
 
-          {/* Track — centered padding makes active card snap to true center */}
-          <div ref={reviewTrack} className="review-track"
+          {/* Infinite loop track — [clone_last, ...reviews, clone_first] */}
+          <div
+            ref={trackRef}
+            className="review-track"
             onMouseEnter={()=>setIsPaused(true)}
             onMouseLeave={()=>setIsPaused(false)}
             onTouchStart={()=>setIsPaused(true)}
             onTouchEnd={()=>setTimeout(()=>setIsPaused(false),2000)}
           >
-            {reviews.map((r,i)=>(
-              <div key={r.name}
-                className={`review-card ${i===activeIdx?"active":Math.abs(i-activeIdx)===1?"near":""}`}>
-                <div className="flex gap-0.5 mb-3">
-                  {Array.from({length:5}).map((_,j)=>(
-                    <span key={j} style={{ color:j<r.stars?"#f59e0b":"rgb(var(--border))", fontSize:13 }}>★</span>
-                  ))}
-                </div>
-                <p className="text-sm leading-[1.7] mb-5" style={{ color:"rgb(var(--fg))" }}>"{r.quote}"</p>
-                <div className="flex items-center gap-2.5 pt-4" style={{ borderTop:"1px solid rgb(var(--border))" }}>
-                  <div className="av text-xs">{r.initials}</div>
-                  <div>
-                    <div className="text-xs font-semibold">{r.name}</div>
-                    <div className="text-[11px] mt-0.5" style={{ color:"rgb(var(--muted2))" }}>{r.course}</div>
+            {clonedReviews.map((r, ci) => {
+              // Determine if this clone position matches active real index
+              // pos 0 = clone_last, pos n+1 = clone_first
+              // realIdx matches pos ci-1 (for 1..n)
+              const posReal = ci === 0 ? reviews.length - 1 : ci === clonedReviews.length - 1 ? 0 : ci - 1;
+              const isActive = posReal === realIdx && (ci !== 0 && ci !== clonedReviews.length - 1
+                // show active on clones only when we're at the very edge positions
+                || (ci === 0 && realIdx === reviews.length - 1)
+                || (ci === clonedReviews.length - 1 && realIdx === 0));
+              // compute distance from current scroll position
+              const el = trackRef.current;
+              const scrollPos = el ? Math.round(el.scrollLeft / STEP) : 1;
+              const dist = Math.abs(ci - scrollPos);
+              const cls = dist === 0 ? "active" : dist === 1 ? "near" : "";
+              return (
+                <div key={`${r.name}-${ci}`} className={`review-card ${cls}`}>
+                  <div className="flex gap-0.5 mb-3">
+                    {Array.from({length:5}).map((_,j)=>(
+                      <span key={j} style={{
+                        color:j<r.stars?"#f59e0b":"rgb(var(--border))",
+                        fontSize:13,
+                        display:"inline-block",
+                        animation:j<r.stars?`starTwinkle ${1.5+j*0.3}s ease-in-out infinite`:"none",
+                        animationDelay:`${j*0.15}s`,
+                      }}>★</span>
+                    ))}
+                  </div>
+                  <p className="text-sm leading-[1.7] mb-5" style={{ color:"rgb(var(--fg))" }}>"{r.quote}"</p>
+                  <div className="flex items-center gap-2.5 pt-4" style={{ borderTop:"1px solid rgb(var(--border))" }}>
+                    <div className="av text-xs">{r.initials}</div>
+                    <div>
+                      <div className="text-xs font-semibold">{r.name}</div>
+                      <div className="text-[11px] mt-0.5" style={{ color:"rgb(var(--muted2))" }}>{r.course}</div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
 
@@ -627,8 +1080,12 @@ export default function HomePage() {
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            {trustItems.map(item=>(
-              <div key={item.title} className="card-lift glass rounded-3xl p-6 flex gap-4">
+            {trustItems.map((item,ti)=>(
+              <div key={item.title} className="trust-card glass rounded-3xl p-6 flex gap-4"
+                style={{
+                  border:"1px solid rgb(var(--border))",
+                  animation:`slideIn${ti%2===0?"Left":"Right"} .6s cubic-bezier(.22,1,.36,1) both ${0.1+ti*0.1}s`,
+                }}>
                 <div className="icon-box flex-shrink-0" style={{ fontSize:19 }}>{item.icon}</div>
                 <div>
                   <div className="text-sm font-bold">{item.title}</div>
@@ -642,7 +1099,7 @@ export default function HomePage() {
         <div className="px-4"><div className="divider-line" /></div>
 
         {/* ══════════════════════════════════════════════════════
-            FAQ — accordion
+            FAQ — FIXED: two separate columns, no grid-row stretching
         ══════════════════════════════════════════════════════ */}
         <section id="faq" className="mx-auto max-w-6xl px-4 py-16">
           <div className="mb-8 max-w-lg">
@@ -653,21 +1110,53 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            {faqs.map((f,i)=>(
-              <div key={f.q} className={`faq-item${openFaq===i?" open":""}`}>
-                <button className="faq-trigger" type="button"
-                  onClick={()=>setOpenFaq(openFaq===i?null:i)}>
-                  <span className="text-sm font-semibold text-left leading-snug">{f.q}</span>
-                  <span className="faq-chevron">▾</span>
-                </button>
-                <div className="faq-body">
-                  <div className="faq-body-inner">
-                    <p className="text-sm leading-relaxed pb-1" style={{ color:"rgb(var(--muted))" }}>{f.a}</p>
+          {/* Two independent columns — no shared row heights */}
+          <div className="faq-grid">
+            {/* Column 1 — even indices */}
+            <div className="faq-col">
+              {faqs.filter((_,i)=>i%2===0).map((f)=>{
+                const i = faqs.indexOf(f);
+                return (
+                  <div key={f.q} className={`faq-item${openFaq===i?" open":""}`}
+                    style={{ animation:`fadeUp .5s cubic-bezier(.22,1,.36,1) both ${0.05+Math.floor(i/2)*0.07}s` }}>
+                    <button className="faq-trigger" type="button" onClick={()=>setOpenFaq(openFaq===i?null:i)}>
+                      <span className="text-sm font-semibold text-left leading-snug">{f.q}</span>
+                      <span className="faq-chevron">▾</span>
+                    </button>
+                    <div className="faq-body">
+                      <div className="faq-body-inner">
+                        <div className="faq-body-content">
+                          <p className="text-sm leading-relaxed" style={{ color:"rgb(var(--muted))" }}>{f.a}</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                );
+              })}
+            </div>
+
+            {/* Column 2 — odd indices */}
+            <div className="faq-col">
+              {faqs.filter((_,i)=>i%2===1).map((f)=>{
+                const i = faqs.indexOf(f);
+                return (
+                  <div key={f.q} className={`faq-item${openFaq===i?" open":""}`}
+                    style={{ animation:`fadeUp .5s cubic-bezier(.22,1,.36,1) both ${0.05+Math.floor(i/2)*0.07}s` }}>
+                    <button className="faq-trigger" type="button" onClick={()=>setOpenFaq(openFaq===i?null:i)}>
+                      <span className="text-sm font-semibold text-left leading-snug">{f.q}</span>
+                      <span className="faq-chevron">▾</span>
+                    </button>
+                    <div className="faq-body">
+                      <div className="faq-body-inner">
+                        <div className="faq-body-content">
+                          <p className="text-sm leading-relaxed" style={{ color:"rgb(var(--muted))" }}>{f.a}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </section>
 
@@ -682,10 +1171,31 @@ export default function HomePage() {
               border:"1px solid rgb(var(--primary)/.22)",
               background:"linear-gradient(135deg,rgb(var(--primary)/.1),rgb(var(--primary2)/.07),rgb(var(--card)/.35))",
             }}>
-            <div className="pointer-events-none absolute inset-0"
+            <div className="pointer-events-none absolute inset-0 cta-glow"
               style={{ background:"radial-gradient(ellipse 70% 55% at 50% -5%,rgb(var(--primary)/.2),transparent 68%)" }} />
+
+            {/* Floating sparkles in CTA */}
+            {["✦","✧","✦","✧","✦"].map((s,i)=>(
+              <div key={i} className="sparkle" style={{
+                top:`${10+i*15}%`, left:`${5+i*20}%`,
+                ["--dur" as string]:`${1.8+i*0.4}s`,
+                ["--delay" as string]:`${i*0.3}s`,
+                ["--sz" as string]:`${10+i%3*4}px`,
+                color:"rgb(var(--primary))",
+              }}>{s}</div>
+            ))}
+            {["✧","✦","✧"].map((s,i)=>(
+              <div key={i+5} className="sparkle" style={{
+                top:`${20+i*25}%`, right:`${8+i*12}%`,
+                ["--dur" as string]:`${2+i*0.5}s`,
+                ["--delay" as string]:`${0.6+i*0.4}s`,
+                ["--sz" as string]:`${12+i%2*6}px`,
+                color:"rgb(var(--primary2))",
+              }}>{s}</div>
+            ))}
+
             <div className="relative">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl text-xl mb-4"
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl text-xl mb-4 book-bounce"
                 style={{ background:"linear-gradient(135deg,rgb(var(--primary)/.18),rgb(var(--primary2)/.14))", border:"1px solid rgb(var(--primary)/.25)" }}>
                 🎓
               </div>
@@ -721,13 +1231,10 @@ export default function HomePage() {
           position:"relative", height:90, overflow:"hidden",
           marginBottom:0, pointerEvents:"none", userSelect:"none",
         }}>
-          {/* ground line */}
           <div style={{
             position:"absolute", bottom:16, left:0, right:0, height:1,
             background:"linear-gradient(90deg,transparent,rgb(var(--border)/.5) 20%,rgb(var(--border)/.5) 80%,transparent)",
           }} />
-
-          {/* walker container */}
           <div style={{
             position:"absolute", bottom:17,
             animation:"walkAcross 14s linear infinite",
@@ -735,73 +1242,33 @@ export default function HomePage() {
           }}>
             <svg width="48" height="68" viewBox="0 0 48 68" fill="none"
               style={{ animation:"walkBody .55s ease-in-out infinite", display:"block" }}>
-
-              {/* shadow */}
-              <ellipse cx="24" cy="66" rx="10" ry="3"
-                fill="rgb(var(--primary))" opacity="0.15"/>
-
-              {/* backpack */}
-              <rect x="18" y="22" width="9" height="13" rx="3"
-                fill="rgb(var(--primary))" opacity="0.35"/>
-
-              {/* left leg */}
+              <ellipse cx="24" cy="66" rx="10" ry="3" fill="rgb(var(--primary))" opacity="0.15"/>
+              <rect x="18" y="22" width="9" height="13" rx="3" fill="rgb(var(--primary))" opacity="0.35"/>
               <g style={{ transformOrigin:"24px 50px", animation:"walkLegL .55s ease-in-out infinite" }}>
-                <rect x="20" y="49" width="5" height="16" rx="2.5"
-                  fill="rgb(var(--primary))" opacity="0.7"/>
-                {/* left shoe */}
-                <rect x="18" y="62" width="9" height="4" rx="2"
-                  fill="rgb(var(--primary))" opacity="0.85"/>
+                <rect x="20" y="49" width="5" height="16" rx="2.5" fill="rgb(var(--primary))" opacity="0.7"/>
+                <rect x="18" y="62" width="9" height="4" rx="2" fill="rgb(var(--primary))" opacity="0.85"/>
               </g>
-
-              {/* right leg */}
               <g style={{ transformOrigin:"24px 50px", animation:"walkLegR .55s ease-in-out infinite" }}>
-                <rect x="23" y="49" width="5" height="16" rx="2.5"
-                  fill="rgb(var(--primary2))" opacity="0.65"/>
-                {/* right shoe */}
-                <rect x="21" y="62" width="9" height="4" rx="2"
-                  fill="rgb(var(--primary2))" opacity="0.8"/>
+                <rect x="23" y="49" width="5" height="16" rx="2.5" fill="rgb(var(--primary2))" opacity="0.65"/>
+                <rect x="21" y="62" width="9" height="4" rx="2" fill="rgb(var(--primary2))" opacity="0.8"/>
               </g>
-
-              {/* body */}
-              <rect x="17" y="28" width="14" height="22" rx="6"
-                fill="rgb(var(--primary))" opacity="0.6"/>
-
-              {/* left arm */}
+              <rect x="17" y="28" width="14" height="22" rx="6" fill="rgb(var(--primary))" opacity="0.6"/>
               <g style={{ transformOrigin:"17px 32px", animation:"walkArmL .55s ease-in-out infinite" }}>
-                <rect x="10" y="30" width="8" height="4" rx="2"
-                  fill="rgb(var(--primary))" opacity="0.55"/>
+                <rect x="10" y="30" width="8" height="4" rx="2" fill="rgb(var(--primary))" opacity="0.55"/>
               </g>
-
-              {/* right arm — holding book */}
               <g style={{ transformOrigin:"31px 32px", animation:"walkArmR .55s ease-in-out infinite" }}>
-                <rect x="30" y="30" width="8" height="4" rx="2"
-                  fill="rgb(var(--primary))" opacity="0.55"/>
-                {/* book */}
-                <rect x="35" y="26" width="8" height="10" rx="2"
-                  fill="rgb(var(--primary2))" opacity="0.8"
+                <rect x="30" y="30" width="8" height="4" rx="2" fill="rgb(var(--primary))" opacity="0.55"/>
+                <rect x="35" y="26" width="8" height="10" rx="2" fill="rgb(var(--primary2))" opacity="0.8"
                   style={{ animation:"bookFloat 1.1s ease-in-out infinite" }}/>
                 <line x1="37" y1="26" x2="37" y2="36" stroke="white" strokeWidth="0.8" opacity="0.5"/>
               </g>
-
-              {/* head */}
-              <circle cx="24" cy="17" r="9"
-                fill="rgb(var(--primary))" opacity="0.75"/>
-
-              {/* face — eyes */}
+              <circle cx="24" cy="17" r="9" fill="rgb(var(--primary))" opacity="0.75"/>
               <circle cx="21.5" cy="16" r="1.2" fill="white" opacity="0.9"/>
               <circle cx="26.5" cy="16" r="1.2" fill="white" opacity="0.9"/>
-
-              {/* smile */}
-              <path d="M21 20 Q24 22.5 27 20" stroke="white" strokeWidth="1.2"
-                strokeLinecap="round" fill="none" opacity="0.8"/>
-
-              {/* graduation cap */}
-              <rect x="16" y="8" width="16" height="3" rx="1"
-                fill="rgb(var(--primary2))" opacity="0.9"/>
-              <polygon points="24,4 32,9 24,11 16,9"
-                fill="rgb(var(--primary2))" opacity="0.85"/>
-              <line x1="32" y1="9" x2="34" y2="14" stroke="rgb(var(--primary2))"
-                strokeWidth="1.5" strokeLinecap="round" opacity="0.8"/>
+              <path d="M21 20 Q24 22.5 27 20" stroke="white" strokeWidth="1.2" strokeLinecap="round" fill="none" opacity="0.8"/>
+              <rect x="16" y="8" width="16" height="3" rx="1" fill="rgb(var(--primary2))" opacity="0.9"/>
+              <polygon points="24,4 32,9 24,11 16,9" fill="rgb(var(--primary2))" opacity="0.85"/>
+              <line x1="32" y1="9" x2="34" y2="14" stroke="rgb(var(--primary2))" strokeWidth="1.5" strokeLinecap="round" opacity="0.8"/>
               <circle cx="34" cy="14" r="1.5" fill="rgb(var(--primary2))" opacity="0.8"/>
             </svg>
           </div>
