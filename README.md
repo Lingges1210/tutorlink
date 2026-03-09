@@ -102,3 +102,80 @@ tutorlink/
 ├── tsconfig.json
 ├── next.config.js
 └── README.md
+
+⚙️ Installation
+
+Clone the repository
+
+git clone https://github.com/yourusername/tutorlink.git
+
+Move into the project
+
+cd tutorlink
+
+Install dependencies
+
+npm install
+🚀 Running the Project
+
+Start the development server:
+
+npm run dev
+
+Open your browser:
+
+http://localhost:3000
+🔧 Environment Variables
+
+Create a .env.local file.
+
+Example:
+
+DATABASE_URL=your_database_url
+NEXTAUTH_SECRET=your_secret
+NEXTAUTH_URL=http://localhost:3000
+NEXT_PUBLIC_SUPABASE_URL=your_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_key
+🧪 Available Scripts
+Command	Description
+npm run dev	Run development server
+npm run build	Build production app
+npm run start	Run production build
+npm run lint	Run linter
+📈 Future Improvements
+
+AI tutor recommendation
+
+AI study assistant
+
+Mobile app version
+
+LMS integration
+
+Advanced analytics dashboard
+
+🤝 Contributing
+
+Contributions are welcome!
+
+Steps:
+
+Fork the repository
+
+Create a new branch
+
+git checkout -b feature/new-feature
+
+Commit changes
+
+git commit -m "Added new feature"
+
+Push branch
+
+git push origin feature/new-feature
+
+Open a Pull Request
+
+📜 License
+
+This project is developed for academic purposes and educational use.
