@@ -1,36 +1,104 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TutorLink
 
-## Getting Started
+TutorLink is a campus-based peer tutoring web application designed for Universiti Sains Malaysia (USM) students. It provides a centralized platform for students to request academic help, connect with peer tutors, manage tutoring sessions, communicate in real time, track learning progress, and engage through gamification features.
 
-First, run the development server:
+The platform is built as a modern web application using **Next.js** and **TypeScript**, with a scalable architecture intended to support secure authentication, tutor matching, session booking, analytics, and admin management.
+
+---
+
+## Features
+
+- **User Management**
+  - Student registration and login
+  - USM email verification
+  - Profile management
+  - Role-based access for Student, Tutor, and Admin
+
+- **Tutor Matching & Booking**
+  - Search tutors by subject or course
+  - Smart tutor suggestions
+  - Session request and booking management
+  - Tutor availability handling
+
+- **Notification & Messaging**
+  - Real-time in-app chat
+  - Booking confirmation notifications
+  - Session reminders
+  - File sharing in chat
+
+- **Progress Tracking & Analytics**
+  - Session completion tracking
+  - Study history and topic coverage
+  - Student analytics dashboard
+  - Exportable progress reports
+
+- **Gamification**
+  - Points and badges
+  - Weekly leaderboard
+  - Reward redemption
+  - Study streak tracking
+
+- **SOS Academic Help**
+  - Urgent academic help requests
+  - Real-time routing to available tutors
+  - SOS request tracking and response handling
+
+- **Admin Management**
+  - User account moderation
+  - Tutor application approval/rejection
+  - System-wide analytics
+  - Activity summary reports
+
+---
+
+## Tech Stack
+
+This project is developed with:
+
+- **Next.js**
+- **React**
+- **TypeScript**
+- **Node.js**
+- **PostgreSQL** (planned / backend database)
+- **GitHub** for version control
+
+---
+
+## Project Structure
+
+Below is a typical structure for the project based on the current Next.js App Router setup and the TutorLink system modules:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+tutorlink/
+├── app/
+│   ├── page.tsx
+│   ├── layout.tsx
+│   ├── login/
+│   ├── register/
+│   ├── dashboard/
+│   │   ├── student/
+│   │   ├── tutor/
+│   │   └── admin/
+│   ├── messaging/
+│   ├── sos/
+│   ├── leaderboard/
+│   └── api/
+├── components/
+│   ├── ui/
+│   ├── session/
+│   ├── messaging/
+│   ├── dashboard/
+│   └── gamification/
+├── lib/
+│   ├── auth/
+│   ├── db/
+│   ├── utils/
+│   └── services/
+├── prisma/ or database/
+├── public/
+├── styles/
+├── types/
+├── package.json
+├── tsconfig.json
+├── next.config.js
+└── README.md
