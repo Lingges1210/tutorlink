@@ -1,427 +1,812 @@
-// src/app/page.tsx
+"use client";
 import Link from "next/link";
-import ThemeToggle from "@/components/ThemeToggle";
+import { useRef, useState, useEffect, useCallback } from "react";
+
+/* ─── DATA ────────────────────────────────────────────────── */
 
 const outcomes = [
   {
+    svg: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`,
     title: "Less stress during peak weeks",
-    desc: "When assignments pile up, you can reach the right people faster — without begging in random groups.",
+    desc: "When assignments pile up, reach the right people faster — no more begging in random group chats.",
   },
   {
+    svg: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>`,
     title: "More consistent study progress",
-    desc: "Get structured help that actually moves you forward instead of one-off answers that don’t stick.",
+    desc: "Get structured help that actually moves you forward — not just one-off answers that don't stick.",
   },
   {
+    svg: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
     title: "Fair access for everyone",
-    desc: "No more ‘you must know seniors’. Everyone gets a chance to ask and learn with equal access.",
+    desc: "No more 'you must know seniors'. Everyone gets equal access to ask and learn.",
   },
 ];
 
 const stats = [
-  { label: "Campus-exclusive", value: "USM only" },
-  { label: "Fast coordination", value: "Book in minutes" },
-  { label: "Built for students", value: "Peer-first" },
-  { label: "Community trust", value: "Verified users" },
+  { label: "Campus-exclusive", value: "USM only", icon: "🏛" },
+  { label: "Fast coordination", value: "Book in minutes", icon: "⏱" },
+  { label: "Built for students", value: "Peer-first", icon: "👥" },
+  { label: "Community trust", value: "Verified users", icon: "🛡" },
 ];
 
-const testimonials = [
-  {
-    name: "Year 2 Student",
-    quote:
-      "I stopped wasting time asking around. I found someone who actually explains properly.",
-  },
-  {
-    name: "Tutor",
-    quote:
-      "It’s easier to help people when everything is organized and sessions are clear.",
-  },
-  {
-    name: "New Intake",
-    quote:
-      "I didn’t know many seniors yet, so this made getting help feel less intimidating.",
-  },
+const reviews = [
+  { initials: "ZA", name: "Zara A.", course: "Year 2 · CSC", stars: 5, quote: "I stopped wasting time asking around. Found someone who actually explains things properly." },
+  { initials: "KR", name: "Kumar R.", course: "Tutor · MAT", stars: 5, quote: "Everything is organized and sessions are clear. So much easier to help people this way." },
+  { initials: "NF", name: "Nur F.", course: "New Intake · EEE", stars: 5, quote: "Didn't know many seniors yet — this made getting help feel way less intimidating." },
+  { initials: "HA", name: "Haziq A.", course: "Year 3 · ECE", stars: 5, quote: "Booked a tutor for my circuits module in under 5 minutes. Exam prep sorted." },
+  { initials: "LM", name: "Li Mei", course: "Year 1 · BIO", stars: 5, quote: "The SOS feature saved me the night before my lab report was due. Incredible." },
+  { initials: "RS", name: "Raj S.", course: "Tutor · PHY", stars: 5, quote: "I love that students can actually find me based on subject and time. No more random DMs." },
+  { initials: "AM", name: "Amirah M.", course: "Year 2 · CHE", stars: 5, quote: "My study streak keeps me accountable. I've been consistent for 3 weeks now." },
+  { initials: "DP", name: "Danish P.", course: "Year 3 · COM", stars: 4, quote: "Smart matching actually works — got paired with a senior who took the same module." },
+  { initials: "YS", name: "Yuna S.", course: "New Intake · MED", stars: 5, quote: "As a new student, TutorLink made me feel like I had support from day one." },
+  { initials: "FH", name: "Farid H.", course: "Tutor · MAT", stars: 5, quote: "The points system motivates me to tutor more. It genuinely feels rewarding." },
 ];
 
 const faqs = [
-  {
-    q: "Who can join TutorLink?",
-    a: "USM students using verified USM email authentication.",
-  },
-  {
-    q: "Is TutorLink paid?",
-    a: "For MVP you can keep it free. Later you can add optional paid sessions or token-based support if needed.",
-  },
-  {
-    q: "Is this like tuition?",
-    a: "It’s peer support — short, focused help between students, designed to be affordable and accessible.",
-  },
-  {
-    q: "Can I be a tutor?",
-    a: "Yes. You can apply as a tutor, then your profile can be reviewed/approved before tutoring begins.",
-  },
+  { q: "Who can join TutorLink?", a: "USM students using verified USM email authentication. Just sign up with your student email and you're in — no approval needed for learners." },
+  { q: "Is TutorLink paid?", a: "The MVP is completely free. Optional paid sessions or a token-based tipping system may be introduced later based on community feedback." },
+  { q: "Is this like tuition?", a: "Not exactly. It's peer support — short, focused help sessions between students. Think of it as a smarter version of asking a senior for help, but organized." },
+  { q: "Can I be a tutor?", a: "Yes. Apply as a tutor, submit for review, and once approved your profile goes live. You decide your own availability and which subjects you offer." },
+  { q: "How does smart matching work?", a: "We match you based on your course code, availability window, learning preference, and past session ratings to surface the most relevant tutors first." },
+  { q: "What is SOS Academic Help?", a: "SOS is for urgent requests. When you need help right now, it surfaces available tutors in real time and notifies them instantly so you get a response fast." },
+  { q: "Is my personal data private?", a: "Yes. We only collect what's strictly needed to run the service. Your data is never sold or shared with third parties." },
+  { q: "How are tutors verified?", a: "Tutors go through a manual review before approval. Their profiles display ratings, session counts, and feedback from past learners." },
+  { q: "Can I leave feedback after a session?", a: "Absolutely — every completed session prompts a rating and optional review. This keeps the community quality high." },
+  { q: "What subjects are covered?", a: "Any subject taught at USM. From engineering maths and physics to language electives — if it's on your timetable, there's likely a tutor for it." },
 ];
 
+const trustItems = [
+  { icon: "🔐", title: "USM verification", desc: "Only verified university accounts can access the platform." },
+  { icon: "⭐", title: "Tutor accountability", desc: "Profiles, feedback, and reporting help keep the community safe." },
+  { icon: "🪪", title: "Clear roles", desc: "Students and tutors have separate permissions and experiences." },
+  { icon: "🔒", title: "Privacy-first mindset", desc: "Keep personal data minimal — only what's needed for the service." },
+];
+
+const tutors = [
+  { name: "Aina", rating: "4.9", time: "9–11 pm", badge: "Top Tutor", active: true },
+  { name: "Kumar", rating: "4.8", time: "8–10 pm", badge: null, active: false },
+  { name: "Syafiq", rating: "4.7", time: "10–12 am", badge: null, active: false },
+];
+
+/* ─── COMPONENT ───────────────────────────────────────────── */
+
 export default function HomePage() {
+  const reviewTrack = useRef<HTMLDivElement>(null);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
+  const CARD_W = 320;
+  const GAP = 20;
+  const REVIEW_W = CARD_W + GAP;
+  const activeIdxRef = useRef(0);
+  activeIdxRef.current = activeIdx;
+
+  // scroll so card[idx] is centered in the track
+  const scrollTo = useCallback((idx: number) => {
+    const el = reviewTrack.current;
+    if (!el) return;
+    // padding-left = calc(50vw - 160px), so center of card[0] is at 160px from left
+    // center of card[i] = i * REVIEW_W + 160px from track start
+    // we want that at el center: scrollLeft = i * REVIEW_W
+    el.scrollTo({ left: idx * REVIEW_W, behavior: "smooth" });
+    setActiveIdx(idx);
+  }, []);
+
+  const scrollReview = useCallback((dir: number) => {
+    const next = Math.max(0, Math.min(reviews.length - 1, activeIdxRef.current + dir));
+    scrollTo(next);
+  }, [scrollTo]);
+
+  // auto-scroll every 2s, loops back to start
+  useEffect(() => {
+    const tick = () => {
+      if (isPaused) return;
+      const next = (activeIdxRef.current + 1) % reviews.length;
+      scrollTo(next);
+    };
+    const id = setInterval(tick, 2000);
+    return () => clearInterval(id);
+  }, [isPaused, scrollTo]);
+
+  // sync activeIdx when user manually scrolls
+  useEffect(() => {
+    const el = reviewTrack.current;
+    if (!el) return;
+    const handler = () => {
+      const idx = Math.round(el.scrollLeft / REVIEW_W);
+      setActiveIdx(Math.max(0, Math.min(reviews.length - 1, idx)));
+    };
+    el.addEventListener("scroll", handler, { passive: true });
+    return () => el.removeEventListener("scroll", handler);
+  }, [REVIEW_W]);
+
   return (
-    <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
-      {/* subtle background glow (works in light + dark) */}
-      <div className="pointer-events-none fixed inset-0">
-        <div
-          className="
-            absolute -top-24 left-1/2 h-72 w-[42rem] -translate-x-1/2 rounded-full blur-3xl
-            bg-[rgb(var(--shadow) / 0.22)]
-          "
-        />
-        <div
-          className="
-            absolute top-40 right-[-6rem] h-72 w-72 rounded-full blur-3xl
-            bg-[rgb(var(--primary2) / 0.18)]
-          "
-        />
+    <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))] overflow-x-hidden">
+      <style>{`
+        @keyframes fadeUp {
+          from { opacity:0; transform:translateY(20px); }
+          to   { opacity:1; transform:translateY(0); }
+        }
+        @keyframes pulseGlow {
+          0%,100% { opacity:.38; transform:scale(1); }
+          50%      { opacity:.68; transform:scale(1.07); }
+        }
+        @keyframes shimmer {
+          0%   { background-position:-200% center; }
+          100% { background-position:200% center; }
+        }
+        @keyframes progressFill {
+          from { width:0%; }
+          to   { width:68%; }
+        }
+        @keyframes dotBlink {
+          0%,100% { opacity:1; }
+          50%     { opacity:.35; }
+        }
+        @keyframes accordionOpen {
+          from { opacity:0; transform:translateY(-6px); }
+          to   { opacity:1; transform:translateY(0); }
+        }
+        @keyframes floatCard {
+          0%,100% { transform:translateY(0px); }
+          50%     { transform:translateY(-10px); }
+        }
+        @keyframes walkBody {
+          0%,100% { transform:translateY(0px); }
+          50%     { transform:translateY(-3px); }
+        }
+        @keyframes walkArmL {
+          0%,100% { transform:rotate(-28deg); }
+          50%     { transform:rotate(28deg); }
+        }
+        @keyframes walkArmR {
+          0%,100% { transform:rotate(28deg); }
+          50%     { transform:rotate(-28deg); }
+        }
+        @keyframes walkLegL {
+          0%,100% { transform:rotate(-30deg); }
+          50%     { transform:rotate(30deg); }
+        }
+        @keyframes walkLegR {
+          0%,100% { transform:rotate(30deg); }
+          50%     { transform:rotate(-30deg); }
+        }
+        @keyframes walkAcross {
+          0%   { left:-80px; transform:scaleX(1); }
+          48%  { left:calc(100% + 80px); transform:scaleX(1); }
+          50%  { left:calc(100% + 80px); transform:scaleX(-1); }
+          98%  { left:-80px; transform:scaleX(-1); }
+          100% { left:-80px; transform:scaleX(1); }
+        }
+        @keyframes bookFloat {
+          0%,100% { transform:translateY(0) rotate(-8deg); }
+          50%     { transform:translateY(-6px) rotate(-4deg); }
+        }
+
+        .anim-1 { animation:fadeUp .65s cubic-bezier(.22,1,.36,1) both .05s; }
+        .anim-2 { animation:fadeUp .65s cubic-bezier(.22,1,.36,1) both .2s; }
+        .glow-blob { animation:pulseGlow 7s ease-in-out infinite; }
+        .live-dot  { animation:dotBlink 2s ease-in-out infinite; }
+        .float-card { animation:floatCard 4s ease-in-out infinite; }
+
+        .shimmer-text {
+          background:linear-gradient(90deg,
+            rgb(var(--primary)) 0%,rgb(var(--primary2)) 35%,
+            rgb(var(--primary)) 65%,rgb(var(--primary2)) 100%);
+          background-size:200% auto;
+          -webkit-background-clip:text;
+          -webkit-text-fill-color:transparent;
+          background-clip:text;
+          animation:shimmer 5s linear infinite;
+        }
+
+        .card-lift { transition:transform .22s ease,box-shadow .22s ease; }
+        .card-lift:hover { transform:translateY(-4px); box-shadow:0 18px 48px rgb(var(--shadow)/.24); }
+
+        .btn-grad {
+          background:linear-gradient(135deg,rgb(var(--primary)),rgb(var(--primary2)));
+          position:relative; overflow:hidden;
+          transition:opacity .18s,transform .18s;
+        }
+        .btn-grad::before {
+          content:''; position:absolute; inset:0;
+          background:linear-gradient(135deg,rgba(255,255,255,.18) 0%,transparent 55%);
+          pointer-events:none;
+        }
+        .btn-grad:hover { opacity:.87; transform:translateY(-1px); }
+
+        .btn-ghost { transition:background .18s,transform .18s; }
+        .btn-ghost:hover { background:rgb(var(--card)) !important; transform:translateY(-1px); }
+
+        .divider-line {
+          height:1px;
+          background:linear-gradient(90deg,transparent,rgb(var(--border)/.65) 25%,rgb(var(--border)/.65) 75%,transparent);
+          max-width:72rem; margin:0 auto;
+        }
+
+        .eyebrow {
+          font-size:10.5px; font-weight:700; letter-spacing:.14em;
+          text-transform:uppercase; color:rgb(var(--primary));
+          display:inline-flex; align-items:center; gap:7px; margin-bottom:8px;
+        }
+        .eyebrow::before {
+          content:''; display:inline-block;
+          width:18px; height:2px; border-radius:1px; background:rgb(var(--primary));
+        }
+
+        .icon-box {
+          display:inline-flex; align-items:center; justify-content:center;
+          width:42px; height:42px; border-radius:13px; flex-shrink:0;
+          color:rgb(var(--primary));
+          background:linear-gradient(135deg,rgb(var(--primary)/.14),rgb(var(--primary2)/.08));
+        }
+
+        .progress-bar { height:5px; border-radius:3px; background:rgb(var(--border)); overflow:hidden; }
+        .progress-fill {
+          height:100%; border-radius:3px;
+          background:linear-gradient(90deg,rgb(var(--primary)),rgb(var(--primary2)));
+          animation:progressFill 1.4s cubic-bezier(.22,1,.36,1) both .9s;
+        }
+
+        .av {
+          width:36px; height:36px; border-radius:50%;
+          display:flex; align-items:center; justify-content:center;
+          font-size:12px; font-weight:700; color:white; flex-shrink:0;
+          background:linear-gradient(135deg,rgb(var(--primary)),rgb(var(--primary2)));
+        }
+
+        .chip {
+          display:inline-flex; align-items:center; gap:5px;
+          border-radius:999px; border:1px solid rgb(var(--border));
+          background:rgb(var(--card)/.5); padding:4px 11px;
+          font-size:11.5px; color:rgb(var(--muted)); white-space:nowrap;
+          transition:background .16s,color .16s,border-color .16s;
+        }
+        .chip:hover { background:rgb(var(--card)); color:rgb(var(--fg)); border-color:rgb(var(--primary)/.4); }
+
+        .glass { border:1px solid rgb(var(--border)); background:rgb(var(--card)/.6); }
+
+        /* ── Review carousel ── */
+        .review-section { overflow:hidden; }
+        .review-track {
+          display:flex; gap:20px;
+          overflow-x:auto; scroll-snap-type:x mandatory;
+          scrollbar-width:none; -ms-overflow-style:none;
+          padding-top:24px; padding-bottom:28px;
+          /* center padding = half viewport minus half card (160px) */
+          padding-left:calc(50vw - 160px);
+          padding-right:calc(50vw - 160px);
+        }
+        .review-track::-webkit-scrollbar { display:none; }
+        .review-card {
+          flex:0 0 320px; scroll-snap-align:center;
+          border:1px solid rgb(var(--border));
+          background:rgb(var(--card)/.6);
+          border-radius:24px; padding:24px;
+          transition:transform .4s cubic-bezier(.22,1,.36,1),
+                      opacity .4s ease,
+                      box-shadow .4s ease,
+                      border-color .4s ease,
+                      background .4s ease;
+          transform:scale(.84); opacity:.45;
+          will-change:transform,opacity;
+        }
+        .review-card.active {
+          transform:scale(1); opacity:1;
+          box-shadow:0 24px 60px rgb(var(--primary)/.2),0 4px 20px rgb(0,0,0/.1);
+          border-color:rgb(var(--primary)/.35);
+          background:rgb(var(--card)/.95);
+        }
+        .review-card.near {
+          transform:scale(.91); opacity:.7;
+        }
+
+        /* ── FAQ accordion ── */
+        .faq-item {
+          border:1px solid rgb(var(--border));
+          background:rgb(var(--card)/.6);
+          border-radius:20px;
+          overflow:hidden;
+          transition:border-color .2s,background .2s;
+        }
+        .faq-item.open {
+          border-color:rgb(var(--primary)/.35);
+          background:rgb(var(--card)/.85);
+        }
+        .faq-trigger {
+          width:100%; text-align:left; background:none; border:none; cursor:pointer;
+          display:flex; align-items:center; justify-content:space-between; gap:12px;
+          padding:18px 22px; color:rgb(var(--fg));
+          transition:background .15s;
+        }
+        .faq-trigger:hover { background:rgb(var(--primary)/.04); }
+        .faq-chevron {
+          width:20px; height:20px; flex-shrink:0;
+          display:inline-flex; align-items:center; justify-content:center;
+          border-radius:50%; border:1px solid rgb(var(--border));
+          font-size:11px; color:rgb(var(--muted));
+          transition:transform .28s cubic-bezier(.22,1,.36,1),
+                      background .2s, border-color .2s, color .2s;
+        }
+        .faq-item.open .faq-chevron {
+          transform:rotate(180deg);
+          background:rgb(var(--primary)/.12);
+          border-color:rgb(var(--primary)/.4);
+          color:rgb(var(--primary));
+        }
+        .faq-body {
+          max-height:0; overflow:hidden;
+          transition:max-height .35s cubic-bezier(.22,1,.36,1), padding .25s;
+          padding:0 22px;
+        }
+        .faq-item.open .faq-body {
+          max-height:200px;
+          padding:0 22px 18px;
+        }
+        .faq-body-inner { animation:accordionOpen .25s ease both; }
+      `}</style>
+
+      {/* ── Background atmosphere ── */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="glow-blob absolute -top-40 left-1/2 h-[32rem] w-[56rem] -translate-x-1/2 rounded-full blur-3xl"
+          style={{ background: "rgb(var(--primary)/.12)" }} />
+        <div className="glow-blob absolute top-56 right-[-10rem] h-80 w-80 rounded-full blur-3xl"
+          style={{ background: "rgb(var(--primary2)/.11)", animationDelay: "3s" }} />
+        <div className="glow-blob absolute bottom-[30%] left-[-8rem] h-64 w-64 rounded-full blur-3xl"
+          style={{ background: "rgb(var(--primary)/.08)", animationDelay: "5.5s" }} />
       </div>
 
-      {/* Nav */}
-
       <main className="relative">
-        {/*  HERO (layout unchanged, tokenized colors + gradient visible) */}
-        <section className="mx-auto max-w-6xl px-4 pb-16 pt-14 md:pt-20">
-          <div className="grid items-center gap-10 md:grid-cols-2">
-            <div className="fade-up-1">
-              <p
-                className="
-                  inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs
-                  border-[rgb(var(--border))]
-                  bg-[rgb(var(--card) / 0.6)]
-                  text-[rgb(var(--fg))]
-                "
-              >
-                Campus-exclusive • Verified USM accounts
-              </p>
 
-              <h1 className="mt-4 text-4xl font-semibold tracking-tight md:text-5xl">
-                Get help faster.{" "}
-                <span className="inline-block bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary2))] bg-clip-text text-transparent">
-                  Study smarter.
-                </span>{" "}
-                Together at USM.
+        {/* ══════════════════════════════════════════════════════
+            HERO — side-by-side layout
+        ══════════════════════════════════════════════════════ */}
+        <section className="mx-auto max-w-6xl px-4 pt-10 pb-16">
+          <div className="grid items-center gap-10 md:grid-cols-2">
+
+            {/* Left */}
+            <div className="anim-1">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <span className="chip" style={{ borderColor:"rgb(var(--primary)/.35)", color:"rgb(var(--primary))", background:"rgb(var(--primary)/.08)" }}>
+                  <span className="live-dot" style={{ width:6,height:6,borderRadius:"50%",background:"rgb(var(--primary))",display:"inline-block" }} />
+                  Campus-exclusive
+                </span>
+                <span className="chip">Verified USM accounts</span>
+              </div>
+
+              <h1 style={{ fontSize:"clamp(1.85rem,3.8vw,2.9rem)", fontWeight:800, lineHeight:1.12, letterSpacing:"-0.025em" }}>
+                Get help faster.
+                <br />
+                <span className="shimmer-text">Study smarter.</span>
+                <br />
+                <span style={{ color:"rgb(var(--muted))", fontWeight:400, fontSize:"0.87em" }}>Together at USM.</span>
               </h1>
 
-              <p className="mt-4 text-base leading-relaxed text-[rgb(var(--muted))]">
-                TutorLink connects USM students with peer tutors through smart matching,
-                easy booking, real-time chat, SOS academic help, progress analytics,
-                and gamified rewards.
+              <p className="mt-3 text-[14px] leading-[1.7]" style={{ color:"rgb(var(--muted))", maxWidth:"40ch" }}>
+                TutorLink connects USM students with peer tutors through smart
+                matching, easy booking, real-time chat, SOS help, and gamified rewards.
               </p>
 
-              <div className="mt-6 flex flex-wrap gap-3">
-                {/*  correct path */}
-                <Link
-                  href="/auth/register"
-                  className="
-                    rounded-2xl px-5 py-3 text-sm font-semibold text-white
-                    bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary2))]
-                    hover:opacity-90
-                  "
-                >
-                  Join with USM Email
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link href="/auth/register" className="btn-grad rounded-2xl px-5 py-2.5 text-sm font-bold text-white">
+                  Join with USM Email →
                 </Link>
-
-                {/* If you don't have /apply-tutor yet, change this to an existing route */}
-                <Link
-                  href="/apply-tutor"
-                  className="
-                    rounded-2xl border px-5 py-3 text-sm font-semibold
-                    border-[rgb(var(--border))]
-                    bg-[rgb(var(--card) / 0.6)]
-                    text-[rgb(var(--fg))]
-                    hover:bg-[rgb(var(--card) / 0.9)]
-                  "
-                >
+                <Link href="/apply-tutor" className="btn-ghost rounded-2xl border px-5 py-2.5 text-sm font-bold"
+                  style={{ borderColor:"rgb(var(--border))", background:"rgb(var(--card)/.6)", color:"rgb(var(--fg))" }}>
                   Become a Tutor
                 </Link>
               </div>
 
-              <div className="mt-6 flex flex-wrap gap-2 text-xs text-[rgb(var(--muted))]">
-                {["Smart Matching", "SOS Academic Help", "Progress Analytics", "Points & Badges"].map(
-                  (chip) => (
-                    <span
-                      key={chip}
-                      className="
-                        rounded-full border px-3 py-1
-                        border-[rgb(var(--border))]
-                        bg-[rgb(var(--card) / 0.55)]
-                      "
-                    >
-                      {chip}
-                    </span>
-                  )
-                )}
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {[{ d:"✦",l:"Smart Matching"},{d:"◈",l:"SOS Help"},{d:"◎",l:"Analytics"},{d:"◆",l:"Points & Badges"}].map(c=>(
+                  <span key={c.l} className="chip">
+                    <span style={{ color:"rgb(var(--primary))", fontSize:9 }}>{c.d}</span>{c.l}
+                  </span>
+                ))}
+              </div>
+
+              <div className="mt-6 flex items-center gap-5">
+                {[["500+","Students"],["80+","Tutors"],["4.8★","Avg rating"]].map(([v,l],i)=>(
+                  <div key={l} className="flex items-center gap-5">
+                    {i>0 && <div style={{ width:1,height:26,background:"rgb(var(--border))" }} />}
+                    <div>
+                      <div style={{ fontSize:"1.3rem",fontWeight:800,letterSpacing:"-0.02em",lineHeight:1,color:"rgb(var(--fg))" }}>{v}</div>
+                      <div style={{ fontSize:11,color:"rgb(var(--muted2))",marginTop:2 }}>{l}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Right mock card */}
-            <div
-              className="
-                fade-up-2 rounded-3xl border p-6
-                border-[rgb(var(--border))]
-                bg-[rgb(var(--card) / 0.6)]
-                shadow-[0_0_60px_rgba(124,58,237,0.18)]
-              "
-            >
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold">Find a tutor</div>
-                <span
-                  className="
-                    rounded-full border px-2 py-1 text-[11px]
-                    border-[rgb(var(--border))]
-                    bg-[rgb(var(--card) / 0.55)]
-                    text-[rgb(var(--muted))]
-                  "
-                >
-                  CPT113 • Tonight
+            {/* Right — tutor card */}
+            <div className="anim-2 float-card rounded-3xl p-5"
+              style={{
+                border:"1px solid rgb(var(--border))",
+                background:"rgb(var(--card)/.68)",
+                backdropFilter:"blur(20px)",
+                WebkitBackdropFilter:"blur(20px)",
+                boxShadow:"0 0 0 1px rgb(var(--border)/.3),0 20px 64px rgb(var(--primary)/.13),0 4px 16px rgb(0,0,0/.1)",
+              }}>
+
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <div className="text-sm font-bold">Find a tutor</div>
+                  <div className="mt-0.5 flex items-center gap-1.5 text-xs" style={{ color:"rgb(var(--muted))" }}>
+                    <span className="live-dot" style={{ width:5,height:5,borderRadius:"50%",background:"#22c55e",display:"inline-block" }} />
+                    3 available now
+                  </div>
+                </div>
+                <span className="rounded-full px-3 py-1 text-[11px] font-semibold"
+                  style={{ border:"1px solid rgb(var(--primary)/.3)", background:"rgb(var(--primary)/.1)", color:"rgb(var(--primary))" }}>
+                  CPT113 · Tonight
                 </span>
               </div>
 
-              <div className="mt-4 space-y-3">
-                {[
-                  "Aina (4.9) • Available 9–11pm",
-                  "Kumar (4.8) • Available 8–10pm",
-                  "Syafiq (4.7) • Available 10–12am",
-                ].map((row) => (
-                  <div
-                    key={row}
-                    className="
-                      flex items-center justify-between rounded-2xl border px-4 py-3
-                      border-[rgb(var(--border))]
-                      bg-[rgb(var(--card2) / 0.55)]
-                    "
-                  >
-                    <div className="text-sm text-[rgb(var(--fg))]">{row}</div>
-                    <button
-                      className="
-                        rounded-xl px-3 py-2 text-xs font-semibold text-white
-                        bg-[rgb(var(--primary))]
-                        hover:opacity-90
-                      "
-                      type="button"
-                    >
-                      Request
-                    </button>
+              <div className="space-y-2">
+                {tutors.map(t=>(
+                  <div key={t.name} className="flex items-center gap-3 rounded-2xl border px-3.5 py-2.5"
+                    style={{
+                      borderColor:t.active?"rgb(var(--primary)/.3)":"rgb(var(--border))",
+                      background:t.active
+                        ?"linear-gradient(135deg,rgb(var(--primary)/.1),rgb(var(--primary2)/.07))"
+                        :"rgb(var(--card2)/.45)",
+                    }}>
+                    <div className="av">{t.name[0]}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-semibold">{t.name}</span>
+                        {t.badge && (
+                          <span className="text-[10px] rounded-full px-1.5 py-0.5 font-semibold"
+                            style={{ background:"rgb(var(--primary)/.15)", color:"rgb(var(--primary))" }}>
+                            {t.badge}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-0.5 text-[11px]" style={{ color:"rgb(var(--muted))" }}>
+                        <span style={{ color:"#f59e0b" }}>★</span> {t.rating} · {t.time}
+                      </div>
+                    </div>
+                    <button className="rounded-xl px-3 py-1.5 text-xs font-bold text-white flex-shrink-0"
+                      style={{ background:t.active?"linear-gradient(135deg,rgb(var(--primary)),rgb(var(--primary2)))":"rgb(var(--primary))" }}
+                      type="button">Book</button>
                   </div>
                 ))}
               </div>
 
-              <div
-                className="
-                  mt-4 rounded-2xl border p-4
-                  border-[rgb(var(--border))]
-                  bg-gradient-to-r from-[rgb(var(--primary) / 0.15)] to-[rgb(var(--primary2) / 0.12)]
-                "
-              >
-                <div className="text-xs text-[rgb(var(--muted))]">Need urgent help?</div>
-                <div className="mt-1 text-sm font-semibold">Use SOS Academic Help</div>
+              <div className="mt-4">
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <span style={{ color:"rgb(var(--muted))" }}>Your study streak</span>
+                  <span className="font-semibold" style={{ color:"rgb(var(--primary))" }}>🔥 5 days</span>
+                </div>
+                <div className="progress-bar"><div className="progress-fill" /></div>
+                <div className="flex justify-between text-[10px] mt-1" style={{ color:"rgb(var(--muted2))" }}>
+                  <span>Day 5</span><span>Goal: 7 days</span>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-2xl border px-3.5 py-2.5 flex items-center gap-3"
+                style={{ borderColor:"rgb(var(--border))", background:"linear-gradient(135deg,rgb(var(--primary)/.09),rgb(var(--primary2)/.06))" }}>
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl text-[10px] font-black text-white"
+                  style={{ background:"linear-gradient(135deg,rgb(var(--primary)),rgb(var(--primary2)))" }}>SOS</div>
+                <div className="flex-1">
+                  <div className="text-[11px]" style={{ color:"rgb(var(--muted))" }}>Need urgent help?</div>
+                  <div className="text-sm font-semibold">SOS Academic Help</div>
+                </div>
+                <span className="text-[11px] rounded-full px-2.5 py-1 font-semibold"
+                  style={{ background:"rgb(34 197 94/.15)", color:"#22c55e" }}>Active</span>
               </div>
             </div>
+
           </div>
         </section>
 
-        {/* Why TutorLink (benefits, not modules) */}
-        <section id="why" className="mx-auto max-w-6xl px-4 pb-16">
-          <div className="fade-up-3 flex items-end justify-between gap-6">
+        <div className="px-4"><div className="divider-line" /></div>
+
+        {/* ══════════════════════════════════════════════════════
+            WHY
+        ══════════════════════════════════════════════════════ */}
+        <section id="why" className="mx-auto max-w-6xl px-4 py-16">
+          <div className="mb-8 max-w-lg">
+            <div className="eyebrow">Why TutorLink</div>
+            <h2 style={{ fontSize:"1.65rem",fontWeight:800,letterSpacing:"-0.02em" }}>Real outcomes for real students</h2>
+            <p className="mt-2 text-sm leading-relaxed" style={{ color:"rgb(var(--muted))" }}>
+              Not a feature list — just what actually changes during your semester.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {outcomes.map(o=>(
+              <div key={o.title} className="card-lift glass rounded-3xl p-6">
+                <div className="icon-box mb-4" dangerouslySetInnerHTML={{ __html:o.svg }} />
+                <div className="text-sm font-bold mb-1.5">{o.title}</div>
+                <p className="text-sm leading-relaxed" style={{ color:"rgb(var(--muted))" }}>{o.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            {stats.map(s=>(
+              <div key={s.label} className="card-lift glass rounded-2xl p-4 flex items-center gap-3"
+                style={{ background:"rgb(var(--card2)/.5)" }}>
+                <div className="icon-box" style={{ width:36,height:36,borderRadius:10,fontSize:17 }}>{s.icon}</div>
+                <div>
+                  <div className="text-sm font-bold">{s.value}</div>
+                  <div className="text-[11px] mt-0.5" style={{ color:"rgb(var(--muted2))" }}>{s.label}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="px-4"><div className="divider-line" /></div>
+
+        {/* ══════════════════════════════════════════════════════
+            REVIEWS — focus carousel (center = big, sides = small)
+        ══════════════════════════════════════════════════════ */}
+        <section id="reviews" className="py-16 overflow-hidden">
+          <div className="mx-auto max-w-6xl px-4 mb-6 flex items-end justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold">Why students use TutorLink</h2>
-              <p className="mt-2 text-sm text-[rgb(var(--muted))]">
-                Not a feature list — just the real outcomes you want during the semester.
+              <div className="eyebrow">Reviews</div>
+              <h2 style={{ fontSize:"1.65rem",fontWeight:800,letterSpacing:"-0.02em" }}>What students are saying</h2>
+              <p className="mt-1.5 text-sm" style={{ color:"rgb(var(--muted))" }}>
+                Real feedback from the USM community.
               </p>
             </div>
-          </div>
-
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
-            {outcomes.map((o) => (
-              <div
-                key={o.title}
-                className="
-                fade-up-4 rounded-3xl border p-6
-                border-[rgb(var(--border))]
-                bg-[rgb(var(--card) / 0.6)]
-                transition-all duration-300 ease-out
-                hover:-translate-y-1
-                hover:shadow-[0_12px_40px_rgb(var(--shadow) / 0.25)]
-                hover:bg-[rgb(var(--card) / 0.9)]
-                "
-
-              >
-                <div className="text-base font-semibold">{o.title}</div>
-                <p className="mt-2 text-sm leading-relaxed text-[rgb(var(--muted))]">
-                  {o.desc}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 grid gap-3 md:grid-cols-4">
-            {stats.map((s) => (
-              <div
-                key={s.label}
-                className="
-                fade-up-5 rounded-3xl border p-5
-                border-[rgb(var(--border))]
-                bg-[rgb(var(--card2) / 0.5)]
-                transition-all duration-300 ease-out
-                hover:-translate-y-1
-                hover:shadow-[0_10px_30px_rgb(var(--shadow) / 0.2)]
-                "
-              >
-                <div className="text-xs text-[rgb(var(--muted2))]">{s.label}</div>
-                <div className="mt-1 text-sm font-semibold">{s.value}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Community proof */}
-        <section id="community" className="mx-auto max-w-6xl px-4 pb-16">
-          <div
-            className="
-              rounded-3xl border p-8
-              border-[rgb(var(--border))]
-              bg-[rgb(var(--card2) / 0.45)]
-            "
-          >
-            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold">Built around USM student culture</h2>
-                <p className="mt-2 text-sm text-[rgb(var(--muted))]">
-                  Short, focused help. Friendly peer learning. Less awkward asking around.
-                </p>
-              </div>
-              <div className="text-xs text-[rgb(var(--muted2))]">
-                (Replace these later with real pilot feedback.)
-              </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button onClick={()=>scrollReview(-1)} disabled={activeIdx===0} type="button"
+                style={{
+                  width:38,height:38,borderRadius:"50%",border:"1px solid rgb(var(--border))",
+                  background:"rgb(var(--card)/.7)",cursor:"pointer",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:14,color:"rgb(var(--fg))",
+                  opacity:activeIdx===0?.35:1,transition:"opacity .2s,background .2s",
+                }}>←</button>
+              <button onClick={()=>scrollReview(1)} disabled={activeIdx>=reviews.length-1} type="button"
+                style={{
+                  width:38,height:38,borderRadius:"50%",border:"1px solid rgb(var(--border))",
+                  background:"rgb(var(--card)/.7)",cursor:"pointer",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:14,color:"rgb(var(--fg))",
+                  opacity:activeIdx>=reviews.length-1?.35:1,transition:"opacity .2s,background .2s",
+                }}>→</button>
             </div>
+          </div>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
-              {testimonials.map((t) => (
-                <div
-                  key={t.name}
-                  className="
-                  rounded-3xl border p-6
-                  border-[rgb(var(--border))]
-                  bg-[rgb(var(--card) / 0.6)]
-                  transition-all duration-300 ease-out
-                  hover:-translate-y-1
-                  hover:shadow-[0_12px_36px_rgb(var(--shadow) / 0.22)]
-                  "
+          {/* Dot indicators */}
+          <div className="mx-auto max-w-6xl px-4 flex gap-1.5 mb-2">
+            {reviews.map((_,i)=>(
+              <button key={i} type="button"
+                onClick={()=>scrollTo(i)}
+                style={{
+                  width:i===activeIdx?20:6, height:6, borderRadius:3, border:"none", padding:0, cursor:"pointer",
+                  background:i===activeIdx?"rgb(var(--primary))":"rgb(var(--border))",
+                  transition:"width .25s,background .25s",
+                }} />
+            ))}
+          </div>
 
-                >
-                  <p className="text-sm leading-relaxed text-[rgb(var(--fg))]">
-                    “{t.quote}”
-                  </p>
-                  <div className="mt-3 text-xs text-[rgb(var(--muted2))]">— {t.name}</div>
+          {/* Track — centered padding makes active card snap to true center */}
+          <div ref={reviewTrack} className="review-track"
+            onMouseEnter={()=>setIsPaused(true)}
+            onMouseLeave={()=>setIsPaused(false)}
+            onTouchStart={()=>setIsPaused(true)}
+            onTouchEnd={()=>setTimeout(()=>setIsPaused(false),2000)}
+          >
+            {reviews.map((r,i)=>(
+              <div key={r.name}
+                className={`review-card ${i===activeIdx?"active":Math.abs(i-activeIdx)===1?"near":""}`}>
+                <div className="flex gap-0.5 mb-3">
+                  {Array.from({length:5}).map((_,j)=>(
+                    <span key={j} style={{ color:j<r.stars?"#f59e0b":"rgb(var(--border))", fontSize:13 }}>★</span>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Trust */}
-        <section id="trust" className="mx-auto max-w-6xl px-4 pb-16">
-          <h2 className="text-2xl font-semibold">Trust & safety by design</h2>
-          <p className="mt-2 text-sm text-[rgb(var(--muted))]">
-            A campus-only platform needs strong identity, clear boundaries, and accountability.
-          </p>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            {[
-              ["USM verification", "Only verified university accounts can access the platform."],
-              ["Tutor accountability", "Profiles, feedback, and reporting help keep the community safe."],
-              ["Clear roles", "Students and tutors have separate permissions and experiences."],
-              ["Privacy-first mindset", "Keep personal data minimal — only what’s needed for the service."],
-            ].map(([t, d]) => (
-              <div
-                key={t}
-                className="
-                rounded-3xl border p-6
-                border-[rgb(var(--border))]
-                bg-[rgb(var(--card) / 0.6)]
-                transition-all duration-300 ease-out
-                hover:-translate-y-1
-                hover:shadow-[0_12px_36px_rgb(var(--shadow) / 0.22)]
-              "
-
-              >
-                <div className="text-sm font-semibold">{t}</div>
-                <p className="mt-2 text-sm text-[rgb(var(--muted))]">{d}</p>
+                <p className="text-sm leading-[1.7] mb-5" style={{ color:"rgb(var(--fg))" }}>"{r.quote}"</p>
+                <div className="flex items-center gap-2.5 pt-4" style={{ borderTop:"1px solid rgb(var(--border))" }}>
+                  <div className="av text-xs">{r.initials}</div>
+                  <div>
+                    <div className="text-xs font-semibold">{r.name}</div>
+                    <div className="text-[11px] mt-0.5" style={{ color:"rgb(var(--muted2))" }}>{r.course}</div>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         </section>
 
-        {/* FAQ + Final CTA */}
-        <section id="faq" className="mx-auto max-w-6xl px-4 pb-20">
-          <h2 className="text-2xl font-semibold">FAQ</h2>
+        <div className="px-4"><div className="divider-line" /></div>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            {faqs.map((f) => (
-              <div
-                key={f.q}
-                className="
-                rounded-3xl border p-6
-                border-[rgb(var(--border))]
-                bg-[rgb(var(--card) / 0.6)]
-                transition-all duration-300 ease-out
-                hover:-translate-y-1
-                hover:shadow-[0_12px_36px_rgb(var(--shadow) / 0.22)]
-              "
-
-
-              >
-                <div className="text-sm font-semibold">{f.q}</div>
-                <p className="mt-2 text-sm text-[rgb(var(--muted))]">{f.a}</p>
-              </div>
-            ))}
-          </div>
-
-          <div
-            className="
-              mt-10 rounded-3xl border p-8
-              border-[rgb(var(--border))]
-              bg-gradient-to-r from-[rgb(var(--primary) / 0.16)] to-[rgb(var(--primary2) / 0.12)]
-            "
-          >
-            <h3 className="text-xl font-semibold">Ready to make academic help feel easy?</h3>
-            <p className="mt-2 text-sm text-[rgb(var(--muted))]">
-              Join TutorLink with your USM email and start learning with peers today.
+        {/* ══════════════════════════════════════════════════════
+            TRUST
+        ══════════════════════════════════════════════════════ */}
+        <section id="trust" className="mx-auto max-w-6xl px-4 py-16">
+          <div className="mb-8 max-w-lg">
+            <div className="eyebrow">Trust & Safety</div>
+            <h2 style={{ fontSize:"1.65rem",fontWeight:800,letterSpacing:"-0.02em" }}>Safe by design, not by chance</h2>
+            <p className="mt-2 text-sm leading-relaxed" style={{ color:"rgb(var(--muted))" }}>
+              A campus-only platform needs strong identity, clear boundaries, and accountability.
             </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {trustItems.map(item=>(
+              <div key={item.title} className="card-lift glass rounded-3xl p-6 flex gap-4">
+                <div className="icon-box flex-shrink-0" style={{ fontSize:19 }}>{item.icon}</div>
+                <div>
+                  <div className="text-sm font-bold">{item.title}</div>
+                  <p className="mt-1.5 text-sm leading-relaxed" style={{ color:"rgb(var(--muted))" }}>{item.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-            <div className="mt-5 flex flex-wrap gap-3">
-              {/*  correct path */}
-              <Link
-                href="/auth/register"
-                className="
-                  rounded-2xl px-5 py-3 text-sm font-semibold text-white
-                  bg-[rgb(var(--primary))]
-                  hover:opacity-90
-                "
-              >
-                Join with USM Email
-              </Link>
+        <div className="px-4"><div className="divider-line" /></div>
 
-              <Link
-                href="/apply-tutor"
-                className="
-                  rounded-2xl border px-5 py-3 text-sm font-semibold
-                  border-[rgb(var(--border))]
-                  bg-[rgb(var(--card) / 0.6)]
-                  text-[rgb(var(--fg))]
-                  hover:bg-[rgb(var(--card) / 0.9)]
-                "
-              >
-                Become a Tutor
-              </Link>
-            </div>
+        {/* ══════════════════════════════════════════════════════
+            FAQ — accordion
+        ══════════════════════════════════════════════════════ */}
+        <section id="faq" className="mx-auto max-w-6xl px-4 py-16">
+          <div className="mb-8 max-w-lg">
+            <div className="eyebrow">FAQ</div>
+            <h2 style={{ fontSize:"1.65rem",fontWeight:800,letterSpacing:"-0.02em" }}>Common questions</h2>
+            <p className="mt-2 text-sm leading-relaxed" style={{ color:"rgb(var(--muted))" }}>
+              Click any question to read the answer.
+            </p>
           </div>
 
+          <div className="grid gap-3 md:grid-cols-2">
+            {faqs.map((f,i)=>(
+              <div key={f.q} className={`faq-item${openFaq===i?" open":""}`}>
+                <button className="faq-trigger" type="button"
+                  onClick={()=>setOpenFaq(openFaq===i?null:i)}>
+                  <span className="text-sm font-semibold text-left leading-snug">{f.q}</span>
+                  <span className="faq-chevron">▾</span>
+                </button>
+                <div className="faq-body">
+                  <div className="faq-body-inner">
+                    <p className="text-sm leading-relaxed pb-1" style={{ color:"rgb(var(--muted))" }}>{f.a}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </section>
+
+        <div className="px-4"><div className="divider-line" /></div>
+
+        {/* ══════════════════════════════════════════════════════
+            CTA
+        ══════════════════════════════════════════════════════ */}
+        <section className="mx-auto max-w-6xl px-4 py-16">
+          <div className="rounded-3xl p-10 md:p-12 text-center relative overflow-hidden"
+            style={{
+              border:"1px solid rgb(var(--primary)/.22)",
+              background:"linear-gradient(135deg,rgb(var(--primary)/.1),rgb(var(--primary2)/.07),rgb(var(--card)/.35))",
+            }}>
+            <div className="pointer-events-none absolute inset-0"
+              style={{ background:"radial-gradient(ellipse 70% 55% at 50% -5%,rgb(var(--primary)/.2),transparent 68%)" }} />
+            <div className="relative">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl text-xl mb-4"
+                style={{ background:"linear-gradient(135deg,rgb(var(--primary)/.18),rgb(var(--primary2)/.14))", border:"1px solid rgb(var(--primary)/.25)" }}>
+                🎓
+              </div>
+              <h3 style={{ fontSize:"1.5rem",fontWeight:800,letterSpacing:"-0.02em" }}>
+                Ready to make academic help feel easy?
+              </h3>
+              <p className="mt-2 text-sm max-w-sm mx-auto leading-relaxed" style={{ color:"rgb(var(--muted))" }}>
+                Join TutorLink with your USM email and start learning with peers today.
+              </p>
+              <div className="mt-6 flex flex-wrap justify-center gap-3">
+                <Link href="/auth/register" className="btn-grad rounded-2xl px-7 py-3 text-sm font-bold text-white">
+                  Join with USM Email →
+                </Link>
+                <Link href="/apply-tutor" className="btn-ghost rounded-2xl border px-7 py-3 text-sm font-bold"
+                  style={{ borderColor:"rgb(var(--border))", background:"rgb(var(--card)/.6)", color:"rgb(var(--fg))" }}>
+                  Become a Tutor
+                </Link>
+              </div>
+              <div className="mt-4 flex items-center justify-center gap-1 text-xs" style={{ color:"rgb(var(--muted2))" }}>
+                {["Free to join","USM students only","No spam"].map((t,i)=>(
+                  <span key={t} className="flex items-center gap-1">
+                    {i>0 && <span style={{ margin:"0 4px",opacity:.4 }}>·</span>}
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ══ WALKING FIGURE ════════════════════════════════════ */}
+        <div style={{
+          position:"relative", height:90, overflow:"hidden",
+          marginBottom:0, pointerEvents:"none", userSelect:"none",
+        }}>
+          {/* ground line */}
+          <div style={{
+            position:"absolute", bottom:16, left:0, right:0, height:1,
+            background:"linear-gradient(90deg,transparent,rgb(var(--border)/.5) 20%,rgb(var(--border)/.5) 80%,transparent)",
+          }} />
+
+          {/* walker container */}
+          <div style={{
+            position:"absolute", bottom:17,
+            animation:"walkAcross 14s linear infinite",
+            width:48, transformOrigin:"center bottom",
+          }}>
+            <svg width="48" height="68" viewBox="0 0 48 68" fill="none"
+              style={{ animation:"walkBody .55s ease-in-out infinite", display:"block" }}>
+
+              {/* shadow */}
+              <ellipse cx="24" cy="66" rx="10" ry="3"
+                fill="rgb(var(--primary))" opacity="0.15"/>
+
+              {/* backpack */}
+              <rect x="18" y="22" width="9" height="13" rx="3"
+                fill="rgb(var(--primary))" opacity="0.35"/>
+
+              {/* left leg */}
+              <g style={{ transformOrigin:"24px 50px", animation:"walkLegL .55s ease-in-out infinite" }}>
+                <rect x="20" y="49" width="5" height="16" rx="2.5"
+                  fill="rgb(var(--primary))" opacity="0.7"/>
+                {/* left shoe */}
+                <rect x="18" y="62" width="9" height="4" rx="2"
+                  fill="rgb(var(--primary))" opacity="0.85"/>
+              </g>
+
+              {/* right leg */}
+              <g style={{ transformOrigin:"24px 50px", animation:"walkLegR .55s ease-in-out infinite" }}>
+                <rect x="23" y="49" width="5" height="16" rx="2.5"
+                  fill="rgb(var(--primary2))" opacity="0.65"/>
+                {/* right shoe */}
+                <rect x="21" y="62" width="9" height="4" rx="2"
+                  fill="rgb(var(--primary2))" opacity="0.8"/>
+              </g>
+
+              {/* body */}
+              <rect x="17" y="28" width="14" height="22" rx="6"
+                fill="rgb(var(--primary))" opacity="0.6"/>
+
+              {/* left arm */}
+              <g style={{ transformOrigin:"17px 32px", animation:"walkArmL .55s ease-in-out infinite" }}>
+                <rect x="10" y="30" width="8" height="4" rx="2"
+                  fill="rgb(var(--primary))" opacity="0.55"/>
+              </g>
+
+              {/* right arm — holding book */}
+              <g style={{ transformOrigin:"31px 32px", animation:"walkArmR .55s ease-in-out infinite" }}>
+                <rect x="30" y="30" width="8" height="4" rx="2"
+                  fill="rgb(var(--primary))" opacity="0.55"/>
+                {/* book */}
+                <rect x="35" y="26" width="8" height="10" rx="2"
+                  fill="rgb(var(--primary2))" opacity="0.8"
+                  style={{ animation:"bookFloat 1.1s ease-in-out infinite" }}/>
+                <line x1="37" y1="26" x2="37" y2="36" stroke="white" strokeWidth="0.8" opacity="0.5"/>
+              </g>
+
+              {/* head */}
+              <circle cx="24" cy="17" r="9"
+                fill="rgb(var(--primary))" opacity="0.75"/>
+
+              {/* face — eyes */}
+              <circle cx="21.5" cy="16" r="1.2" fill="white" opacity="0.9"/>
+              <circle cx="26.5" cy="16" r="1.2" fill="white" opacity="0.9"/>
+
+              {/* smile */}
+              <path d="M21 20 Q24 22.5 27 20" stroke="white" strokeWidth="1.2"
+                strokeLinecap="round" fill="none" opacity="0.8"/>
+
+              {/* graduation cap */}
+              <rect x="16" y="8" width="16" height="3" rx="1"
+                fill="rgb(var(--primary2))" opacity="0.9"/>
+              <polygon points="24,4 32,9 24,11 16,9"
+                fill="rgb(var(--primary2))" opacity="0.85"/>
+              <line x1="32" y1="9" x2="34" y2="14" stroke="rgb(var(--primary2))"
+                strokeWidth="1.5" strokeLinecap="round" opacity="0.8"/>
+              <circle cx="34" cy="14" r="1.5" fill="rgb(var(--primary2))" opacity="0.8"/>
+            </svg>
+          </div>
+        </div>
+
       </main>
     </div>
   );
