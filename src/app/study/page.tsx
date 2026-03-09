@@ -28,20 +28,20 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={[
-        "inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-xs font-semibold border transition-all duration-200",
+        "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-300",
         active
           ? [
-              "border-[rgb(var(--border))]",
-              "bg-gradient-to-r from-[rgb(var(--primary) / 0.18)] to-[rgb(var(--primary2) / 0.14)]",
-              "text-[rgb(var(--fg))]",
-              "shadow-[0_10px_28px_rgb(var(--shadow)/0.18)]",
+              "bg-[rgb(var(--fg))]",
+              "text-[rgb(var(--bg))]",
+              "shadow-[0_4px_20px_rgb(var(--shadow)/0.25)]",
+              "scale-[1.02]",
             ].join(" ")
           : [
-              "border-[rgb(var(--border))]",
-              "bg-[rgb(var(--card) / 0.6)]",
-              "text-[rgb(var(--fg))]",
-              "hover:bg-[rgb(var(--card) / 0.9)]",
-              "hover:shadow-[0_10px_26px_rgb(var(--shadow)/0.16)]",
+              "bg-transparent",
+              "border border-[rgb(var(--border))]",
+              "text-[rgb(var(--muted))]",
+              "hover:text-[rgb(var(--fg))]",
+              "hover:border-[rgb(var(--fg)/0.3)]",
             ].join(" "),
       ].join(" ")}
     >
@@ -56,65 +56,70 @@ function StepCard({
   desc,
   icon: Icon,
   accentClass,
+  lineClass,
 }: {
   num: number;
   title: string;
   desc: string;
   icon: any;
   accentClass: string;
+  lineClass: string;
 }) {
   return (
     <div
       className="
-        rounded-3xl border p-5
+        group relative rounded-2xl border p-5 overflow-hidden
         border-[rgb(var(--border))]
-        bg-[rgb(var(--card) / 0.6)]
+        bg-[rgb(var(--card)/0.5)]
+        backdrop-blur-sm
         transition-all duration-300 ease-out
-        hover:-translate-y-1
-        hover:bg-[rgb(var(--card) / 0.9)]
-        hover:shadow-[0_12px_40px_rgb(var(--shadow) / 0.25)]
+        hover:-translate-y-1.5
+        hover:border-[rgb(var(--border)/0.8)]
+        hover:bg-[rgb(var(--card)/0.85)]
+        hover:shadow-[0_16px_48px_rgb(var(--shadow)/0.22)]
       "
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="inline-flex items-center gap-2">
-          <div
-            className={[
-              "h-10 w-10 rounded-2xl border inline-flex items-center justify-center",
-              "border-[rgb(var(--border))]",
-              "bg-[rgb(var(--card2) / 0.55)]",
-              "shadow-[0_10px_26px_rgb(var(--shadow)/0.18)]",
-              accentClass,
-            ].join(" ")}
-          >
-            <Icon className="h-5 w-5" />
-          </div>
+      {/* Corner number watermark */}
+      <span
+        className="
+          absolute -right-1 -top-3 text-[5rem] font-black leading-none
+          text-[rgb(var(--fg)/0.04)]
+          select-none pointer-events-none
+          group-hover:text-[rgb(var(--fg)/0.07)]
+          transition-colors duration-300
+        "
+      >
+        {num}
+      </span>
 
-          <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-            Step {num}
-          </div>
-        </div>
-
-        <span
-          className="
-            text-[10px] rounded-full border px-2 py-1
-            border-[rgb(var(--border))]
-            bg-[rgb(var(--card2) / 0.5)]
-            text-[rgb(var(--muted2))]
-          "
+      <div className="relative flex items-start gap-3">
+        <div
+          className={[
+            "h-9 w-9 shrink-0 rounded-xl inline-flex items-center justify-center",
+            "bg-[rgb(var(--card2)/0.7)]",
+            "border border-[rgb(var(--border))]",
+            accentClass,
+          ].join(" ")}
         >
-          {num}
-        </span>
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="text-[10px] font-bold uppercase tracking-widest text-[rgb(var(--muted2))] mt-2">
+          Step {num}
+        </div>
       </div>
 
-      <div className="mt-3 text-sm font-semibold text-[rgb(var(--fg))]">
+      <div className="relative mt-4 text-sm font-semibold text-[rgb(var(--fg))] leading-snug">
         {title}
       </div>
-      <p className="mt-2 text-xs text-[rgb(var(--muted))] leading-relaxed">
+      <p className="relative mt-1.5 text-xs text-[rgb(var(--muted))] leading-relaxed">
         {desc}
       </p>
 
-      <div className="mt-4 h-[2px] w-full rounded-full bg-[rgb(var(--border))] overflow-hidden">
-        <div className={`h-full w-1/2 ${accentClass} opacity-80`} />
+      {/* Bottom accent line */}
+      <div className="relative mt-5 h-px w-full overflow-hidden rounded-full bg-[rgb(var(--border))]">
+        <div
+          className={`h-full w-0 group-hover:w-3/4 transition-all duration-500 ease-out rounded-full ${lineClass}`}
+        />
       </div>
     </div>
   );
@@ -127,7 +132,8 @@ function QuickCard({
   href,
   tag,
   accentClass,
-  tagClass,
+  tagBg,
+  tagText,
 }: {
   title: string;
   desc: string;
@@ -135,56 +141,65 @@ function QuickCard({
   href: string;
   tag: string;
   accentClass: string;
-  tagClass: string;
+  tagBg: string;
+  tagText: string;
 }) {
   return (
     <Link
       href={href}
       className="
-        group rounded-3xl border p-5
+        group relative rounded-2xl border p-5 overflow-hidden flex flex-col
         border-[rgb(var(--border))]
-        bg-[rgb(var(--card) / 0.6)]
+        bg-[rgb(var(--card)/0.5)]
+        backdrop-blur-sm
         transition-all duration-300 ease-out
-        hover:-translate-y-1
-        hover:bg-[rgb(var(--card) / 0.9)]
-        hover:shadow-[0_12px_40px_rgb(var(--shadow) / 0.25)]
+        hover:-translate-y-1.5
+        hover:bg-[rgb(var(--card)/0.85)]
+        hover:shadow-[0_16px_48px_rgb(var(--shadow)/0.22)]
+        hover:border-[rgb(var(--border)/0.8)]
       "
     >
-      <div className="flex items-start justify-between gap-3">
+      {/* Subtle gradient wash on hover */}
+      <div
+        className="
+          absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none
+          bg-gradient-to-br from-[rgb(var(--primary)/0.04)] to-transparent
+        "
+      />
+
+      <div className="relative flex items-start justify-between gap-3">
         <div
           className={[
-            "h-10 w-10 rounded-2xl border inline-flex items-center justify-center",
-            "border-[rgb(var(--border))]",
-            "bg-[rgb(var(--card2) / 0.55)]",
-            "shadow-[0_10px_26px_rgb(var(--shadow)/0.18)]",
+            "h-9 w-9 rounded-xl inline-flex items-center justify-center shrink-0",
+            "border border-[rgb(var(--border))]",
+            "bg-[rgb(var(--card2)/0.7)]",
             accentClass,
           ].join(" ")}
         >
-          <Icon className="h-5 w-5" />
+          <Icon className="h-4 w-4" />
         </div>
 
         <span
           className={[
-            "text-[10px] rounded-full border px-2 py-1",
-            "border-[rgb(var(--border))]",
-            "bg-[rgb(var(--card2) / 0.5)]",
-            tagClass,
+            "text-[10px] font-bold uppercase tracking-wider rounded-lg px-2 py-1",
+            tagBg,
+            tagText,
           ].join(" ")}
         >
           {tag}
         </span>
       </div>
 
-      <div className="mt-3 text-sm font-semibold text-[rgb(var(--fg))]">
+      <div className="relative mt-4 text-sm font-semibold text-[rgb(var(--fg))] leading-snug">
         {title}
       </div>
-      <p className="mt-2 text-xs text-[rgb(var(--muted))] leading-relaxed">
+      <p className="relative mt-1.5 text-xs text-[rgb(var(--muted))] leading-relaxed flex-1">
         {desc}
       </p>
 
-      <div className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-[rgb(var(--primary))]">
-        Get started{" "}
-        <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition" />
+      <div className="relative mt-5 inline-flex items-center gap-1.5 text-xs font-semibold text-[rgb(var(--primary))]">
+        Get started
+        <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform duration-200" />
       </div>
     </Link>
   );
@@ -205,155 +220,177 @@ export default function StudyMain() {
 
   return (
     <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
-      {/* subtle background glow (works in light + dark) */}
-      <div className="pointer-events-none fixed inset-0">
+      {/* Background atmosphere */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div
           className="
-            absolute -top-24 left-1/2 h-72 w-[42rem] -translate-x-1/2 rounded-full blur-3xl
-            bg-[rgb(var(--shadow) / 0.22)]
+            absolute -top-32 left-1/2 h-80 w-[52rem] -translate-x-1/2 rounded-full blur-3xl
+            bg-[rgb(var(--shadow)/0.18)]
           "
         />
         <div
           className="
-            absolute top-40 right-[-6rem] h-72 w-72 rounded-full blur-3xl
-            bg-[rgb(var(--primary2) / 0.18)]
+            absolute top-1/3 right-[-8rem] h-96 w-96 rounded-full blur-3xl
+            bg-[rgb(var(--primary2)/0.12)]
+          "
+        />
+        <div
+          className="
+            absolute bottom-0 left-[-6rem] h-64 w-64 rounded-full blur-3xl
+            bg-[rgb(var(--primary)/0.08)]
           "
         />
       </div>
 
-      <div className="relative pt-10 pb-10">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 space-y-6">
-          {/* Top header */}
+      <div className="relative pt-10 pb-16">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 space-y-5">
+
+          {/* ── Header ── */}
           <header className="flex items-start justify-between gap-4">
             <div className="min-w-0">
+              {/* Badge */}
               <div
                 className="
-                  inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs
+                  inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium
                   border-[rgb(var(--border))]
-                  bg-[rgb(var(--card) / 0.6)]
-                  text-[rgb(var(--fg))]
+                  bg-[rgb(var(--card)/0.6)]
+                  text-[rgb(var(--muted))]
+                  backdrop-blur-sm
                 "
               >
-                <Sparkles className="h-4 w-4 text-amber-500 dark:text-amber-300" />
+                <Sparkles className="h-3.5 w-3.5 text-amber-400" />
                 AI Learning Suite
               </div>
 
-              <h1 className="mt-4 text-2xl font-semibold tracking-tight">
-                Simple. Powerful. Intelligent.
+              <h1 className="mt-4 text-3xl font-bold tracking-tight leading-tight">
+                Simple.{" "}
+                <span className="text-[rgb(var(--muted))]">Powerful.</span>{" "}
+                Intelligent.
               </h1>
-              <p className="mt-2 text-sm text-[rgb(var(--muted))] max-w-2xl leading-relaxed">
+              <p className="mt-2.5 text-sm text-[rgb(var(--muted))] max-w-xl leading-relaxed">
                 Upload or paste content → AI creates study materials → you practice
-                → you master. Now with a second mode: AI-generated weekly study
-                plans.
+                → you master. With a second mode: AI-generated weekly study plans.
               </p>
 
               {/* Tabs */}
               <div className="mt-5 flex flex-wrap items-center gap-2">
-                <TabButton active={tab === "hub"} onClick={() => setTab("hub")}>
-                  <BookOpen className="h-4 w-4" />
-                  Study Hub
-                </TabButton>
-                <TabButton active={tab === "plan"} onClick={() => setTab("plan")}>
-                  <CalendarClock className="h-4 w-4" />
-                  Study Plan Generator
-                </TabButton>
-                <span className="text-xs text-[rgb(var(--muted2))] ml-1">
-                  • {title}
+                <div className="inline-flex items-center gap-1.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.5)] backdrop-blur-sm p-1">
+                  <TabButton active={tab === "hub"} onClick={() => setTab("hub")}>
+                    <BookOpen className="h-3.5 w-3.5" />
+                    Study Hub
+                  </TabButton>
+                  <TabButton active={tab === "plan"} onClick={() => setTab("plan")}>
+                    <CalendarClock className="h-3.5 w-3.5" />
+                    Study Plan
+                  </TabButton>
+                </div>
+                <span className="text-[11px] text-[rgb(var(--muted2))] pl-1">
+                  — {title}
                 </span>
               </div>
             </div>
 
-            {/* Primary action */}
-            <div className="flex items-center gap-2">
-              <Link
-                href="/study/hub/upload"
-                className="
-                  inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-semibold text-white
-                  bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary2))]
-                  hover:opacity-90
-                  shadow-[0_10px_30px_rgb(var(--shadow)/0.22)]
-                "
-              >
-                <Plus className="h-4 w-4" />
-                Add Material
-              </Link>
-            </div>
+            {/* CTA */}
+            <Link
+              href="/study/hub/upload"
+              className="
+                shrink-0 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold text-white
+                bg-[rgb(var(--fg))]
+                hover:opacity-85 active:scale-95
+                shadow-[0_8px_24px_rgb(var(--shadow)/0.2)]
+                transition-all duration-200
+              "
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Material
+            </Link>
           </header>
 
-          {/* “How it works” */}
+          {/* ── How it Works ── */}
           <section
             className="
-              rounded-3xl border p-6
+              rounded-2xl border p-6
               border-[rgb(var(--border))]
-              bg-[rgb(var(--card2) / 0.45)]
+              bg-[rgb(var(--card2)/0.4)]
+              backdrop-blur-sm
             "
           >
-            <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] pb-4">
-              <div className="text-sm font-semibold text-[rgb(var(--fg))] inline-flex items-center gap-2">
-                <Wand2 className="h-4 w-4 text-[rgb(var(--primary))]" />
-                How it Works 
+            <div className="flex items-center justify-between gap-3 pb-5 border-b border-[rgb(var(--border))]">
+              <div className="inline-flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]">
+                <div className="h-6 w-6 rounded-lg bg-[rgb(var(--fg))] flex items-center justify-center">
+                  <Wand2 className="h-3.5 w-3.5 text-[rgb(var(--bg))]" />
+                </div>
+                How it Works
               </div>
-              <div className="text-xs text-[rgb(var(--muted2))]">
+              <div className="text-[11px] text-[rgb(var(--muted2))] font-medium">
                 Choose a Mode → Follow the steps
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-4 gap-3">
               <StepCard
                 num={1}
                 title="Upload Content"
                 desc="Upload a PDF or paste notes. Best for text PDFs (slides exported)."
                 icon={Plus}
-                accentClass="text-cyan-600 dark:text-cyan-300"
+                accentClass="text-sky-500 dark:text-sky-400"
+                lineClass="bg-sky-400"
               />
               <StepCard
                 num={2}
                 title="AI Processing"
                 desc="AI extracts & organizes: summary, concepts, flashcards, quizzes."
                 icon={Brain}
-                accentClass="text-fuchsia-600 dark:text-fuchsia-300"
+                accentClass="text-violet-500 dark:text-violet-400"
+                lineClass="bg-violet-400"
               />
               <StepCard
                 num={3}
                 title="Study Materials"
                 desc="Use your study pack instantly inside Study Hub."
                 icon={BookOpen}
-                accentClass="text-emerald-600 dark:text-emerald-300"
+                accentClass="text-emerald-500 dark:text-emerald-400"
+                lineClass="bg-emerald-400"
               />
               <StepCard
                 num={4}
                 title="Master"
                 desc="Practice & follow a weekly study plan for consistent progress."
                 icon={CalendarClock}
-                accentClass="text-rose-600 dark:text-rose-300"
+                accentClass="text-rose-500 dark:text-rose-400"
+                lineClass="bg-rose-400"
               />
             </div>
           </section>
 
-          {/* Quick Actions */}
+          {/* ── Quick Actions ── */}
           <section
             className="
-              rounded-3xl border p-6
+              rounded-2xl border p-6
               border-[rgb(var(--border))]
-              bg-[rgb(var(--card2) / 0.45)]
+              bg-[rgb(var(--card2)/0.4)]
+              backdrop-blur-sm
             "
           >
-            <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] pb-4">
+            <div className="flex items-center justify-between gap-3 pb-5 border-b border-[rgb(var(--border))]">
               <div className="text-sm font-semibold text-[rgb(var(--fg))]">
                 Quick Actions
               </div>
-              <div className="text-xs text-[rgb(var(--muted2))]">Pick a workflow</div>
+              <div className="text-[11px] text-[rgb(var(--muted2))] font-medium">
+                Pick a workflow
+              </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
               <QuickCard
                 title="Active Recall Study Hub"
                 desc="Browse your materials, generate study packs, and quiz yourself."
                 icon={BookOpen}
                 href="/study/hub"
                 tag="Essential"
-                accentClass="text-emerald-600 dark:text-emerald-300"
-                tagClass="text-emerald-600 dark:text-emerald-300"
+                accentClass="text-emerald-500 dark:text-emerald-400"
+                tagBg="bg-emerald-500/10"
+                tagText="text-emerald-600 dark:text-emerald-400"
               />
               <QuickCard
                 title="AI Study Plan Generator"
@@ -361,8 +398,9 @@ export default function StudyMain() {
                 icon={CalendarClock}
                 href="/study/plan"
                 tag="New"
-                accentClass="text-cyan-600 dark:text-cyan-300"
-                tagClass="text-cyan-600 dark:text-cyan-300"
+                accentClass="text-sky-500 dark:text-sky-400"
+                tagBg="bg-sky-500/10"
+                tagText="text-sky-600 dark:text-sky-400"
               />
               <QuickCard
                 title="Upload New Material"
@@ -370,21 +408,23 @@ export default function StudyMain() {
                 icon={Plus}
                 href="/study/hub/upload"
                 tag="Fast"
-                accentClass="text-rose-600 dark:text-rose-300"
-                tagClass="text-rose-600 dark:text-rose-300"
+                accentClass="text-rose-500 dark:text-rose-400"
+                tagBg="bg-rose-500/10"
+                tagText="text-rose-600 dark:text-rose-400"
               />
             </div>
           </section>
 
-          {/* Below: show the selected tab’s content (light preview) */}
+          {/* ── Tab preview ── */}
           <section
             className="
-              rounded-3xl border p-6
+              rounded-2xl border p-6
               border-[rgb(var(--border))]
-              bg-[rgb(var(--card2) / 0.45)]
+              bg-[rgb(var(--card2)/0.4)]
+              backdrop-blur-sm
             "
           >
-            <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] pb-4">
+            <div className="flex items-center justify-between gap-3 pb-5 border-b border-[rgb(var(--border))]">
               <div className="text-sm font-semibold text-[rgb(var(--fg))]">
                 {tab === "hub" ? "Go to Study Hub" : "Go to Study Plan Generator"}
               </div>
@@ -392,34 +432,37 @@ export default function StudyMain() {
               <Link
                 href={tab === "hub" ? "/study/hub" : "/study/plan"}
                 className="
-                  inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-semibold
+                  group inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-semibold
                   border-[rgb(var(--border))]
-                  bg-[rgb(var(--card) / 0.6)]
+                  bg-[rgb(var(--card)/0.6)]
                   text-[rgb(var(--fg))]
-                  hover:bg-[rgb(var(--card) / 0.9)]
-                  hover:shadow-[0_10px_26px_rgb(var(--shadow)/0.16)]
+                  hover:bg-[rgb(var(--card)/0.9)]
+                  hover:shadow-[0_8px_24px_rgb(var(--shadow)/0.14)]
+                  transition-all duration-200
                 "
               >
-                Open <ArrowRight className="h-4 w-4" />
+                Open
+                <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform duration-200" />
               </Link>
             </div>
 
-            <div className="mt-4 text-sm text-[rgb(var(--muted))] leading-relaxed">
+            <p className="mt-4 text-sm text-[rgb(var(--muted))] leading-relaxed max-w-2xl">
               {tab === "hub" ? (
                 <>
                   Study Hub is where your subjects + materials live. From a material
-                  page, you’ll generate the AI study pack (summary, concepts,
+                  page, you'll generate the AI study pack (summary, concepts,
                   flashcards, quiz).
                 </>
               ) : (
                 <>
                   Study Plan Generator will create a weekly schedule based on your
-                  exam date, difficulty, and available hours. (We’ll build the AI
+                  exam date, difficulty, and available hours. (We'll build the AI
                   logic next.)
                 </>
               )}
-            </div>
+            </p>
           </section>
+
         </div>
       </div>
     </div>

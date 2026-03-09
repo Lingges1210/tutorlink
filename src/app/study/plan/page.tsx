@@ -1,1204 +1,1401 @@
-// src/app/study/plan/page.tsx
 "use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
-  CalendarClock,
-  Sparkles,
-  CheckCircle2,
-  Circle,
-  Flame,
-  Wand2,
-  RefreshCcw,
-  BookOpenCheck,
-  Timer,
-  GraduationCap,
-  AlertCircle,
-  HelpCircle,
-  Moon,
-  Sun,
-  Sunset,
+  ArrowLeft, CalendarClock, Sparkles, CheckCircle2, Flame,
+  Wand2, RefreshCcw, BookOpenCheck, Timer, GraduationCap, AlertCircle,
+  HelpCircle, Moon, Sun, Sunset, Trophy, Target, Zap, BookOpen, X, Star,
+  ChevronRight, Clock, BarChart2, Layers,
 } from "lucide-react";
 
-type DayKey = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
-const DAY_KEYS: DayKey[] = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
-const DAY_LABEL: Record<DayKey, string> = {
-  MON: "Mon",
-  TUE: "Tue",
-  WED: "Wed",
-  THU: "Thu",
-  FRI: "Fri",
-  SAT: "Sat",
-  SUN: "Sun",
-};
+/* ─── types ─── */
+type DayKey = "MON"|"TUE"|"WED"|"THU"|"FRI"|"SAT"|"SUN";
+const DAY_KEYS: DayKey[] = ["MON","TUE","WED","THU","FRI","SAT","SUN"];
+const DAY_LABEL: Record<DayKey,string> = { MON:"Mon",TUE:"Tue",WED:"Wed",THU:"Thu",FRI:"Fri",SAT:"Sat",SUN:"Sun" };
 
-type Style = "SHORT_BURSTS" | "DEEP_STUDY";
-type PreferredTime = "MORNING" | "AFTERNOON" | "NIGHT";
-
-type InputSubject = {
-  name: string;
-  level0to10: number;
-  weakTopics: string[];
-  weakInput: string;
-};
+type Style        = "SHORT_BURSTS"|"DEEP_STUDY";
+type PreferredTime = "MORNING"|"AFTERNOON"|"NIGHT";
+type InputSubject  = { name:string; level0to10:number; weakTopics:string[]; weakInput:string };
 
 type PlanItem = {
-  id: string;
-  date: string;
-  subjectName: string;
-  topic: string;
-  task: string;
-  durationMin: number;
-  type: "STUDY" | "PRACTICE" | "REVIEW" | "TUTOR";
-  reason?: string | null;
-  status: "PENDING" | "DONE" | "SKIPPED" | string;
-
-  // ✅ NEW
-  timeBlock?: string | null;
+  id:string; date:string; subjectName:string; topic:string; task:string;
+  durationMin:number; type:"STUDY"|"PRACTICE"|"REVIEW"|"TUTOR";
+  reason?:string|null; status:"PENDING"|"DONE"|"SKIPPED"|string;
+  timeBlock?:string|null;
 };
-
 type Plan = {
-  id: string;
-  title: string;
-  startDate: string;
-  endDate: string;
-  examDate?: string | null;
-  hoursPerWeek: number;
-  style: Style;
-  subjects: any;
-  availability: any;
-  items: PlanItem[];
-
-  // ✅ NEW
-  preferredTime?: PreferredTime;
-  aiExplanation?: string;
-  progress?: { done: number; total: number; pct: number };
+  id:string; title:string; startDate:string; endDate:string;
+  examDate?:string|null; hoursPerWeek:number; style:Style;
+  subjects:any; availability:any; items:PlanItem[];
+  preferredTime?:PreferredTime; aiExplanation?:string;
 };
 
-function cx(...s: Array<string | false | null | undefined>) {
-  return s.filter(Boolean).join(" ");
+/* ─── helpers ─── */
+function cx(...s:Array<string|false|null|undefined>) { return s.filter(Boolean).join(" "); }
+function startOfDayISO(iso:string) { const d=new Date(iso); d.setHours(0,0,0,0); return d.toISOString(); }
+function prettyDate(iso:string) {
+  return new Date(iso).toLocaleDateString(undefined,{ weekday:"short",month:"short",day:"numeric" });
+}
+function dayStamp(input:Date|string) {
+  const d=typeof input==="string"?new Date(input):input;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function prefLabel(p:PreferredTime) {
+  return p==="MORNING"?"Morning · 8–11 am":p==="AFTERNOON"?"Afternoon · 1–4 pm":"Night · 7–10 pm";
 }
 
-function startOfDayISO(iso: string) {
-  const d = new Date(iso);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString();
+// Strip verbose AI-generated prefixes and replace with clean short labels
+const TASK_PREFIX_MAP: [RegExp, string][] = [
+  [/^(spaced\s+review|spaced\s+revision|revision\s+session)[:\s–-]*/i, "Revision: "],
+  [/^(learn\s*\+\s*understand|learn\s*and\s*understand|learn\s*&\s*understand)[:\s–-]*/i, "Study: "],
+  [/^(practice\s+questions?|practice\s+problems?|practice\s+exercises?)[:\s–-]*/i, "Practice: "],
+  [/^(study\s+session|study)[:\s–-]+/i, "Study: "],
+  [/^(tutor\s+session|get\s+help)[:\s–-]*/i, "Get help: "],
+];
+function cleanTask(raw: string): string {
+  for (const [re, replacement] of TASK_PREFIX_MAP) {
+    if (re.test(raw)) return raw.replace(re, replacement);
+  }
+  return raw;
 }
-
-function prettyDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function badgeForType(t: PlanItem["type"]) {
-  if (t === "TUTOR") return { label: "Tutor", icon: GraduationCap };
-  if (t === "REVIEW") return { label: "Review", icon: Flame };
-  if (t === "PRACTICE") return { label: "Practice", icon: BookOpenCheck };
-  return { label: "Study", icon: Timer };
-}
-
-function prefLabel(p: PreferredTime) {
-  if (p === "MORNING") return "Morning (8–11am)";
-  if (p === "AFTERNOON") return "Afternoon (1–4pm)";
-  return "Night (7–10pm)";
-}
-
-// ✅ local-day stamp (YYYY-MM-DD in the user's local timezone)
-function dayStamp(input: Date | string) {
-  const d = typeof input === "string" ? new Date(input) : input;
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
-}
-
 function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return { text: "Good Morning", Icon: Sun };
-  if (h < 18) return { text: "Good Afternoon", Icon: Sunset };
-  return { text: "Good Evening", Icon: Moon };
+  const h=new Date().getHours();
+  if(h<12) return { text:"Good Morning",   Icon:Sun    };
+  if(h<18) return { text:"Good Afternoon", Icon:Sunset };
+  return       { text:"Good Evening",    Icon:Moon   };
+}
+function calcStreak(items:PlanItem[]) {
+  const done=new Set(items.filter(x=>x.status==="DONE").map(x=>dayStamp(x.date)));
+  let n=0; const d=new Date();
+  while(done.has(dayStamp(d))){ n++; d.setDate(d.getDate()-1); }
+  return n;
+}
+function badgeForType(t:PlanItem["type"]) {
+  if(t==="TUTOR")    return { label:"Get help",  Icon:GraduationCap };
+  if(t==="REVIEW")   return { label:"Revision",  Icon:Flame };
+  if(t==="PRACTICE") return { label:"Practice",  Icon:BookOpenCheck };
+  return { label:"Study", Icon:Timer };
 }
 
-// ✅ streak = consecutive days with at least 1 DONE task, ending today
-function calcStreak(items: PlanItem[]) {
-  const doneDays = new Set<string>();
-  for (const it of items) {
-    if (it.status === "DONE") doneDays.add(dayStamp(it.date));
-  }
+const TYPE_PILL: Record<string,string> = {
+  TUTOR:"spg-pill-purple", REVIEW:"spg-pill-amber",
+  PRACTICE:"spg-pill-sky", STUDY:"spg-pill-indigo",
+};
+const TYPE_BAR: Record<string,string> = {
+  TUTOR:"spg-bar-purple", REVIEW:"spg-bar-amber",
+  PRACTICE:"spg-bar-sky", STUDY:"spg-bar-indigo",
+};
 
-  let streak = 0;
-  const cur = new Date();
-  // walk backwards from today
-  for (;;) {
-    const s = dayStamp(cur);
-    if (!doneDays.has(s)) break;
-    streak += 1;
-    cur.setDate(cur.getDate() - 1);
-  }
-  return streak;
-}
-
+/* ════════════════════════════════════════════════
+   COMPONENT
+════════════════════════════════════════════════ */
 export default function StudyPlanPage() {
-  const [step, setStep] = useState<"FORM" | "RESULT">("FORM");
+  const [step,setStep]         = useState<"FORM"|"RESULT">("FORM");
+  const [title,setTitle]       = useState("");
+  const [examDate,setExamDate] = useState("");
+  const [hoursPerWeek,setHPW]  = useState(8);
+  const [style,setStyle]       = useState<Style>("SHORT_BURSTS");
+  const [preferredTime,setPT]  = useState<PreferredTime>("NIGHT");
+  const [days,setDays]         = useState<DayKey[]>(["MON","TUE","WED","THU","FRI","SAT"]);
+  const [hoursByDay,setHBD]    = useState<Record<DayKey,number>>({ MON:1,TUE:1,WED:1,THU:1,FRI:1,SAT:2,SUN:2 });
+  const [subjects,setSubjects] = useState<InputSubject[]>([{ name:"",level0to10:5,weakTopics:[],weakInput:"" }]);
+  const [plan,setPlan]         = useState<Plan|null>(null);
+  const [loading,setLoading]   = useState(false);
+  const [busyToggle,setBusy]   = useState<string|null>(null);
+  const [error,setError]       = useState("");
+  const [whyId,setWhyId]       = useState<string|null>(null);
+  const [activeSection,setActiveSection] = useState<number>(0);
 
-  // FORM state
-  const [title, setTitle] = useState("");
-  const [examDate, setExamDate] = useState<string>("");
-  const [hoursPerWeek, setHoursPerWeek] = useState<number>(8);
-  const [style, setStyle] = useState<Style>("SHORT_BURSTS");
-
-  // ✅ NEW: Preferred study time
-  const [preferredTime, setPreferredTime] = useState<PreferredTime>("NIGHT");
-
-  const [days, setDays] = useState<DayKey[]>([
-    "MON",
-    "TUE",
-    "WED",
-    "THU",
-    "FRI",
-    "SAT",
-  ]);
-  const [hoursByDay, setHoursByDay] = useState<Record<DayKey, number>>({
-    MON: 1,
-    TUE: 1,
-    WED: 1,
-    THU: 1,
-    FRI: 1,
-    SAT: 2,
-    SUN: 2,
-  });
-
-  const [subjects, setSubjects] = useState<InputSubject[]>([
-    { name: "", level0to10: 5, weakTopics: [], weakInput: "" },
-  ]);
-
-  // RESULT state
-  const [plan, setPlan] = useState<Plan | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [busyToggle, setBusyToggle] = useState<string | null>(null);
-  const [error, setError] = useState<string>("");
-
-  // ✅ NEW: “Why today?” modal
-  const [whyOpenItemId, setWhyOpenItemId] = useState<string | null>(null);
-
-  async function fetchCurrentPlan() {
-    const res = await fetch(`/api/study/plans`, { cache: "no-store" });
-    const json = await res.json();
-    if (!json?.ok) throw new Error(json?.error ?? "Failed to load plan");
-    setPlan(json.plan ?? null);
-
-    // if a plan exists, keep form's preferredTime synced (nice UX)
-    if (json.plan?.preferredTime) setPreferredTime(json.plan.preferredTime);
-
-    return json.plan ?? null;
+  async function fetchPlan() {
+    const res=await fetch("/api/study/plans",{ cache:"no-store" });
+    const json=await res.json();
+    if(!json?.ok) throw new Error(json?.error??"Failed to load plan");
+    setPlan(json.plan??null);
+    if(json.plan?.preferredTime) setPT(json.plan.preferredTime);
+    return json.plan??null;
   }
-
-  // ✅ Optimistic UI helper
-  function updateItemStatusLocal(
-    itemId: string,
-    nextStatus: "PENDING" | "DONE" | "SKIPPED"
-  ) {
-    setPlan((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        items: prev.items.map((it) =>
-          it.id === itemId ? { ...it, status: nextStatus } : it
-        ),
-      };
-    });
+  function patchLocal(id:string,s:"PENDING"|"DONE"|"SKIPPED") {
+    setPlan(p=>p?{ ...p, items:p.items.map(it=>it.id===id?{...it,status:s}:it) }:p);
   }
-
-  // ✅ Auto-load existing plan on page open → show RESULT if exists
-  // (This already loads plan first; UI will still render once, but you’ll see plan quickly)
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const p = await fetchCurrentPlan();
-        if (!mounted) return;
-        if (p) setStep("RESULT");
-      } catch {
-        // ignore
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(()=>{
+    let ok=true;
+    (async()=>{ try{ const p=await fetchPlan(); if(ok&&p) setStep("RESULT"); }catch{} })();
+    return()=>{ ok=false; };
+  },[]);
 
   async function generatePlan() {
-    setError("");
-    setLoading(true);
+    setError(""); setLoading(true);
     try {
-      const cleanSubjects = subjects
-        .map((s) => {
-          const weakTopics = s.weakInput
-            .split(",")
-            .map((x) => x.trim())
-            .filter(Boolean);
-          return {
-            name: s.name.trim(),
-            level0to10: Number.isFinite(Number(s.level0to10))
-              ? Number(s.level0to10)
-              : 5,
-            weakTopics,
-          };
-        })
-        .filter((s) => s.name.length > 0);
-
-      if (cleanSubjects.length === 0) throw new Error("Add at least 1 subject.");
-
-      const payload = {
-        title: title.trim() || undefined,
-        examDate: examDate ? new Date(examDate).toISOString() : undefined,
-        hoursPerWeek,
-        style,
-        preferredTime, // ✅ NEW
-        availability: { days, hoursByDay },
-        subjects: cleanSubjects,
-      };
-
-      const res = await fetch("/api/study/plans/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      const cleanSubjects=subjects
+        .map(s=>({ name:s.name.trim(), level0to10:+s.level0to10||5,
+          weakTopics:s.weakInput.split(",").map(x=>x.trim()).filter(Boolean) }))
+        .filter(s=>s.name.length>0);
+      if(!cleanSubjects.length) throw new Error("Add at least 1 subject.");
+      const res=await fetch("/api/study/plans/generate",{
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ title:title.trim()||undefined,
+          examDate:examDate?new Date(examDate).toISOString():undefined,
+          hoursPerWeek, style, preferredTime,
+          availability:{days,hoursByDay}, subjects:cleanSubjects }),
       });
-
-      const json = await res.json();
-      if (!json?.ok) throw new Error(json?.error ?? "Failed to generate");
-
-      await fetchCurrentPlan();
-      setStep("RESULT");
-    } catch (e: any) {
-      setError(e?.message ?? "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
+      const json=await res.json();
+      if(!json?.ok) throw new Error(json?.error??"Failed to generate");
+      await fetchPlan(); setStep("RESULT");
+    } catch(e:any){ setError(e?.message??"Something went wrong"); }
+    finally{ setLoading(false); }
   }
 
-  // ✅ Optimistic toggle
-  async function toggleItem(item: PlanItem) {
-    const nextStatus: "PENDING" | "DONE" =
-      item.status === "DONE" ? "PENDING" : "DONE";
-    updateItemStatusLocal(item.id, nextStatus);
-
-    setBusyToggle(item.id);
+  async function toggleItem(item:PlanItem) {
+    const next=item.status==="DONE"?"PENDING":"DONE";
+    patchLocal(item.id,next); setBusy(item.id);
     try {
-      const res = await fetch("/api/study/plans/item", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: item.id, nextStatus }),
+      const res=await fetch("/api/study/plans/item",{
+        method:"PATCH", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ itemId:item.id, nextStatus:next }),
       });
-      const json = await res.json();
-      if (!json?.ok) throw new Error(json?.error ?? "Failed to update");
-    } catch (e: any) {
-      updateItemStatusLocal(item.id, item.status as any); // revert
-      setError(e?.message ?? "Failed to update task");
-    } finally {
-      setBusyToggle(null);
-    }
+      if(!(await res.json())?.ok) throw new Error();
+    } catch{ patchLocal(item.id,item.status as any); setError("Failed to update task"); }
+    finally{ setBusy(null); }
   }
 
-  async function rebalanceWeek() {
-    setLoading(true);
-    setError("");
+  async function rebalance() {
+    setLoading(true); setError("");
     try {
-      const res = await fetch("/api/study/plans/rebalance", { method: "POST" });
-      const json = await res.json();
-      if (!json?.ok) throw new Error(json?.error ?? "Failed to rebalance");
-      await fetchCurrentPlan();
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to rebalance");
-    } finally {
-      setLoading(false);
+      const res=await fetch("/api/study/plans/rebalance",{ method:"POST" });
+      if(!(await res.json())?.ok) throw new Error("Failed to rebalance");
+      await fetchPlan();
+    } catch(e:any){ setError(e?.message??"Failed to rebalance"); }
+    finally{ setLoading(false); }
+  }
+
+  const grouped=useMemo(()=>{
+    if(!plan?.items) return [];
+    const map=new Map<string,PlanItem[]>();
+    for(const it of plan.items){
+      const k=startOfDayISO(it.date);
+      if(!map.has(k)) map.set(k,[]);
+      map.get(k)!.push(it);
     }
-  }
-
-  function addSubject() {
-    setSubjects((p) => [
-      ...p,
-      { name: "", level0to10: 5, weakTopics: [], weakInput: "" },
-    ]);
-  }
-
-  function removeSubject(idx: number) {
-    setSubjects((p) => p.filter((_, i) => i !== idx));
-  }
-
-  function toggleDay(d: DayKey) {
-    setDays((p) => (p.includes(d) ? p.filter((x) => x !== d) : [...p, d]));
-  }
-
-  const grouped = useMemo(() => {
-    if (!plan?.items) return [];
-    const map = new Map<string, PlanItem[]>();
-    for (const it of plan.items) {
-      const key = startOfDayISO(it.date);
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(it);
-    }
-
-    const order = { TUTOR: 0, STUDY: 1, PRACTICE: 2, REVIEW: 3 } as any;
+    const ord:any={ TUTOR:0,STUDY:1,PRACTICE:2,REVIEW:3 };
     return [...map.entries()]
-      .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
-      .map(([date, items]) => ({
-        date,
-        items: items.sort((a, b) => (order[a.type] ?? 99) - (order[b.type] ?? 99)),
-      }));
-  }, [plan]);
+      .sort((a,b)=>+new Date(a[0])-+new Date(b[0]))
+      .map(([date,items])=>({ date, items:items.sort((a,b)=>(ord[a.type]??9)-(ord[b.type]??9)) }));
+  },[plan]);
 
-  const progress = useMemo(() => {
-    const all = plan?.items ?? [];
-    const done = all.filter((x) => x.status === "DONE").length;
-    const pct = all.length ? Math.round((done / all.length) * 100) : 0;
+  const progress=useMemo(()=>{
+    const all=plan?.items??[];
+    const done=all.filter(x=>x.status==="DONE").length;
+    const pct=all.length?Math.round(done/all.length*100):0;
+    const pbs=new Map<string,number>();
+    for(const it of all) if(it.status!=="DONE") pbs.set(it.subjectName,(pbs.get(it.subjectName)??0)+1);
+    return { done, total:all.length, pct, weakSpot:[...pbs.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]??null };
+  },[plan]);
 
-    const pendingBySubject = new Map<string, number>();
-    for (const it of all) {
-      if (it.status !== "DONE") {
-        pendingBySubject.set(
-          it.subjectName,
-          (pendingBySubject.get(it.subjectName) ?? 0) + 1
-        );
-      }
-    }
-    const worst = [...pendingBySubject.entries()].sort((a, b) => b[1] - a[1])[0];
-    return { done, total: all.length, pct, weakSpot: worst?.[0] ?? null };
-  }, [plan]);
+  const todayPack=useMemo(()=>{
+    if(!plan?.items) return null;
+    const today=dayStamp(new Date());
+    const todays=plan.items.filter(it=>dayStamp(it.date)===today)
+      .sort((a,b)=>a.status.localeCompare(b.status));
+    const pending=todays.filter(x=>x.status!=="DONE");
+    return { todays, pending, streak:calcStreak(plan.items),
+      totalMin:pending.reduce((s,x)=>s+(x.durationMin||0),0) };
+  },[plan]);
 
-  // ✅ Today’s dashboard data
-  const todayPack = useMemo(() => {
-    if (!plan?.items) return null;
-    const today = dayStamp(new Date());
-    const todays = plan.items
-      .filter((it) => dayStamp(it.date) === today)
-      .sort((a, b) => a.status.localeCompare(b.status));
+  const whyItem=useMemo(()=>
+    whyId&&plan?.items?plan.items.find(x=>x.id===whyId)??null:null
+  ,[whyId,plan]);
 
-    const pending = todays.filter((x) => x.status !== "DONE");
-    const streak = calcStreak(plan.items);
+  const greeting=useMemo(()=>getGreeting(),[]);
 
-    const totalMin = pending.reduce((sum, x) => sum + (x.durationMin || 0), 0);
+  const FORM_SECTIONS = [
+    { id: 0, label: "Goals", icon: Target },
+    { id: 1, label: "Schedule", icon: CalendarClock },
+    { id: 2, label: "Subjects", icon: BookOpen },
+  ];
 
-    return {
-      today,
-      todays,
-      pending,
-      streak,
-      totalMin,
-    };
-  }, [plan]);
-
-  const whyItem = useMemo(() => {
-    if (!whyOpenItemId || !plan?.items) return null;
-    return plan.items.find((x) => x.id === whyOpenItemId) ?? null;
-  }, [whyOpenItemId, plan]);
-
-  const greeting = useMemo(() => getGreeting(), []);
-
+  /* ─── render ─── */
   return (
-    <div className="pt-10 pb-12">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 space-y-6">
-        {/* Header */}
-        <header className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <Link
-              href="/study?tab=plan"
-              className="inline-flex items-center gap-2 text-sm text-[rgb(var(--muted))] hover:underline"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to AI Learning Suite
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+        /* ── base ── */
+        .spg { font-family: 'Plus Jakarta Sans', sans-serif; }
+
+        /* ── surfaces ── */
+        .spg-card  { background: rgb(var(--card));  border: 1px solid rgb(var(--border)); }
+        .spg-card2 { background: rgb(var(--card2)); border: 1px solid rgb(var(--border)); }
+        .spg-inset { background: rgb(var(--card2)); border: 1px solid rgb(var(--border)); border-radius: 14px; }
+
+        /* ── accent ── */
+        .spg-acc-pill { background: rgba(var(--primary),.1); border: 1px solid rgba(var(--primary),.2); color: rgb(var(--primary)); }
+        .spg-acc-text { color: rgb(var(--primary)); }
+
+        /* ── buttons ── */
+        .spg-ghost {
+          background: rgb(var(--card2)); border: 1px solid rgb(var(--border));
+          color: rgb(var(--fg)); transition: all .15s;
+        }
+        .spg-ghost:hover:not(:disabled) { border-color: rgba(var(--primary),.4); color: rgb(var(--primary)); }
+        .spg-ghost:disabled { opacity: .45; }
+
+        .spg-cta {
+          background: rgb(var(--primary));
+          color: #fff; border: none;
+          transition: all .18s;
+        }
+        .spg-cta:hover:not(:disabled) { opacity: .88; transform: translateY(-1px); }
+        .spg-cta:disabled { opacity: .5; }
+
+        /* ── type pills ── */
+        .spg-pill-indigo { background: rgba(99,102,241,.1); border: 1px solid rgba(99,102,241,.22); color: #4f46e5; }
+        .spg-pill-purple { background: rgba(168,85,247,.1); border: 1px solid rgba(168,85,247,.22); color: #7c3aed; }
+        .spg-pill-amber  { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.22); color: #b45309; }
+        .spg-pill-sky    { background: rgba(14,165,233,.1);  border: 1px solid rgba(14,165,233,.22); color: #0369a1; }
+        .dark .spg-pill-indigo { color: #818cf8; }
+        .dark .spg-pill-purple { color: #c084fc; }
+        .dark .spg-pill-amber  { color: #fbbf24; }
+        .dark .spg-pill-sky    { color: #38bdf8; }
+
+        /* ── type bars ── */
+        .spg-bar-indigo { background: #6366f1; }
+        .spg-bar-purple { background: #a855f7; }
+        .spg-bar-amber  { background: #f59e0b; }
+        .spg-bar-sky    { background: #0ea5e9; }
+
+        /* ── stat chips ── */
+        .spg-stat-fire  { background: rgba(251,146,60,.1); border: 1px solid rgba(251,146,60,.25); }
+        .spg-stat-green { background: rgba(34,197,94,.1);  border: 1px solid rgba(34,197,94,.25); }
+
+        /* ── done state ── */
+        .spg-done      { background: rgba(34,197,94,.06); border: 1px solid rgba(34,197,94,.2); }
+
+        /* ── today column ── */
+        .spg-today-col { background: rgba(var(--primary),.04); border: 1.5px solid rgba(var(--primary),.22); }
+        .spg-today-hdr { border-bottom: 1px solid rgba(var(--primary),.14); }
+
+        /* ── progress bar ── */
+        .spg-track { background: rgb(var(--card2)); border: 1px solid rgb(var(--border)); }
+        .spg-fill  { background: rgb(var(--primary)); transition: width .9s cubic-bezier(.16,1,.3,1); }
+
+        /* ── day pills ── */
+        .spg-day-on  { background: rgba(var(--primary),.12); border: 1.5px solid rgba(var(--primary),.35); color: rgb(var(--primary)); font-weight: 700; }
+        .spg-day-off { background: transparent; border: 1px solid rgb(var(--border)); color: rgb(var(--muted)); }
+        .spg-day-off:hover { border-color: rgba(var(--primary),.3); color: rgb(var(--fg)); }
+
+        /* ── text ── */
+        .spg-fg    { color: rgb(var(--fg)); }
+        .spg-muted { color: rgb(var(--muted)); }
+        .spg-muted2{ color: rgb(var(--muted2)); }
+        .spg-grad  {
+          background: linear-gradient(135deg, rgb(var(--primary)), rgba(var(--primary),.55));
+          -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        /* ── ai banner ── */
+        .spg-ai-banner {
+          background: rgba(var(--primary),.05);
+          border: 1px solid rgba(var(--primary),.16);
+        }
+
+        /* ── tip box ── */
+        .spg-tip { background: rgba(var(--primary),.06); border: 1px solid rgba(var(--primary),.15); border-radius: 10px; }
+
+        /* ── range input ── */
+        input[type=range].spg-range {
+          -webkit-appearance: none; appearance: none;
+          width: 100%; height: 4px; border-radius: 99px;
+          background: rgb(var(--card2)); outline: none; cursor: pointer;
+        }
+        input[type=range].spg-range::-webkit-slider-thumb {
+          -webkit-appearance: none; width: 17px; height: 17px; border-radius: 50%;
+          background: rgb(var(--primary)); cursor: pointer;
+          border: 2.5px solid rgb(var(--card));
+          box-shadow: 0 1px 6px rgba(var(--primary),.35);
+          transition: transform .15s;
+        }
+        input[type=range].spg-range:hover::-webkit-slider-thumb { transform: scale(1.18); }
+        input[type=range].spg-range::-moz-range-thumb {
+          width: 17px; height: 17px; border-radius: 50%;
+          background: rgb(var(--primary)); cursor: pointer; border: none;
+        }
+
+        /* ── text inputs ── */
+        .spg-input {
+          background: rgb(var(--card2)); border: 1px solid rgb(var(--border));
+          color: rgb(var(--fg)); outline: none;
+          transition: border-color .15s, box-shadow .15s;
+          font-family: inherit;
+        }
+        .spg-input::placeholder { color: rgb(var(--muted)); opacity: .6; }
+        .spg-input:focus {
+          border-color: rgba(var(--primary),.5);
+          box-shadow: 0 0 0 3px rgba(var(--primary),.1);
+        }
+
+        /* ── task card hover ── */
+        .spg-task { transition: all .16s; cursor: pointer; }
+        .spg-task:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+        .dark .spg-task:hover:not(:disabled) { box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+
+        /* ── modal ── */
+        .spg-backdrop { background: rgba(0,0,0,.45); backdrop-filter: blur(6px); }
+        .spg-modal { background: rgb(var(--card)); border: 1px solid rgb(var(--border)); box-shadow: 0 24px 60px rgba(0,0,0,.18); }
+
+        /* ── divider ── */
+        .spg-divider { border-top: 1px solid rgb(var(--border)); }
+
+        /* ── section nav ── */
+        .spg-sec-nav {
+          background: rgb(var(--card2));
+          border: 1px solid rgb(var(--border));
+          border-radius: 12px;
+          padding: 4px;
+          display: flex;
+          gap: 2px;
+        }
+        .spg-sec-btn {
+          flex: 1; border: none; border-radius: 9px;
+          padding: 8px 12px; font-size: 12px; font-weight: 600;
+          cursor: pointer; transition: all .15s;
+          font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .spg-sec-btn-active {
+          background: rgb(var(--card));
+          border: 1.5px solid rgba(var(--primary),.5);
+          color: rgb(var(--primary));
+          box-shadow: 0 1px 4px rgba(0,0,0,.06);
+        }
+        .spg-sec-btn-inactive {
+          background: transparent; border: 1px solid transparent;
+          color: rgb(var(--muted));
+        }
+        .spg-sec-btn-inactive:hover { color: rgb(var(--fg)); }
+
+        /* ── label ── */
+        .spg-label {
+          font-size: 11px; font-weight: 600; letter-spacing: .04em;
+          text-transform: uppercase; color: rgb(var(--muted2));
+          margin-bottom: 6px;
+        }
+
+        /* ── option card ── */
+        .spg-opt {
+          border-radius: 12px; padding: 12px 14px;
+          cursor: pointer; transition: all .15s; text-align: left;
+          font-family: inherit;
+        }
+        .spg-opt-on {
+          background: rgba(var(--primary),.08);
+          border: 2px solid rgb(var(--primary));
+          color: rgb(var(--primary));
+          box-shadow: 0 0 0 3px rgba(var(--primary),.1);
+        }
+        .spg-opt-off {
+          background: transparent;
+          border: 1.5px solid rgb(var(--border));
+          color: rgb(var(--fg));
+        }
+        .spg-opt-off:hover { border-color: rgba(var(--primary),.4); }
+
+        /* ── mascot ── */
+        .spg-mascot-wrap {
+          position: fixed;
+          bottom: 24px;
+          right: 28px;
+          z-index: 40;
+          pointer-events: none;
+        }
+        .spg-mascot-float {
+          animation: spgMascotFloat 3.8s ease-in-out infinite;
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+        @keyframes spgMascotFloat {
+          0%,100% { transform: translateY(0px) rotate(-1deg); }
+          50%      { transform: translateY(-10px) rotate(1deg); }
+        }
+
+        /* arm holding book wobble */
+        .spg-arm-l {
+          transform-origin: 22px 56px;
+          animation: spgArmWobble 3.8s ease-in-out infinite;
+        }
+        @keyframes spgArmWobble {
+          0%,100% { transform: rotate(0deg); }
+          30%     { transform: rotate(-8deg); }
+          60%     { transform: rotate(4deg); }
+        }
+
+        /* blinking */
+        .spg-blink {
+          animation: spgBlink 4s ease-in-out infinite;
+          opacity: 0;
+        }
+        @keyframes spgBlink {
+          0%,92%,100% { opacity: 0; }
+          94%,98%     { opacity: 1; }
+        }
+
+        /* sparkles */
+        .spg-sparkle1 {
+          animation: spgSpark1 2.4s ease-in-out infinite;
+          transform-origin: 61.5px 18px;
+        }
+        @keyframes spgSpark1 {
+          0%,100% { opacity:.9; transform: scale(1) rotate(0deg); }
+          50%     { opacity:.4; transform: scale(0.6) rotate(20deg); }
+        }
+        .spg-sparkle2 {
+          animation: spgSpark2 3.1s ease-in-out infinite;
+          transform-origin: 11px 12px;
+        }
+        @keyframes spgSpark2 {
+          0%,100% { opacity:.9; transform: scale(1); }
+          40%     { opacity:.2; transform: scale(0.5); }
+        }
+
+        /* speech bubble */
+        .spg-bubble {
+          background: rgb(var(--card));
+          border: 1px solid rgb(var(--border));
+          border-radius: 12px;
+          padding: 5px 10px;
+          margin-bottom: 6px;
+          order: -1;
+          box-shadow: 0 4px 16px rgba(0,0,0,.1);
+          position: relative;
+          animation: spgBubblePop 4s ease-in-out infinite;
+          pointer-events: none;
+        }
+        .spg-bubble::after {
+          content: '';
+          position: absolute;
+          bottom: -6px;
+          left: 50%;
+          transform: translateX(-50%);
+          border-left: 6px solid transparent;
+          border-right: 6px solid transparent;
+          border-top: 6px solid rgb(var(--card));
+        }
+        .spg-bubble::before {
+          content: '';
+          position: absolute;
+          bottom: -7px;
+          left: 50%;
+          transform: translateX(-50%);
+          border-left: 7px solid transparent;
+          border-right: 7px solid transparent;
+          border-top: 7px solid rgb(var(--border));
+        }
+        .spg-bubble-text {
+          font-size: 11px;
+          font-weight: 600;
+          color: rgb(var(--fg));
+          white-space: nowrap;
+          font-family: inherit;
+        }
+        @keyframes spgBubblePop {
+          0%,100% { opacity: 1; transform: scale(1); }
+          45%,55% { opacity: 0; transform: scale(0.85); }
+        }
+        .spg-up  { animation: spgUp  .38s cubic-bezier(.16,1,.3,1) both; }
+        @keyframes spgUp  { from{ opacity:0; transform:translateY(10px) } to{ opacity:1; transform:translateY(0) } }
+        .spg-fd  { animation: spgFd  .22s ease both; }
+        @keyframes spgFd  { from{opacity:0} to{opacity:1} }
+        .spg-pop { animation: spgPop .26s cubic-bezier(.16,1,.3,1) both; }
+        @keyframes spgPop { from{opacity:0;transform:scale(.94) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
+        .spg-fire{ animation: spgFire 2s ease-in-out infinite; }
+        @keyframes spgFire{ 0%,100%{transform:scale(1) rotate(-2deg)} 50%{transform:scale(1.12) rotate(2deg)} }
+        .spg-spin{ animation: spgSpin .9s linear infinite; }
+        @keyframes spgSpin{ to{transform:rotate(360deg)} }
+
+        .d1{animation-delay:.04s} .d2{animation-delay:.08s}
+        .d3{animation-delay:.12s} .d4{animation-delay:.16s}
+
+        /* ── section panel ── */
+        .spg-panel { display:none; }
+        .spg-panel-active { display:block; animation:spgUp .28s cubic-bezier(.16,1,.3,1) both; }
+
+        /* ── number input ── */
+        .spg-num-input::-webkit-inner-spin-button,
+        .spg-num-input::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+        .spg-num-input { -moz-appearance:textfield; }
+
+        /* ── subject card ── */
+        .spg-subj-card {
+          border: 1px solid rgb(var(--border));
+          border-radius: 16px;
+          overflow: hidden;
+        }
+        .spg-subj-head {
+          background: rgb(var(--card2));
+          border-bottom: 1px solid rgb(var(--border));
+          padding: 14px 16px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        /* ── level bar ── */
+        .spg-level-track {
+          height: 6px; border-radius: 99px;
+          background: rgb(var(--card2));
+          border: 1px solid rgb(var(--border));
+          overflow: hidden;
+        }
+        .spg-level-fill {
+          height: 100%;
+          background: linear-gradient(90deg, rgba(var(--primary),.5), rgb(var(--primary)));
+          border-radius: 99px;
+          transition: width .3s ease;
+        }
+      `}</style>
+
+      <div className="spg pt-8 pb-20">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6">
+
+          {/* ══ HEADER ══ */}
+          <header className="spg-up mb-6">
+            <Link href="/study?tab=plan"
+              className="inline-flex items-center gap-1.5 text-sm spg-muted hover:spg-acc-text transition-colors mb-3">
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back
             </Link>
 
-            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1.5 text-xs text-[rgb(var(--muted2))]">
-              <Sparkles className="h-4 w-4" />
-              AI Study Planner (MVP+)
-            </div>
-
-            <h1 className="mt-3 text-2xl font-semibold text-[rgb(var(--fg))]">
-              Study Plan Generator
-            </h1>
-            <p className="text-sm text-[rgb(var(--muted))] max-w-2xl">
-              Build a weekly Mon–Sun plan with spaced repetition, smart task blocks, and
-              clear “why” explanations.
-            </p>
-          </div>
-
-          {step === "RESULT" && (
-            <button
-              type="button"
-              onClick={() => setStep("FORM")}
-              className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:opacity-90"
-            >
-              <Wand2 className="h-4 w-4" />
-              Adjust inputs
-            </button>
-          )}
-        </header>
-
-        {error && (
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-500 flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 mt-0.5" />
-            <div>{error}</div>
-          </div>
-        )}
-
-        {/* ✅ Plan-level AI Explanation */}
-        {step === "RESULT" && plan?.aiExplanation && (
-          <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]">
-              <Sparkles className="h-4 w-4" />
-              Why this plan?
-            </div>
-            <p className="mt-2 text-sm text-[rgb(var(--muted))]">{plan.aiExplanation}</p>
-          </div>
-        )}
-
-        {/* ✅ TODAY’S STUDY DASHBOARD (Killer Feature) */}
-        {step === "RESULT" && plan && todayPack && (
-          <section
-            className={cx(
-              "rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5",
-              "shadow-[0_18px_40px_rgba(0,0,0,0.12)]",
-              "transition hover:-translate-y-0.5 hover:shadow-[0_24px_60px_rgba(0,0,0,0.18)]"
-            )}
-          >
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <div className="inline-flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]">
-                  <greeting.Icon className="h-4 w-4" />
-                  {greeting.text}
-                  <span className="text-[rgb(var(--muted))] font-semibold">—</span>
-                  <span className="text-[rgb(var(--muted))]">{prettyDate(new Date().toISOString())}</span>
+                <div className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold spg-acc-pill mb-2">
+                  <Sparkles className="h-3 w-3" />
+                  AI-Powered
+                </div>
+                <h1 className="text-2xl font-bold spg-fg tracking-tight leading-tight">
+                  Study Plan <span className="spg-grad">Generator</span>
+                </h1>
+                <p className="text-sm spg-muted mt-1">
+                  Smart weekly schedule that adapts to your weak spots and keeps you on track every day.
+                </p>
+              </div>
+
+              {step==="RESULT" && (
+                <button type="button" onClick={()=>setStep("FORM")}
+                  className="spg-ghost inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold shrink-0 mt-1">
+                  <Wand2 className="h-3.5 w-3.5" />
+                  Edit inputs
+                </button>
+              )}
+            </div>
+          </header>
+
+          {/* ══ ERROR ══ */}
+          {error && (
+            <div className="spg-fd rounded-2xl border border-red-500/25 bg-red-500/8 p-4 mb-6 text-sm text-red-500 flex items-start gap-3">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span className="flex-1 leading-relaxed">{error}</span>
+              <button type="button" onClick={()=>setError("")} className="hover:opacity-70 transition-opacity">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
+          {/* ══ AI EXPLANATION BANNER ══ */}
+          {step==="RESULT" && plan?.aiExplanation && (
+            <div className="spg-ai-banner rounded-xl px-4 py-3 mb-4 spg-up d1 flex items-start gap-2.5">
+              <Sparkles className="h-3.5 w-3.5 spg-acc-text mt-0.5 shrink-0" />
+              <p className="text-xs spg-muted leading-relaxed">
+                <span className="font-semibold spg-acc-text">Why this plan? </span>
+                {plan.aiExplanation}
+              </p>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════
+              TODAY DASHBOARD
+          ══════════════════════════════════ */}
+          {step==="RESULT" && plan && todayPack && (
+            <section className="spg-card rounded-3xl p-6 shadow-sm mb-6 spg-up d1">
+
+              {/* greeting row */}
+              <div className="flex items-center justify-between gap-4 mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-2xl flex items-center justify-center spg-acc-pill shrink-0">
+                    <greeting.Icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold spg-fg">{greeting.text}!</p>
+                    <p className="text-xs spg-muted mt-0.5">
+                      {prettyDate(new Date().toISOString())}
+                      <span className="mx-1.5 opacity-30">·</span>
+                      <span className="spg-fg font-medium">{prefLabel(plan.preferredTime??preferredTime)}</span>
+                    </p>
+                  </div>
                 </div>
 
-                <div className="mt-2 text-xs text-[rgb(var(--muted))]">
-                  Study window:{" "}
-                  <span className="font-semibold text-[rgb(var(--fg))]">
-                    {prefLabel(plan.preferredTime ?? preferredTime)}
+                <div className="flex gap-2 shrink-0">
+                  <div className="spg-stat-fire rounded-xl px-3.5 py-2.5 flex items-center gap-2">
+                    <Flame className="spg-fire h-4 w-4 shrink-0" style={{color:"#f97316"}} />
+                    <div>
+                      <p className="text-base font-bold leading-none" style={{color:"#ea580c"}}>{todayPack.streak}</p>
+                      <p className="text-[10px] spg-muted mt-0.5">streak</p>
+                    </div>
+                  </div>
+                  <div className="spg-stat-green rounded-xl px-3.5 py-2.5 flex items-center gap-2">
+                    <Trophy className="h-4 w-4 shrink-0" style={{color:"#16a34a"}} />
+                    <div>
+                      <p className="text-base font-bold leading-none" style={{color:"#16a34a"}}>{progress.pct}%</p>
+                      <p className="text-[10px] spg-muted mt-0.5">done</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* progress bar */}
+              <div className="spg-track h-1.5 w-full rounded-full overflow-hidden mb-1.5">
+                <div className="spg-fill h-full rounded-full" style={{width:`${progress.pct}%`}} />
+              </div>
+              <div className="flex justify-between text-[11px] spg-muted mb-5">
+                <span>{progress.done} of {progress.total} tasks completed</span>
+                {todayPack.pending.length>0 && (
+                  <span className="spg-acc-text font-semibold">{todayPack.totalMin} min left today</span>
+                )}
+              </div>
+
+              {/* today tasks */}
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold spg-fg">Today's Tasks</p>
+                {todayPack.todays.length>0 && (
+                  <span className="text-xs spg-muted">
+                    {todayPack.pending.length===0 ? "All done 🎉" : `${todayPack.pending.length} remaining`}
                   </span>
-                  {todayPack.pending.length > 0 && (
-                    <>
-                      {" "}
-                      • Estimated{" "}
-                      <span className="font-semibold text-[rgb(var(--fg))]">
-                        {todayPack.totalMin} min
-                      </span>{" "}
-                      today
-                    </>
-                  )}
-                </div>
+                )}
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <div className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2">
-                  <Flame className="h-4 w-4 text-[rgb(var(--primary))]" />
-                  <div className="text-xs">
-                    <div className="font-semibold text-[rgb(var(--fg))]">Streak</div>
-                    <div className="text-[rgb(var(--muted))]">{todayPack.streak} days</div>
-                  </div>
-                </div>
-
-                <div className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <div className="text-xs">
-                    <div className="font-semibold text-[rgb(var(--fg))]">Progress</div>
-                    <div className="text-[rgb(var(--muted))]">{progress.pct}%</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* progress bar */}
-            <div className="mt-4">
-              <div className="h-2 w-full rounded-full bg-[rgb(var(--card2))] border border-[rgb(var(--border))] overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-[rgb(var(--primary))] transition-all duration-500"
-                  style={{ width: `${progress.pct}%` }}
-                />
-              </div>
-              <div className="mt-2 flex items-center justify-between text-[11px] text-[rgb(var(--muted))]">
-                <span>
-                  {progress.done}/{progress.total} tasks done
-                </span>
-                <span>Keep it consistent ✨</span>
-              </div>
-            </div>
-
-            {/* Today’s tasks */}
-            <div className="mt-5">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                  Today’s Tasks
-                </div>
-                <div className="text-xs text-[rgb(var(--muted))]">
-                  {todayPack.pending.length === 0
-                    ? "All done 🎉"
-                    : `${todayPack.pending.length} remaining`}
-                </div>
-              </div>
-
-              {todayPack.todays.length === 0 ? (
-                <div className="mt-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 text-sm text-[rgb(var(--muted))]">
-                  No tasks scheduled for today. Tap <span className="font-semibold">Rebalance</span> if you missed days,
-                  or regenerate with more hours/week.
+              {todayPack.todays.length===0 ? (
+                <div className="spg-inset p-8 text-center">
+                  <BookOpen className="h-7 w-7 mx-auto mb-2.5 spg-muted opacity-30" />
+                  <p className="text-sm spg-muted font-medium">No tasks scheduled today</p>
+                  <p className="text-xs spg-muted mt-1 opacity-70">
+                    <button type="button" onClick={rebalance} className="spg-acc-text font-semibold hover:underline">Rebalance</button>{" "}
+                    if you missed days, or regenerate with more hours/week.
+                  </p>
                 </div>
               ) : (
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {todayPack.todays.map((it) => {
-                    const done = it.status === "DONE";
-                    const { label, icon: Icon } = badgeForType(it.type);
-
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {todayPack.todays.map((it,i)=>{
+                    const done=it.status==="DONE";
+                    const { label,Icon }=badgeForType(it.type);
                     return (
-                      <button
-                        key={it.id}
-                        type="button"
-                        onClick={() => toggleItem(it)}
-                        disabled={busyToggle === it.id}
-                        className={cx(
-                          "group w-full text-left rounded-2xl border p-4 transition",
-                          "hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(0,0,0,0.12)]",
-                          done
-                            ? "border-emerald-500/30 bg-emerald-500/10"
-                            : "border-[rgb(var(--border))] bg-[rgb(var(--card2))]"
-                        )}
-                      >
-                        <div className="flex items-start gap-3">
-                          {done ? (
-                            <CheckCircle2 className="h-5 w-5 mt-0.5 text-emerald-500" />
-                          ) : (
-                            <Circle className="h-5 w-5 mt-0.5 text-[rgb(var(--muted))]" />
-                          )}
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="text-sm font-semibold text-[rgb(var(--fg))] truncate">
-                                  {it.task}
-                                </div>
-                                <div className="mt-1 text-[11px] text-[rgb(var(--muted2))]">
-                                  {it.subjectName} • {it.topic}
-                                </div>
-                              </div>
-
-                              <div className="shrink-0 text-[11px] text-[rgb(var(--muted))]">
-                                {it.durationMin}m
-                              </div>
+                      <div key={it.id}
+                        className={cx("rounded-2xl overflow-hidden spg-up", done?"spg-done":"spg-card2")}
+                        style={{animationDelay:`${i*40}ms`}}>
+                        <div className={cx("h-[3px] w-full", TYPE_BAR[it.type]??TYPE_BAR.STUDY)} />
+                        <button type="button" onClick={()=>toggleItem(it)}
+                          disabled={busyToggle===it.id}
+                          className="spg-task w-full text-left px-4 py-3.5">
+                          <div className="flex items-start gap-3">
+                            <div className={cx(
+                              "mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+                              done?"bg-emerald-500 border-emerald-500":"border-current/20"
+                            )}>
+                              {done && <CheckCircle2 className="h-3 w-3 text-white" />}
                             </div>
-
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2 py-0.5 text-[10px] text-[rgb(var(--muted))]">
-                                <Icon className="h-3 w-3" />
-                                {label}
-                              </span>
-
-                              {it.timeBlock && (
-                                <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2 py-0.5 text-[10px] text-[rgb(var(--muted))]">
-                                  {it.timeBlock}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className={cx("text-sm font-semibold spg-fg leading-snug",done&&"line-through opacity-35")}>
+                                  {cleanTask(it.task)}
+                                </p>
+                                <span className="text-xs spg-muted shrink-0 font-medium tabular-nums">{it.durationMin}m</span>
+                              </div>
+                              <p className="text-xs spg-muted mt-1">{it.subjectName} · {it.topic}</p>
+                              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                                <span className={cx("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                                  TYPE_PILL[it.type]??TYPE_PILL.STUDY)}>
+                                  <Icon className="h-2.5 w-2.5" />{label}
                                 </span>
-                              )}
-
-                              <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-[rgb(var(--muted))] group-hover:underline">
-                                <HelpCircle className="h-4 w-4" />
-                                Why today?
-                              </span>
+                                {it.timeBlock && (
+                                  <span className="spg-card rounded-full px-2 py-0.5 text-[10px] spg-muted2">{it.timeBlock}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
+                        </button>
+                        <div className="px-4 pb-3">
+                          <button type="button" onClick={()=>setWhyId(it.id)}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold spg-acc-text hover:underline">
+                            <HelpCircle className="h-3 w-3" />Why today?
+                          </button>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
               )}
-            </div>
 
-            {/* actions row */}
-            <div className="mt-5 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => fetchCurrentPlan()}
-                disabled={loading}
-                className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:opacity-90"
-              >
-                <RefreshCcw className="h-4 w-4" />
-                Refresh
-              </button>
-
-              <button
-                type="button"
-                onClick={rebalanceWeek}
-                disabled={loading}
-                className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:opacity-90"
-              >
-                <Wand2 className="h-4 w-4" />
-                Rebalance week
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setStep("FORM")}
-                className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-90"
-              >
-                Adjust inputs
-                <Sparkles className="h-4 w-4" />
-              </button>
-            </div>
-          </section>
-        )}
-
-        {/* FORM */}
-        {step === "FORM" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left: form */}
-            <section className="lg:col-span-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.12)] space-y-5">
-              <div className="flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]">
-                <CalendarClock className="h-4 w-4" />
-                Your Inputs
+              {/* actions */}
+              <div className="spg-divider mt-5 pt-4 flex flex-wrap gap-2">
+                <button type="button" onClick={()=>fetchPlan()} disabled={loading}
+                  className="spg-ghost inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold">
+                  <RefreshCcw className={cx("h-3.5 w-3.5",loading&&"spg-spin")} />
+                  Refresh
+                </button>
+                <button type="button" onClick={rebalance} disabled={loading}
+                  className="spg-ghost inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold">
+                  <Wand2 className="h-3.5 w-3.5" />
+                  Rebalance week
+                </button>
+                <button type="button" onClick={()=>setStep("FORM")}
+                  className="spg-cta ml-auto inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold">
+                  Edit plan <ChevronRight className="h-3.5 w-3.5" />
+                </button>
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <label className="space-y-1">
-                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                    Plan title (optional)
-                  </div>
-                  <input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g., CALC Final Sprint"
-                    className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none"
-                  />
-                </label>
-
-                <label className="space-y-1">
-                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                    Exam/assignment date
-                  </div>
-                  <input
-                    type="date"
-                    value={examDate}
-                    onChange={(e) => setExamDate(e.target.value)}
-                    className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none"
-                  />
-                </label>
-
-                <label className="space-y-1">
-                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                    Hours per week
-                  </div>
-                  <input
-                    type="range"
-                    min={1}
-                    max={30}
-                    value={hoursPerWeek}
-                    onChange={(e) => setHoursPerWeek(Number(e.target.value))}
-                    className="w-full"
-                  />
-                  <div className="text-xs text-[rgb(var(--muted))]">
-                    {hoursPerWeek} hours/week
-                  </div>
-                </label>
-
-                <label className="space-y-1">
-                  <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                    Preferred style
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setStyle("SHORT_BURSTS")}
-                      className={cx(
-                        "rounded-xl border px-3 py-2 text-xs font-semibold transition",
-                        style === "SHORT_BURSTS"
-                          ? "border-[rgb(var(--primary))] bg-[rgb(var(--primary))/0.10] text-[rgb(var(--primary))]"
-                          : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:opacity-90"
-                      )}
-                    >
-                      Short bursts (25m)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStyle("DEEP_STUDY")}
-                      className={cx(
-                        "rounded-xl border px-3 py-2 text-xs font-semibold transition",
-                        style === "DEEP_STUDY"
-                          ? "border-[rgb(var(--primary))] bg-[rgb(var(--primary))/0.10] text-[rgb(var(--primary))]"
-                          : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:opacity-90"
-                      )}
-                    >
-                      Deep study (50m)
-                    </button>
-                  </div>
-                </label>
-              </div>
-
-              {/* ✅ Preferred Study Time */}
-              <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 space-y-2">
-                <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                  Preferred study time
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPreferredTime("MORNING")}
-                    className={cx(
-                      "rounded-xl border px-3 py-2 text-xs font-semibold transition inline-flex items-center justify-center gap-2",
-                      preferredTime === "MORNING"
-                        ? "border-[rgb(var(--primary))] bg-[rgb(var(--primary))/0.10] text-[rgb(var(--primary))]"
-                        : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:opacity-90"
-                    )}
-                  >
-                    <Sun className="h-4 w-4" />
-                    Morning
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPreferredTime("AFTERNOON")}
-                    className={cx(
-                      "rounded-xl border px-3 py-2 text-xs font-semibold transition inline-flex items-center justify-center gap-2",
-                      preferredTime === "AFTERNOON"
-                        ? "border-[rgb(var(--primary))] bg-[rgb(var(--primary))/0.10] text-[rgb(var(--primary))]"
-                        : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:opacity-90"
-                    )}
-                  >
-                    <Sunset className="h-4 w-4" />
-                    Afternoon
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPreferredTime("NIGHT")}
-                    className={cx(
-                      "rounded-xl border px-3 py-2 text-xs font-semibold transition inline-flex items-center justify-center gap-2",
-                      preferredTime === "NIGHT"
-                        ? "border-[rgb(var(--primary))] bg-[rgb(var(--primary))/0.10] text-[rgb(var(--primary))]"
-                        : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:opacity-90"
-                    )}
-                  >
-                    <Moon className="h-4 w-4" />
-                    Night
-                  </button>
-                </div>
-
-                <div className="text-xs text-[rgb(var(--muted))]">
-                  Planner will tag tasks with a time window:{" "}
-                  <span className="font-semibold">{prefLabel(preferredTime)}</span>
-                </div>
-              </div>
-
-              {/* Availability */}
-              <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 space-y-3">
-                <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                  Weekly availability
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {DAY_KEYS.map((d) => {
-                    const on = days.includes(d);
-                    return (
-                      <button
-                        key={d}
-                        type="button"
-                        onClick={() => toggleDay(d)}
-                        className={cx(
-                          "rounded-full px-3 py-1.5 text-xs font-semibold border transition",
-                          on
-                            ? "border-[rgb(var(--primary))] bg-[rgb(var(--primary))/0.12] text-[rgb(var(--primary))]"
-                            : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] hover:opacity-90"
-                        )}
-                      >
-                        {DAY_LABEL[d]}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {DAY_KEYS.map((d) => (
-                    <label
-                      key={d}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2"
-                    >
-                      <div className="text-xs font-semibold text-[rgb(var(--fg))]">
-                        {DAY_LABEL[d]}
-                        <span className="ml-2 text-[10px] text-[rgb(var(--muted))]">
-                          {days.includes(d) ? "On" : "Off"}
-                        </span>
-                      </div>
-                      <input
-                        type="number"
-                        min={0}
-                        max={8}
-                        step={0.5}
-                        value={hoursByDay[d]}
-                        onChange={(e) =>
-                          setHoursByDay((p) => ({
-                            ...p,
-                            [d]: Number(e.target.value),
-                          }))
-                        }
-                        className="w-20 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-1 text-sm text-[rgb(var(--fg))] outline-none"
-                      />
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Subjects */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                    Subjects + weak topics
-                  </div>
-                  <button
-                    type="button"
-                    onClick={addSubject}
-                    className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:opacity-90"
-                  >
-                    + Add subject
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {subjects.map((s, idx) => (
-                    <div
-                      key={idx}
-                      className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 space-y-3"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                          Subject {idx + 1}
-                        </div>
-                        {subjects.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeSubject(idx)}
-                            className="text-xs font-semibold text-[rgb(var(--muted))] hover:underline"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <input
-                          value={s.name}
-                          onChange={(e) =>
-                            setSubjects((p) =>
-                              p.map((x, i) =>
-                                i === idx ? { ...x, name: e.target.value } : x
-                              )
-                            )
-                          }
-                          placeholder="e.g., CAT404 Web Engineering"
-                          className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none"
-                        />
-
-                        <label className="space-y-1">
-                          <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                            Current level (0–10)
-                          </div>
-                          <input
-                            type="range"
-                            min={0}
-                            max={10}
-                            value={s.level0to10}
-                            onChange={(e) =>
-                              setSubjects((p) =>
-                                p.map((x, i) =>
-                                  i === idx
-                                    ? {
-                                        ...x,
-                                        level0to10: Number(e.target.value),
-                                      }
-                                    : x
-                                )
-                              )
-                            }
-                            className="w-full"
-                          />
-                          <div className="text-xs text-[rgb(var(--muted))]">
-                            {s.level0to10}/10
-                          </div>
-                        </label>
-
-                        <div className="sm:col-span-2">
-                          <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                            Weak topics (comma separated)
-                          </div>
-                          <input
-                            value={s.weakInput}
-                            onChange={(e) =>
-                              setSubjects((p) =>
-                                p.map((x, i) =>
-                                  i === idx
-                                    ? { ...x, weakInput: e.target.value }
-                                    : x
-                                )
-                              )
-                            }
-                            placeholder="e.g., SQL joins, React hooks, ERD normalization"
-                            className="mt-1 w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--fg))] outline-none"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={generatePlan}
-                disabled={loading}
-                className={cx(
-                  "w-full inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white transition",
-                  loading ? "opacity-60" : "hover:-translate-y-0.5",
-                  "bg-[rgb(var(--primary))]"
-                )}
-              >
-                {loading
-                  ? "Generating..."
-                  : plan
-                  ? "Regenerate weekly plan"
-                  : "Generate weekly plan"}
-                <Sparkles className="h-4 w-4" />
-              </button>
             </section>
+          )}
 
-            {/* Right */}
-            <aside className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.12)] space-y-4">
-              <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                What you’ll get
-              </div>
+          {/* ══════════════════════════════════
+              FORM — revamped layout
+          ══════════════════════════════════ */}
+          {step==="FORM" && (
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5">
 
-              <div className="space-y-3 text-sm text-[rgb(var(--muted))]">
-                <div className="flex gap-2">
-                  <CheckCircle2 className="h-4 w-4 mt-0.5" />
-                  <div>Mon–Sun schedule with 25–60 min blocks</div>
-                </div>
-                <div className="flex gap-2">
-                  <Flame className="h-4 w-4 mt-0.5" />
-                  <div>Spaced repetition reviews (+2 days)</div>
-                </div>
-                <div className="flex gap-2">
-                  <HelpCircle className="h-4 w-4 mt-0.5" />
-                  <div>“Why today?” explanation per task</div>
-                </div>
-              </div>
+              {/* ── LEFT: main form card ── */}
+              <div className="spg-card rounded-3xl shadow-sm overflow-hidden spg-up">
 
-              <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 text-xs text-[rgb(var(--muted2))]">
-                Tip: Keep weak topics specific (e.g., “Normalization 2NF/3NF”, “SQL GROUP BY”, “JWT auth flow”).
-              </div>
-            </aside>
-          </div>
-        )}
-
-        {/* RESULT (your original calendar view stays the same) */}
-        {step === "RESULT" && plan && (
-          <div className="space-y-6">
-            {/* Top stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
-                <div className="text-xs text-[rgb(var(--muted2))]">Plan</div>
-                <div className="mt-1 text-sm font-semibold text-[rgb(var(--fg))]">
-                  {plan.title}
-                </div>
-                <div className="mt-2 text-xs text-[rgb(var(--muted))]">
-                  {prettyDate(plan.startDate)} → {prettyDate(plan.endDate)}
-                </div>
-                <div className="mt-2 text-xs text-[rgb(var(--muted))]">
-                  Study time:{" "}
-                  <span className="font-semibold">
-                    {prefLabel(plan.preferredTime ?? preferredTime)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
-                <div className="text-xs text-[rgb(var(--muted2))]">Progress</div>
-                <div className="mt-1 text-2xl font-semibold text-[rgb(var(--fg))]">
-                  {progress.pct}%
-                </div>
-                <div className="mt-2 text-xs text-[rgb(var(--muted))]">
-                  {progress.done}/{progress.total} tasks done
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
-                <div className="text-xs text-[rgb(var(--muted2))]">Weak spot (proxy)</div>
-                <div className="mt-1 text-sm font-semibold text-[rgb(var(--fg))]">
-                  {progress.weakSpot ?? "—"}
-                </div>
-                <div className="mt-2 text-xs text-[rgb(var(--muted))]">
-                  Most remaining tasks are here → prioritize consistency.
-                </div>
-              </div>
-            </div>
-
-            {/* Calendar */}
-            <section className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-[rgb(var(--fg))]">Your week</div>
-                <div className="text-xs text-[rgb(var(--muted))]">Tap a task to mark done.</div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {grouped.map((day) => (
-                  <div
-                    key={day.date}
-                    className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4"
-                  >
-                    <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                      {prettyDate(day.date)}
+                {/* card header */}
+                <div className="px-6 pt-6 pb-5 border-b" style={{borderColor:"rgb(var(--border))"}}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-9 w-9 rounded-xl flex items-center justify-center spg-acc-pill shrink-0">
+                      <Sparkles className="h-4 w-4" />
                     </div>
+                    <div>
+                      <p className="text-sm font-bold spg-fg">Configure your plan</p>
+                      <p className="text-xs spg-muted mt-0.5">Fill in the details below to generate a smart schedule</p>
+                    </div>
+                  </div>
 
-                    <div className="mt-3 space-y-2">
-                      {day.items.map((it) => {
-                        const done = it.status === "DONE";
-                        const { label, icon: Icon } = badgeForType(it.type);
+                  {/* section nav */}
+                  <div className="spg-sec-nav">
+                    {FORM_SECTIONS.map(({ id,label,icon:Icon })=>(
+                      <button key={id} type="button"
+                        onClick={()=>setActiveSection(id)}
+                        className={cx("spg-sec-btn",
+                          activeSection===id ? "spg-sec-btn-active" : "spg-sec-btn-inactive")}>
+                        <Icon className="h-3.5 w-3.5" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-                        return (
-                          <div key={it.id} className="space-y-2">
-                            <button
-                              type="button"
-                              onClick={() => toggleItem(it)}
-                              disabled={busyToggle === it.id}
+                {/* panels */}
+                <div className="p-6">
+
+                  {/* ── Panel 0: Goals ── */}
+                  <div className={activeSection===0 ? "spg-panel-active" : "spg-panel"}>
+                    <div className="space-y-5">
+
+                      {/* plan title */}
+                      <div>
+                        <p className="spg-label">Plan title <span className="normal-case font-normal opacity-60">(optional)</span></p>
+                        <input
+                          value={title} onChange={e=>setTitle(e.target.value)}
+                          placeholder="e.g., CALC Final Sprint"
+                          className="spg-input w-full rounded-xl px-3.5 py-2.5 text-sm"
+                        />
+                      </div>
+
+                      {/* exam date */}
+                      <div>
+                        <p className="spg-label">Exam / deadline date</p>
+                        <input
+                          type="date" value={examDate} onChange={e=>setExamDate(e.target.value)}
+                          className="spg-input w-full rounded-xl px-3.5 py-2.5 text-sm"
+                          style={{colorScheme:"inherit"}}
+                        />
+                      </div>
+
+                      {/* hours per week */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="spg-label mb-0">Hours per week</p>
+                          <span className="inline-block rounded-lg px-2.5 py-1 text-xs font-bold spg-acc-pill">
+                            {hoursPerWeek}h / week
+                          </span>
+                        </div>
+                        <input
+                          type="range" min={1} max={30} value={hoursPerWeek}
+                          onChange={e=>setHPW(+e.target.value)}
+                          className="spg-range w-full"
+                        />
+                        <div className="flex justify-between text-[10px] spg-muted mt-1.5">
+                          <span>1h</span><span>30h</span>
+                        </div>
+                      </div>
+
+                      {/* study style */}
+                      <div>
+                        <p className="spg-label">Study style</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {([
+                            ["SHORT_BURSTS","⚡ Short bursts","25 min sessions, more breaks"],
+                            ["DEEP_STUDY",  "🧠 Deep study",  "50 min sessions, fewer breaks"],
+                          ] as [Style,string,string][]).map(([s,l,sub])=>(
+                            <button key={s} type="button" onClick={()=>setStyle(s)}
+                              className={cx("spg-opt", style===s ? "spg-opt-on" : "spg-opt-off")}>
+                              <p className="text-xs font-semibold">{l}</p>
+                              <p className="text-[10px] mt-0.5 opacity-55">{sub}</p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* preferred time */}
+                      <div>
+                        <p className="spg-label">Preferred study time</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {([
+                            ["MORNING",  Sun,    "Morning",   "8–11 am"],
+                            ["AFTERNOON",Sunset, "Afternoon", "1–4 pm" ],
+                            ["NIGHT",    Moon,   "Night",     "7–10 pm"],
+                          ] as [PreferredTime,any,string,string][]).map(([t,Icon,l,sub])=>(
+                            <button key={t} type="button" onClick={()=>setPT(t)}
+                              className={cx("spg-opt text-center", preferredTime===t ? "spg-opt-on" : "spg-opt-off")}>
+                              <Icon className="h-4 w-4 mx-auto mb-1.5" />
+                              <p className="text-xs font-semibold">{l}</p>
+                              <p className="text-[10px] mt-0.5 opacity-55">{sub}</p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <button type="button"
+                        onClick={()=>setActiveSection(1)}
+                        className="spg-cta w-full inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold">
+                        Continue to Schedule
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ── Panel 1: Schedule ── */}
+                  <div className={activeSection===1 ? "spg-panel-active" : "spg-panel"}>
+                    <div className="space-y-5">
+
+                      {/* active days */}
+                      <div>
+                        <p className="spg-label">Active days</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {DAY_KEYS.map(d=>(
+                            <button key={d} type="button"
+                              onClick={()=>setDays(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d])}
                               className={cx(
-                                "w-full text-left rounded-xl border px-3 py-2 transition",
-                                done
-                                  ? "border-emerald-500/30 bg-emerald-500/10"
-                                  : "border-[rgb(var(--border))] bg-[rgb(var(--card))] hover:opacity-90"
+                                "rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all",
+                                days.includes(d) ? "spg-day-on" : "spg-day-off"
+                              )}>
+                              {DAY_LABEL[d]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* hours per day */}
+                      <div>
+                        <p className="spg-label">Hours per day</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {DAY_KEYS.map(d=>(
+                            <div key={d}
+                              className={cx(
+                                "rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 transition-all",
+                                days.includes(d) ? "spg-card2" : "opacity-40 spg-card2"
+                              )}>
+                              <span className={cx("text-xs font-semibold",
+                                days.includes(d) ? "spg-acc-text" : "spg-muted")}>
+                                {DAY_LABEL[d]}
+                              </span>
+                              <input
+                                type="number" min={0} max={8} step={0.5}
+                                value={hoursByDay[d]}
+                                onChange={e=>setHBD(p=>({...p,[d]:+e.target.value}))}
+                                className="spg-input spg-num-input w-12 rounded-lg px-2 py-1 text-xs text-center"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-2">
+                        <button type="button"
+                          onClick={()=>setActiveSection(0)}
+                          className="spg-ghost flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold">
+                          Back
+                        </button>
+                        <button type="button"
+                          onClick={()=>setActiveSection(2)}
+                          className="spg-cta flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold">
+                          Continue to Subjects
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── Panel 2: Subjects ── */}
+                  <div className={activeSection===2 ? "spg-panel-active" : "spg-panel"}>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <p className="spg-label mb-0">Subjects</p>
+                        <button type="button"
+                          onClick={()=>setSubjects(p=>[...p,{name:"",level0to10:5,weakTopics:[],weakInput:""}])}
+                          className="spg-ghost inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold">
+                          + Add subject
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {subjects.map((s,idx)=>(
+                          <div key={idx} className="spg-subj-card">
+                            {/* subject header bar */}
+                            <div className="spg-subj-head">
+                              <div className="flex items-center gap-2">
+                                <span className="h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold spg-acc-pill">
+                                  {idx+1}
+                                </span>
+                                <p className="text-xs font-semibold spg-fg">
+                                  {s.name||`Subject ${idx+1}`}
+                                </p>
+                              </div>
+                              {subjects.length>1 && (
+                                <button type="button"
+                                  onClick={()=>setSubjects(p=>p.filter((_,i)=>i!==idx))}
+                                  className="h-7 w-7 rounded-full flex items-center justify-center transition-all hover:bg-red-500/12"
+                                  style={{border:"1px solid rgba(239,68,68,.2)",color:"rgba(239,68,68,.65)"}}>
+                                  <X className="h-3 w-3" />
+                                </button>
                               )}
-                            >
-                              <div className="flex items-start gap-2">
-                                {done ? (
-                                  <CheckCircle2 className="h-4 w-4 mt-0.5 text-emerald-500" />
-                                ) : (
-                                  <Circle className="h-4 w-4 mt-0.5 text-[rgb(var(--muted))]" />
-                                )}
+                            </div>
 
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <div className="text-xs font-semibold text-[rgb(var(--fg))] truncate">
-                                      {it.task}
-                                    </div>
-                                    <div className="text-[10px] text-[rgb(var(--muted))]">
-                                      {it.durationMin}m
-                                    </div>
-                                  </div>
+                            {/* subject body */}
+                            <div className="p-4 space-y-4">
+                              <input
+                                value={s.name}
+                                onChange={e=>setSubjects(p=>p.map((x,i)=>i===idx?{...x,name:e.target.value}:x))}
+                                placeholder="Subject name, e.g., CAT404 Web Engineering"
+                                className="spg-input w-full rounded-xl px-3.5 py-2.5 text-sm"
+                              />
 
-                                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                                    <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-0.5 text-[10px] text-[rgb(var(--muted))]">
-                                      <Icon className="h-3 w-3" />
-                                      {label}
-                                    </span>
-
-                                    {it.timeBlock && (
-                                      <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-0.5 text-[10px] text-[rgb(var(--muted))]">
-                                        {it.timeBlock}
-                                      </span>
-                                    )}
-
-                                    <span className="text-[10px] text-[rgb(var(--muted2))]">
-                                      {it.subjectName} • {it.topic}
-                                    </span>
-                                  </div>
+                              {/* level slider */}
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="text-xs font-medium spg-muted">Current level</p>
+                                  <span className="text-xs font-bold spg-acc-text">{s.level0to10}/10</span>
+                                </div>
+                                <div className="spg-level-track mb-2">
+                                  <div className="spg-level-fill" style={{width:`${s.level0to10*10}%`}} />
+                                </div>
+                                <input type="range" min={0} max={10} value={s.level0to10}
+                                  onChange={e=>setSubjects(p=>p.map((x,i)=>i===idx?{...x,level0to10:+e.target.value}:x))}
+                                  className="spg-range w-full"
+                                />
+                                <div className="flex justify-between text-[10px] spg-muted mt-1">
+                                  <span>Beginner</span><span>Expert</span>
                                 </div>
                               </div>
-                            </button>
 
-                            <button
-                              type="button"
-                              onClick={() => setWhyOpenItemId(it.id)}
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[rgb(var(--muted))] hover:underline"
-                            >
-                              <HelpCircle className="h-3.5 w-3.5" />
-                              Why am I studying this today?
-                            </button>
+                              {/* weak topics */}
+                              <div>
+                                <p className="text-xs font-medium spg-muted mb-1.5">
+                                  Weak topics <span className="opacity-60">(comma separated)</span>
+                                </p>
+                                <input
+                                  value={s.weakInput}
+                                  onChange={e=>setSubjects(p=>p.map((x,i)=>i===idx?{...x,weakInput:e.target.value}:x))}
+                                  placeholder="e.g., SQL joins, React hooks, ERD normalization"
+                                  className="spg-input w-full rounded-xl px-3.5 py-2.5 text-sm"
+                                />
+                              </div>
+                            </div>
                           </div>
-                        );
-                      })}
+                        ))}
+                      </div>
+
+                      {/* generate */}
+                      <div className="flex gap-2 pt-2">
+                        <button type="button"
+                          onClick={()=>setActiveSection(1)}
+                          className="spg-ghost rounded-xl px-4 py-3 text-sm font-semibold">
+                          Back
+                        </button>
+                        <button type="button" onClick={generatePlan} disabled={loading}
+                          className="spg-cta flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold">
+                          {loading
+                            ? (<><RefreshCcw className="h-4 w-4 spg-spin" />Generating…</>)
+                            : (<>{plan?"Regenerate plan":"Generate plan"}<Sparkles className="h-4 w-4" /></>)}
+                        </button>
+                      </div>
                     </div>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* ── RIGHT: sidebar ── */}
+              <aside className="space-y-4 spg-up d2">
+
+                {/* feature list */}
+                <div className="spg-card rounded-2xl p-5 shadow-sm">
+                  <p className="text-xs font-bold spg-fg mb-4">What you'll get</p>
+                  <div className="space-y-3">
+                    {[
+                      { Icon:CalendarClock, text:"Daily study blocks, Mon–Sun"          },
+                      { Icon:Flame,         text:"Revision reminders every few days"    },
+                      { Icon:Target,        text:"Hard topics get more practice time"   },
+                      { Icon:HelpCircle,    text:"Explains why each task is scheduled"  },
+                      { Icon:Clock,         text:"Morning / afternoon / night labels"   },
+                    ].map(({Icon,text},i)=>(
+                      <div key={i} className="flex items-center gap-2.5">
+                        <div className="h-6 w-6 rounded-lg flex items-center justify-center spg-acc-pill shrink-0">
+                          <Icon className="h-3 w-3" />
+                        </div>
+                        <p className="text-xs spg-muted">{text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* progress indicator */}
+                <div className="spg-card rounded-2xl p-5 shadow-sm">
+                  <p className="text-xs font-bold spg-fg mb-3">Setup progress</p>
+                  <div className="space-y-2">
+                    {FORM_SECTIONS.map(({ id,label,icon:Icon })=>(
+                      <button key={id} type="button"
+                        onClick={()=>setActiveSection(id)}
+                        className={cx(
+                          "w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all text-left",
+                          activeSection===id ? "spg-opt-on" : "spg-opt-off"
+                        )}>
+                        <Icon className="h-3.5 w-3.5 shrink-0" />
+                        {label}
+                        {activeSection===id && <ChevronRight className="h-3 w-3 ml-auto" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* tip */}
+                <div className="spg-tip p-4">
+                  <p className="text-xs font-bold spg-acc-text mb-1.5">💡 Pro tip</p>
+                  <p className="text-xs spg-muted leading-relaxed">
+                    Be specific with weak topics — <em>"2NF/3NF normalization"</em>, <em>"SQL GROUP BY"</em>, <em>"JWT auth flow"</em>.
+                  </p>
+                </div>
+
+              </aside>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════
+              RESULT — stat cards + calendar
+          ══════════════════════════════════ */}
+          {step==="RESULT" && plan && (
+            <div className="space-y-5">
+
+              {/* stat cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {([
+                  {
+                    label:"Plan",
+                    value: plan.title||"My Study Plan",
+                    sub:`${prettyDate(plan.startDate)} → ${prettyDate(plan.endDate)}`,
+                    extra:`${prefLabel(plan.preferredTime??preferredTime)}`,
+                    Icon:BookOpen,
+                  },
+                  {
+                    label:"Progress",
+                    value:`${progress.pct}%`,
+                    sub:`${progress.done} of ${progress.total} tasks`,
+                    Icon:BarChart2,
+                  },
+                  {
+                    label:"Focus area",
+                    value: progress.weakSpot??"—",
+                    sub:"Most pending tasks here",
+                    Icon:Target,
+                  },
+                ] as any[]).map((c,i)=>(
+                  <div key={i} className="spg-card rounded-2xl p-4 shadow-sm spg-up"
+                    style={{animationDelay:`${i*60}ms`}}>
+                    <div className="flex items-center justify-between mb-2.5">
+                      <p className="text-[11px] font-medium spg-muted2">{c.label}</p>
+                      <div className="h-6 w-6 rounded-lg flex items-center justify-center spg-acc-pill">
+                        <c.Icon className="h-3 w-3" />
+                      </div>
+                    </div>
+                    <p className="text-base font-bold spg-fg leading-snug">{c.value}</p>
+                    <p className="text-xs spg-muted mt-1">{c.sub}</p>
+                    {c.extra && <p className="text-[11px] spg-muted2 mt-0.5">{c.extra}</p>}
                   </div>
                 ))}
               </div>
-            </section>
-          </div>
-        )}
 
-        {/* ✅ “Why today?” Modal */}
-        {whyItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div
-              className="absolute inset-0 bg-black/60"
-              onClick={() => setWhyOpenItemId(null)}
-            />
-            <div className="relative w-full max-w-lg rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.35)]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                    Why this task today
+              {/* calendar */}
+              <section className="spg-card rounded-3xl shadow-sm spg-up d2 overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-4 border-b" style={{borderColor:"rgb(var(--border))"}}>
+                  <div>
+                    <p className="text-sm font-bold spg-fg">Weekly Schedule</p>
+                    <p className="text-xs spg-muted mt-0.5">Click any task to mark it complete</p>
                   </div>
-                  <div className="mt-1 text-xs text-[rgb(var(--muted))]">
-                    {whyItem.subjectName} • {whyItem.topic} • {prettyDate(whyItem.date)}
+                  <div className="flex items-center gap-3 text-[11px] spg-muted flex-wrap">
+                    {[
+                      {cls:"spg-bar-indigo",label:"Study"},
+                      {cls:"spg-bar-sky",   label:"Practice"},
+                      {cls:"spg-bar-amber", label:"Revision"},
+                      {cls:"spg-bar-purple",label:"Get help"},
+                    ].map(({cls,label})=>(
+                      <span key={label} className="flex items-center gap-1">
+                        <span className={cx("inline-block h-2 w-2 rounded-full",cls)} />
+                        {label}
+                      </span>
+                    ))}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setWhyOpenItemId(null)}
-                  className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1.5 text-xs font-semibold text-[rgb(var(--fg))] hover:opacity-90"
-                >
-                  Close
-                </button>
+
+                <div className="divide-y" style={{borderColor:"rgb(var(--border))"}}>
+                  {grouped.map((day,di)=>{
+                    const isToday=dayStamp(day.date)===dayStamp(new Date());
+                    const allDone=day.items.every(x=>x.status==="DONE");
+                    const doneCount=day.items.filter(x=>x.status==="DONE").length;
+                    const totalMin=day.items.reduce((s,x)=>s+(x.durationMin||0),0);
+                    return (
+                      <div key={day.date}
+                        className={cx("spg-up", isToday && "spg-today-col")}
+                        style={{animationDelay:`${di*25}ms`}}>
+
+                        {/* day row header */}
+                        <div className={cx(
+                          "flex items-center gap-4 px-6 py-3",
+                          isToday ? "spg-today-hdr" : ""
+                        )}>
+                          <div className="w-20 shrink-0">
+                            <p className={cx("text-xs font-bold", isToday ? "spg-acc-text" : "spg-fg")}>
+                              {prettyDate(day.date).split(",")[0]}
+                            </p>
+                            <p className="text-[10px] spg-muted">
+                              {prettyDate(day.date).split(",").slice(1).join("").trim()}
+                            </p>
+                          </div>
+
+                          <div className="flex-1 flex flex-wrap gap-2 min-w-0">
+                            {day.items.map(it=>{
+                              const done=it.status==="DONE";
+                              const {Icon}=badgeForType(it.type);
+                              return (
+                                <div key={it.id} className="flex flex-col gap-1 min-w-0">
+                                  <button type="button" onClick={()=>toggleItem(it)}
+                                    disabled={busyToggle===it.id}
+                                    className={cx(
+                                      "spg-task flex items-center gap-2 rounded-xl px-3 py-2 text-left",
+                                      done ? "spg-done" : "spg-card2"
+                                    )}>
+                                    {/* left color dot */}
+                                    <span className={cx("h-2 w-2 rounded-full shrink-0 mt-px",
+                                      TYPE_BAR[it.type]??TYPE_BAR.STUDY)} />
+
+                                    {/* checkbox */}
+                                    <div className={cx(
+                                      "h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+                                      done?"bg-emerald-500 border-emerald-500":"border-current/20"
+                                    )}>
+                                      {done && <CheckCircle2 className="h-2.5 w-2.5 text-white" />}
+                                    </div>
+
+                                    <div className="min-w-0">
+                                      <p className={cx("text-xs font-semibold spg-fg whitespace-nowrap",
+                                        done&&"line-through opacity-35")}>
+                                        {cleanTask(it.task)}
+                                      </p>
+                                      <p className="text-[10px] spg-muted mt-0.5 whitespace-nowrap">
+                                        {it.subjectName} · {it.durationMin}m
+                                        {it.timeBlock && <span className="opacity-60"> · {it.timeBlock}</span>}
+                                      </p>
+                                    </div>
+                                  </button>
+
+                                  <button type="button" onClick={()=>setWhyId(it.id)}
+                                    className="ml-2 inline-flex items-center gap-0.5 text-[10px] font-semibold spg-acc-text hover:underline">
+                                    <HelpCircle className="h-2.5 w-2.5" />
+                                    Why?
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* day summary */}
+                          <div className="shrink-0 text-right hidden sm:block">
+                            <div className={cx(
+                              "text-[10px] font-semibold px-2.5 py-1 rounded-full",
+                              allDone ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+                                      : "spg-muted2 spg-card2"
+                            )}>
+                              {allDone ? "✓ Done" : `${doneCount}/${day.items.length}`}
+                            </div>
+                            <p className="text-[10px] spg-muted mt-1">{totalMin}m total</p>
+                            {isToday && (
+                              <span className="inline-block rounded-full px-2 py-0.5 text-[9px] font-bold spg-acc-pill mt-1">
+                                TODAY
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+          )}
+
+          {/* no plan yet */}
+          {step==="RESULT" && !plan && (
+            <div className="spg-card rounded-3xl p-12 text-center shadow-sm spg-up">
+              <div className="mx-auto h-12 w-12 rounded-2xl flex items-center justify-center spg-acc-pill mb-4">
+                <BookOpen className="h-6 w-6" />
               </div>
+              <p className="text-base font-bold spg-fg">No plan yet</p>
+              <p className="mt-1.5 text-sm spg-muted max-w-xs mx-auto leading-relaxed">
+                Create your first plan to see your weekly schedule here.
+              </p>
+              <button type="button" onClick={()=>setStep("FORM")}
+                className="spg-cta mt-5 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold">
+                Generate plan <Sparkles className="h-4 w-4" />
+              </button>
+            </div>
+          )}
 
-              <div className="mt-4 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
-                <div className="text-xs font-semibold text-[rgb(var(--fg))]">{whyItem.task}</div>
-                {whyItem.timeBlock && (
-                  <div className="mt-1 text-xs text-[rgb(var(--muted))]">
-                    Scheduled: {whyItem.timeBlock}
-                  </div>
-                )}
-                <div className="mt-3 text-sm text-[rgb(var(--muted))]">
-                  {whyItem.reason ||
-                    "This task was scheduled to maintain weekly balance and improve retention."}
-                </div>
-              </div>
+        </div>
+      </div>
 
-              {plan?.aiExplanation && (
-                <div className="mt-4 text-xs text-[rgb(var(--muted))]">
-                  <span className="font-semibold">Plan context:</span> {plan.aiExplanation}
-                </div>
-              )}
+        {/* ══ FLOATING MASCOT ══ */}
+        <div className="spg-mascot-wrap" aria-hidden="true">
+          <div className="spg-mascot-float">
+            <svg width="72" height="90" viewBox="0 0 72 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+              {/* glow shadow */}
+              <ellipse cx="36" cy="87" rx="16" ry="4" fill="rgba(var(--primary-raw,99,102,241),.18)" />
+
+              {/* body */}
+              <rect x="22" y="46" width="28" height="26" rx="10" fill="rgb(var(--primary))" opacity=".9"/>
+
+              {/* left arm holding book — animated */}
+              <g className="spg-arm-l">
+                <rect x="8" y="52" width="16" height="7" rx="3.5" fill="rgb(var(--primary))" opacity=".85"/>
+                {/* book */}
+                <rect x="2" y="48" width="12" height="14" rx="2.5" fill="#f59e0b"/>
+                <rect x="7.5" y="48" width="1.5" height="14" rx="0.75" fill="#b45309" opacity=".6"/>
+                <rect x="4" y="51" width="5" height="1.5" rx="0.75" fill="#fff" opacity=".5"/>
+                <rect x="4" y="54" width="4" height="1.5" rx="0.75" fill="#fff" opacity=".5"/>
+                <rect x="4" y="57" width="5" height="1.5" rx="0.75" fill="#fff" opacity=".5"/>
+              </g>
+
+              {/* right arm */}
+              <rect x="48" y="52" width="14" height="7" rx="3.5" fill="rgb(var(--primary))" opacity=".85"/>
+
+              {/* legs */}
+              <rect x="25" y="68" width="9" height="14" rx="4.5" fill="rgb(var(--primary))" opacity=".8"/>
+              <rect x="38" y="68" width="9" height="14" rx="4.5" fill="rgb(var(--primary))" opacity=".8"/>
+
+              {/* shoes */}
+              <ellipse cx="29.5" cy="82" rx="7" ry="4" fill="#1e1b4b"/>
+              <ellipse cx="42.5" cy="82" rx="7" ry="4" fill="#1e1b4b"/>
+
+              {/* neck */}
+              <rect x="31" y="40" width="10" height="8" rx="4" fill="#fcd5b0"/>
+
+              {/* head */}
+              <ellipse cx="36" cy="30" rx="15" ry="16" fill="#fcd5b0"/>
+
+              {/* hair */}
+              <path d="M21 25 Q22 14 36 12 Q50 14 51 25 Q48 18 36 17 Q24 18 21 25Z" fill="#1e1b4b"/>
+
+              {/* eyes — blinking */}
+              <g className="spg-eyes">
+                <ellipse cx="30" cy="29" rx="2.5" ry="2.5" fill="#1e1b4b"/>
+                <ellipse cx="42" cy="29" rx="2.5" ry="2.5" fill="#1e1b4b"/>
+                <ellipse cx="30.8" cy="28.2" rx="1" ry="1" fill="#fff" opacity=".7"/>
+                <ellipse cx="42.8" cy="28.2" rx="1" ry="1" fill="#fff" opacity=".7"/>
+              </g>
+              {/* blink overlay */}
+              <g className="spg-blink">
+                <rect x="27.5" y="27.5" width="5" height="3" rx="1.5" fill="#fcd5b0"/>
+                <rect x="39.5" y="27.5" width="5" height="3" rx="1.5" fill="#fcd5b0"/>
+              </g>
+
+              {/* smile */}
+              <path d="M31 35 Q36 39 41 35" stroke="#c07850" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+
+              {/* cheeks */}
+              <ellipse cx="26" cy="33" rx="3" ry="2" fill="#f9a8a8" opacity=".5"/>
+              <ellipse cx="46" cy="33" rx="3" ry="2" fill="#f9a8a8" opacity=".5"/>
+
+              {/* sparkles */}
+              <g className="spg-sparkle1">
+                <path d="M60 18 L61.5 22 L65 18 L61.5 14Z" fill="#fbbf24" opacity=".9"/>
+                <path d="M58 18 L65 18" stroke="#fbbf24" strokeWidth="1" opacity=".6"/>
+                <path d="M61.5 14 L61.5 22" stroke="#fbbf24" strokeWidth="1" opacity=".6"/>
+              </g>
+              <g className="spg-sparkle2">
+                <path d="M10 12 L11 15 L14 12 L11 9Z" fill="#a78bfa" opacity=".9"/>
+              </g>
+            </svg>
+
+            {/* speech bubble */}
+            <div className="spg-bubble">
+              <p className="spg-bubble-text">You got this! 📚</p>
             </div>
           </div>
-        )}
-
-        {/* No plan yet */}
-        {step === "RESULT" && !plan && (
-          <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5">
-            <div className="text-sm font-semibold text-[rgb(var(--fg))]">No plan yet</div>
-            <p className="mt-2 text-sm text-[rgb(var(--muted))]">
-              Create your first plan to see your weekly schedule here.
-            </p>
-            <button
-              type="button"
-              onClick={() => setStep("FORM")}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-90"
-            >
-              Generate plan
-              <Sparkles className="h-4 w-4" />
-            </button>
+        </div>
+      {whyItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="spg-backdrop spg-fd absolute inset-0" onClick={()=>setWhyId(null)} />
+          <div className="spg-modal spg-pop relative w-full max-w-sm rounded-3xl overflow-hidden">
+            <div className="h-[3px] w-full" style={{background:"rgb(var(--primary))"}} />
+            <div className="p-5">
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div>
+                  <p className="text-sm font-bold spg-fg">Why this task today?</p>
+                  <p className="text-xs spg-muted mt-0.5">{whyItem.subjectName} · {prettyDate(whyItem.date)}</p>
+                </div>
+                <button type="button" onClick={()=>setWhyId(null)}
+                  className="spg-ghost h-8 w-8 rounded-xl flex items-center justify-center shrink-0">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="spg-inset p-4 mb-4">
+                <p className="text-sm font-semibold spg-fg mb-2">{cleanTask(whyItem.task)}</p>
+                {whyItem.timeBlock && (
+                  <span className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium spg-acc-pill mb-2">
+                    {whyItem.timeBlock}
+                  </span>
+                )}
+                <p className="text-sm spg-muted leading-relaxed">
+                  {whyItem.reason??"Scheduled to maintain weekly balance and improve long-term retention."}
+                </p>
+              </div>
+              {plan?.aiExplanation && (
+                <p className="text-xs spg-muted leading-relaxed mb-4">
+                  <span className="font-semibold spg-fg">Plan context: </span>
+                  {plan.aiExplanation}
+                </p>
+              )}
+              <button type="button" onClick={()=>setWhyId(null)}
+                className="spg-ghost w-full rounded-xl py-2.5 text-sm font-semibold">
+                Got it
+              </button>
+            </div>
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </>
   );
 }
