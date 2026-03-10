@@ -32,7 +32,7 @@ export default async function CallPage({ params }: Props) {
           </div>
         </div>
 
-        {/* Embed — owns its own card and border */}
+        {/* Embed */}
         <SessionCallEmbed sessionId={sessionId} />
 
         {/* Footer hint */}
