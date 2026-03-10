@@ -312,7 +312,7 @@ export default function RegisterPage() {
             href="/auth/login"
             className="text-[rgb(var(--primary))] hover:underline"
           >
-            Log in here
+            Login here
           </Link>
         </p>
       </div>

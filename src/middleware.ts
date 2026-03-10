@@ -55,7 +55,17 @@ export async function middleware(request: NextRequest) {
   const needsTutor = pathname.startsWith("/dashboard/tutor");
   const needsAdmin = pathname.startsWith("/admin");
   const needsMessaging = pathname === "/messaging" || pathname.startsWith("/messaging/");
-  const needsProtectedArea = needsDashboard || needsAdmin || needsMessaging;
+  const needsStudy = pathname === "/study" || pathname.startsWith("/study/");
+  const needsSOS = pathname === "/sos" || pathname.startsWith("/sos/");
+  const needsFindTutor = pathname === "/find-tutor" || pathname.startsWith("/find-tutor/");
+
+  const needsProtectedArea =
+    needsDashboard ||
+    needsAdmin ||
+    needsMessaging ||
+    needsStudy ||
+    needsSOS ||
+    needsFindTutor;
 
   if (!session && needsProtectedArea) {
     const loginUrl = new URL("/auth/login", request.url);
@@ -93,5 +103,16 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/admin/:path*", "/messaging", "/messaging/:path*"],
+  matcher: [
+    "/dashboard/:path*",
+    "/admin/:path*",
+    "/messaging",
+    "/messaging/:path*",
+    "/study",
+    "/study/:path*",
+    "/sos",
+    "/sos/:path*",
+    "/find-tutor",
+    "/find-tutor/:path*",
+  ],
 };

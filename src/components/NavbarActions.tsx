@@ -23,7 +23,7 @@ export default async function NavbarActions() {
                      bg-[rgb(var(--card)/0.65)]
                      hover:bg-[rgb(var(--card)/0.9)]"
         >
-          Log in
+          Login
         </Link>
 
         <Link
