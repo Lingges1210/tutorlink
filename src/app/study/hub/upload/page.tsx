@@ -9,6 +9,7 @@ import {
   Plus, ChevronDown, FileText, Type, GraduationCap,
 } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
+import { StudyBackground } from "@/components/FloatingParticles";
 
 type StudySubj = { id: string; name: string; materialCount?: number };
 
@@ -103,7 +104,9 @@ export default function StudyUpload() {
 
   return (
     <div className="min-h-screen pt-6 pb-16 bg-[rgb(var(--background))]">
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+      <StudyBackground />
+
+      <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
 
         {/* Header */}
         <div className="mb-6">

@@ -8,6 +8,7 @@ import {
   HelpCircle, Moon, Sun, Sunset, Trophy, Target, Zap, BookOpen, X, Star,
   ChevronRight, Clock, BarChart2, Layers,
 } from "lucide-react";
+import { StudyBackground } from "@/components/FloatingParticles";
 
 /* ─── types ─── */
 type DayKey = "MON"|"TUE"|"WED"|"THU"|"FRI"|"SAT"|"SUN";
@@ -45,7 +46,6 @@ function prefLabel(p:PreferredTime) {
   return p==="MORNING"?"Morning · 8–11 am":p==="AFTERNOON"?"Afternoon · 1–4 pm":"Night · 7–10 pm";
 }
 
-// Strip verbose AI-generated prefixes and replace with clean short labels
 const TASK_PREFIX_MAP: [RegExp, string][] = [
   [/^(spaced\s+review|spaced\s+revision|revision\s+session)[:\s–-]*/i, "Revision: "],
   [/^(learn\s*\+\s*understand|learn\s*and\s*understand|learn\s*&\s*understand)[:\s–-]*/i, "Study: "],
@@ -218,11 +218,6 @@ export default function StudyPlanPage() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-
-        /* ── base ── */
-        .spg { font-family: 'Plus Jakarta Sans', sans-serif; }
-
         /* ── surfaces ── */
         .spg-card  { background: rgb(var(--card));  border: 1px solid rgb(var(--border)); }
         .spg-card2 { background: rgb(var(--card2)); border: 1px solid rgb(var(--border)); }
@@ -419,7 +414,6 @@ export default function StudyPlanPage() {
           50%      { transform: translateY(-10px) rotate(1deg); }
         }
 
-        /* arm holding book wobble */
         .spg-arm-l {
           transform-origin: 22px 56px;
           animation: spgArmWobble 3.8s ease-in-out infinite;
@@ -430,7 +424,6 @@ export default function StudyPlanPage() {
           60%     { transform: rotate(4deg); }
         }
 
-        /* blinking */
         .spg-blink {
           animation: spgBlink 4s ease-in-out infinite;
           opacity: 0;
@@ -440,7 +433,6 @@ export default function StudyPlanPage() {
           94%,98%     { opacity: 1; }
         }
 
-        /* sparkles */
         .spg-sparkle1 {
           animation: spgSpark1 2.4s ease-in-out infinite;
           transform-origin: 61.5px 18px;
@@ -458,7 +450,6 @@ export default function StudyPlanPage() {
           40%     { opacity:.2; transform: scale(0.5); }
         }
 
-        /* speech bubble */
         .spg-bubble {
           background: rgb(var(--card));
           border: 1px solid rgb(var(--border));
@@ -516,16 +507,13 @@ export default function StudyPlanPage() {
         .d1{animation-delay:.04s} .d2{animation-delay:.08s}
         .d3{animation-delay:.12s} .d4{animation-delay:.16s}
 
-        /* ── section panel ── */
         .spg-panel { display:none; }
         .spg-panel-active { display:block; animation:spgUp .28s cubic-bezier(.16,1,.3,1) both; }
 
-        /* ── number input ── */
         .spg-num-input::-webkit-inner-spin-button,
         .spg-num-input::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
         .spg-num-input { -moz-appearance:textfield; }
 
-        /* ── subject card ── */
         .spg-subj-card {
           border: 1px solid rgb(var(--border));
           border-radius: 16px;
@@ -540,7 +528,6 @@ export default function StudyPlanPage() {
           justify-content: space-between;
         }
 
-        /* ── level bar ── */
         .spg-level-track {
           height: 6px; border-radius: 99px;
           background: rgb(var(--card2));
@@ -555,8 +542,9 @@ export default function StudyPlanPage() {
         }
       `}</style>
 
-      <div className="spg pt-8 pb-20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6">
+      <div className="pt-8 pb-20">
+        <StudyBackground />
+        <div className="relative z-10 mx-auto max-w-4xl px-4 sm:px-6">
 
           {/* ══ HEADER ══ */}
           <header className="spg-up mb-6">
@@ -755,7 +743,7 @@ export default function StudyPlanPage() {
           )}
 
           {/* ══════════════════════════════════
-              FORM — revamped layout
+              FORM
           ══════════════════════════════════ */}
           {step==="FORM" && (
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5">
@@ -796,7 +784,6 @@ export default function StudyPlanPage() {
                   <div className={activeSection===0 ? "spg-panel-active" : "spg-panel"}>
                     <div className="space-y-5">
 
-                      {/* plan title */}
                       <div>
                         <p className="spg-label">Plan title <span className="normal-case font-normal opacity-60">(optional)</span></p>
                         <input
@@ -806,7 +793,6 @@ export default function StudyPlanPage() {
                         />
                       </div>
 
-                      {/* exam date */}
                       <div>
                         <p className="spg-label">Exam / deadline date</p>
                         <input
@@ -816,7 +802,6 @@ export default function StudyPlanPage() {
                         />
                       </div>
 
-                      {/* hours per week */}
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <p className="spg-label mb-0">Hours per week</p>
@@ -834,7 +819,6 @@ export default function StudyPlanPage() {
                         </div>
                       </div>
 
-                      {/* study style */}
                       <div>
                         <p className="spg-label">Study style</p>
                         <div className="grid grid-cols-2 gap-2">
@@ -851,7 +835,6 @@ export default function StudyPlanPage() {
                         </div>
                       </div>
 
-                      {/* preferred time */}
                       <div>
                         <p className="spg-label">Preferred study time</p>
                         <div className="grid grid-cols-3 gap-2">
@@ -883,7 +866,6 @@ export default function StudyPlanPage() {
                   <div className={activeSection===1 ? "spg-panel-active" : "spg-panel"}>
                     <div className="space-y-5">
 
-                      {/* active days */}
                       <div>
                         <p className="spg-label">Active days</p>
                         <div className="flex flex-wrap gap-1.5">
@@ -900,7 +882,6 @@ export default function StudyPlanPage() {
                         </div>
                       </div>
 
-                      {/* hours per day */}
                       <div>
                         <p className="spg-label">Hours per day</p>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -956,7 +937,6 @@ export default function StudyPlanPage() {
                       <div className="space-y-3">
                         {subjects.map((s,idx)=>(
                           <div key={idx} className="spg-subj-card">
-                            {/* subject header bar */}
                             <div className="spg-subj-head">
                               <div className="flex items-center gap-2">
                                 <span className="h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold spg-acc-pill">
@@ -976,7 +956,6 @@ export default function StudyPlanPage() {
                               )}
                             </div>
 
-                            {/* subject body */}
                             <div className="p-4 space-y-4">
                               <input
                                 value={s.name}
@@ -985,7 +964,6 @@ export default function StudyPlanPage() {
                                 className="spg-input w-full rounded-xl px-3.5 py-2.5 text-sm"
                               />
 
-                              {/* level slider */}
                               <div>
                                 <div className="flex items-center justify-between mb-2">
                                   <p className="text-xs font-medium spg-muted">Current level</p>
@@ -1003,7 +981,6 @@ export default function StudyPlanPage() {
                                 </div>
                               </div>
 
-                              {/* weak topics */}
                               <div>
                                 <p className="text-xs font-medium spg-muted mb-1.5">
                                   Weak topics <span className="opacity-60">(comma separated)</span>
@@ -1020,7 +997,6 @@ export default function StudyPlanPage() {
                         ))}
                       </div>
 
-                      {/* generate */}
                       <div className="flex gap-2 pt-2">
                         <button type="button"
                           onClick={()=>setActiveSection(1)}
@@ -1043,7 +1019,6 @@ export default function StudyPlanPage() {
               {/* ── RIGHT: sidebar ── */}
               <aside className="space-y-4 spg-up d2">
 
-                {/* feature list */}
                 <div className="spg-card rounded-2xl p-5 shadow-sm">
                   <p className="text-xs font-bold spg-fg mb-4">What you'll get</p>
                   <div className="space-y-3">
@@ -1064,7 +1039,6 @@ export default function StudyPlanPage() {
                   </div>
                 </div>
 
-                {/* progress indicator */}
                 <div className="spg-card rounded-2xl p-5 shadow-sm">
                   <p className="text-xs font-bold spg-fg mb-3">Setup progress</p>
                   <div className="space-y-2">
@@ -1083,7 +1057,6 @@ export default function StudyPlanPage() {
                   </div>
                 </div>
 
-                {/* tip */}
                 <div className="spg-tip p-4">
                   <p className="text-xs font-bold spg-acc-text mb-1.5">💡 Pro tip</p>
                   <p className="text-xs spg-muted leading-relaxed">
@@ -1101,7 +1074,6 @@ export default function StudyPlanPage() {
           {step==="RESULT" && plan && (
             <div className="space-y-5">
 
-              {/* stat cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {([
                   {
@@ -1139,7 +1111,6 @@ export default function StudyPlanPage() {
                 ))}
               </div>
 
-              {/* calendar */}
               <section className="spg-card rounded-3xl shadow-sm spg-up d2 overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-4 border-b" style={{borderColor:"rgb(var(--border))"}}>
                   <div>
@@ -1172,7 +1143,6 @@ export default function StudyPlanPage() {
                         className={cx("spg-up", isToday && "spg-today-col")}
                         style={{animationDelay:`${di*25}ms`}}>
 
-                        {/* day row header */}
                         <div className={cx(
                           "flex items-center gap-4 px-6 py-3",
                           isToday ? "spg-today-hdr" : ""
@@ -1198,18 +1168,14 @@ export default function StudyPlanPage() {
                                       "spg-task flex items-center gap-2 rounded-xl px-3 py-2 text-left",
                                       done ? "spg-done" : "spg-card2"
                                     )}>
-                                    {/* left color dot */}
                                     <span className={cx("h-2 w-2 rounded-full shrink-0 mt-px",
                                       TYPE_BAR[it.type]??TYPE_BAR.STUDY)} />
-
-                                    {/* checkbox */}
                                     <div className={cx(
                                       "h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
                                       done?"bg-emerald-500 border-emerald-500":"border-current/20"
                                     )}>
                                       {done && <CheckCircle2 className="h-2.5 w-2.5 text-white" />}
                                     </div>
-
                                     <div className="min-w-0">
                                       <p className={cx("text-xs font-semibold spg-fg whitespace-nowrap",
                                         done&&"line-through opacity-35")}>
@@ -1232,7 +1198,6 @@ export default function StudyPlanPage() {
                             })}
                           </div>
 
-                          {/* day summary */}
                           <div className="shrink-0 text-right hidden sm:block">
                             <div className={cx(
                               "text-[10px] font-semibold px-2.5 py-1 rounded-full",
@@ -1277,84 +1242,56 @@ export default function StudyPlanPage() {
         </div>
       </div>
 
-        {/* ══ FLOATING MASCOT ══ */}
-        <div className="spg-mascot-wrap" aria-hidden="true">
-          <div className="spg-mascot-float">
-            <svg width="72" height="90" viewBox="0 0 72 90" fill="none" xmlns="http://www.w3.org/2000/svg">
-              {/* glow shadow */}
-              <ellipse cx="36" cy="87" rx="16" ry="4" fill="rgba(var(--primary-raw,99,102,241),.18)" />
-
-              {/* body */}
-              <rect x="22" y="46" width="28" height="26" rx="10" fill="rgb(var(--primary))" opacity=".9"/>
-
-              {/* left arm holding book — animated */}
-              <g className="spg-arm-l">
-                <rect x="8" y="52" width="16" height="7" rx="3.5" fill="rgb(var(--primary))" opacity=".85"/>
-                {/* book */}
-                <rect x="2" y="48" width="12" height="14" rx="2.5" fill="#f59e0b"/>
-                <rect x="7.5" y="48" width="1.5" height="14" rx="0.75" fill="#b45309" opacity=".6"/>
-                <rect x="4" y="51" width="5" height="1.5" rx="0.75" fill="#fff" opacity=".5"/>
-                <rect x="4" y="54" width="4" height="1.5" rx="0.75" fill="#fff" opacity=".5"/>
-                <rect x="4" y="57" width="5" height="1.5" rx="0.75" fill="#fff" opacity=".5"/>
-              </g>
-
-              {/* right arm */}
-              <rect x="48" y="52" width="14" height="7" rx="3.5" fill="rgb(var(--primary))" opacity=".85"/>
-
-              {/* legs */}
-              <rect x="25" y="68" width="9" height="14" rx="4.5" fill="rgb(var(--primary))" opacity=".8"/>
-              <rect x="38" y="68" width="9" height="14" rx="4.5" fill="rgb(var(--primary))" opacity=".8"/>
-
-              {/* shoes */}
-              <ellipse cx="29.5" cy="82" rx="7" ry="4" fill="#1e1b4b"/>
-              <ellipse cx="42.5" cy="82" rx="7" ry="4" fill="#1e1b4b"/>
-
-              {/* neck */}
-              <rect x="31" y="40" width="10" height="8" rx="4" fill="#fcd5b0"/>
-
-              {/* head */}
-              <ellipse cx="36" cy="30" rx="15" ry="16" fill="#fcd5b0"/>
-
-              {/* hair */}
-              <path d="M21 25 Q22 14 36 12 Q50 14 51 25 Q48 18 36 17 Q24 18 21 25Z" fill="#1e1b4b"/>
-
-              {/* eyes — blinking */}
-              <g className="spg-eyes">
-                <ellipse cx="30" cy="29" rx="2.5" ry="2.5" fill="#1e1b4b"/>
-                <ellipse cx="42" cy="29" rx="2.5" ry="2.5" fill="#1e1b4b"/>
-                <ellipse cx="30.8" cy="28.2" rx="1" ry="1" fill="#fff" opacity=".7"/>
-                <ellipse cx="42.8" cy="28.2" rx="1" ry="1" fill="#fff" opacity=".7"/>
-              </g>
-              {/* blink overlay */}
-              <g className="spg-blink">
-                <rect x="27.5" y="27.5" width="5" height="3" rx="1.5" fill="#fcd5b0"/>
-                <rect x="39.5" y="27.5" width="5" height="3" rx="1.5" fill="#fcd5b0"/>
-              </g>
-
-              {/* smile */}
-              <path d="M31 35 Q36 39 41 35" stroke="#c07850" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
-
-              {/* cheeks */}
-              <ellipse cx="26" cy="33" rx="3" ry="2" fill="#f9a8a8" opacity=".5"/>
-              <ellipse cx="46" cy="33" rx="3" ry="2" fill="#f9a8a8" opacity=".5"/>
-
-              {/* sparkles */}
-              <g className="spg-sparkle1">
-                <path d="M60 18 L61.5 22 L65 18 L61.5 14Z" fill="#fbbf24" opacity=".9"/>
-                <path d="M58 18 L65 18" stroke="#fbbf24" strokeWidth="1" opacity=".6"/>
-                <path d="M61.5 14 L61.5 22" stroke="#fbbf24" strokeWidth="1" opacity=".6"/>
-              </g>
-              <g className="spg-sparkle2">
-                <path d="M10 12 L11 15 L14 12 L11 9Z" fill="#a78bfa" opacity=".9"/>
-              </g>
-            </svg>
-
-            {/* speech bubble */}
-            <div className="spg-bubble">
-              <p className="spg-bubble-text">You got this! 📚</p>
-            </div>
+      {/* ══ FLOATING MASCOT ══ */}
+      <div className="spg-mascot-wrap" aria-hidden="true">
+        <div className="spg-mascot-float">
+          <svg width="72" height="90" viewBox="0 0 72 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="36" cy="87" rx="16" ry="4" fill="rgba(var(--primary-raw,99,102,241),.18)" />
+            <rect x="22" y="46" width="28" height="26" rx="10" fill="rgb(var(--primary))" opacity=".9"/>
+            <g className="spg-arm-l">
+              <rect x="8" y="52" width="16" height="7" rx="3.5" fill="rgb(var(--primary))" opacity=".85"/>
+              <rect x="2" y="48" width="12" height="14" rx="2.5" fill="#f59e0b"/>
+              <rect x="7.5" y="48" width="1.5" height="14" rx="0.75" fill="#b45309" opacity=".6"/>
+              <rect x="4" y="51" width="5" height="1.5" rx="0.75" fill="#fff" opacity=".5"/>
+              <rect x="4" y="54" width="4" height="1.5" rx="0.75" fill="#fff" opacity=".5"/>
+              <rect x="4" y="57" width="5" height="1.5" rx="0.75" fill="#fff" opacity=".5"/>
+            </g>
+            <rect x="48" y="52" width="14" height="7" rx="3.5" fill="rgb(var(--primary))" opacity=".85"/>
+            <rect x="25" y="68" width="9" height="14" rx="4.5" fill="rgb(var(--primary))" opacity=".8"/>
+            <rect x="38" y="68" width="9" height="14" rx="4.5" fill="rgb(var(--primary))" opacity=".8"/>
+            <ellipse cx="29.5" cy="82" rx="7" ry="4" fill="#1e1b4b"/>
+            <ellipse cx="42.5" cy="82" rx="7" ry="4" fill="#1e1b4b"/>
+            <rect x="31" y="40" width="10" height="8" rx="4" fill="#fcd5b0"/>
+            <ellipse cx="36" cy="30" rx="15" ry="16" fill="#fcd5b0"/>
+            <path d="M21 25 Q22 14 36 12 Q50 14 51 25 Q48 18 36 17 Q24 18 21 25Z" fill="#1e1b4b"/>
+            <g className="spg-eyes">
+              <ellipse cx="30" cy="29" rx="2.5" ry="2.5" fill="#1e1b4b"/>
+              <ellipse cx="42" cy="29" rx="2.5" ry="2.5" fill="#1e1b4b"/>
+              <ellipse cx="30.8" cy="28.2" rx="1" ry="1" fill="#fff" opacity=".7"/>
+              <ellipse cx="42.8" cy="28.2" rx="1" ry="1" fill="#fff" opacity=".7"/>
+            </g>
+            <g className="spg-blink">
+              <rect x="27.5" y="27.5" width="5" height="3" rx="1.5" fill="#fcd5b0"/>
+              <rect x="39.5" y="27.5" width="5" height="3" rx="1.5" fill="#fcd5b0"/>
+            </g>
+            <path d="M31 35 Q36 39 41 35" stroke="#c07850" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+            <ellipse cx="26" cy="33" rx="3" ry="2" fill="#f9a8a8" opacity=".5"/>
+            <ellipse cx="46" cy="33" rx="3" ry="2" fill="#f9a8a8" opacity=".5"/>
+            <g className="spg-sparkle1">
+              <path d="M60 18 L61.5 22 L65 18 L61.5 14Z" fill="#fbbf24" opacity=".9"/>
+              <path d="M58 18 L65 18" stroke="#fbbf24" strokeWidth="1" opacity=".6"/>
+              <path d="M61.5 14 L61.5 22" stroke="#fbbf24" strokeWidth="1" opacity=".6"/>
+            </g>
+            <g className="spg-sparkle2">
+              <path d="M10 12 L11 15 L14 12 L11 9Z" fill="#a78bfa" opacity=".9"/>
+            </g>
+          </svg>
+          <div className="spg-bubble">
+            <p className="spg-bubble-text">You got this! 📚</p>
           </div>
         </div>
+      </div>
+
       {whyItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="spg-backdrop spg-fd absolute inset-0" onClick={()=>setWhyId(null)} />

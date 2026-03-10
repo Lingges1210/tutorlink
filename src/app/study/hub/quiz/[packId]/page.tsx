@@ -1,23 +1,14 @@
 //src/app/study/hub/quiz/[packId]/page.tsx
-
 "use client";
 
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  Sparkles,
-  ArrowLeft,
-  HelpCircle,
-  Layers,
-  BookOpenCheck,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  RefreshCcw,
-  CornerDownRight,
-  Trophy,
-  Target,
+  Sparkles, ArrowLeft, HelpCircle, Layers, BookOpenCheck,
+  CheckCircle, XCircle, AlertCircle, RefreshCcw, CornerDownRight,
+  Trophy, Target,
 } from "lucide-react";
+import { StudyBackground } from "@/components/FloatingParticles";
 
 type Q = {
   q: string;
@@ -39,10 +30,9 @@ const difficultyColor: Record<string, string> = {
 
 function tabBtn(active: boolean) {
   return `inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition-all duration-200
-    ${
-      active
-        ? "border-violet-400/60 bg-violet-500/15 text-violet-400 shadow-[0_0_12px_rgba(139,92,246,0.20)]"
-        : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))] hover:bg-[rgb(var(--card))] hover:border-violet-400/25"
+    ${active
+      ? "border-violet-400/60 bg-violet-500/15 text-violet-400 shadow-[0_0_12px_rgba(139,92,246,0.20)]"
+      : "border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.8)] text-[rgb(var(--muted))] hover:bg-[rgb(var(--card)/0.65)] hover:border-violet-400/25"
     }`;
 }
 
@@ -136,415 +126,404 @@ export default function QuizPage({ params }: { params: Promise<{ packId: string 
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-16 flex flex-col items-center gap-3">
-        <div className="h-7 w-7 rounded-full border-2 border-violet-400 border-t-transparent animate-spin" />
-        <div className="text-xs text-[rgb(var(--muted))]">Loading study pack…</div>
+      <div className="min-h-screen bg-[rgb(var(--bg))]">
+        <StudyBackground />
+        <div className="relative z-10 mx-auto max-w-3xl px-4 py-16 flex flex-col items-center gap-3">
+          <div className="h-7 w-7 rounded-full border-2 border-violet-400 border-t-transparent animate-spin" />
+          <div className="text-xs text-[rgb(var(--muted))]">Loading study pack…</div>
+        </div>
       </div>
     );
   }
 
   if (err || !pack) {
     return (
-      <div className="pt-8 pb-10">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 space-y-3">
-          <div className="rounded-xl border border-red-400/30 bg-red-500/8 p-4 text-xs text-red-400 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            {err || "Pack not found"}
+      <div className="min-h-screen bg-[rgb(var(--bg))]">
+        <StudyBackground />
+        <div className="relative z-10 pt-8 pb-10">
+          <div className="mx-auto max-w-3xl px-4 sm:px-6 space-y-3">
+            <div className="rounded-xl border border-red-400/30 bg-red-500/8 p-4 text-xs text-red-400 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {err || "Pack not found"}
+            </div>
+            <Link href="/study/hub" className="inline-flex items-center gap-1.5 text-xs text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] transition-colors group">
+              <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
+              Back to Study Hub
+            </Link>
           </div>
-          <Link href="/study/hub" className="inline-flex items-center gap-1.5 text-xs text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] transition-colors group">
-            <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
-            Back to Study Hub
-          </Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="pt-8 pb-16 min-h-screen">
-      <div className="mx-auto max-w-3xl px-4 sm:px-6 space-y-5">
+    <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
+      <StudyBackground />
 
-        {/* Header — compact single row */}
-        <header>
-          <Link
-            href="/study/hub"
-            className="inline-flex items-center gap-1.5 text-xs text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] transition-colors group"
-          >
-            <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
-            Back to Study Hub
-          </Link>
+      <div className="relative z-10 pt-8 pb-16">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 space-y-5">
 
-          <div className="mt-3 flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl font-bold tracking-tight text-[rgb(var(--fg))]">Study Pack</h1>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-400/25 bg-violet-500/8 px-2.5 py-1 text-[10px] font-semibold text-violet-400">
-                  <Sparkles className="h-3 w-3" />
-                  Active Recall
-                </span>
-              </div>
-              <p className="mt-0.5 text-xs text-[rgb(var(--muted))]">
-                Quiz yourself, drill flashcards, and skim the summary.
-              </p>
-            </div>
-
-            {/* Score / Progress badge — inline with header */}
-            <div
-              className="shrink-0 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-2.5 text-center min-w-[90px]"
-              style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }}
+          {/* Header */}
+          <header>
+            <Link
+              href="/study/hub"
+              className="inline-flex items-center gap-1.5 text-xs text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] transition-colors group"
             >
-              <div className="flex items-center justify-center gap-1 mb-1">
-                {isSubmitted
-                  ? <Trophy className="h-3 w-3 text-amber-400" />
-                  : <Target className="h-3 w-3 text-violet-400" />
-                }
-                <span className="text-[10px] text-[rgb(var(--muted2))] font-medium">
-                  {isSubmitted ? "Score" : "Progress"}
-                </span>
-              </div>
-              <div className="text-lg font-bold leading-none text-[rgb(var(--fg))]">
-                {isSubmitted ? result.score : answeredCount}
-                <span className="text-[rgb(var(--muted2))] font-normal text-xs">
-                  /{isSubmitted ? result.total : quiz.length}
-                </span>
-              </div>
-              {isSubmitted && (
-                <div className={`mt-1 text-[10px] font-semibold ${scorePercent >= 80 ? "text-emerald-400" : scorePercent >= 60 ? "text-amber-400" : "text-red-400"}`}>
-                  {scorePercent}%
-                </div>
-              )}
-              {!isSubmitted && quiz.length > 0 && (
-                <div className="mt-1.5 h-1 w-full rounded-full bg-[rgb(var(--border))] overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${(answeredCount / quiz.length) * 100}%`,
-                      background: "linear-gradient(90deg, rgb(139,92,246), rgb(217,70,239))",
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
+              <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
+              Back to Study Hub
+            </Link>
 
-          {/* Retake button when submitted */}
-          {isSubmitted && (
-            <div className="mt-3">
-              <button
-                type="button"
-                onClick={retake}
-                className="inline-flex items-center gap-1.5 h-8 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 text-xs font-semibold text-[rgb(var(--fg))] hover:border-violet-400/30 transition-all duration-200"
+            <div className="mt-3 flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-xl font-bold tracking-tight text-[rgb(var(--fg))]">Study Pack</h1>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-400/25 bg-violet-500/8 px-2.5 py-1 text-[10px] font-semibold text-violet-400">
+                    <Sparkles className="h-3 w-3" />
+                    Active Recall
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-[rgb(var(--muted))]">
+                  Quiz yourself, drill flashcards, and skim the summary.
+                </p>
+              </div>
+
+              <div
+                className="shrink-0 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.65)] dark:bg-[rgb(var(--card)/0.5)] backdrop-blur-sm px-4 py-2.5 text-center min-w-[90px]"
+                style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }}
               >
-                <RefreshCcw className="h-3 w-3" />
-                Retake Quiz
-              </button>
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  {isSubmitted
+                    ? <Trophy className="h-3 w-3 text-amber-400" />
+                    : <Target className="h-3 w-3 text-violet-400" />
+                  }
+                  <span className="text-[10px] text-[rgb(var(--muted2))] font-medium">
+                    {isSubmitted ? "Score" : "Progress"}
+                  </span>
+                </div>
+                <div className="text-lg font-bold leading-none text-[rgb(var(--fg))]">
+                  {isSubmitted ? result.score : answeredCount}
+                  <span className="text-[rgb(var(--muted2))] font-normal text-xs">
+                    /{isSubmitted ? result.total : quiz.length}
+                  </span>
+                </div>
+                {isSubmitted && (
+                  <div className={`mt-1 text-[10px] font-semibold ${scorePercent >= 80 ? "text-emerald-400" : scorePercent >= 60 ? "text-amber-400" : "text-red-400"}`}>
+                    {scorePercent}%
+                  </div>
+                )}
+                {!isSubmitted && quiz.length > 0 && (
+                  <div className="mt-1.5 h-1 w-full rounded-full bg-[rgb(var(--border))] overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${(answeredCount / quiz.length) * 100}%`,
+                        background: "linear-gradient(90deg, rgb(139,92,246), rgb(217,70,239))",
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </header>
 
-        {/* Main card */}
-        <section
-          className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] overflow-hidden"
-          style={{ boxShadow: "0 16px 40px rgba(0,0,0,0.12), 0 1px 0 rgba(255,255,255,0.04) inset" }}
-        >
-          {/* Tabs + actions row */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgb(var(--border))] px-4 py-3 bg-[rgb(var(--card2))]/40">
-            <div className="flex items-center gap-1.5">
-              <button type="button" onClick={() => setTab("QUIZ")} className={tabBtn(tab === "QUIZ")}>
-                <HelpCircle className="h-3.5 w-3.5" /> Quiz
-              </button>
-              <button type="button" onClick={() => setTab("FLASHCARDS")} className={tabBtn(tab === "FLASHCARDS")}>
-                <BookOpenCheck className="h-3.5 w-3.5" /> Flashcards
-              </button>
-              <button type="button" onClick={() => setTab("SUMMARY")} className={tabBtn(tab === "SUMMARY")}>
-                <Layers className="h-3.5 w-3.5" /> Summary
-              </button>
-            </div>
-
-            {tab === "QUIZ" && isSubmitted && mistakes.length > 0 && (
-              <div className="flex items-center gap-1.5">
+            {isSubmitted && (
+              <div className="mt-3">
                 <button
                   type="button"
-                  onClick={() => setShowReview((v) => !v)}
-                  className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-1 text-[10px] font-semibold text-[rgb(var(--fg))] hover:border-violet-400/30 transition-all duration-200"
+                  onClick={retake}
+                  className="inline-flex items-center gap-1.5 h-8 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.65)] dark:bg-[rgb(var(--card)/0.5)] backdrop-blur-sm px-3 text-xs font-semibold text-[rgb(var(--fg))] hover:border-violet-400/30 transition-all duration-200"
                 >
-                  {showReview ? "Hide Review" : "Show Review"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => jumpToQuestion(mistakes[0].i)}
-                  className="rounded-full border border-violet-400/40 bg-violet-500/10 px-2.5 py-1 text-[10px] font-semibold text-violet-400 hover:bg-violet-500/15 transition-all duration-200"
-                >
-                  Jump to 1st mistake
+                  <RefreshCcw className="h-3 w-3" />
+                  Retake Quiz
                 </button>
               </div>
             )}
-          </div>
+          </header>
 
-          <div className="p-4">
-            {/* QUIZ */}
-            {tab === "QUIZ" && (
-              <div className="space-y-3">
-                {/* Mistake Review panel */}
-                {isSubmitted && showReview && (
-                  <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 relative overflow-hidden">
-                    <div
-                      className="absolute top-0 left-0 h-full w-1 rounded-l-xl"
-                      style={{ background: "linear-gradient(180deg, rgb(139,92,246), rgb(217,70,239))" }}
-                    />
-                    <div className="pl-3 flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <div className="text-sm font-semibold text-[rgb(var(--fg))]">Mistake Review</div>
-                        <div className="mt-0.5 text-xs text-[rgb(var(--muted2))]">
-                          Questions you missed — correct answer + explanation.
+          {/* Main card */}
+          <section
+            className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.65)] dark:bg-[rgb(var(--card)/0.5)] backdrop-blur-sm overflow-hidden"
+            style={{ boxShadow: "0 16px 40px rgba(0,0,0,0.12), 0 1px 0 rgba(255,255,255,0.04) inset" }}
+          >
+            {/* Tabs + actions row */}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgb(var(--border))] px-4 py-3 bg-[rgb(var(--card2)/0.4)]">
+              <div className="flex items-center gap-1.5">
+                <button type="button" onClick={() => setTab("QUIZ")} className={tabBtn(tab === "QUIZ")}>
+                  <HelpCircle className="h-3.5 w-3.5" /> Quiz
+                </button>
+                <button type="button" onClick={() => setTab("FLASHCARDS")} className={tabBtn(tab === "FLASHCARDS")}>
+                  <BookOpenCheck className="h-3.5 w-3.5" /> Flashcards
+                </button>
+                <button type="button" onClick={() => setTab("SUMMARY")} className={tabBtn(tab === "SUMMARY")}>
+                  <Layers className="h-3.5 w-3.5" /> Summary
+                </button>
+              </div>
+
+              {tab === "QUIZ" && isSubmitted && mistakes.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowReview((v) => !v)}
+                    className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.8)] px-2.5 py-1 text-[10px] font-semibold text-[rgb(var(--fg))] hover:border-violet-400/30 transition-all duration-200"
+                  >
+                    {showReview ? "Hide Review" : "Show Review"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => jumpToQuestion(mistakes[0].i)}
+                    className="rounded-full border border-violet-400/40 bg-violet-500/10 px-2.5 py-1 text-[10px] font-semibold text-violet-400 hover:bg-violet-500/15 transition-all duration-200"
+                  >
+                    Jump to 1st mistake
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4">
+              {/* QUIZ */}
+              {tab === "QUIZ" && (
+                <div className="space-y-3">
+                  {isSubmitted && showReview && (
+                    <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.8)] p-4 relative overflow-hidden">
+                      <div
+                        className="absolute top-0 left-0 h-full w-1 rounded-l-xl"
+                        style={{ background: "linear-gradient(180deg, rgb(139,92,246), rgb(217,70,239))" }}
+                      />
+                      <div className="pl-3 flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <div className="text-sm font-semibold text-[rgb(var(--fg))]">Mistake Review</div>
+                          <div className="mt-0.5 text-xs text-[rgb(var(--muted2))]">
+                            Questions you missed — correct answer + explanation.
+                          </div>
+                        </div>
+                        <div className="inline-flex items-center gap-1.5 rounded-full border border-red-400/30 bg-red-500/8 px-2.5 py-1 text-xs font-semibold text-red-400">
+                          <XCircle className="h-3 w-3" />
+                          {mistakes.length} / {quiz.length} wrong
                         </div>
                       </div>
-                      <div className="inline-flex items-center gap-1.5 rounded-full border border-red-400/30 bg-red-500/8 px-2.5 py-1 text-xs font-semibold text-red-400">
-                        <XCircle className="h-3 w-3" />
-                        {mistakes.length} / {quiz.length} wrong
-                      </div>
+
+                      {mistakes.length === 0 ? (
+                        <div className="mt-3 pl-3 flex items-center gap-2 text-sm text-emerald-400">
+                          <CheckCircle className="h-4 w-4" />
+                          Perfect score — nothing to review 🎉
+                        </div>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          {mistakes.map((m) => (
+                            <button
+                              key={m.i}
+                              type="button"
+                              onClick={() => jumpToQuestion(m.i)}
+                              className="w-full text-left rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.65)] p-3 hover:border-violet-400/30 hover:shadow-[0_2px_12px_rgba(139,92,246,0.10)] transition-all duration-200 group"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="font-medium text-xs text-[rgb(var(--fg))] leading-snug">
+                                  <span className="text-[rgb(var(--muted2))] mr-1">Q{m.i + 1}.</span>
+                                  {m.q.q}
+                                </div>
+                                <CornerDownRight className="h-3 w-3 text-[rgb(var(--muted2))] shrink-0 mt-0.5 group-hover:text-violet-400 transition-colors" />
+                              </div>
+                              <div className="mt-2 grid gap-1 text-xs">
+                                <div className="rounded-lg border border-red-400/20 bg-red-500/8 px-2.5 py-1.5">
+                                  <span className="font-semibold text-red-400">Your answer: </span>
+                                  <span className="text-red-300">{m.pickedText ?? "Not answered"}</span>
+                                </div>
+                                <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/8 px-2.5 py-1.5">
+                                  <span className="font-semibold text-emerald-400">Correct: </span>
+                                  <span className="text-emerald-300">{m.correctText}</span>
+                                </div>
+                                <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.8)] px-2.5 py-1.5 text-[rgb(var(--muted))]">
+                                  {m.q.explanation}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
+                  )}
 
-                    {mistakes.length === 0 ? (
-                      <div className="mt-3 pl-3 flex items-center gap-2 text-sm text-emerald-400">
-                        <CheckCircle className="h-4 w-4" />
-                        Perfect score — nothing to review 🎉
-                      </div>
-                    ) : (
-                      <div className="mt-3 space-y-2">
-                        {mistakes.map((m) => (
-                          <button
-                            key={m.i}
-                            type="button"
-                            onClick={() => jumpToQuestion(m.i)}
-                            className="w-full text-left rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3 hover:border-violet-400/30 hover:shadow-[0_2px_12px_rgba(139,92,246,0.10)] transition-all duration-200 group"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="font-medium text-xs text-[rgb(var(--fg))] leading-snug">
-                                <span className="text-[rgb(var(--muted2))] mr-1">Q{m.i + 1}.</span>
-                                {m.q.q}
-                              </div>
-                              <CornerDownRight className="h-3 w-3 text-[rgb(var(--muted2))] shrink-0 mt-0.5 group-hover:text-violet-400 transition-colors" />
+                  {quiz.map((q, i) => {
+                    const picked = answers[i];
+                    const correct = q.answerIndex;
+
+                    return (
+                      <div
+                        key={i}
+                        ref={(el) => { questionRefs.current[i] = el; }}
+                        className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.8)] p-4 scroll-mt-24 transition-all duration-200"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start gap-2">
+                              <span className="shrink-0 mt-0.5 inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.65)] text-[rgb(var(--muted2))]">
+                                {i + 1}
+                              </span>
+                              <div className="font-medium text-sm text-[rgb(var(--fg))] leading-snug">{q.q}</div>
                             </div>
-
-                            <div className="mt-2 grid gap-1 text-xs">
-                              <div className="rounded-lg border border-red-400/20 bg-red-500/8 px-2.5 py-1.5">
-                                <span className="font-semibold text-red-400">Your answer: </span>
-                                <span className="text-red-300">{m.pickedText ?? "Not answered"}</span>
-                              </div>
-                              <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/8 px-2.5 py-1.5">
-                                <span className="font-semibold text-emerald-400">Correct: </span>
-                                <span className="text-emerald-300">{m.correctText}</span>
-                              </div>
-                              <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-1.5 text-[rgb(var(--muted))]">
-                                {m.q.explanation}
-                              </div>
+                            <div className="mt-1.5 ml-7 flex items-center gap-2">
+                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${difficultyColor[q.difficulty] ?? "text-[rgb(var(--muted2))]"}`}>
+                                {q.difficulty}
+                              </span>
+                              {q.topic && (
+                                <span className="text-[10px] text-[rgb(var(--muted2))]">{q.topic}</span>
+                              )}
                             </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Questions */}
-                {quiz.map((q, i) => {
-                  const picked = answers[i];
-                  const correct = q.answerIndex;
-
-                  return (
-                    <div
-                      key={i}
-                      ref={(el) => { questionRefs.current[i] = el; }}
-                      className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 scroll-mt-24 transition-all duration-200"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start gap-2">
-                            <span className="shrink-0 mt-0.5 inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted2))]">
-                              {i + 1}
-                            </span>
-                            <div className="font-medium text-sm text-[rgb(var(--fg))] leading-snug">{q.q}</div>
                           </div>
-                          <div className="mt-1.5 ml-7 flex items-center gap-2">
-                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${difficultyColor[q.difficulty] ?? "text-[rgb(var(--muted2))]"}`}>
-                              {q.difficulty}
-                            </span>
-                            {q.topic && (
-                              <span className="text-[10px] text-[rgb(var(--muted2))]">{q.topic}</span>
-                            )}
-                          </div>
+
+                          {isSubmitted && (
+                            <div className="text-xs font-semibold shrink-0">
+                              {picked === correct ? (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/8 px-2 py-0.5 text-emerald-400 text-[10px]">
+                                  <CheckCircle className="h-3 w-3" /> Correct
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-red-400/30 bg-red-500/8 px-2 py-0.5 text-red-400 text-[10px]">
+                                  <XCircle className="h-3 w-3" /> Wrong
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
 
-                        {isSubmitted && (
-                          <div className="text-xs font-semibold shrink-0">
-                            {picked === correct ? (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/8 px-2 py-0.5 text-emerald-400 text-[10px]">
-                                <CheckCircle className="h-3 w-3" /> Correct
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-red-400/30 bg-red-500/8 px-2 py-0.5 text-red-400 text-[10px]">
-                                <XCircle className="h-3 w-3" /> Wrong
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                        <div className="mt-2.5 grid gap-1.5 ml-7">
+                          {q.options.map((opt, idx) => {
+                            const isPicked = picked === idx;
+                            const isCorrectOpt = correct === idx;
+                            const base = "text-left rounded-lg border px-3 py-2 text-sm transition-all duration-150 w-full";
 
-                      <div className="mt-2.5 grid gap-1.5 ml-7">
-                        {q.options.map((opt, idx) => {
-                          const isPicked = picked === idx;
-                          const isCorrectOpt = correct === idx;
-                          const base = "text-left rounded-lg border px-3 py-2 text-sm transition-all duration-150 w-full";
-
-                          if (!isSubmitted) {
-                            return (
-                              <button
-                                key={idx}
-                                onClick={() => {
-                                  const next = [...answers];
-                                  next[i] = idx;
-                                  setAnswers(next);
-                                }}
-                                className={`${base} ${
-                                  isPicked
+                            if (!isSubmitted) {
+                              return (
+                                <button
+                                  key={idx}
+                                  onClick={() => {
+                                    const next = [...answers];
+                                    next[i] = idx;
+                                    setAnswers(next);
+                                  }}
+                                  className={`${base} ${isPicked
                                     ? "border-violet-400/60 bg-violet-500/10 text-[rgb(var(--fg))] shadow-[0_0_0_1px_rgba(139,92,246,0.20)]"
-                                    : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] hover:border-violet-400/30 hover:text-[rgb(var(--fg))]"
-                                }`}
-                              >
+                                    : "border-[rgb(var(--border))] bg-[rgb(var(--card)/0.65)] text-[rgb(var(--muted))] hover:border-violet-400/30 hover:text-[rgb(var(--fg))]"
+                                  }`}
+                                >
+                                  <span className="flex items-center gap-2">
+                                    <span className={`shrink-0 h-4 w-4 rounded-full border text-[9px] font-bold inline-flex items-center justify-center transition-all ${isPicked ? "border-violet-400 bg-violet-400 text-white" : "border-[rgb(var(--border))]"}`}>
+                                      {isPicked ? "✓" : String.fromCharCode(65 + idx)}
+                                    </span>
+                                    {opt}
+                                  </span>
+                                </button>
+                              );
+                            }
+
+                            let cls = `${base} border-[rgb(var(--border))] bg-[rgb(var(--card)/0.65)] text-[rgb(var(--muted))] cursor-not-allowed`;
+                            if (isCorrectOpt) cls = `${base} border-emerald-400/40 bg-emerald-500/8 text-emerald-300 cursor-not-allowed`;
+                            else if (isPicked && !isCorrectOpt) cls = `${base} border-red-400/40 bg-red-500/8 text-red-300 cursor-not-allowed`;
+
+                            return (
+                              <button key={idx} type="button" disabled className={cls}>
                                 <span className="flex items-center gap-2">
-                                  <span className={`shrink-0 h-4 w-4 rounded-full border text-[9px] font-bold inline-flex items-center justify-center transition-all ${isPicked ? "border-violet-400 bg-violet-400 text-white" : "border-[rgb(var(--border))]"}`}>
-                                    {isPicked ? "✓" : String.fromCharCode(65 + idx)}
+                                  <span className={`shrink-0 h-4 w-4 rounded-full border text-[9px] font-bold inline-flex items-center justify-center ${isCorrectOpt ? "border-emerald-400 bg-emerald-400 text-white" : isPicked ? "border-red-400 bg-red-400 text-white" : "border-[rgb(var(--border))]"}`}>
+                                    {isCorrectOpt ? "✓" : isPicked ? "✗" : String.fromCharCode(65 + idx)}
                                   </span>
                                   {opt}
                                 </span>
                               </button>
                             );
-                          }
-
-                          let cls = `${base} border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] cursor-not-allowed`;
-                          if (isCorrectOpt) {
-                            cls = `${base} border-emerald-400/40 bg-emerald-500/8 text-emerald-300 cursor-not-allowed`;
-                          } else if (isPicked && !isCorrectOpt) {
-                            cls = `${base} border-red-400/40 bg-red-500/8 text-red-300 cursor-not-allowed`;
-                          }
-
-                          return (
-                            <button key={idx} type="button" disabled className={cls}>
-                              <span className="flex items-center gap-2">
-                                <span className={`shrink-0 h-4 w-4 rounded-full border text-[9px] font-bold inline-flex items-center justify-center ${isCorrectOpt ? "border-emerald-400 bg-emerald-400 text-white" : isPicked ? "border-red-400 bg-red-400 text-white" : "border-[rgb(var(--border))]"}`}>
-                                  {isCorrectOpt ? "✓" : isPicked ? "✗" : String.fromCharCode(65 + idx)}
-                                </span>
-                                {opt}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {isSubmitted && (
-                        <div className="mt-2.5 ml-7 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card))]/60 px-3 py-2 text-xs text-[rgb(var(--muted))] leading-relaxed">
-                          <span className="font-semibold text-[rgb(var(--muted2))]">Explanation: </span>
-                          {q.explanation}
+                          })}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
 
-            {/* FLASHCARDS */}
-            {tab === "FLASHCARDS" && (
-              <FlashcardGrid flashcards={flashcards} />
-            )}
+                        {isSubmitted && (
+                          <div className="mt-2.5 ml-7 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.5)] px-3 py-2 text-xs text-[rgb(var(--muted))] leading-relaxed">
+                            <span className="font-semibold text-[rgb(var(--muted2))]">Explanation: </span>
+                            {q.explanation}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-            {/* SUMMARY */}
-            {tab === "SUMMARY" && (
-              <div className="space-y-3">
-                <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 relative overflow-hidden">
-                  <div
-                    className="absolute top-0 left-0 h-full w-1 rounded-l-xl"
-                    style={{ background: "linear-gradient(180deg, rgb(139,92,246), rgb(217,70,239))" }}
-                  />
-                  <div className="pl-3">
-                    <div className="text-sm font-semibold text-[rgb(var(--fg))] mb-3">Summary</div>
-                    {/* Render summary with paragraph breaks */}
-                    <div className="text-sm text-[rgb(var(--muted))] leading-relaxed space-y-2">
-                      {(pack.summary as string)
-                        .split(/\n+/)
-                        .filter(Boolean)
-                        .map((para, idx) => (
+              {tab === "FLASHCARDS" && <FlashcardGrid flashcards={flashcards} />}
+
+              {tab === "SUMMARY" && (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.8)] p-4 relative overflow-hidden">
+                    <div
+                      className="absolute top-0 left-0 h-full w-1 rounded-l-xl"
+                      style={{ background: "linear-gradient(180deg, rgb(139,92,246), rgb(217,70,239))" }}
+                    />
+                    <div className="pl-3">
+                      <div className="text-sm font-semibold text-[rgb(var(--fg))] mb-3">Summary</div>
+                      <div className="text-sm text-[rgb(var(--muted))] leading-relaxed space-y-2">
+                        {(pack.summary as string).split(/\n+/).filter(Boolean).map((para, idx) => (
                           <p key={idx}>{para}</p>
                         ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.8)] p-4">
+                    <div className="text-sm font-semibold text-[rgb(var(--fg))] mb-2.5">Key Concepts</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {concepts.map((c, i) => (
+                        <span key={i} className="text-xs border border-[rgb(var(--border))] px-2.5 py-1 rounded-full bg-[rgb(var(--card)/0.65)] text-[rgb(var(--muted2))] hover:border-violet-400/30 hover:text-[rgb(var(--fg))] transition-all duration-150 cursor-default">
+                          {c}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 </div>
+              )}
+            </div>
 
-                <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
-                  <div className="text-sm font-semibold text-[rgb(var(--fg))] mb-2.5">Key Concepts</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {concepts.map((c, i) => (
-                      <span
-                        key={i}
-                        className="text-xs border border-[rgb(var(--border))] px-2.5 py-1 rounded-full bg-[rgb(var(--card))] text-[rgb(var(--muted2))] hover:border-violet-400/30 hover:text-[rgb(var(--fg))] transition-all duration-150 cursor-default"
-                      >
-                        {c}
-                      </span>
-                    ))}
+            {tab === "QUIZ" && !isSubmitted && (
+              <div className="sticky bottom-0">
+                <div
+                  className="border-t border-[rgb(var(--border))] bg-[rgb(var(--card)/0.85)] backdrop-blur-sm px-4 py-3"
+                  style={{ boxShadow: "0 -6px 20px rgba(0,0,0,0.12)" }}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="text-xs text-[rgb(var(--muted))]">
+                        {answeredCount} / {quiz.length} answered
+                      </div>
+                      <div className="h-1.5 w-24 rounded-full bg-[rgb(var(--border))] overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: quiz.length ? `${(answeredCount / quiz.length) * 100}%` : "0%",
+                            background: "linear-gradient(90deg, rgb(139,92,246), rgb(217,70,239))",
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={submit}
+                      disabled={answeredCount === 0}
+                      className="relative h-9 rounded-xl px-5 inline-flex items-center gap-2 text-xs font-semibold text-white disabled:opacity-40 overflow-hidden group"
+                      style={{
+                        background: "linear-gradient(135deg, rgb(139,92,246), rgb(217,70,239))",
+                        boxShadow: "0 6px 16px rgba(139,92,246,0.35), inset 0 1px 0 rgba(255,255,255,0.15)",
+                      }}
+                    >
+                      <span className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-200 rounded-xl" />
+                      <span className="relative z-10">Submit Quiz</span>
+                    </button>
                   </div>
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Sticky bottom submit */}
-          {tab === "QUIZ" && !isSubmitted && (
-            <div className="sticky bottom-0">
-              <div
-                className="border-t border-[rgb(var(--border))] bg-[rgb(var(--card))]/95 backdrop-blur-sm px-4 py-3"
-                style={{ boxShadow: "0 -6px 20px rgba(0,0,0,0.12)" }}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className="text-xs text-[rgb(var(--muted))]">
-                      {answeredCount} / {quiz.length} answered
-                    </div>
-                    <div className="h-1.5 w-24 rounded-full bg-[rgb(var(--border))] overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: quiz.length ? `${(answeredCount / quiz.length) * 100}%` : "0%",
-                          background: "linear-gradient(90deg, rgb(139,92,246), rgb(217,70,239))",
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={submit}
-                    disabled={answeredCount === 0}
-                    className="relative h-9 rounded-xl px-5 inline-flex items-center gap-2 text-xs font-semibold text-white disabled:opacity-40 overflow-hidden group"
-                    style={{
-                      background: "linear-gradient(135deg, rgb(139,92,246), rgb(217,70,239))",
-                      boxShadow: "0 6px 16px rgba(139,92,246,0.35), inset 0 1px 0 rgba(255,255,255,0.15)",
-                    }}
-                  >
-                    <span className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-200 rounded-xl" />
-                    <span className="relative z-10">Submit Quiz</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
+          </section>
+        </div>
       </div>
     </div>
   );
 }
 
-function FlashcardGrid({ flashcards }: { flashcards: Flashcard[] }) {
+function FlashcardGrid({ flashcards }: { flashcards: { q: string; a: string }[] }) {
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
 
   function toggle(i: number) {
@@ -559,7 +538,6 @@ function FlashcardGrid({ flashcards }: { flashcards: Flashcard[] }) {
 
   return (
     <div className="space-y-4">
-      {/* Progress header */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs text-[rgb(var(--muted))]">
@@ -568,58 +546,43 @@ function FlashcardGrid({ flashcards }: { flashcards: Flashcard[] }) {
               : `${revealed.size} of ${flashcards.length} revealed`}
           </span>
           {revealed.size > 0 && (
-            <button
-              type="button"
-              onClick={() => setRevealed(new Set())}
-              className="text-[10px] font-medium text-[rgb(var(--muted2))] hover:text-violet-500 transition-colors"
-            >
+            <button type="button" onClick={() => setRevealed(new Set())}
+              className="text-[10px] font-medium text-[rgb(var(--muted2))] hover:text-violet-500 transition-colors">
               Reset
             </button>
           )}
         </div>
         <div className="h-1.5 w-full rounded-full bg-[rgb(var(--border))] overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{
-              width: `${progress}%`,
-              background: "linear-gradient(90deg, rgb(139,92,246), rgb(217,70,239))",
-            }}
-          />
+          <div className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${progress}%`, background: "linear-gradient(90deg, rgb(139,92,246), rgb(217,70,239))" }} />
         </div>
       </div>
 
-      {/* Cards grid */}
       <div className="grid gap-3 sm:grid-cols-2">
         {flashcards.map((c, i) => {
           const isOpen = revealed.has(i);
           return (
-            <div
-              key={i}
-              onClick={() => toggle(i)}
+            <div key={i} onClick={() => toggle(i)}
               className={`rounded-xl border transition-all duration-200 cursor-pointer select-none overflow-hidden
                 ${isOpen
-                  ? "border-violet-400/40 bg-[rgb(var(--card))] shadow-sm"
-                  : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] hover:border-violet-400/25 hover:bg-[rgb(var(--card))]"
+                  ? "border-violet-400/40 bg-[rgb(var(--card)/0.65)] shadow-sm"
+                  : "border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.8)] hover:border-violet-400/25 hover:bg-[rgb(var(--card)/0.65)]"
                 }`}
             >
-              {/* Question row */}
               <div className="flex items-center gap-3 px-4 py-3.5">
-                <span className="shrink-0 h-5 w-5 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] inline-flex items-center justify-center text-[10px] font-semibold text-[rgb(var(--muted2))]">
+                <span className="shrink-0 h-5 w-5 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.8)] inline-flex items-center justify-center text-[10px] font-semibold text-[rgb(var(--muted2))]">
                   {i + 1}
                 </span>
-                <p className="flex-1 text-sm font-medium text-[rgb(var(--fg))] leading-snug">
-                  {c.q}
-                </p>
+                <p className="flex-1 text-sm font-medium text-[rgb(var(--fg))] leading-snug">{c.q}</p>
                 <span className={`shrink-0 text-[10px] font-semibold rounded-full px-2.5 py-1 transition-all duration-200
                   ${isOpen
                     ? "bg-violet-500/10 text-violet-500 border border-violet-400/25"
-                    : "bg-[rgb(var(--card2))] text-[rgb(var(--muted2))] border border-[rgb(var(--border))]"
+                    : "bg-[rgb(var(--card2)/0.8)] text-[rgb(var(--muted2))] border border-[rgb(var(--border))]"
                   }`}>
                   {isOpen ? "Hide" : "Show"}
                 </span>
               </div>
 
-              {/* Answer */}
               {isOpen && (
                 <div className="px-4 pb-4">
                   <div className="rounded-lg border border-violet-400/25 bg-violet-500/8 px-4 py-3">
@@ -629,7 +592,6 @@ function FlashcardGrid({ flashcards }: { flashcards: Flashcard[] }) {
                 </div>
               )}
 
-              {/* Hint when closed */}
               {!isOpen && (
                 <div className="px-4 pb-3.5 -mt-0.5">
                   <p className="text-xs text-[rgb(var(--muted2))]">Tap to reveal</p>
