@@ -84,15 +84,16 @@ export default function ChangePasswordPage() {
   }
 
   return (
-    <div className="mx-auto mt-2 max-w-md px-4">
-      <div
-        className="
-          rounded-3xl border p-6
-          border-[rgb(var(--border))]
-          bg-[rgb(var(--card)/0.7)]
-          shadow-[0_20px_60px_rgb(var(--shadow)/0.15)]
-        "
-      >
+  <div className="flex min-h-full w-full items-center justify-center px-4 py-10">
+    <div
+      className="
+        w-full max-w-md
+        rounded-3xl border p-6
+        border-[rgb(var(--border))]
+        bg-[rgb(var(--card)/0.7)]
+        shadow-[0_20px_60px_rgb(var(--shadow)/0.15)]
+      "
+    >
         <h1 className="text-xl font-semibold text-[rgb(var(--fg))]">
           Change Password
         </h1>
@@ -273,14 +274,7 @@ export default function ChangePasswordPage() {
 
         {status && <p className="mt-4 text-xs text-rose-400">{status}</p>}
 
-        <p className="mt-4 text-xs text-[rgb(var(--muted2))]">
-          <Link
-            href="/dashboard/student/profile"
-            className="text-[rgb(var(--primary))] hover:underline"
-          >
-            Back to profile
-          </Link>
-        </p>
+        
       </div>
     </div>
   );
