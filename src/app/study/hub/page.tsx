@@ -8,6 +8,7 @@ import {
   Pencil, Trash2, X, AlertTriangle, Clock,
   FolderOpen, ChevronRight, Search, GraduationCap,
 } from "lucide-react";
+import { StudyBackground } from "@/components/FloatingParticles";
 
 type StudySubj = { id: string; name: string; materialCount?: number };
 type Material = {
@@ -140,7 +141,9 @@ export default function StudyHub() {
 
   return (
     <div className="min-h-screen pt-8 pb-16 bg-[rgb(var(--background))]">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+      <StudyBackground />
+
+      <div className="relative z-10 mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
 
         {/* ── Page header ── */}
         <div className="flex items-center justify-between mb-6">
@@ -151,7 +154,7 @@ export default function StudyHub() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-[rgb(var(--fg))]">Study Hub</h1>
-              <p className="text-xs text-[rgb(var(--muted))] font-mono">Active Recall Engine</p>
+              <p className="text-xs text-[rgb(var(--muted))]">Active Recall Engine</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -175,7 +178,7 @@ export default function StudyHub() {
           <aside className="w-44 shrink-0 sticky top-6">
             <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] overflow-hidden">
               <div className="px-3 pt-3 pb-2 border-b border-[rgb(var(--border))]">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--muted2))] font-mono">Subjects</p>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--muted2))]">Subjects</p>
               </div>
               <nav className="p-1.5 space-y-0.5">
                 <button type="button" onClick={() => setActiveSubjectId("")}
@@ -188,7 +191,7 @@ export default function StudyHub() {
                     <FolderOpen className="h-3.5 w-3.5 shrink-0" />
                     All
                   </span>
-                  <span className={`font-mono text-[10px] rounded-md px-1.5 py-0.5
+                  <span className={`text-[10px] rounded-md px-1.5 py-0.5
                     ${activeSubjectId === "" ? "bg-[rgb(var(--primary))/0.15] text-[rgb(var(--primary))]" : "bg-[rgb(var(--card2))] text-[rgb(var(--muted2))]"}`}>
                     {items.length}
                   </span>
@@ -206,7 +209,7 @@ export default function StudyHub() {
                       <span className="truncate">{s.name}</span>
                     </span>
                     {typeof s.materialCount === "number" && (
-                      <span className={`font-mono text-[10px] rounded-md px-1.5 py-0.5 shrink-0
+                      <span className={`text-[10px] rounded-md px-1.5 py-0.5 shrink-0
                         ${activeSubjectId === s.id ? "bg-[rgb(var(--primary))/0.15] text-[rgb(var(--primary))]" : "bg-[rgb(var(--card2))] text-[rgb(var(--muted2))]"}`}>
                         {s.materialCount}
                       </span>
@@ -218,11 +221,11 @@ export default function StudyHub() {
               <div className="px-3 py-2.5 border-t border-[rgb(var(--border))] space-y-1.5">
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] text-[rgb(var(--muted2))]">Total</span>
-                  <span className="font-mono text-[10px] font-medium text-[rgb(var(--fg))]">{items.length}</span>
+                  <span className="text-[10px] font-medium text-[rgb(var(--fg))]">{items.length}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] text-[rgb(var(--muted2))]">Subjects</span>
-                  <span className="font-mono text-[10px] font-medium text-[rgb(var(--fg))]">{subjects.length}</span>
+                  <span className="text-[10px] font-medium text-[rgb(var(--fg))]">{subjects.length}</span>
                 </div>
               </div>
             </div>
@@ -234,7 +237,7 @@ export default function StudyHub() {
             <div className="flex items-center justify-between gap-4 mb-4">
               <div>
                 <h2 className="text-lg font-bold text-[rgb(var(--fg))]">{subjectName}</h2>
-                <p className="text-xs text-[rgb(var(--muted))] font-mono">{filtered.length} item{filtered.length !== 1 ? "s" : ""}</p>
+                <p className="text-xs text-[rgb(var(--muted))]">{filtered.length} item{filtered.length !== 1 ? "s" : ""}</p>
               </div>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[rgb(var(--muted2))] pointer-events-none" />
@@ -283,11 +286,11 @@ export default function StudyHub() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-[rgb(var(--fg))] truncate">{m.title}</p>
                         <div className="mt-1 flex items-center gap-2 flex-wrap">
-                          <span className="flex items-center gap-1 text-[11px] text-[rgb(var(--muted2))] font-mono">
+                          <span className="flex items-center gap-1 text-[11px] text-[rgb(var(--muted2))]">
                             <Clock className="h-3 w-3" />{fmtRelative(m.updatedAt)}
                           </span>
                           <span className="text-[rgb(var(--border))]">·</span>
-                          <span className="text-[11px] text-[rgb(var(--muted2))] font-mono">{fmtDate(m.createdAt)}</span>
+                          <span className="text-[11px] text-[rgb(var(--muted2))]">{fmtDate(m.createdAt)}</span>
                           {m.studySubjectId && (() => {
                             const subj = subjects.find(s => s.id === m.studySubjectId);
                             return subj ? (
@@ -301,7 +304,7 @@ export default function StudyHub() {
                       <ChevronRight className="h-4 w-4 text-[rgb(var(--border))] group-hover:text-[rgb(var(--primary))] transition-colors shrink-0" />
                     </Link>
 
-                    {/* 3-dot button + dropdown — self-contained relative wrapper */}
+                    {/* 3-dot button + dropdown */}
                     <div className="absolute top-1/2 -translate-y-1/2 right-2.5 z-30">
                       <button
                         ref={menuOpenId === m.id ? menuBtnRef : undefined}
@@ -351,7 +354,7 @@ export default function StudyHub() {
       {/* Toast */}
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
-          <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))]/95 backdrop-blur-sm px-4 py-2.5 text-xs font-medium text-[rgb(var(--fg))] shadow-lg font-mono">
+          <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))]/95 backdrop-blur-sm px-4 py-2.5 text-xs font-medium text-[rgb(var(--fg))] shadow-lg">
             {toast}
           </div>
         </div>
