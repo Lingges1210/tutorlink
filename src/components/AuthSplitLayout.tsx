@@ -1,6 +1,5 @@
 "use client";
-
-import { ReactNode, useCallback, useState } from "react";
+import { ReactNode, useCallback, useEffect, useState } from "react";
 import LoginAnimation, { LoginAnimationHandle } from "@/components/LoginAnimation";
 
 type Props = {
@@ -11,13 +10,28 @@ type Props = {
 
 export default function AuthSplitLayout({ title, subtitle, children }: Props) {
   const [animationApi, setAnimationApi] = useState<LoginAnimationHandle | null>(null);
-
   const handleReady = useCallback((api: LoginAnimationHandle) => {
     setAnimationApi(api);
   }, []);
 
+  // Hide footer and prevent body scroll on auth pages
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    const footer = document.querySelector("footer");
+    if (footer) footer.style.display = "none";
+
+    return () => {
+      document.body.style.overflow = "";
+      const footer = document.querySelector("footer");
+      if (footer) footer.style.display = "";
+    };
+  }, []);
+
   return (
-    <div className="min-h-screen grid place-items-center px-4 bg-[rgb(var(--bg))]">
+    <div
+      style={{ height: "calc(100vh - 56px)" }}
+      className="flex items-center justify-center px-4 bg-[rgb(var(--bg))]"
+    >
       <div
         className="
           w-full max-w-4xl overflow-hidden
@@ -27,7 +41,6 @@ export default function AuthSplitLayout({ title, subtitle, children }: Props) {
           shadow-[0_30px_120px_rgb(var(--shadow)/0.25)]
         "
       >
-        {/* Bear LEFT, Form RIGHT (nice balance) */}
         <div className="grid md:grid-cols-2">
           {/* LEFT: animation panel */}
           <div
@@ -38,7 +51,6 @@ export default function AuthSplitLayout({ title, subtitle, children }: Props) {
               bg-[rgb(var(--card2)_/_0.55)]
             "
           >
-            {/* Grid background (subtle, theme-safe) */}
             <div
               className="
                 absolute inset-0 pointer-events-none opacity-60
@@ -46,26 +58,20 @@ export default function AuthSplitLayout({ title, subtitle, children }: Props) {
                 bg-[size:56px_56px]
               "
             />
-
-            {/* Soft glow (theme-safe) */}
             <div className="absolute -top-20 -right-24 h-72 w-72 rounded-full bg-[rgb(var(--primary)_/_0.12)] blur-3xl" />
             <div className="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-[rgb(var(--primary)_/_0.10)] blur-3xl" />
 
-            {/* Circle frame */}
             <div
               className="
                 relative z-10
                 h-64 w-64 md:h-80 md:w-80
                 rounded-full overflow-hidden
                 flex items-center justify-center
-
-                /* IMPORTANT: fill matches theme (works in light + dark) */
                 bg-[rgb(var(--card2))]
                 ring-1 ring-[rgb(var(--border))]
                 shadow-[0_30px_90px_rgb(var(--shadow)/0.30)]
               "
             >
-              {/* subtle gloss */}
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/20 to-transparent" />
               <LoginAnimation onReady={handleReady} />
             </div>
@@ -83,7 +89,6 @@ export default function AuthSplitLayout({ title, subtitle, children }: Props) {
               </h1>
               <p className="mt-2 text-sm text-[rgb(var(--muted))]">{subtitle}</p>
             </div>
-
             {children(animationApi)}
           </div>
         </div>
