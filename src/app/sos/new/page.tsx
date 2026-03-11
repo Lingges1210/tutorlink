@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
+  ArrowLeft,
   BookOpen,
   Send,
   Sparkles,
@@ -249,6 +250,18 @@ export default function SOSNewPage() {
       `}</style>
 
       <div className="mx-auto w-full max-w-2xl px-4 sm:px-6 py-10 space-y-4">
+
+        {/* ── Back button ── */}
+        <div className="anim-1">
+          <button
+            onClick={() => router.push("/sos")}
+            disabled={submitting}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1.5 text-sm font-semibold text-[rgb(var(--muted))] transition-all duration-150 hover:text-[rgb(var(--fg))] hover:border-violet-400/40 hover:-translate-y-0.5 disabled:opacity-40"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back
+          </button>
+        </div>
 
         {/* ── Header ── */}
         <div className="anim-1 relative overflow-hidden rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-[0_20px_44px_rgba(0,0,0,0.09)]">
@@ -557,13 +570,6 @@ export default function SOSNewPage() {
                 <Sparkles className="h-3.5 w-3.5 opacity-80" />
               </>
             )}
-          </button>
-          <button
-            onClick={() => router.push("/sos")}
-            disabled={submitting}
-            className="h-11 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-5 text-sm font-semibold text-[rgb(var(--fg))] transition-all duration-150 hover:border-violet-400/40 hover:-translate-y-0.5 disabled:opacity-40"
-          >
-            Back
           </button>
         </div>
 
