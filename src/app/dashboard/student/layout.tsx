@@ -109,7 +109,7 @@ export default async function StudentLayout({
           },
           {
             type: "link",
-            href: "/my-reports",
+            href: "/dashboard/student/report",
             label: "My Reports",
             icon: "shieldoff",
           },
@@ -189,7 +189,7 @@ export default async function StudentLayout({
           },
           {
             type: "link",
-            href: "/my-reports",
+            href: "/dashboard/student/report",
             label: "My Reports",
             icon: "shieldoff",
           },

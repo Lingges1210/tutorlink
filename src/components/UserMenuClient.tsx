@@ -255,7 +255,7 @@ export default function UserMenuClient({
             />
 
             <MenuItem
-              href="/my-reports"
+              href={`${dashboardHref}/report`}
               onClick={() => setOpen(false)}
               icon={<ShieldOff size={16} />}
               label="My Reports"

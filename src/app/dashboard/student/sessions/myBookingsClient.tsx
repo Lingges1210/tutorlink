@@ -635,7 +635,7 @@ export default function MyBookingsClient() {
     source: "SESSION",
   });
 
-  router.push(`/report?${params.toString()}`);
+  router.push(`/dashboard/student/report?${params.toString()}`);
 }
 
   async function openRateModal(s: Row) {
