@@ -3,6 +3,7 @@
 import Link from "next/link";
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import StarBackground from "@/components/StarBackground";
 
 type SubjectItem = { id: string; code: string; title: string };
 
@@ -183,7 +184,6 @@ export default function FindTutorClient({
   useEffect(() => {
     if (!canUse) return;
     const term = q.trim();
-    // If q matches the currently selected subject label, don't search
     if (selected && q === `${selected.code} — ${selected.title}`) return;
     if (!term) { setSuggestions([]); setShowDrop(false); return; }
 
@@ -318,6 +318,9 @@ export default function FindTutorClient({
   ════════════════════════════════════════════════════════ */
   return (
     <>
+      {/* ── Star background ── */}
+      <StarBackground />
+
       {/* ── Toast ── */}
       <AnimatePresence>
         {toast && (
@@ -352,7 +355,7 @@ export default function FindTutorClient({
       {/* ════════════════════════════════════════════════════
           PAGE
       ═════════════════════════════════════════════════════*/}
-      <div className="mx-auto w-full max-w-6xl px-0 pt-6 sm:pt-8 pb-24">
+      <div className="relative z-10 mx-auto w-full max-w-6xl px-0 pt-6 sm:pt-8 pb-24">
 
         {/* ── Top bar ── */}
         <motion.div
@@ -442,7 +445,6 @@ export default function FindTutorClient({
                     onChange={e => {
                       const val = e.target.value;
                       setQ(val);
-                      // Clear selection only if user is changing from the selected label
                       if (selected && val !== `${selected.code} — ${selected.title}`) {
                         setSelected(null);
                         setSlots([]);

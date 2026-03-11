@@ -761,7 +761,7 @@ export default function HomePage() {
               <h1 style={{ fontSize:"clamp(1.85rem,3.8vw,2.9rem)", fontWeight:800, lineHeight:1.12, letterSpacing:"-0.025em" }}>
                 Get help faster.
                 <br />
-                <span className="shimmer-text">Study smarter.</span>
+                <span className="shimmer-text">Study Smarter.</span>
                 <br />
                 <span style={{ color:"rgb(var(--muted))", fontWeight:400, fontSize:"0.87em" }}>Together at USM.</span>
               </h1>
