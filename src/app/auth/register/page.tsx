@@ -2,6 +2,7 @@
 
 import { FormEvent, useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import StarBackground from "@/components/StarBackground";
 
 function getPasswordStrength(password: string) {
   let score = 0;
@@ -31,12 +32,9 @@ export default function RegisterPage() {
   const [status, setStatus] = useState<{ type: "error" | "success"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [step, setStep] = useState(1); // multi-step feel
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
 
   const strength = getPasswordStrength(password);
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
@@ -102,11 +100,6 @@ export default function RegisterPage() {
         @keyframes shimmer {
           0%   { background-position: -200% center; }
           100% { background-position: 200% center; }
-        }
-        @keyframes pulseRing {
-          0%   { transform: scale(1);   opacity: 0.6; }
-          50%  { transform: scale(1.08); opacity: 0.2; }
-          100% { transform: scale(1);   opacity: 0.6; }
         }
         @keyframes bounceIn {
           0%   { transform: scale(0.8); opacity: 0; }
@@ -174,9 +167,7 @@ export default function RegisterPage() {
           transform: translateY(-2px);
           box-shadow: 0 10px 28px rgb(var(--shadow) / 0.35);
         }
-        .submit-btn:not(:disabled):active {
-          transform: translateY(0);
-        }
+        .submit-btn:not(:disabled):active { transform: translateY(0); }
 
         .upload-zone {
           transition: border-color 0.2s, background 0.2s, transform 0.15s;
@@ -208,338 +199,359 @@ export default function RegisterPage() {
         }
       `}</style>
 
-      <div className="mx-auto mt-10 mb-12 max-w-md px-4">
-        <div
-          className="register-card rounded-3xl border p-7"
-          style={{
-            borderColor: "rgb(var(--border))",
-            background: "rgb(var(--card) / 0.75)",
-            backdropFilter: "blur(18px)",
-            boxShadow: "0 24px 64px rgb(var(--shadow) / 0.18), 0 1px 0 rgb(var(--border))",
-          }}
-        >
-          {/* Header */}
-          <div className="mb-6">
-            <h1 className="text-xl font-semibold leading-tight" style={{ color: "rgb(var(--fg))" }}>
-              Create your TutorLink account
-            </h1>
-            <p className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
-              Use your USM email address to sign up.
-            </p>
-          </div>
+      {/* ── Star background ── */}
+      <div className="relative min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
+        <StarBackground />
 
-          {/* Divider */}
-          <div className="mb-5 flex items-center gap-3">
-            <span className="divider-line" />
-            <span className="text-[0.65rem] font-medium tracking-widest uppercase" style={{ color: "rgb(var(--muted2))" }}>
-              Account Details
-            </span>
-            <span className="divider-line" />
-          </div>
-
-          <form className="space-y-4" onSubmit={handleSubmit}>
-
-            {/* Email */}
-            <div className="field-row">
-              <FloatingLabelInput
-                id="email"
-                label="Email"
-                type="email"
-                placeholder="yourid@student.usm.my"
-                value={email}
-                onChange={setEmail}
-                icon={
-                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
-                    <path d="M2.5 6.5l7.5 5 7.5-5M2.5 5.5h15v10h-15z" strokeLinejoin="round" strokeLinecap="round"/>
-                  </svg>
-                }
-              />
-            </div>
-
-            {/* Full name */}
-            <div className="field-row">
-              <FloatingLabelInput
-                id="fullName"
-                label="Full Name (as per NRIC)"
-                placeholder="Lingges Muniandy"
-                value={fullName}
-                onChange={setFullName}
-                icon={
-                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
-                    <circle cx="10" cy="7" r="3.5" strokeLinecap="round"/>
-                    <path d="M3 17c0-3.314 3.134-6 7-6s7 2.686 7 6" strokeLinecap="round"/>
-                  </svg>
-                }
-              />
-            </div>
-
-            {/* 2-col row: Programme + Matric */}
-            <div className="field-row grid grid-cols-2 gap-3">
-              <FloatingLabelInput
-                id="programme"
-                label="Programme"
-                placeholder="BSc Computer Sci."
-                value={programme}
-                onChange={setProgramme}
-              />
-              <FloatingLabelInput
-                id="matricNo"
-                label="Matric No."
-                placeholder="172345"
-                value={matricNo}
-                onChange={setMatricNo}
-              />
-            </div>
-
-            {/* Upload matric card */}
-            <div className="field-row">
-              <p className="mb-1.5 text-xs font-medium" style={{ color: "rgb(var(--muted))" }}>
-                Upload Matric Card
-              </p>
+        <div className="relative z-10 mx-auto mb-12 mt-10 max-w-md px-4">
+          <div
+            className="register-card rounded-3xl border p-7"
+            style={{
+              borderColor: "rgb(var(--border))",
+              background: "rgb(var(--card) / 0.75)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              boxShadow: "0 24px 64px rgb(var(--shadow) / 0.18), 0 1px 0 rgb(var(--border))",
+            }}
+          >
+            {/* Header */}
+            <div className="mb-6">
               <div
-                className={`upload-zone rounded-xl border-2 border-dashed px-4 py-4 text-center ${matricCardFile ? "has-file" : ""}`}
-                style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card2))" }}
-                onClick={() => fileInputRef.current?.click()}
+                className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl text-lg"
+                style={{
+                  background: "linear-gradient(135deg, rgb(var(--primary) / 0.15), rgb(var(--primary2) / 0.1))",
+                  border: "1px solid rgb(var(--primary) / 0.2)",
+                }}
               >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="hidden"
-                  onChange={(e) => setMatricCardFile(e.target.files?.[0] || null)}
-                />
-                {matricCardFile ? (
-                  <div className="bounce-in flex items-center justify-center gap-2">
-                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-5 w-5" style={{ color: "rgb(var(--primary))" }}>
-                      <path d="M4 10.5l4.5 4.5 7.5-8" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    <span className="text-xs font-medium" style={{ color: "rgb(var(--primary))" }}>
-                      {matricCardFile.name}
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" className="mx-auto mb-1.5 h-7 w-7" style={{ color: "rgb(var(--muted2))" }}>
-                      <path d="M12 16V8m0 0l-3 3m3-3l3 3" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M4 16.8A4 4 0 015.6 9a6 6 0 0111.8 0A4 4 0 0119 16.8" strokeLinecap="round"/>
-                    </svg>
-                    <p className="text-xs font-medium" style={{ color: "rgb(var(--muted))" }}>Click to upload</p>
-                    <p className="text-[0.65rem] mt-0.5" style={{ color: "rgb(var(--muted2))" }}>JPG, PNG or PDF · Name & matric no. must be visible</p>
-                  </>
-                )}
+                🎓
               </div>
+              <h1 className="text-xl font-semibold leading-tight" style={{ color: "rgb(var(--fg))" }}>
+                Create your TutorLink account
+              </h1>
+              <p className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                Use your USM email address to sign up.
+              </p>
             </div>
 
             {/* Divider */}
-            <div className="field-row flex items-center gap-3 !mt-5">
+            <div className="mb-5 flex items-center gap-3">
               <span className="divider-line" />
-              <span className="text-[0.65rem] font-medium tracking-widest uppercase" style={{ color: "rgb(var(--muted2))" }}>
-                Security
+              <span className="text-[0.65rem] font-medium uppercase tracking-widest" style={{ color: "rgb(var(--muted2))" }}>
+                Account Details
               </span>
               <span className="divider-line" />
             </div>
 
-            {/* Password */}
-            <div className="field-row">
-              <p className="mb-1.5 text-xs font-medium" style={{ color: "rgb(var(--muted))" }}>Password</p>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  className="fancy-input w-full rounded-xl border px-3.5 py-2.5 pr-12 text-sm outline-none"
-                  style={{
-                    borderColor: "rgb(var(--border))",
-                    background: "rgb(var(--card2))",
-                    color: "rgb(var(--fg))",
-                  }}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyUp={(e) => setCapsLockOn(e.getModifierState("CapsLock"))}
-                  required
-                  minLength={6}
-                  placeholder="Min. 6 characters"
+            <form className="space-y-4" onSubmit={handleSubmit}>
+
+              {/* Email */}
+              <div className="field-row">
+                <FloatingLabelInput
+                  id="email"
+                  label="Email"
+                  type="email"
+                  placeholder="yourid@student.usm.my"
+                  value={email}
+                  onChange={setEmail}
+                  icon={
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
+                      <path d="M2.5 6.5l7.5 5 7.5-5M2.5 5.5h15v10h-15z" strokeLinejoin="round" strokeLinecap="round"/>
+                    </svg>
+                  }
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="eye-btn absolute right-3 top-1/2 -translate-y-1/2"
-                  style={{ color: "rgb(var(--muted2))" }}
-                  aria-label="Toggle password visibility"
-                >
-                  {showPassword ? (
-                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
-                      <path d="M3 3l14 14M8.5 8.6A3 3 0 0013.4 13M6 6.4A8.8 8.8 0 002 10s2.667 5 8 5a8.3 8.3 0 003.6-.83M8 5.1A8.7 8.7 0 0110 5c5.333 0 8 5 8 5a9.6 9.6 0 01-1.76 2.23" strokeLinecap="round"/>
-                    </svg>
-                  ) : (
-                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
-                      <ellipse cx="10" cy="10" rx="8" ry="5" strokeLinecap="round"/>
-                      <circle cx="10" cy="10" r="2.5"/>
-                    </svg>
-                  )}
-                </button>
               </div>
 
-              {capsLockOn && (
-                <p className="status-msg mt-1 flex items-center gap-1 text-[0.7rem] text-amber-400">
-                  <svg viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3">
-                    <path d="M8 1L2 8h3v6h6V8h3z"/>
-                  </svg>
-                  Caps Lock is ON
-                </p>
-              )}
+              {/* Full name */}
+              <div className="field-row">
+                <FloatingLabelInput
+                  id="fullName"
+                  label="Full Name (as per NRIC)"
+                  placeholder="Lingges Muniandy"
+                  value={fullName}
+                  onChange={setFullName}
+                  icon={
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
+                      <circle cx="10" cy="7" r="3.5" strokeLinecap="round"/>
+                      <path d="M3 17c0-3.314 3.134-6 7-6s7 2.686 7 6" strokeLinecap="round"/>
+                    </svg>
+                  }
+                />
+              </div>
 
-              {password && (
-                <div className="mt-2.5 strength-bar">
-                  <div className="flex gap-1.5">
-                    {[1, 2, 3].map((i) => (
-                      <div
-                        key={i}
-                        className="relative h-1.5 flex-1 overflow-hidden rounded-full"
-                        style={{ background: "rgb(var(--border))" }}
-                      >
-                        {strength.level >= i && (
-                          <span
-                            className={`absolute inset-y-0 left-0 rounded-full ${strength.color}`}
-                            style={{ animationDelay: `${(i - 1) * 0.08}s` }}
-                          />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <p className={`mt-1 text-[0.7rem] font-medium ${strength.textColor}`}>
-                    {strength.label} password
-                  </p>
+              {/* 2-col: Programme + Matric */}
+              <div className="field-row grid grid-cols-2 gap-3">
+                <FloatingLabelInput
+                  id="programme"
+                  label="Programme"
+                  placeholder="BSc Computer Sci."
+                  value={programme}
+                  onChange={setProgramme}
+                />
+                <FloatingLabelInput
+                  id="matricNo"
+                  label="Matric No."
+                  placeholder="172345"
+                  value={matricNo}
+                  onChange={setMatricNo}
+                />
+              </div>
+
+              {/* Upload matric card */}
+              <div className="field-row">
+                <p className="mb-1.5 text-xs font-medium" style={{ color: "rgb(var(--muted))" }}>
+                  Upload Matric Card
+                </p>
+                <div
+                  className={`upload-zone rounded-xl border-2 border-dashed px-4 py-4 text-center ${matricCardFile ? "has-file" : ""}`}
+                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card2))" }}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="hidden"
+                    onChange={(e) => setMatricCardFile(e.target.files?.[0] || null)}
+                  />
+                  {matricCardFile ? (
+                    <div className="bounce-in flex items-center justify-center gap-2">
+                      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-5 w-5" style={{ color: "rgb(var(--primary))" }}>
+                        <path d="M4 10.5l4.5 4.5 7.5-8" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      <span className="text-xs font-medium" style={{ color: "rgb(var(--primary))" }}>
+                        {matricCardFile.name}
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" className="mx-auto mb-1.5 h-7 w-7" style={{ color: "rgb(var(--muted2))" }}>
+                        <path d="M12 16V8m0 0l-3 3m3-3l3 3" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M4 16.8A4 4 0 015.6 9a6 6 0 0111.8 0A4 4 0 0119 16.8" strokeLinecap="round"/>
+                      </svg>
+                      <p className="text-xs font-medium" style={{ color: "rgb(var(--muted))" }}>Click to upload</p>
+                      <p className="text-[0.65rem] mt-0.5" style={{ color: "rgb(var(--muted2))" }}>JPG, PNG or PDF · Name & matric no. must be visible</p>
+                    </>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
 
-            {/* Confirm password */}
-            <div className="field-row">
-              <p className="mb-1.5 text-xs font-medium" style={{ color: "rgb(var(--muted))" }}>Confirm Password</p>
-              <div className="relative">
-                <input
-                  type={showConfirmPassword ? "text" : "password"}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="fancy-input w-full rounded-xl border px-3.5 py-2.5 pr-12 text-sm outline-none"
-                  style={{
-                    borderColor: confirmPassword.length > 0
-                      ? passwordsMatch ? "rgb(16 185 129 / 0.6)" : "rgb(251 113 133 / 0.6)"
-                      : "rgb(var(--border))",
-                    background: "rgb(var(--card2))",
-                    color: "rgb(var(--fg))",
-                  }}
-                  required
-                  minLength={6}
-                  placeholder="Re-enter password"
+              {/* Divider */}
+              <div className="field-row flex items-center gap-3 !mt-5">
+                <span className="divider-line" />
+                <span className="text-[0.65rem] font-medium uppercase tracking-widest" style={{ color: "rgb(var(--muted2))" }}>
+                  Security
+                </span>
+                <span className="divider-line" />
+              </div>
+
+              {/* Password */}
+              <div className="field-row">
+                <p className="mb-1.5 text-xs font-medium" style={{ color: "rgb(var(--muted))" }}>Password</p>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    className="fancy-input w-full rounded-xl border px-3.5 py-2.5 pr-12 text-sm outline-none"
+                    style={{
+                      borderColor: "rgb(var(--border))",
+                      background: "rgb(var(--card2))",
+                      color: "rgb(var(--fg))",
+                    }}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyUp={(e) => setCapsLockOn(e.getModifierState("CapsLock"))}
+                    required
+                    minLength={6}
+                    placeholder="Min. 6 characters"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="eye-btn absolute right-3 top-1/2 -translate-y-1/2"
+                    style={{ color: "rgb(var(--muted2))" }}
+                    aria-label="Toggle password visibility"
+                  >
+                    {showPassword ? (
+                      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
+                        <path d="M3 3l14 14M8.5 8.6A3 3 0 0013.4 13M6 6.4A8.8 8.8 0 002 10s2.667 5 8 5a8.3 8.3 0 003.6-.83M8 5.1A8.7 8.7 0 0110 5c5.333 0 8 5 8 5a9.6 9.6 0 01-1.76 2.23" strokeLinecap="round"/>
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
+                        <ellipse cx="10" cy="10" rx="8" ry="5" strokeLinecap="round"/>
+                        <circle cx="10" cy="10" r="2.5"/>
+                      </svg>
+                    )}
+                  </button>
+                </div>
+
+                {capsLockOn && (
+                  <p className="status-msg mt-1 flex items-center gap-1 text-[0.7rem] text-amber-400">
+                    <svg viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3">
+                      <path d="M8 1L2 8h3v6h6V8h3z"/>
+                    </svg>
+                    Caps Lock is ON
+                  </p>
+                )}
+
+                {password && (
+                  <div className="mt-2.5 strength-bar">
+                    <div className="flex gap-1.5">
+                      {[1, 2, 3].map((i) => (
+                        <div
+                          key={i}
+                          className="relative h-1.5 flex-1 overflow-hidden rounded-full"
+                          style={{ background: "rgb(var(--border))" }}
+                        >
+                          {strength.level >= i && (
+                            <span
+                              className={`absolute inset-y-0 left-0 rounded-full ${strength.color}`}
+                              style={{ animationDelay: `${(i - 1) * 0.08}s` }}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <p className={`mt-1 text-[0.7rem] font-medium ${strength.textColor}`}>
+                      {strength.label} password
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Confirm password */}
+              <div className="field-row">
+                <p className="mb-1.5 text-xs font-medium" style={{ color: "rgb(var(--muted))" }}>Confirm Password</p>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="fancy-input w-full rounded-xl border px-3.5 py-2.5 pr-12 text-sm outline-none"
+                    style={{
+                      borderColor: confirmPassword.length > 0
+                        ? passwordsMatch ? "rgb(16 185 129 / 0.6)" : "rgb(251 113 133 / 0.6)"
+                        : "rgb(var(--border))",
+                      background: "rgb(var(--card2))",
+                      color: "rgb(var(--fg))",
+                    }}
+                    required
+                    minLength={6}
+                    placeholder="Re-enter password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((v) => !v)}
+                    className="eye-btn absolute right-3 top-1/2 -translate-y-1/2"
+                    style={{ color: "rgb(var(--muted2))" }}
+                    aria-label="Toggle confirm password visibility"
+                  >
+                    {showConfirmPassword ? (
+                      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
+                        <path d="M3 3l14 14M8.5 8.6A3 3 0 0013.4 13M6 6.4A8.8 8.8 0 002 10s2.667 5 8 5a8.3 8.3 0 003.6-.83M8 5.1A8.7 8.7 0 0110 5c5.333 0 8 5 8 5a9.6 9.6 0 01-1.76 2.23" strokeLinecap="round"/>
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
+                        <ellipse cx="10" cy="10" rx="8" ry="5" strokeLinecap="round"/>
+                        <circle cx="10" cy="10" r="2.5"/>
+                      </svg>
+                    )}
+                  </button>
+                </div>
+
+                {confirmPassword.length > 0 && (
+                  <p className={`status-msg mt-1 flex items-center gap-1 text-[0.7rem] font-medium ${passwordsMatch ? "text-emerald-500" : "text-rose-400"}`}>
+                    {passwordsMatch ? (
+                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
+                        <path d="M3 8l3.5 3.5L13 5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
+                        <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round"/>
+                      </svg>
+                    )}
+                    {passwordsMatch ? "Passwords match" : "Passwords do not match"}
+                  </p>
+                )}
+              </div>
+
+              {/* Captcha */}
+              <div className="field-row">
+                <FloatingLabelInput
+                  id="captcha"
+                  label='Type "USM" to verify'
+                  placeholder="USM"
+                  value={captcha}
+                  onChange={setCaptcha}
+                  icon={
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
+                      <rect x="2.5" y="5.5" width="15" height="10" rx="2" strokeLinecap="round"/>
+                      <path d="M6 9.5h2m2 0h4M6 12.5h3" strokeLinecap="round"/>
+                    </svg>
+                  }
                 />
+              </div>
+
+              {/* Submit */}
+              <div className="field-row !mt-6">
                 <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword((v) => !v)}
-                  className="eye-btn absolute right-3 top-1/2 -translate-y-1/2"
-                  style={{ color: "rgb(var(--muted2))" }}
-                  aria-label="Toggle confirm password visibility"
+                  type="submit"
+                  disabled={loading}
+                  className="submit-btn w-full rounded-xl py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                  style={{
+                    background: "linear-gradient(135deg, rgb(var(--primary)), rgb(var(--primary2)))",
+                    boxShadow: "0 4px 20px rgb(var(--primary) / 0.3)",
+                  }}
                 >
-                  {showConfirmPassword ? (
-                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
-                      <path d="M3 3l14 14M8.5 8.6A3 3 0 0013.4 13M6 6.4A8.8 8.8 0 002 10s2.667 5 8 5a8.3 8.3 0 003.6-.83M8 5.1A8.7 8.7 0 0110 5c5.333 0 8 5 8 5a9.6 9.6 0 01-1.76 2.23" strokeLinecap="round"/>
-                    </svg>
+                  {loading ? (
+                    <>
+                      <span className="spinner" />
+                      Creating account…
+                    </>
                   ) : (
-                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
-                      <ellipse cx="10" cy="10" rx="8" ry="5" strokeLinecap="round"/>
-                      <circle cx="10" cy="10" r="2.5"/>
-                    </svg>
+                    "Create Account →"
                   )}
                 </button>
               </div>
+            </form>
 
-              {confirmPassword.length > 0 && (
-                <p className={`status-msg mt-1 flex items-center gap-1 text-[0.7rem] font-medium ${passwordsMatch ? "text-emerald-500" : "text-rose-400"}`}>
-                  {passwordsMatch ? (
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
-                      <path d="M3 8l3.5 3.5L13 5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  ) : (
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
-                      <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round"/>
-                    </svg>
-                  )}
-                  {passwordsMatch ? "Passwords match" : "Passwords do not match"}
-                </p>
-              )}
-            </div>
-
-            {/* Captcha */}
-            <div className="field-row">
-              <FloatingLabelInput
-                id="captcha"
-                label='Type "USM" to verify'
-                placeholder="USM"
-                value={captcha}
-                onChange={setCaptcha}
-                icon={
-                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4">
-                    <rect x="2.5" y="5.5" width="15" height="10" rx="2" strokeLinecap="round"/>
-                    <path d="M6 9.5h2m2 0h4M6 12.5h3" strokeLinecap="round"/>
-                  </svg>
-                }
-              />
-            </div>
-
-            {/* Submit */}
-            <div className="field-row !mt-6">
-              <button
-                type="submit"
-                disabled={loading}
-                className="submit-btn w-full rounded-xl py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-                style={{ background: "rgb(var(--primary))" }}
+            {/* Status message */}
+            {status && (
+              <div
+                className={`status-msg mt-4 flex items-start gap-2 rounded-xl px-3.5 py-3 text-xs ${
+                  status.type === "success"
+                    ? "bg-emerald-500/10 text-emerald-400"
+                    : "bg-rose-500/10 text-rose-400"
+                }`}
+                style={{
+                  border: `1.5px solid ${status.type === "success" ? "rgb(16 185 129 / 0.3)" : "rgb(251 113 133 / 0.3)"}`,
+                }}
               >
-                {loading ? (
-                  <>
-                    <span className="spinner" />
-                    Creating account…
-                  </>
+                {status.type === "success" ? (
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 h-3.5 w-3.5 flex-shrink-0">
+                    <path d="M3 8l3.5 3.5L13 5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
                 ) : (
-                  "Create Account →"
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 h-3.5 w-3.5 flex-shrink-0">
+                    <circle cx="8" cy="8" r="6"/>
+                    <path d="M8 5v3.5M8 11v.5" strokeLinecap="round"/>
+                  </svg>
                 )}
-              </button>
-            </div>
-          </form>
+                {status.msg}
+              </div>
+            )}
 
-          {/* Status message */}
-          {status && (
-            <div
-              className={`status-msg mt-4 flex items-start gap-2 rounded-xl px-3.5 py-3 text-xs ${
-                status.type === "success"
-                  ? "bg-emerald-500/10 text-emerald-400"
-                  : "bg-rose-500/10 text-rose-400"
-              }`}
-            >
-              {status.type === "success" ? (
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 h-3.5 w-3.5 flex-shrink-0">
-                  <path d="M3 8l3.5 3.5L13 5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              ) : (
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 h-3.5 w-3.5 flex-shrink-0">
-                  <circle cx="8" cy="8" r="6"/>
-                  <path d="M8 5v3.5M8 11v.5" strokeLinecap="round"/>
-                </svg>
-              )}
-              {status.msg}
-            </div>
-          )}
-
-          {/* Footer */}
-          <p className="mt-5 text-center text-xs" style={{ color: "rgb(var(--muted2))" }}>
-            Already have an account?{" "}
-            <Link
-              href="/auth/login"
-              className="font-medium hover:underline"
-              style={{ color: "rgb(var(--primary))" }}
-            >
-              Log in here
-            </Link>
-          </p>
+            {/* Footer */}
+            <p className="mt-5 text-center text-xs" style={{ color: "rgb(var(--muted2))" }}>
+              Already have an account?{" "}
+              <Link
+                href="/auth/login"
+                className="font-medium hover:underline"
+                style={{ color: "rgb(var(--primary))" }}
+              >
+                Log in here
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
     </>
@@ -569,7 +581,6 @@ function FloatingLabelInput({
 
   return (
     <div className="relative">
-      {/* Floating label */}
       <label
         htmlFor={id}
         className="pointer-events-none absolute left-3.5 select-none text-xs transition-all duration-200"
@@ -585,15 +596,6 @@ function FloatingLabelInput({
       >
         {label}
       </label>
-
-      {icon && (
-        <span
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
-          style={{ color: focused ? "rgb(var(--primary))" : "rgb(var(--muted2))", transition: "color 0.2s" }}
-        >
-          {/* shift label right when icon present */}
-        </span>
-      )}
 
       <input
         id={id}

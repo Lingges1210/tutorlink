@@ -75,37 +75,28 @@ const tutors = [
 export default function HomePage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [isPaused, setIsPaused] = useState(false);
-  const [realIdx, setRealIdx] = useState(0); // index in original reviews[]
+  const [realIdx, setRealIdx] = useState(0);
   const CARD_W = 320;
   const GAP = 20;
   const STEP = CARD_W + GAP;
 
-  // Build infinite clone list: [last, ...all, first]
-  // We render: clone_of_last | review[0..n-1] | clone_of_first
-  // Total = reviews.length + 2
   const total = reviews.length + 2;
   const trackRef = useRef<HTMLDivElement>(null);
   const isJumping = useRef(false);
 
-  // Initial scroll: position at real index 0 (which is position 1 in cloned list)
   useEffect(() => {
     const el = trackRef.current;
     if (!el) return;
     el.scrollLeft = 1 * STEP;
   }, [STEP]);
 
-  // Map scroll position → real index
   const posToReal = useCallback((scrollLeft: number) => {
     const pos = Math.round(scrollLeft / STEP);
-    // pos 0 = clone of last → real index n-1
-    // pos 1..n = real indices 0..n-1
-    // pos n+1 = clone of first → real index 0
     if (pos === 0) return reviews.length - 1;
     if (pos === total - 1) return 0;
     return pos - 1;
   }, [STEP, total]);
 
-  // Teleport without animation when hitting clones
   useEffect(() => {
     const el = trackRef.current;
     if (!el) return;
@@ -116,14 +107,12 @@ export default function HomePage() {
       if (isJumping.current) return;
 
       if (pos === 0) {
-        // hit left clone → jump to real last
         isJumping.current = true;
         el.style.scrollBehavior = "auto";
         el.scrollLeft = reviews.length * STEP;
         el.style.scrollBehavior = "";
         setTimeout(() => { isJumping.current = false; }, 50);
       } else if (pos === total - 1) {
-        // hit right clone → jump to real first
         isJumping.current = true;
         el.style.scrollBehavior = "auto";
         el.scrollLeft = 1 * STEP;
@@ -135,7 +124,6 @@ export default function HomePage() {
     return () => el.removeEventListener("scroll", handler);
   }, [STEP, total, posToReal]);
 
-  // Auto-scroll every 2.4s
   useEffect(() => {
     if (isPaused) return;
     const id = setInterval(() => {
@@ -169,7 +157,6 @@ export default function HomePage() {
 
     let animId: number;
 
-    // detect light vs dark — re-check on every frame so it reacts live
     const isDark = () =>
       document.documentElement.classList.contains("dark") ||
       window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -194,27 +181,24 @@ export default function HomePage() {
 
     // ── Shooting star ──
     interface Shooter {
-      // start top-left area, travel bottom-right at ~35–50° angle
-      x: number; y: number;       // current head position
-      sx: number; sy: number;     // start
-      vx: number; vy: number;     // velocity per frame
-      tailX: number[]; tailY: number[]; // ring buffer of last N positions
+      x: number; y: number;
+      sx: number; sy: number;
+      vx: number; vy: number;
+      tailX: number[]; tailY: number[];
       tailMax: number;
       progress: number;
       totalFrames: number;
       opacity: number;
       delay: number; active: boolean;
-      size: number;               // tail width at head
+      size: number;
     }
 
     const W = () => canvas.width;
     const H = () => canvas.height;
 
     const makeShooter = (): Shooter => {
-      // start anywhere along top 60% of screen, left 80%
       const sx = Math.random() * W() * 0.82;
       const sy = Math.random() * H() * 0.52;
-      // angle 30–50 deg downward-right
       const angle = (30 + Math.random() * 20) * Math.PI / 180;
       const speed = 6 + Math.random() * 7;
       const vx = Math.cos(angle) * speed;
@@ -247,10 +231,10 @@ export default function HomePage() {
         const a = Math.max(0.05, d.alpha + tw);
         ctx.beginPath();
         ctx.arc(d.x * canvas.width, d.y * canvas.height, d.r, 0, Math.PI * 2);
-        // light mode: dark navy dots; dark mode: pale blue-white dots
+        // FIXED: light mode uses deep navy at much higher opacity for visibility
         const dotColor = isDark()
           ? `rgba(200,210,255,${a})`
-          : `rgba(60,70,140,${a * 1.6})`;
+          : `rgba(15,20,100,${a * 3.2})`;
         ctx.fillStyle = dotColor;
         ctx.fill();
       }
@@ -263,7 +247,6 @@ export default function HomePage() {
           continue;
         }
 
-        // advance
         s.x += s.vx;
         s.y += s.vy;
         s.tailX.push(s.x);
@@ -276,7 +259,6 @@ export default function HomePage() {
           continue;
         }
 
-        // fade in/out envelope
         const env = s.progress < 10
           ? s.progress / 10
           : s.progress > s.totalFrames - 14
@@ -284,11 +266,10 @@ export default function HomePage() {
             : 1;
         const alpha = s.opacity * env;
 
-        // draw tail — gradient from transparent at tip to bright at head
         const len = s.tailX.length;
         if (len < 2) continue;
         for (let i = 1; i < len; i++) {
-          const t = i / len;           // 0 = oldest (tail tip), 1 = head
+          const t = i / len;
           const x1 = s.tailX[i - 1];
           const y1 = s.tailY[i - 1];
           const x2 = s.tailX[i];
@@ -296,17 +277,17 @@ export default function HomePage() {
           ctx.beginPath();
           ctx.moveTo(x1, y1);
           ctx.lineTo(x2, y2);
-          // colour: pale white-gold, matching the reference image
+          // FIXED: light mode tail is deep indigo at 4.5× opacity for strong visibility
           const tailColor = isDark()
             ? `rgba(230,235,255,${alpha * t * t})`
-            : `rgba(40,50,160,${alpha * t * t * 1.5})`;
+            : `rgba(10,15,120,${alpha * t * t * 4.5})`;
           ctx.strokeStyle = tailColor;
           ctx.lineWidth = s.size * t;
           ctx.lineCap = "round";
           ctx.stroke();
         }
 
-        // glowing head — small radial gradient
+        // glowing head
         const gx = s.x, gy = s.y;
         const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, s.size * 3.5);
         if (isDark()) {
@@ -314,9 +295,10 @@ export default function HomePage() {
           grad.addColorStop(0.3, `rgba(200,210,255,${alpha * 0.7})`);
           grad.addColorStop(1,   `rgba(180,190,255,0)`);
         } else {
-          grad.addColorStop(0,   `rgba(30,40,180,${alpha})`);
-          grad.addColorStop(0.3, `rgba(60,80,200,${alpha * 0.7})`);
-          grad.addColorStop(1,   `rgba(80,100,220,0)`);
+          // FIXED: deep navy glow at boosted opacity for punchy light-mode appearance
+          grad.addColorStop(0,   `rgba(5,10,140,${alpha * 1.8})`);
+          grad.addColorStop(0.3, `rgba(20,30,180,${alpha * 1.4})`);
+          grad.addColorStop(1,   `rgba(40,60,200,0)`);
         }
         ctx.beginPath();
         ctx.arc(gx, gy, s.size * 3.5, 0, Math.PI * 2);
@@ -326,9 +308,10 @@ export default function HomePage() {
         // solid bright core
         ctx.beginPath();
         ctx.arc(gx, gy, s.size * 0.7, 0, Math.PI * 2);
+        // FIXED: light mode core is crisp dark navy at 2× opacity
         ctx.fillStyle = isDark()
           ? `rgba(255,255,255,${alpha})`
-          : `rgba(20,30,160,${alpha})`;
+          : `rgba(5,10,120,${alpha * 2})`;
         ctx.fill();
       }
 
@@ -342,7 +325,6 @@ export default function HomePage() {
     };
   }, []);
 
-  // Cloned list for rendering
   const clonedReviews = [reviews[reviews.length - 1], ...reviews, reviews[0]];
 
   return (
@@ -661,10 +643,11 @@ export default function HomePage() {
           pointer-events:none; z-index:0;
           opacity:0.85;
         }
+        /* FIXED: light mode gets contrast+brightness filter to punch up all stars */
         @media (prefers-color-scheme: light) {
-          .stars-canvas { opacity:1; }
+          .stars-canvas { opacity:1; filter: contrast(1.4) brightness(0.65); }
         }
-        :root:not(.dark) .stars-canvas { opacity:1; }
+        :root:not(.dark) .stars-canvas { opacity:1; filter: contrast(1.4) brightness(0.65); }
 
         /* star sparkles */
         .sparkle {
@@ -1026,15 +1009,10 @@ export default function HomePage() {
             onTouchEnd={()=>setTimeout(()=>setIsPaused(false),2000)}
           >
             {clonedReviews.map((r, ci) => {
-              // Determine if this clone position matches active real index
-              // pos 0 = clone_last, pos n+1 = clone_first
-              // realIdx matches pos ci-1 (for 1..n)
               const posReal = ci === 0 ? reviews.length - 1 : ci === clonedReviews.length - 1 ? 0 : ci - 1;
               const isActive = posReal === realIdx && (ci !== 0 && ci !== clonedReviews.length - 1
-                // show active on clones only when we're at the very edge positions
                 || (ci === 0 && realIdx === reviews.length - 1)
                 || (ci === clonedReviews.length - 1 && realIdx === 0));
-              // compute distance from current scroll position
               const el = trackRef.current;
               const scrollPos = el ? Math.round(el.scrollLeft / STEP) : 1;
               const dist = Math.abs(ci - scrollPos);
@@ -1099,7 +1077,7 @@ export default function HomePage() {
         <div className="px-4"><div className="divider-line" /></div>
 
         {/* ══════════════════════════════════════════════════════
-            FAQ — FIXED: two separate columns, no grid-row stretching
+            FAQ
         ══════════════════════════════════════════════════════ */}
         <section id="faq" className="mx-auto max-w-6xl px-4 py-16">
           <div className="mb-8 max-w-lg">
@@ -1110,7 +1088,6 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* Two independent columns — no shared row heights */}
           <div className="faq-grid">
             {/* Column 1 — even indices */}
             <div className="faq-col">

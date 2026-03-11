@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AuthSplitLayout from "@/components/AuthSplitLayout";
 import { LoginAnimationHandle } from "@/components/LoginAnimation";
+import StarBackground from "@/components/StarBackground";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -91,6 +92,8 @@ export default function LoginPage() {
 
   return (
     <>
+      <StarBackground />
+
       <style>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
@@ -481,12 +484,8 @@ export default function LoginPage() {
                       setPasswordFocused(false);
                       animation?.setHandsUp(false);
                     }}
-                    onKeyDown={(e) =>
-                      setCapsLockOn(e.getModifierState("CapsLock"))
-                    }
-                    onKeyUp={(e) =>
-                      setCapsLockOn(e.getModifierState("CapsLock"))
-                    }
+                    onKeyDown={(e) => setCapsLockOn(e.getModifierState("CapsLock"))}
+                    onKeyUp={(e) => setCapsLockOn(e.getModifierState("CapsLock"))}
                     required
                   />
                   <button
@@ -541,9 +540,7 @@ export default function LoginPage() {
                   role="alert"
                   aria-live="polite"
                 >
-                  <span className="status-icon">
-                    {isSuccess ? "✓" : "✕"}
-                  </span>
+                  <span className="status-icon">{isSuccess ? "✓" : "✕"}</span>
                   <span>{status}</span>
                 </div>
               )}

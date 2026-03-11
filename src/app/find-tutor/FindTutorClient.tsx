@@ -1,235 +1,198 @@
 "use client";
 
 import Link from "next/link";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 type SubjectItem = { id: string; code: string; title: string };
 
-// returned by GET /api/subjects/[id]/slots?durationMin=60
 type SlotItem = {
-  id: string; // stable key (we'll use start ISO)
-  start: string; // ISO
-  end: string; // ISO
-  tutorCount?: number; // optional
+  id: string;
+  start: string;
+  end: string;
+  tutorCount?: number;
 };
 
-function PrimaryButtonLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className="
-        inline-flex items-center justify-center
-        rounded-md px-3 py-2 text-xs font-semibold text-white
-        bg-[rgb(var(--primary))]
-        transition-all duration-200
-        hover:-translate-y-0.5
-        hover:shadow-[0_8px_24px_rgb(var(--shadow)/0.35)]
-      "
-    >
-      {children}
-    </Link>
-  );
+/* ─── tiny helpers ─────────────────────────────────────── */
+function fmtTime(iso: string) {
+  try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+  catch { return iso; }
 }
-
-function DisabledButton({ children }: { children: React.ReactNode }) {
-  return (
-    <button
-      disabled
-      type="button"
-      className="
-        inline-flex items-center justify-center
-        cursor-not-allowed rounded-md px-3 py-2 text-xs font-semibold
-        border border-[rgb(var(--border))]
-        bg-[rgb(var(--card2))]
-        text-[rgb(var(--muted2))]
-        opacity-70
-      "
-    >
-      {children}
-    </button>
-  );
-}
-
-/** --- consistent formatting helpers --- */
-function prettyDateTime(iso: string) {
+function fmtDateTime(iso: string) {
   try {
-    const d = new Date(iso);
-    return d.toLocaleString([], {
-      weekday: "short",
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+    return new Date(iso).toLocaleString([], {
+      weekday: "short", day: "2-digit", month: "short",
+      year: "numeric", hour: "2-digit", minute: "2-digit",
     });
-  } catch {
-    return iso;
-  }
+  } catch { return iso; }
 }
-
-function prettyTime(iso: string) {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
-
 function dayKey(iso: string) {
   const d = new Date(iso);
-  // "YYYY-MM-DD" in local time
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
-
-function prettyDayLabel(day: string) {
+function todayKey() { return dayKey(new Date().toISOString()); }
+function tomorrowKey() { const d=new Date(); d.setDate(d.getDate()+1); return dayKey(d.toISOString()); }
+function smartDay(day: string) {
+  if (day===todayKey()) return "Today";
+  if (day===tomorrowKey()) return "Tomorrow";
   try {
-    const [y, m, d] = day.split("-").map((x) => parseInt(x, 10));
-    const date = new Date(y, m - 1, d);
-    return date.toLocaleDateString([], {
-      weekday: "short",
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return day;
-  }
+    const [y,m,d]=day.split("-").map(Number);
+    return new Date(y,m-1,d).toLocaleDateString([],{weekday:"short",day:"2-digit",month:"short"});
+  } catch { return day; }
+}
+function fullDay(day: string) {
+  try {
+    const [y,m,d]=day.split("-").map(Number);
+    return new Date(y,m-1,d).toLocaleDateString([],{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
+  } catch { return day; }
+}
+function next7Days() {
+  return Array.from({length:7},(_,i)=>{
+    const d=new Date(); d.setDate(d.getDate()+i);
+    return dayKey(d.toISOString());
+  });
 }
 
-function todayKey() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
-}
-function tomorrowKey() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
+type ToastKind = "success"|"error"|"info";
+type Toast = { text: string; kind: ToastKind; actionHref?: string; actionLabel?: string } | null;
+
+/* ─── icons ────────────────────────────────────────────── */
+const IconSearch = () => (
+  <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+  </svg>
+);
+const IconArrow = () => (
+  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 12h14M12 5l7 7-7 7"/>
+  </svg>
+);
+const IconRefresh = () => (
+  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+  </svg>
+);
+const IconX = () => (
+  <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 6 6 18M6 6l12 12"/>
+  </svg>
+);
+const IconClock = () => (
+  <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+  </svg>
+);
+const IconUser = () => (
+  <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+  </svg>
+);
+const IconChevron = () => (
+  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="m9 18 6-6-6-6"/>
+  </svg>
+);
+
+/* ─── Spinner ───────────────────────────────────────────── */
+function Spinner({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className="animate-spin">
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.2"/>
+      <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
+    </svg>
+  );
 }
 
-/** Display helper: Today / Tomorrow + fallback label */
-function prettyDayLabelSmart(day: string) {
-  const t = todayKey();
-  const tm = tomorrowKey();
-  if (day === t) return "Today";
-  if (day === tm) return "Tomorrow";
-  return prettyDayLabel(day);
+/* ─── Skeleton ──────────────────────────────────────────── */
+function SkeletonSlots() {
+  return (
+    <div className="space-y-3 animate-pulse mt-5">
+      <div className="h-[88px] rounded-2xl bg-[rgb(var(--border)/0.5)]" />
+      <div className="flex gap-2 pt-1">
+        {[90,72,72,72,72,72,72].map((w,i) => (
+          <div key={i} style={{width:w}} className="h-14 shrink-0 rounded-xl bg-[rgb(var(--border)/0.4)]" />
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-2 pt-1">
+        {Array.from({length:6}).map((_,i) => (
+          <div key={i} className="h-16 rounded-xl bg-[rgb(var(--border)/0.35)]" />
+        ))}
+      </div>
+    </div>
+  );
 }
 
-type ToastState =
-  | null
-  | {
-      text: string;
-      kind: "success" | "error" | "info";
-      actionHref?: string;
-      actionLabel?: string;
-    };
-
+/* ══════════════════════════════════════════════════════════
+   MAIN COMPONENT
+═══════════════════════════════════════════════════════════ */
 export default function FindTutorClient({
-  authed,
-  verified,
-}: {
-  authed: boolean;
-  verified: boolean;
-}) {
+  authed, verified,
+}: { authed: boolean; verified: boolean }) {
   const canUse = authed && verified;
 
+  /* search state */
   const [q, setQ] = useState("");
   const [suggestions, setSuggestions] = useState<SubjectItem[]>([]);
   const [loadingSuggest, setLoadingSuggest] = useState(false);
+  const [showDrop, setShowDrop] = useState(false);
 
+  /* subject + slots */
   const [selected, setSelected] = useState<SubjectItem | null>(null);
-
-  // Slots UI
   const [slots, setSlots] = useState<SlotItem[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
-  const [slotsMsg, setSlotsMsg] = useState<string | null>(null);
+  const [slotsError, setSlotsError] = useState<string | null>(null);
 
-  // booking feedback
-  const [bookingMsg, setBookingMsg] = useState<string | null>(null);
-  const [bookingSlotId, setBookingSlotId] = useState<string | null>(null);
+  /* booking */
+  const [bookingId, setBookingId] = useState<string | null>(null);
+  const [bookedSlot, setBookedSlot] = useState<SlotItem | null>(null);
 
-  // duration filter
-  const [durationMin, setDurationMin] = useState<number>(60);
-
-  // day strip selection + show-more for selected day
+  /* ui */
+  const [durationMin, setDurationMin] = useState(60);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [dayLimit, setDayLimit] = useState<number>(9);
+  const [dayLimit, setDayLimit] = useState(9);
+  const [toast, setToast] = useState<Toast>(null);
+  const [inputFocused, setInputFocused] = useState(false);
 
-  // Toast
-  const [toast, setToast] = useState<ToastState>(null);
-  function showToast(t: NonNullable<ToastState>) {
-    setToast(t);
-  }
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* ── toast auto-dismiss ── */
   useEffect(() => {
     if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 4200);
-    return () => window.clearTimeout(t);
+    const t = setTimeout(() => setToast(null), 4500);
+    return () => clearTimeout(t);
   }, [toast]);
 
-  const debounceRef = useRef<number | null>(null);
-
-  /** --- dropdown polish: click-outside + blur close --- */
-  const suggestWrapRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  function closeSuggestions() {
-    setSuggestions([]);
-    setLoadingSuggest(false);
-  }
-
+  /* ── click-outside for dropdown ── */
   useEffect(() => {
-    function onDocDown(e: MouseEvent | TouchEvent) {
-      const el = suggestWrapRef.current;
-      if (!el) return;
-      if (!el.contains(e.target as Node)) {
-        closeSuggestions();
+    const handler = (e: MouseEvent | TouchEvent) => {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node)) {
+        setShowDrop(false);
       }
-    }
-    document.addEventListener("mousedown", onDocDown);
-    document.addEventListener("touchstart", onDocDown);
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
     return () => {
-      document.removeEventListener("mousedown", onDocDown);
-      document.removeEventListener("touchstart", onDocDown);
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
     };
   }, []);
 
+  /* ── search suggest ── */
   useEffect(() => {
     if (!canUse) return;
-
     const term = q.trim();
-    if (!term) {
-      setSuggestions([]);
-      return;
-    }
+    // If q matches the currently selected subject label, don't search
+    if (selected && q === `${selected.code} — ${selected.title}`) return;
+    if (!term) { setSuggestions([]); setShowDrop(false); return; }
 
-    if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    debounceRef.current = window.setTimeout(async () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
       setLoadingSuggest(true);
+      setShowDrop(true);
       try {
-        const res = await fetch(
-          `/api/subjects/suggest?q=${encodeURIComponent(term)}`,
-          { cache: "no-store" }
-        );
+        const res = await fetch(`/api/subjects/suggest?q=${encodeURIComponent(term)}`, { cache: "no-store" });
         const data = await res.json().catch(() => ({}));
         setSuggestions(Array.isArray(data.items) ? data.items : []);
       } catch {
@@ -237,1140 +200,805 @@ export default function FindTutorClient({
       } finally {
         setLoadingSuggest(false);
       }
-    }, 250);
+    }, 240);
 
-    return () => {
-      if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    };
-  }, [q, canUse]);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [q, canUse, selected]);
 
-  async function loadSlots(subjectId: string, dur: number) {
+  /* ── load slots ── */
+  const loadSlots = useCallback(async (subjectId: string, dur: number) => {
     setSlots([]);
-    setSlotsMsg(null);
+    setSlotsError(null);
     setSlotsLoading(true);
-
+    setBookedSlot(null);
     try {
-      const res = await fetch(
-        `/api/subjects/${subjectId}/slots?durationMin=${encodeURIComponent(
-          String(dur)
-        )}`,
-        { cache: "no-store" }
-      );
+      const res = await fetch(`/api/subjects/${subjectId}/slots?durationMin=${dur}`, { cache: "no-store" });
       const data = await res.json().catch(() => ({}));
-
-      const list: unknown[] = Array.isArray(data.items) ? data.items : [];
-
-      const normalized: SlotItem[] = list
+      const raw: unknown[] = Array.isArray(data.items) ? data.items : [];
+      const norm: SlotItem[] = raw
         .filter(Boolean)
-        .map((x: unknown) => {
-          const obj = x as Record<string, unknown>;
-
-          const id = String((obj.id ?? obj.start ?? "") as string);
-          const start = String((obj.start ?? "") as string);
-          const end = String((obj.end ?? "") as string);
-
-          const tutorCount =
-            typeof obj.tutorCount === "number"
-              ? (obj.tutorCount as number)
-              : undefined;
-
-          return { id, start, end, tutorCount };
+        .map((x) => {
+          const o = x as Record<string, unknown>;
+          return {
+            id: String(o.id ?? o.start ?? ""),
+            start: String(o.start ?? ""),
+            end: String(o.end ?? ""),
+            tutorCount: typeof o.tutorCount === "number" ? o.tutorCount : undefined,
+          };
         })
-        .filter((s: SlotItem) => !!s.id && !!s.start && !!s.end);
+        .filter(s => s.id && s.start && s.end);
 
-      setSlots(normalized);
-
-      if (normalized.length === 0) {
-        setSlotsMsg(
-          "No free slots found (try a different duration or check later)."
-        );
-      }
-
-      if (normalized.length > 0) {
-        const earliestDay = dayKey(normalized[0].start);
-
-        setSelectedDay((prevDay) => {
-          if (!prevDay) return earliestDay;
-
-          const stillHasSlots = normalized.some(
-            (s) => dayKey(s.start) === prevDay
-          );
-          if (stillHasSlots) return prevDay;
-
-          return earliestDay;
+      setSlots(norm);
+      if (norm.length > 0) {
+        const first = dayKey(norm[0].start);
+        setSelectedDay(prev => {
+          if (!prev) return first;
+          return norm.some(s => dayKey(s.start) === prev) ? prev : first;
         });
-
         setDayLimit(9);
+      } else {
+        setSlotsError("No available slots found. Try a different duration or come back later.");
       }
     } catch {
-      setSlotsMsg("Failed to load available slots.");
+      setSlotsError("Couldn't load slots. Check your connection and try again.");
     } finally {
       setSlotsLoading(false);
     }
-  }
+  }, []);
 
-  async function pickSubject(s: SubjectItem) {
+  /* ── pick subject ── */
+  const pickSubject = useCallback(async (s: SubjectItem) => {
     setSelected(s);
+    setQ(`${s.code} — ${s.title}`);
     setSuggestions([]);
-    setBookingMsg(null);
+    setShowDrop(false);
     setSlots([]);
-    setSlotsMsg(null);
-
+    setSlotsError(null);
     setSelectedDay(null);
     setDayLimit(9);
+    setBookedSlot(null);
+    if (canUse) await loadSlots(s.id, durationMin);
+  }, [canUse, durationMin, loadSlots]);
 
-    if (canUse) {
-      await loadSlots(s.id, durationMin);
-    }
-  }
-
-  async function bookSlot(slot: SlotItem) {
-    if (!selected) return;
-    if (!canUse) return;
-
-    setBookingSlotId(slot.id);
-    setBookingMsg(null);
-
+  /* ── book slot ── */
+  const bookSlot = useCallback(async (slot: SlotItem) => {
+    if (!selected || !canUse) return;
+    setBookingId(slot.id);
     try {
       const res = await fetch("/api/sessions/book", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subjectId: selected.id,
-          scheduledAt: slot.start,
-          durationMin,
-        }),
+        body: JSON.stringify({ subjectId: selected.id, scheduledAt: slot.start, durationMin }),
       });
-
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const msg = data?.message ?? "Failed to book slot.";
-        setBookingMsg(msg);
-        showToast({ text: msg, kind: "error" });
+        const msg = data?.message ?? "Booking failed. Please try again.";
+        setToast({ text: msg, kind: "error" });
         return;
       }
-
-      setBookingMsg("Booked! Tutor assigned instantly. Check My Bookings →");
-      showToast({
-        text: "Booked! Tutor assigned instantly.",
-        kind: "success",
-        actionHref: "/dashboard/student/sessions",
-        actionLabel: "My Bookings →",
-      });
-
+      setBookedSlot(slot);
+      setToast({ text: "Session booked! A tutor has been assigned.", kind: "success", actionHref: "/dashboard/student/sessions", actionLabel: "View sessions →" });
       await loadSlots(selected.id, durationMin);
     } catch {
-      setBookingMsg("Failed to book slot.");
-      showToast({ text: "Failed to book slot.", kind: "error" });
+      setToast({ text: "Something went wrong. Please try again.", kind: "error" });
     } finally {
-      setBookingSlotId(null);
+      setBookingId(null);
     }
-  }
+  }, [selected, canUse, durationMin, loadSlots]);
 
-  const headerBadge = useMemo(() => {
-    if (!authed) {
-      return (
-        <PrimaryButtonLink href="/auth/login">Login to search</PrimaryButtonLink>
-      );
-    }
-    if (!verified) {
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
-          ⏳ Pending verification
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium border border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-        Verified
-      </span>
-    );
-  }, [authed, verified]);
-
-  const sortedAll = useMemo(() => {
-    return [...slots].sort(
-      (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
-    );
-  }, [slots]);
-
-  const earliest = sortedAll[0] ?? null;
-  const next3 = useMemo(() => sortedAll.slice(1, 4), [sortedAll]);
+  /* ── derived ── */
+  const sorted = useMemo(() => [...slots].sort((a,b) => +new Date(a.start) - +new Date(b.start)), [slots]);
+  const earliest = sorted[0] ?? null;
+  const nextFew = sorted.slice(1, 4);
 
   const dayCounts = useMemo(() => {
     const m = new Map<string, number>();
-    for (const s of slots) {
-      const k = dayKey(s.start);
-      m.set(k, (m.get(k) ?? 0) + 1);
-    }
+    slots.forEach(s => { const k = dayKey(s.start); m.set(k, (m.get(k)??0)+1); });
     return m;
   }, [slots]);
 
-  const sevenDayKeys = useMemo(() => {
-    const out: string[] = [];
-    const now = new Date();
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(now);
-      d.setDate(now.getDate() + i);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const dd = String(d.getDate()).padStart(2, "0");
-      out.push(`${y}-${m}-${dd}`);
-    }
-    return out;
-  }, []);
+  const dayKeys = useMemo(() => next7Days(), []);
 
-  const selectedDaySlots = useMemo(() => {
+  const daySlots = useMemo(() => {
     if (!selectedDay) return [];
-    return sortedAll.filter((s) => dayKey(s.start) === selectedDay);
-  }, [sortedAll, selectedDay]);
+    return sorted.filter(s => dayKey(s.start) === selectedDay);
+  }, [sorted, selectedDay]);
 
-  //  simple “empty state” popular chips (UI only; no backend dependency)
-  const popularChips = [
-    "WIA2003 Data Structures",
-    "WIA2001 OOP",
-    "WIA1002 Operating Systems",
-    "WIF3005 Networks",
-    "MAT100 Calculus",
+  const durations = [30, 45, 60, 90, 120];
+  const popularSubjects = [
+    { code: "WIA2003", name: "Data Structures" },
+    { code: "WIA2001", name: "OOP" },
+    { code: "WIA1002", name: "Operating Systems" },
+    { code: "WIF3005", name: "Networks" },
+    { code: "MAT100", name: "Calculus" },
   ];
 
-  /** --- Enhancement #1: Search status line --- */
-  const searchStatusText = useMemo(() => {
-    if (!authed) return "Login required to search & book.";
-    if (authed && !verified) return "Locked until verification.";
-    if (!q.trim()) return "Type a subject code or course name to search.";
-    if (loadingSuggest) return "Searching…";
-    if (q.trim() && suggestions.length === 0 && !selected)
-      return "No matches yet — try a different keyword.";
-    if (selected)
-      return `Showing ${slots.length} slot${slots.length === 1 ? "" : "s"}.`;
-    return "Pick a subject from the list below.";
-  }, [
-    authed,
-    verified,
-    q,
-    loadingSuggest,
-    suggestions.length,
-    selected,
-    slots.length,
-  ]);
-
-  /** --- Enhancement #2: Inline auth indicator chip (verified => nothing) --- */
-  const inlineAuthChip = useMemo(() => {
-    if (!authed) {
-      return (
-        <span className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[0.7rem] font-semibold border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))]">
-          Login required
-        </span>
-      );
-    }
-    if (!verified) {
-      return (
-        <span className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[0.7rem] font-semibold border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400">
-          Locked (pending verification)
-        </span>
-      );
-    }
-    return null; // <-- removed verified chip
-  }, [authed, verified]);
-
-  /** --- Enhancement #3: Duration segmented pills --- */
-  const durationOptions = [30, 45, 60, 90, 120];
-
-  /** --- Enhancement #6: skeleton blocks for slots loading --- */
-  function SlotsSkeleton() {
-    const blocks = [1, 2, 3, 4, 5];
-    return (
-      <div className="mt-4 space-y-3">
-        <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
-          <div className="flex items-center justify-between">
-            <div className="h-3 w-32 rounded bg-[rgb(var(--border))] opacity-60" />
-            <div className="h-3 w-16 rounded bg-[rgb(var(--border))] opacity-60" />
-          </div>
-          <div className="mt-3 h-12 rounded-xl bg-[rgb(var(--border))] opacity-50" />
-          <div className="mt-3 flex flex-wrap gap-2">
-            {blocks.slice(0, 4).map((b) => (
-              <div
-                key={b}
-                className="h-8 w-28 rounded-full bg-[rgb(var(--border))] opacity-45"
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
-          <div className="h-3 w-24 rounded bg-[rgb(var(--border))] opacity-60" />
-          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-            {blocks.map((b) => (
-              <div
-                key={b}
-                className="shrink-0 h-14 w-28 rounded-2xl bg-[rgb(var(--border))] opacity-45"
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  /* ═══════════════════════════════════════════════════════
+     RENDER
+  ════════════════════════════════════════════════════════ */
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 pt-6 sm:pt-8">
-      {/* Toast */}
-      {toast && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="
-            fixed z-[60] bottom-5 right-5
-            w-[calc(100vw-2.5rem)] sm:w-[380px]
-            rounded-2xl border p-4
-            border-[rgb(var(--border))]
-            bg-[rgb(var(--card) / 0.9)]
-            backdrop-blur
-            shadow-[0_20px_60px_rgb(var(--shadow)/0.18)]
-          "
-        >
-          <div className="flex items-start gap-3">
-            <div
-              className={[
-                "mt-0.5 h-2.5 w-2.5 rounded-full",
-                toast.kind === "success"
-                  ? "bg-emerald-500"
-                  : toast.kind === "error"
-                  ? "bg-rose-500"
-                  : "bg-slate-400",
-              ].join(" ")}
-            />
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                {toast.text}
-              </div>
-
-              <div className="mt-2 flex items-center gap-2">
-                {toast.actionHref && toast.actionLabel && (
-                  <Link
-                    href={toast.actionHref}
-                    className="
-                      rounded-md px-3 py-2 text-xs font-semibold
-                      bg-[rgb(var(--primary))]
-                      text-white
-                      hover:opacity-95
-                    "
-                  >
-                    {toast.actionLabel}
-                  </Link>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setToast(null)}
-                  className="
-                    rounded-md px-3 py-2 text-xs font-semibold
-                    border border-[rgb(var(--border))]
-                    bg-[rgb(var(--card2))]
-                    text-[rgb(var(--fg))]
-                    hover:bg-[rgb(var(--card)/0.6)]
-                  "
-                >
-                  Dismiss
-                </button>
+    <>
+      {/* ── Toast ── */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            key="toast"
+            initial={{ opacity: 0, y: 16, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.96 }}
+            transition={{ type: "spring", stiffness: 500, damping: 32 }}
+            className="fixed z-50 bottom-6 right-5 w-[calc(100vw-2.5rem)] sm:w-[360px] rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.97)] backdrop-blur-xl shadow-[0_24px_48px_rgb(0,0,0,0.16)] p-4"
+          >
+            <div className="flex gap-3 items-start">
+              <div className={`mt-0.5 h-2 w-2 rounded-full shrink-0 ${toast.kind==="success"?"bg-emerald-500 shadow-[0_0_8px_rgb(16,185,129,0.6)]":toast.kind==="error"?"bg-rose-500":"bg-blue-500"}`} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-[rgb(var(--fg))]">{toast.text}</p>
+                <div className="mt-2.5 flex gap-2">
+                  {toast.actionHref && (
+                    <Link href={toast.actionHref} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[rgb(var(--primary))] text-white hover:opacity-90 transition-opacity">
+                      {toast.actionLabel}
+                    </Link>
+                  )}
+                  <button onClick={() => setToast(null)} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-[rgb(var(--border))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] transition-colors">
+                    Dismiss
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </motion.div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Header */}
-      <div
-        className="
-          rounded-3xl border p-6
-          border-[rgb(var(--border))]
-          bg-[rgb(var(--card) / 0.7)]
-          shadow-[0_20px_60px_rgb(var(--shadow)/0.10)]
-        "
-      >
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      {/* ════════════════════════════════════════════════════
+          PAGE
+      ═════════════════════════════════════════════════════*/}
+      <div className="mx-auto w-full max-w-6xl px-0 pt-6 sm:pt-8 pb-24">
+
+        {/* ── Top bar ── */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="mb-8 flex flex-wrap items-end justify-between gap-4"
+        >
           <div>
-            <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">
+            <p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[rgb(var(--primary))] mb-1">
+              Tutoring Platform
+            </p>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-[rgb(var(--fg))] leading-none">
               Find a Tutor
             </h1>
-            <p className="mt-1 text-sm text-[rgb(var(--muted))] max-w-2xl">
-              Search by subject/course, then book the earliest available time —
-              or pick a day.
+            <p className="mt-2 text-sm text-[rgb(var(--muted))] max-w-md leading-relaxed">
+              Search a subject, pick a time, get matched instantly.
             </p>
-            {!authed && (
-              <p className="mt-2 text-xs text-[rgb(var(--muted2))]">
-                You can view this page, but searching and booking require login +
-                verification.
-              </p>
+          </div>
+
+          {/* Auth badge */}
+          <div>
+            {!authed ? (
+              <Link href="/auth/login" className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl bg-[rgb(var(--primary))] text-white hover:opacity-90 transition-opacity shadow-[0_4px_16px_rgb(var(--primary)/0.3)]">
+                Login to book <IconArrow />
+              </Link>
+            ) : !verified ? (
+              <span className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                Pending verification
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                Verified
+              </span>
             )}
           </div>
-          <div className="flex items-center gap-2">{headerBadge}</div>
-        </div>
-      </div>
+        </motion.div>
 
-      {/* locked banner */}
-      {authed && !verified && (
-        <div className="rounded-3xl border p-5 border-amber-500/30 bg-amber-500/10 text-[rgb(var(--fg))]">
-          <div className="text-sm font-semibold text-amber-600 dark:text-amber-400">
-            ⚠️ Search is locked until verification
-          </div>
-          <p className="mt-1 text-sm text-[rgb(var(--muted))]">
-            Once verified, you can search subjects and book available slots.
-          </p>
-        </div>
-      )}
+        {/* ── Verification locked banner ── */}
+        <AnimatePresence>
+          {authed && !verified && (
+            <motion.div
+              initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:"auto" }} exit={{ opacity:0, height:0 }}
+              className="mb-6 overflow-hidden"
+            >
+              <div className="rounded-2xl border border-amber-500/25 bg-amber-500/8 px-5 py-4">
+                <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">⚠ Account pending verification</p>
+                <p className="mt-0.5 text-sm text-[rgb(var(--muted))]">Search and booking will unlock once your account is verified.</p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-      {/*  Layout */}
-      <div className="grid gap-6 lg:grid-cols-12">
-        {/* LEFT panel (sticky on desktop) */}
-        <div
-          className={
-            selected
-              ? "lg:col-span-5 space-y-6"
-              : "lg:col-span-12 space-y-6"
-          }
-        >
-          <section
-            className="
-              rounded-3xl border p-5
-              border-[rgb(var(--border))]
-              bg-[rgb(var(--card) / 0.7)]
-              shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]
-              lg:sticky lg:top-6
-            "
+        {/* ── MAIN TWO-COLUMN GRID ── */}
+        <div className="grid gap-5 lg:grid-cols-[380px_1fr]">
+
+          {/* ════════════════════════════════
+              LEFT COLUMN
+          ════════════════════════════════ */}
+          <motion.div
+            initial={{ opacity:0, x:-16 }} animate={{ opacity:1, x:0 }} transition={{ duration:0.4, delay:0.08 }}
+            className="space-y-4 lg:sticky lg:top-6 lg:self-start"
           >
-            <div className="relative" ref={suggestWrapRef}>
-              <div className="flex items-center justify-between gap-2">
-                <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
-                  Search Subject / Course
-                </label>
-                <div className="mb-1 hidden sm:block">{inlineAuthChip}</div>
-              </div>
 
-              <input
-                ref={inputRef}
-                value={q}
-                onChange={(e) => {
-                  setQ(e.target.value);
-                  setSelected(null);
-                  setBookingMsg(null);
-                  setSlots([]);
-                  setSlotsMsg(null);
-                  setSelectedDay(null);
-                  setDayLimit(9);
-                }}
-                onBlur={() => {
-                  // allow click on suggestion before closing
-                  window.setTimeout(() => {
-                    const active = document.activeElement;
-                    const wrap = suggestWrapRef.current;
-                    if (wrap && active && wrap.contains(active)) return;
-                    closeSuggestions();
-                  }, 120);
-                }}
-                disabled={!canUse}
-                placeholder="e.g. WIA2003, Data Structures"
-                className={[
-                  "w-full rounded-md border px-3 py-2 text-sm outline-none transition",
-                  "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))]",
-                  "focus:border-[rgb(var(--primary))]",
-                  canUse ? "" : "opacity-60 cursor-not-allowed",
-                ].join(" ")}
-              />
+            {/* ── Search card ── */}
+            <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.8)] p-5 shadow-[0_8px_32px_rgb(var(--shadow)/0.08)]">
 
-              {/* Enhancement #1: search status line */}
-              <div className="mt-2 flex items-start justify-between gap-3">
-                <div className="text-[0.75rem] text-[rgb(var(--muted2))]">
-                  {searchStatusText}
-                </div>
-                <div className="sm:hidden">{inlineAuthChip}</div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {!authed ? (
-                  <PrimaryButtonLink href="/auth/login">Login</PrimaryButtonLink>
-                ) : !verified ? (
-                  <DisabledButton>Search Locked</DisabledButton>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setQ("");
-                        setSelected(null);
-                        setSuggestions([]);
-                        setBookingMsg(null);
-                        setSlots([]);
-                        setSlotsMsg(null);
-                        setSelectedDay(null);
-                        setDayLimit(9);
-                      }}
-                      className="
-                        rounded-md px-3 py-2 text-xs font-semibold
-                        border border-[rgb(var(--border))]
-                        bg-[rgb(var(--card2))]
-                        text-[rgb(var(--fg))]
-                        hover:bg-[rgb(var(--card)/0.6)]
-                      "
-                    >
-                      Clear
-                    </button>
-
-                    {/* Enhancement #3: segmented duration pills + helper text */}
-                    <div className="ml-auto flex flex-col items-end gap-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[0.7rem] text-[rgb(var(--muted2))]">
-                          Duration
-                        </span>
-
-                        <div className="hidden sm:flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-1">
-                          {durationOptions.map((opt) => {
-                            const active = durationMin === opt;
-                            return (
-                              <button
-                                key={opt}
-                                type="button"
-                                disabled={slotsLoading}
-                                onClick={() => {
-                                  const v = opt;
-                                  setDurationMin(v);
-                                  setBookingMsg(null);
-                                  setSelectedDay(null);
-                                  setDayLimit(9);
-                                  if (selected?.id) loadSlots(selected.id, v);
-                                }}
-                                className={[
-                                  "rounded-full px-3 py-1.5 text-xs font-semibold transition",
-                                  active
-                                    ? "bg-[rgb(var(--primary))] text-white"
-                                    : "text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
-                                  slotsLoading ? "opacity-60" : "",
-                                ].join(" ")}
-                              >
-                                {opt}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {/* keep original select for mobile + accessibility */}
-                        <select
-                          value={durationMin}
-                          onChange={(e) => {
-                            const v = Number(e.target.value);
-                            setDurationMin(v);
-                            setBookingMsg(null);
-                            setSelectedDay(null);
-                            setDayLimit(9);
-                            if (selected?.id) loadSlots(selected.id, v);
-                          }}
-                          disabled={slotsLoading}
-                          className="
-                            sm:hidden rounded-md border px-2 py-2 text-xs outline-none
-                            border-[rgb(var(--border))]
-                            bg-[rgb(var(--card2))]
-                            text-[rgb(var(--fg))]
-                            disabled:opacity-60
-                          "
-                        >
-                          <option value={30}>30 min</option>
-                          <option value={45}>45 min</option>
-                          <option value={60}>60 min</option>
-                          <option value={90}>90 min</option>
-                          <option value={120}>120 min</option>
-                        </select>
-                      </div>
-
-                      <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
-                        Changing duration refreshes available slots.
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Suggestions dropdown (limited height + scroll; slight spacing) */}
-              {canUse && (loadingSuggest || suggestions.length > 0) && (
-                <div
-                  className="
-                    absolute z-20 mt-3 w-full overflow-hidden
-                    rounded-2xl border border-[rgb(var(--border))]
-                    bg-[rgb(var(--card2))]
-                    shadow-[0_20px_60px_rgb(var(--shadow)/0.18)]
-                  "
+              {/* Search input */}
+              <div ref={dropRef} className="relative">
+                <div className={`relative flex items-center rounded-2xl border transition-all duration-200 bg-[rgb(var(--card2))] overflow-visible
+                  ${inputFocused && canUse
+                    ? "border-[rgb(var(--primary)/0.6)] shadow-[0_0_0_3px_rgb(var(--primary)/0.12)]"
+                    : "border-[rgb(var(--border))]"
+                  }`}
                 >
-                  <div className="max-h-64 overflow-auto">
-                    {loadingSuggest && (
-                      <div className="px-3 py-3 text-xs text-[rgb(var(--muted2))]">
-                        Searching…
-                      </div>
-                    )}
-
-                    {!loadingSuggest && suggestions.length === 0 && (
-                      <div className="px-3 py-3 text-xs text-[rgb(var(--muted2))]">
-                        No matches
-                      </div>
-                    )}
-
-                    {!loadingSuggest &&
-                      suggestions.map((s) => (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => pickSubject(s)}
-                          className="
-                            w-full text-left px-3 py-3
-                            hover:bg-[rgb(var(--card)/0.6)]
-                            border-b border-[rgb(var(--border))]
-                            last:border-b-0
-                          "
-                        >
-                          <div className="text-xs font-semibold text-[rgb(var(--fg))]">
-                            {s.code} {s.title}
-                          </div>
-                          <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
-                            Click to view booking options
-                          </div>
-                        </button>
-                      ))}
+                  <span className={`pl-4 shrink-0 transition-colors duration-200 ${inputFocused && canUse ? "text-[rgb(var(--primary))]" : "text-[rgb(var(--muted2))]"}`}>
+                    <IconSearch />
+                  </span>
+                  <input
+                    ref={inputRef}
+                    value={q}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setQ(val);
+                      // Clear selection only if user is changing from the selected label
+                      if (selected && val !== `${selected.code} — ${selected.title}`) {
+                        setSelected(null);
+                        setSlots([]);
+                        setSlotsError(null);
+                        setSelectedDay(null);
+                        setBookedSlot(null);
+                      }
+                    }}
+                    onFocus={() => {
+                      setInputFocused(true);
+                      if (q.trim() && suggestions.length > 0) setShowDrop(true);
+                    }}
+                    onBlur={() => {
+                      setInputFocused(false);
+                      setTimeout(() => {
+                        if (!dropRef.current?.contains(document.activeElement)) setShowDrop(false);
+                      }, 150);
+                    }}
+                    disabled={!canUse}
+                    placeholder={canUse ? "Search subject code or name…" : authed ? "Locked — awaiting verification" : "Login to search"}
+                    className="flex-1 bg-transparent px-3 py-3.5 text-sm text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] outline-none disabled:cursor-not-allowed"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <div className="pr-3 shrink-0">
+                    {loadingSuggest ? (
+                      <span className="text-[rgb(var(--primary))]"><Spinner size={15} /></span>
+                    ) : q && canUse ? (
+                      <button
+                        type="button"
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => {
+                          setQ("");
+                          setSelected(null);
+                          setSuggestions([]);
+                          setShowDrop(false);
+                          setSlots([]);
+                          setSlotsError(null);
+                          setSelectedDay(null);
+                          setBookedSlot(null);
+                          inputRef.current?.focus();
+                        }}
+                        className="flex items-center justify-center h-6 w-6 rounded-full bg-[rgb(var(--border)/0.8)] text-[rgb(var(--muted))] hover:bg-[rgb(var(--border))] hover:text-[rgb(var(--fg))] transition-colors"
+                      >
+                        <IconX />
+                      </button>
+                    ) : null}
                   </div>
+                </div>
 
-                  <div className="border-t border-[rgb(var(--border))] p-2 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => closeSuggestions()}
-                      className="
-                        rounded-md px-3 py-2 text-xs font-semibold
-                        border border-[rgb(var(--border))]
-                        bg-[rgb(var(--card))]
-                        text-[rgb(var(--fg))]
-                        hover:bg-[rgb(var(--card)/0.8)]
-                      "
+                {/* Dropdown */}
+                <AnimatePresence>
+                  {canUse && showDrop && (loadingSuggest || suggestions.length > 0) && (
+                    <motion.div
+                      key="drop"
+                      initial={{ opacity:0, y:-6, scaleY:0.97 }}
+                      animate={{ opacity:1, y:0, scaleY:1 }}
+                      exit={{ opacity:0, y:-6, scaleY:0.97 }}
+                      style={{ transformOrigin: "top" }}
+                      transition={{ duration: 0.14 }}
+                      className="absolute z-30 top-full mt-2 w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] shadow-[0_16px_48px_rgb(0,0,0,0.16)] overflow-hidden"
                     >
-                      Close
-                    </button>
+                      {loadingSuggest && (
+                        <div className="flex items-center gap-2.5 px-4 py-3.5 text-xs text-[rgb(var(--muted2))]">
+                          <Spinner size={13} /> Searching…
+                        </div>
+                      )}
+                      {!loadingSuggest && suggestions.length === 0 && (
+                        <div className="px-4 py-3.5 text-xs text-[rgb(var(--muted2))]">No subjects matched — try a different keyword.</div>
+                      )}
+                      <div className="max-h-60 overflow-y-auto">
+                        {!loadingSuggest && suggestions.map((s, i) => (
+                          <motion.button
+                            key={s.id}
+                            initial={{ opacity:0, x:-8 }}
+                            animate={{ opacity:1, x:0 }}
+                            transition={{ delay: i*0.04 }}
+                            type="button"
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => pickSubject(s)}
+                            className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-[rgb(var(--primary)/0.07)] border-b border-[rgb(var(--border)/0.5)] last:border-0 transition-colors group"
+                          >
+                            <div className="shrink-0 h-8 w-8 rounded-lg bg-[rgb(var(--primary)/0.12)] flex items-center justify-center text-[rgb(var(--primary))]">
+                              <span className="text-[0.6rem] font-black leading-none">{s.code.slice(0,3)}</span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-bold text-[rgb(var(--fg))] truncate">
+                                <span className="text-[rgb(var(--primary))]">{s.code}</span>
+                                <span className="text-[rgb(var(--muted))] font-normal"> · {s.title}</span>
+                              </div>
+                              <div className="text-[0.67rem] text-[rgb(var(--muted2))] mt-0.5">Tap to see available slots</div>
+                            </div>
+                            <span className="text-[rgb(var(--muted2))] group-hover:text-[rgb(var(--primary))] transition-colors">
+                              <IconChevron />
+                            </span>
+                          </motion.button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Duration selector */}
+              {canUse && (
+                <div className="mt-4">
+                  <p className="text-[0.67rem] font-bold uppercase tracking-widest text-[rgb(var(--muted2))] mb-2">Session length</p>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {durations.map(d => (
+                      <button
+                        key={d}
+                        type="button"
+                        disabled={slotsLoading}
+                        onClick={() => {
+                          setDurationMin(d);
+                          if (selected?.id) loadSlots(selected.id, d);
+                        }}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200 border
+                          ${durationMin===d
+                            ? "bg-[rgb(var(--primary))] text-white border-transparent shadow-[0_2px_12px_rgb(var(--primary)/0.35)]"
+                            : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:border-[rgb(var(--primary)/0.4)]"
+                          } ${slotsLoading?"opacity-50 cursor-not-allowed":""}`}
+                      >
+                        {d}<span className="opacity-70 font-normal">m</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[0.67rem] text-[rgb(var(--muted2))] mt-2">Changing duration reloads available slots.</p>
+                </div>
+              )}
+
+              {/* Popular subjects */}
+              {!selected && canUse && (
+                <div className="mt-5 pt-4 border-t border-[rgb(var(--border)/0.6)]">
+                  <p className="text-[0.67rem] font-bold uppercase tracking-widest text-[rgb(var(--muted2))] mb-2.5">Popular</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {popularSubjects.map((p, i) => (
+                      <motion.button
+                        key={p.code}
+                        initial={{ opacity:0, scale:0.92 }}
+                        animate={{ opacity:1, scale:1 }}
+                        transition={{ delay: 0.3 + i*0.06 }}
+                        type="button"
+                        onClick={() => { setQ(`${p.code} ${p.name}`); inputRef.current?.focus(); }}
+                        className="flex items-baseline gap-1.5 px-3 py-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-xs transition-all duration-200 hover:border-[rgb(var(--primary)/0.5)] hover:bg-[rgb(var(--primary)/0.06)] group"
+                      >
+                        <span className="font-bold text-[rgb(var(--primary))]">{p.code}</span>
+                        <span className="text-[rgb(var(--muted))] text-[0.7rem]">{p.name}</span>
+                      </motion.button>
+                    ))}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Selected summary (inside left panel) */}
-            {selected && (
-              <div className="mt-4 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
-                      Selected
+            {/* ── Selected subject card ── */}
+            <AnimatePresence>
+              {selected && (
+                <motion.div
+                  key="subject-card"
+                  initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-8 }}
+                  className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.8)] p-5 shadow-[0_8px_32px_rgb(var(--shadow)/0.08)]"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-[rgb(var(--primary)/0.14)] flex items-center justify-center shrink-0">
+                      <span className="text-[0.58rem] font-black text-[rgb(var(--primary))] leading-none">{selected.code.slice(0,3)}</span>
                     </div>
-                    <div className="mt-1 text-sm font-semibold text-[rgb(var(--fg))] truncate">
-                      {selected.code} — {selected.title}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[0.67rem] font-bold uppercase tracking-widest text-[rgb(var(--muted2))]">Selected subject</p>
+                      <p className="mt-0.5 text-sm font-bold text-[rgb(var(--fg))] truncate">
+                        <span className="text-[rgb(var(--primary))]">{selected.code}</span>
+                        <span className="font-normal text-[rgb(var(--muted))]"> — </span>
+                        {selected.title}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <span className="inline-flex items-center gap-1 text-[0.67rem] font-semibold px-2.5 py-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))]">
+                          <IconClock /> {durationMin} min
+                        </span>
+                        {slots.length > 0 && (
+                          <span className="inline-flex items-center gap-1 text-[0.67rem] font-semibold px-2.5 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                            {slots.length} slots available
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <span className="inline-flex items-center rounded-full border px-2.5 py-1 text-[0.7rem] font-medium border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))]">
-                        {durationMin} min
-                      </span>
-                      <span className="inline-flex items-center rounded-full border px-2.5 py-1 text-[0.7rem] font-medium border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))]">
-                        {slots.length} slots
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-end gap-2 shrink-0">
-                    <Link
-                      href="/dashboard/student/sessions"
-                      className="text-xs font-medium text-[rgb(var(--primary))] hover:underline"
-                    >
-                      My Bookings →
-                    </Link>
-
-                    {/* Enhancement #4: clear selection */}
                     <button
                       type="button"
                       onClick={() => {
                         setSelected(null);
+                        setQ("");
                         setSlots([]);
-                        setSlotsMsg(null);
+                        setSlotsError(null);
                         setSelectedDay(null);
-                        setDayLimit(9);
-                        setBookingMsg(null);
-                        // keep q as-is so user can tweak quickly
-                        window.setTimeout(() => inputRef.current?.focus(), 0);
+                        setBookedSlot(null);
+                        setTimeout(() => inputRef.current?.focus(), 0);
                       }}
-                      className="
-                        rounded-md px-3 py-2 text-xs font-semibold
-                        border border-[rgb(var(--border))]
-                        bg-[rgb(var(--card))]
-                        text-[rgb(var(--fg))]
-                        hover:bg-[rgb(var(--card)/0.8)]
-                      "
+                      className="shrink-0 h-7 w-7 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card2))] flex items-center justify-center text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] transition-colors"
+                      title="Change subject"
                     >
-                      Change subject
+                      <IconX />
                     </button>
                   </div>
-                </div>
 
-                {bookingMsg && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="
-                      mt-4 rounded-2xl border p-4
-                      border-[rgb(var(--border))]
-                      bg-[rgb(var(--card))]
-                      text-sm text-[rgb(var(--fg))]
-                    "
-                  >
-                    {bookingMsg}
-                  </motion.div>
+                  <div className="mt-4 pt-4 border-t border-[rgb(var(--border)/0.6)] flex items-center justify-between">
+                    <Link href="/dashboard/student/sessions" className="text-xs font-semibold text-[rgb(var(--primary))] hover:underline flex items-center gap-1">
+                      My sessions <IconChevron />
+                    </Link>
+                    <button
+                      type="button"
+                      disabled={slotsLoading}
+                      onClick={() => loadSlots(selected.id, durationMin)}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] disabled:opacity-50 transition-colors"
+                    >
+                      {slotsLoading ? <><Spinner size={12}/> Loading…</> : <><IconRefresh /> Refresh</>}
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* ── How it works ── */}
+            {!selected && (
+              <motion.div
+                initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:0.25 }}
+                className="rounded-3xl border border-[rgb(var(--border)/0.6)] bg-[rgb(var(--card)/0.5)] p-5"
+              >
+                <p className="text-[0.67rem] font-bold uppercase tracking-widest text-[rgb(var(--muted2))] mb-3">How it works</p>
+                <div className="space-y-3">
+                  {[
+                    { n:"01", icon:"🔍", t:"Search", d:"Type a subject code or topic name" },
+                    { n:"02", icon:"📅", t:"Pick a time", d:"Choose the earliest or browse by day" },
+                    { n:"03", icon:"⚡", t:"Booked!", d:"A tutor is assigned to you instantly" },
+                  ].map(item => (
+                    <div key={item.n} className="flex items-start gap-3">
+                      <span className="text-[0.6rem] font-black text-[rgb(var(--muted2)/0.5)] mt-1 w-5 shrink-0">{item.n}</span>
+                      <div>
+                        <p className="text-xs font-bold text-[rgb(var(--fg))]">{item.icon} {item.t}</p>
+                        <p className="text-[0.7rem] text-[rgb(var(--muted))]">{item.d}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </motion.div>
+
+          {/* ════════════════════════════════
+              RIGHT COLUMN — Slots
+          ════════════════════════════════ */}
+          <motion.div
+            initial={{ opacity:0, x:16 }} animate={{ opacity:1, x:0 }} transition={{ duration:0.4, delay:0.14 }}
+          >
+            {/* Empty state */}
+            {!selected && (
+              <div className="h-full min-h-[320px] rounded-3xl border border-dashed border-[rgb(var(--border))] flex flex-col items-center justify-center text-center p-8 gap-4">
+                <div className="h-16 w-16 rounded-2xl bg-[rgb(var(--card2))] flex items-center justify-center text-3xl shadow-sm">
+                  🎓
+                </div>
+                <div>
+                  <p className="text-base font-bold text-[rgb(var(--fg))]">Search a subject to get started</p>
+                  <p className="mt-1 text-sm text-[rgb(var(--muted))] max-w-xs">
+                    {canUse
+                      ? "Type a subject code or name in the search box, then book any available slot."
+                      : authed
+                        ? "Your account is pending verification. Slots will appear here once verified."
+                        : "Login and verify your account to see available tutoring slots."
+                    }
+                  </p>
+                </div>
+                {!authed && (
+                  <Link href="/auth/login" className="mt-2 inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl bg-[rgb(var(--primary))] text-white hover:opacity-90 transition-opacity shadow-[0_4px_16px_rgb(var(--primary)/0.25)]">
+                    Login to get started <IconArrow />
+                  </Link>
                 )}
               </div>
             )}
-          </section>
 
-          {/*  Empty state (ONLY when nothing selected) */}
-          {!selected && (
-            <section
-              className="
-                rounded-3xl border p-6
-                border-[rgb(var(--border))]
-                bg-[rgb(var(--card) / 0.7)]
-                shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]
-              "
-            >
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                    Start here 👇
-                  </div>
-                  <p className="mt-1 text-sm text-[rgb(var(--muted))]">
-                    Search a subject code (like{" "}
-                    <span className="font-semibold">WIA2003</span>) or course
-                    name. Then book the earliest slot instantly.
-                  </p>
+            {/* Loading skeleton */}
+            {selected && slotsLoading && <SkeletonSlots />}
 
-                  <div className="mt-4">
-                    <div className="text-[0.75rem] font-semibold text-[rgb(var(--muted2))]">
-                      Popular searches
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {popularChips.map((chip) => (
-                        <button
-                          key={chip}
-                          type="button"
-                          onClick={() => {
-                            setQ(chip);
-                            window.setTimeout(
-                              () => inputRef.current?.focus(),
-                              0
-                            );
-                          }}
-                          className="
-                            rounded-full px-3 py-2 text-xs font-semibold
-                            border border-[rgb(var(--border))]
-                            bg-[rgb(var(--card2))]
-                            text-[rgb(var(--fg))]
-                            hover:bg-[rgb(var(--card)/0.6)]
-                          "
-                        >
-                          {chip}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 w-full lg:max-w-sm">
-                  <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
-                    <div className="text-xs font-semibold text-[rgb(var(--fg))]">
-                      How it works
-                    </div>
-                    <ol className="mt-2 space-y-2 text-xs text-[rgb(var(--muted))]">
-                      <li>1) Search subject/course</li>
-                      <li>2) Pick earliest or choose a day</li>
-                      <li>3) Book — tutor is assigned automatically</li>
-                    </ol>
-                  </div>
-
-                  <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
-                    <div className="text-xs font-semibold text-[rgb(var(--fg))]">
-                      Tip
-                    </div>
-                    <div className="mt-2 text-xs text-[rgb(var(--muted))]">
-                      If no slots appear, try changing duration (45/60/90 min)
-                      or check later.
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
-        </div>
-
-        {/* RIGHT: Slots panel (only when selected) */}
-        {selected && (
-          <div className="lg:col-span-7">
-            <section
-              className="
-                rounded-3xl border p-5
-                border-[rgb(var(--border))]
-                bg-[rgb(var(--card) / 0.7)]
-                shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]
-              "
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
+            {/* Error state */}
+            {selected && !slotsLoading && slotsError && slots.length === 0 && (
+              <motion.div
+                initial={{ opacity:0 }} animate={{ opacity:1 }}
+                className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.8)] p-6 text-center space-y-4"
+              >
+                <div className="text-4xl">😞</div>
                 <div>
-                  <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                    Book a slot
-                  </div>
-                  <div className="mt-1 text-xs text-[rgb(var(--muted2))]">
-                    1 click: book earliest. Or pick a day to choose.
-                  </div>
+                  <p className="text-sm font-bold text-[rgb(var(--fg))]">No slots available</p>
+                  <p className="mt-1 text-sm text-[rgb(var(--muted))]">{slotsError}</p>
                 </div>
-
+                <div className="flex flex-wrap justify-center gap-2 text-xs text-[rgb(var(--muted2))]">
+                  {["Try 45m / 90m duration", "Refresh in a few minutes", "Try another subject"].map(t => (
+                    <span key={t} className="px-3 py-1.5 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))]">{t}</span>
+                  ))}
+                </div>
                 <button
                   type="button"
-                  disabled={slotsLoading || !!bookingSlotId}
-                  onClick={() => selected && loadSlots(selected.id, durationMin)}
-                  className="
-                    rounded-md px-3 py-2 text-xs font-semibold
-                    border border-[rgb(var(--border))]
-                    bg-[rgb(var(--card2))]
-                    text-[rgb(var(--fg))]
-                    hover:bg-[rgb(var(--card)/0.6)]
-                    disabled:opacity-60
-                  "
+                  onClick={() => loadSlots(selected.id, durationMin)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[rgb(var(--primary))] text-white text-sm font-semibold hover:opacity-90 transition-opacity"
                 >
-                  {slotsLoading ? "Refreshing…" : "Refresh"}
+                  <IconRefresh /> Try again
                 </button>
-              </div>
+              </motion.div>
+            )}
 
-              {/* Enhancement #6: skeleton when loading */}
-              {slotsLoading ? (
-                <SlotsSkeleton />
-              ) : slots.length === 0 ? (
-                /* Enhancement #7: nicer empty state */
-                <div className="mt-4 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                        No slots found
-                      </div>
-                      <div className="mt-1 text-sm text-[rgb(var(--muted))]">
-                        {slotsMsg ??
-                          "Try a different duration, or check again later."}
-                      </div>
+            {/* ── SLOTS ── */}
+            {selected && !slotsLoading && slots.length > 0 && (
+              <div className="space-y-4">
 
-                      <div className="mt-3 text-xs text-[rgb(var(--muted2))]">
-                        Quick fixes:
-                        <ul className="mt-2 list-disc pl-5 space-y-1">
-                          <li>Try 45 / 60 / 90 minutes</li>
-                          <li>Refresh in a few minutes</li>
-                          <li>Try a broader keyword (e.g., “Data”)</li>
-                        </ul>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        selected && loadSlots(selected.id, durationMin)
-                      }
-                      className="
-                        rounded-md px-3 py-2 text-xs font-semibold
-                        bg-[rgb(var(--primary))]
-                        text-white
-                        hover:opacity-95
-                      "
+                {/* Booked confirmation banner */}
+                <AnimatePresence>
+                  {bookedSlot && (
+                    <motion.div
+                      key="booked"
+                      initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-8 }}
+                      className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 flex items-center gap-3"
                     >
-                      Refresh
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-4 space-y-4">
-                  {/* Earliest + next 3 */}
-                  <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-xs font-semibold text-[rgb(var(--fg))]">
-                        Earliest available
+                      <span className="text-xl">✅</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">Session booked!</p>
+                        <p className="text-xs text-[rgb(var(--muted))]">
+                          {smartDay(dayKey(bookedSlot.start))} at {fmtTime(bookedSlot.start)} · {durationMin} min · tutor assigned
+                        </p>
                       </div>
-                      <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
-                        {durationMin} min
-                      </div>
-                    </div>
+                      <Link href="/dashboard/student/sessions" className="shrink-0 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1">
+                        View <IconChevron />
+                      </Link>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-                    {earliest && (
-                      <button
+                {/* HERO earliest slot */}
+                {earliest && (
+                  <motion.div
+                    initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.05 }}
+                    className="relative overflow-hidden rounded-3xl border border-[rgb(var(--primary)/0.3)] bg-[rgb(var(--primary)/0.06)] p-5"
+                  >
+                    <div className="pointer-events-none absolute -top-8 -right-8 h-32 w-32 rounded-full bg-[rgb(var(--primary)/0.15)] blur-2xl" />
+
+                    <div className="relative flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                          </span>
+                          <p className="text-[0.67rem] font-black uppercase tracking-widest text-[rgb(var(--primary))]">Earliest Available</p>
+                        </div>
+                        <p className="text-2xl font-black text-[rgb(var(--fg))] leading-none">
+                          {fmtTime(earliest.start)}
+                          <span className="text-base font-semibold text-[rgb(var(--muted))] ml-2">→ {fmtTime(earliest.end)}</span>
+                        </p>
+                        <p className="mt-1 text-sm text-[rgb(var(--muted))]">{fullDay(dayKey(earliest.start))}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className="inline-flex items-center gap-1.5 text-[0.67rem] font-semibold px-2.5 py-1.5 rounded-full bg-[rgb(var(--card))] border border-[rgb(var(--border))] text-[rgb(var(--muted))]">
+                            <IconClock /> {durationMin} min
+                          </span>
+                          {typeof earliest.tutorCount === "number" && (
+                            <span className="inline-flex items-center gap-1.5 text-[0.67rem] font-semibold px-2.5 py-1.5 rounded-full bg-[rgb(var(--card))] border border-[rgb(var(--border))] text-[rgb(var(--muted))]">
+                              <IconUser /> {earliest.tutorCount} tutor{earliest.tutorCount!==1?"s":""}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <motion.button
+                        whileHover={{ scale:1.03, y:-1 }} whileTap={{ scale:0.97 }}
                         type="button"
-                        disabled={!!bookingSlotId}
+                        disabled={!!bookingId}
                         onClick={() => bookSlot(earliest)}
-                        className="
-                          mt-3 w-full text-left rounded-2xl border px-4 py-4 transition
-                          border-[rgb(var(--border))]
-                          bg-[rgb(var(--primary))]
-                          text-white
-                          hover:opacity-95
-                          disabled:opacity-60
-                        "
-                        title={`${prettyDateTime(
-                          earliest.start
-                        )} → ${prettyDateTime(earliest.end)}`}
+                        className="shrink-0 flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-[rgb(var(--primary))] text-white text-sm font-bold shadow-[0_6px_24px_rgb(var(--primary)/0.4)] hover:shadow-[0_10px_32px_rgb(var(--primary)/0.5)] disabled:opacity-60 transition-all duration-200"
+                        title={fmtDateTime(earliest.start)}
                       >
-                        <div className="text-sm font-bold">
-                          Book earliest:{" "}
-                          {prettyDayLabelSmart(dayKey(earliest.start))} ·{" "}
-                          {prettyTime(earliest.start)}
-                        </div>
-                        <div className="mt-1 text-[0.75rem] opacity-90">
-                          ends {prettyTime(earliest.end)}
-                          {typeof earliest.tutorCount === "number"
-                            ? ` · ${earliest.tutorCount} tutor${
-                                earliest.tutorCount === 1 ? "" : "s"
-                              }`
-                            : ""}
-                        </div>
-                      </button>
-                    )}
+                        {bookingId===earliest.id ? <><Spinner size={15}/> Booking…</> : <>Book now <IconArrow /></>}
+                      </motion.button>
+                    </div>
 
-                    {next3.length > 0 && (
-                      <div className="mt-3">
-                        <div className="text-[0.7rem] text-[rgb(var(--muted2))] mb-2">
-                          Next available
-                        </div>
+                    {nextFew.length > 0 && (
+                      <div className="relative mt-4 pt-4 border-t border-[rgb(var(--primary)/0.15)]">
+                        <p className="text-[0.67rem] font-bold uppercase tracking-widest text-[rgb(var(--muted2))] mb-2.5">Also soon</p>
                         <div className="flex flex-wrap gap-2">
-                          {next3.map((s) => {
-                            const busy = bookingSlotId === s.id;
-                            const disabled = !!bookingSlotId && !busy;
-
-                            return (
-                              <button
-                                key={s.id}
-                                type="button"
-                                disabled={disabled}
-                                onClick={() => bookSlot(s)}
-                                className={[
-                                  "rounded-full px-3 py-2 text-xs font-semibold border transition",
-                                  "border-[rgb(var(--border))]",
-                                  "bg-[rgb(var(--card) / 0.8)] text-[rgb(var(--fg))]",
-                                  "hover:bg-[rgb(var(--card) / 1)]",
-                                  busy ? "opacity-80" : "",
-                                  disabled
-                                    ? "opacity-60 cursor-not-allowed"
-                                    : "",
-                                ].join(" ")}
-                                title={`${prettyDateTime(
-                                  s.start
-                                )} → ${prettyDateTime(s.end)}`}
-                              >
-                                {prettyDayLabelSmart(dayKey(s.start))} ·{" "}
-                                {prettyTime(s.start)}
-                              </button>
-                            );
-                          })}
+                          {nextFew.map(s => (
+                            <motion.button
+                              key={s.id}
+                              whileHover={{ scale:1.04 }} whileTap={{ scale:0.96 }}
+                              type="button"
+                              disabled={!!bookingId}
+                              onClick={() => bookSlot(s)}
+                              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] text-xs font-semibold text-[rgb(var(--fg))] hover:border-[rgb(var(--primary)/0.5)] hover:bg-[rgb(var(--primary)/0.07)] disabled:opacity-50 transition-all duration-150"
+                              title={fmtDateTime(s.start)}
+                            >
+                              {bookingId===s.id ? <Spinner size={12}/> : null}
+                              <span className="font-normal text-[rgb(var(--muted))]">{smartDay(dayKey(s.start))}</span>
+                              <span className="font-bold">{fmtTime(s.start)}</span>
+                            </motion.button>
+                          ))}
                         </div>
                       </div>
                     )}
-                  </div>
+                  </motion.div>
+                )}
 
-                  {/* 7-day strip */}
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs font-semibold text-[rgb(var(--fg))]">
-                        Pick a day
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedDay(null);
-                          setDayLimit(9);
-                        }}
-                        className="text-[0.7rem] font-medium text-[rgb(var(--primary))] hover:underline"
-                      >
-                        Clear day
+                {/* 7-day strip */}
+                <motion.div
+                  initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.1 }}
+                  className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.8)] p-5 shadow-[0_8px_32px_rgb(var(--shadow)/0.06)]"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-[0.67rem] font-black uppercase tracking-widest text-[rgb(var(--muted2))]">Browse by day</p>
+                    {selectedDay && (
+                      <button type="button" onClick={() => { setSelectedDay(null); setDayLimit(9); }} className="text-[0.7rem] font-semibold text-[rgb(var(--primary))] hover:underline">
+                        Clear
                       </button>
-                    </div>
-
-                    <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-                      {sevenDayKeys.map((d) => {
-                        const count = dayCounts.get(d) ?? 0;
-                        const active = selectedDay === d;
-                        const disabled = count === 0;
-
-                        return (
-                          <button
-                            key={d}
-                            type="button"
-                            disabled={disabled}
-                            onClick={() => {
-                              setSelectedDay(d);
-                              setDayLimit(9);
-                            }}
-                            className={[
-                              "shrink-0 rounded-2xl border px-3 py-2 text-left transition",
-                              "border-[rgb(var(--border))]",
-                              active
-                                ? "bg-[rgb(var(--primary))] text-white"
-                                : "bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
-                              disabled ? "opacity-50 cursor-not-allowed" : "",
-                            ].join(" ")}
-                          >
-                            <div className="text-xs font-semibold">
-                              {prettyDayLabelSmart(d)}
-                            </div>
-                            <div className="mt-0.5 text-[0.7rem] opacity-80">
-                              {count} slot{count === 1 ? "" : "s"}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    )}
                   </div>
 
-                  {/* Day times */}
-                  {selectedDay && (
-                    <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-xs font-semibold text-[rgb(var(--fg))]">
-                          {prettyDayLabelSmart(selectedDay)}{" "}
-                          <span className="text-[0.7rem] font-medium text-[rgb(var(--muted2))]">
-                            · {prettyDayLabel(selectedDay)}
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {dayKeys.map((d, i) => {
+                      const count = dayCounts.get(d) ?? 0;
+                      const active = selectedDay === d;
+                      const empty = count === 0;
+                      return (
+                        <motion.button
+                          key={d}
+                          initial={{ opacity:0, y:6 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.12+i*0.05 }}
+                          type="button"
+                          disabled={empty}
+                          onClick={() => { setSelectedDay(d); setDayLimit(9); }}
+                          className={`shrink-0 flex flex-col items-center min-w-[72px] px-3 py-2.5 rounded-2xl border transition-all duration-200
+                            ${active
+                              ? "bg-[rgb(var(--primary))] border-transparent text-white shadow-[0_4px_16px_rgb(var(--primary)/0.35)]"
+                              : empty
+                                ? "border-[rgb(var(--border)/0.5)] bg-transparent opacity-35 cursor-not-allowed"
+                                : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:border-[rgb(var(--primary)/0.5)] hover:bg-[rgb(var(--primary)/0.06)]"
+                            }`}
+                        >
+                          <span className="text-[0.67rem] font-bold leading-none">{smartDay(d)}</span>
+                          <span className={`mt-1 text-[0.62rem] font-semibold leading-none ${active?"opacity-80":"text-[rgb(var(--muted2))]"}`}>
+                            {count === 0 ? "—" : `${count}`}
+                          </span>
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Day slots grid */}
+                  <AnimatePresence mode="wait">
+                    {selectedDay && (
+                      <motion.div
+                        key={selectedDay}
+                        initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-6 }}
+                        transition={{ duration:0.2 }}
+                        className="mt-4 pt-4 border-t border-[rgb(var(--border)/0.6)]"
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className="text-sm font-bold text-[rgb(var(--fg))]">{smartDay(selectedDay)}</span>
+                            <span className="ml-2 text-xs text-[rgb(var(--muted2))]">{fullDay(selectedDay)}</span>
+                          </div>
+                          <span className="text-[0.67rem] font-semibold px-2.5 py-1 rounded-full bg-[rgb(var(--primary)/0.12)] text-[rgb(var(--primary))]">
+                            {daySlots.length} slot{daySlots.length!==1?"s":""}
                           </span>
                         </div>
-                        <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
-                          {selectedDaySlots.length} slots
-                        </div>
-                      </div>
 
-                      {selectedDaySlots.length === 0 ? (
-                        <div className="mt-3 text-sm text-[rgb(var(--muted2))]">
-                          No slots on this day.
-                        </div>
-                      ) : (
-                        <>
-                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                            {selectedDaySlots
-                              .slice(0, dayLimit)
-                              .map((slot) => {
-                                const busy = bookingSlotId === slot.id;
-                                const disabled = !!bookingSlotId && !busy;
-
+                        {daySlots.length === 0 ? (
+                          <p className="text-sm text-[rgb(var(--muted2))] text-center py-4">No slots on this day.</p>
+                        ) : (
+                          <>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {daySlots.slice(0, dayLimit).map((slot, i) => {
+                                const busy = bookingId === slot.id;
+                                const disabled = !!bookingId && !busy;
                                 return (
-                                  <button
+                                  <motion.button
                                     key={slot.id}
+                                    initial={{ opacity:0, scale:0.94 }} animate={{ opacity:1, scale:1 }} transition={{ delay:i*0.04 }}
+                                    whileHover={{ scale:1.03 }} whileTap={{ scale:0.96 }}
                                     type="button"
                                     disabled={disabled}
                                     onClick={() => bookSlot(slot)}
-                                    className={[
-                                      "w-full text-left rounded-xl border px-4 py-3 transition",
-                                      "border-[rgb(var(--border))] bg-[rgb(var(--card) / 0.65)] text-[rgb(var(--fg))]",
-                                      "hover:bg-[rgb(var(--card) / 0.9)]",
-                                      busy ? "opacity-80" : "",
-                                      disabled
-                                        ? "opacity-60 cursor-not-allowed"
-                                        : "",
-                                    ].join(" ")}
-                                    title={`${prettyDateTime(
-                                      slot.start
-                                    )} → ${prettyDateTime(slot.end)}`}
+                                    className={`group w-full text-left rounded-2xl border px-4 py-3.5 transition-all duration-200
+                                      ${busy
+                                        ? "border-[rgb(var(--primary)/0.5)] bg-[rgb(var(--primary)/0.08)]"
+                                        : "border-[rgb(var(--border))] bg-[rgb(var(--card)/0.65)] hover:border-[rgb(var(--primary)/0.5)] hover:bg-[rgb(var(--primary)/0.06)] hover:shadow-[0_4px_16px_rgb(var(--primary)/0.1)]"
+                                      } ${disabled?"opacity-40 cursor-not-allowed":""}`}
+                                    title={`${fmtDateTime(slot.start)} → ${fmtDateTime(slot.end)}`}
                                   >
-                                    <div className="text-xs font-semibold">
-                                      {busy
-                                        ? "Booking…"
-                                        : prettyTime(slot.start)}
-                                    </div>
-                                    <div className="mt-1 text-[0.7rem] text-[rgb(var(--muted2))]">
-                                      ends {prettyTime(slot.end)} ·{" "}
-                                      {durationMin} min
-                                      {typeof slot.tutorCount === "number"
-                                        ? ` · ${slot.tutorCount} tutor${
-                                            slot.tutorCount === 1 ? "" : "s"
-                                          }`
-                                        : ""}
-                                    </div>
-                                  </button>
+                                    <p className="text-sm font-black text-[rgb(var(--fg))] group-hover:text-[rgb(var(--primary))] transition-colors">
+                                      {busy ? <span className="flex items-center gap-1.5"><Spinner size={13}/> Booking…</span> : fmtTime(slot.start)}
+                                    </p>
+                                    <p className="text-[0.67rem] text-[rgb(var(--muted2))] mt-0.5">
+                                      → {fmtTime(slot.end)}
+                                      {typeof slot.tutorCount === "number" ? ` · ${slot.tutorCount}t` : ""}
+                                    </p>
+                                  </motion.button>
                                 );
                               })}
-                          </div>
+                            </div>
 
-                          {selectedDaySlots.length > dayLimit && (
-                            <div className="mt-3">
+                            {daySlots.length > dayLimit && (
                               <button
                                 type="button"
-                                onClick={() => setDayLimit((v) => v + 9)}
-                                className="
-                                  rounded-md px-3 py-2 text-xs font-semibold
-                                  border border-[rgb(var(--border))]
-                                  bg-[rgb(var(--card))]
-                                  text-[rgb(var(--fg))]
-                                  hover:bg-[rgb(var(--card)/0.8)]
-                                "
+                                onClick={() => setDayLimit(v => v + 9)}
+                                className="mt-3 w-full text-center text-xs font-semibold py-2.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] transition-colors"
                               >
-                                Show more times
+                                Show {Math.min(9, daySlots.length - dayLimit)} more times
                               </button>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
+                            )}
+                          </>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
 
-                  <div className="text-[0.7rem] text-[rgb(var(--muted2))]">
-                    If a slot disappears, someone else booked it — hit{" "}
-                    <span className="font-semibold">Refresh</span>.
-                  </div>
-                </div>
-              )}
-            </section>
-          </div>
-        )}
+                <p className="flex items-center gap-1.5 text-[0.67rem] text-[rgb(var(--muted2))] px-1">
+                  <span className="h-1 w-1 rounded-full bg-[rgb(var(--muted2))]" />
+                  Slots update in real time — if one disappears, someone else just booked it.
+                </p>
+              </div>
+            )}
+          </motion.div>
+        </div>
       </div>
 
-      {/* Enhancement #8: mobile sticky action bar (only when selected) */}
-      {selected && (
-        <div
-          className="
-            fixed bottom-0 left-0 right-0 z-40
-            border-t border-[rgb(var(--border))]
-            bg-[rgb(var(--card) / 0.92)]
-            backdrop-blur
-            px-4 py-3
-            sm:hidden
-          "
-        >
-          <div className="mx-auto max-w-6xl flex items-center gap-2">
-            <button
-              type="button"
-              disabled={slotsLoading || !!bookingSlotId}
-              onClick={() => selected && loadSlots(selected.id, durationMin)}
-              className="
-                flex-1 rounded-xl px-3 py-3 text-sm font-semibold
-                border border-[rgb(var(--border))]
-                bg-[rgb(var(--card2))]
-                text-[rgb(var(--fg))]
-                hover:bg-[rgb(var(--card)/0.6)]
-                disabled:opacity-60
-              "
-            >
-              {slotsLoading ? "Refreshing…" : "Refresh slots"}
-            </button>
-
-            <Link
-              href="/dashboard/student/sessions"
-              className="
-                flex-1 rounded-xl px-3 py-3 text-sm font-semibold text-center
-                bg-[rgb(var(--primary))]
-                text-white
-                hover:opacity-95
-              "
-            >
-              My Bookings
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {/* Spacer so mobile sticky bar doesn't cover content */}
-      {selected && <div className="h-16 sm:hidden" />}
-    </div>
+      {/* Mobile sticky bar */}
+      <AnimatePresence>
+        {selected && (
+          <motion.div
+            key="mobile-sticky"
+            initial={{ y:64, opacity:0 }} animate={{ y:0, opacity:1 }} exit={{ y:64, opacity:0 }}
+            transition={{ type:"spring", stiffness:420, damping:34 }}
+            className="fixed bottom-0 left-0 right-0 z-40 sm:hidden border-t border-[rgb(var(--border))] bg-[rgb(var(--card)/0.95)] backdrop-blur-xl px-4 py-3"
+          >
+            <div className="flex gap-2 max-w-6xl mx-auto">
+              <button
+                type="button"
+                disabled={slotsLoading}
+                onClick={() => loadSlots(selected.id, durationMin)}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-sm font-semibold text-[rgb(var(--fg))] disabled:opacity-50"
+              >
+                {slotsLoading ? <><Spinner size={14}/> Loading…</> : <><IconRefresh /> Refresh</>}
+              </button>
+              <Link
+                href="/dashboard/student/sessions"
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-[rgb(var(--primary))] text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+              >
+                My sessions <IconChevron />
+              </Link>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {selected && <div className="h-20 sm:hidden" />}
+    </>
   );
 }
