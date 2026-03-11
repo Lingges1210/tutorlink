@@ -1,7 +1,6 @@
 "use client";
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import StarBackground from "@/components/StarBackground";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -154,8 +153,6 @@ export default function ForgotPasswordPage() {
       `}</style>
 
       <div className="relative min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
-        <StarBackground />
-
         <div className="relative z-10 flex min-h-screen items-center justify-center px-4">
           <div
             className="forgot-card w-full max-w-md rounded-3xl border p-7"

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import StarBackground from "@/components/StarBackground";
 
 type SubjectItem = { id: string; code: string; title: string };
 
@@ -318,8 +317,6 @@ export default function FindTutorClient({
   ════════════════════════════════════════════════════════ */
   return (
     <>
-      {/* ── Star background ── */}
-      <StarBackground />
 
       {/* ── Toast ── */}
       <AnimatePresence>

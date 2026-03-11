@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import StarBackground from "@/components/StarBackground";
 
 function getPasswordStrength(password: string) {
   let score = 0;
@@ -73,7 +72,6 @@ export default function ResetPasswordPage() {
   if (ready && !hasRecoverySession) {
     return (
       <div className="relative min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
-        <StarBackground />
         <div className="relative z-10 flex min-h-screen items-center justify-center px-4">
           <div
             className="w-full max-w-md rounded-3xl border p-6"
@@ -154,8 +152,6 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="relative min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
-      <StarBackground />
-
       <div className="relative z-10 flex min-h-screen items-center justify-center px-4">
         <div
           className="w-full max-w-md rounded-3xl border p-7"

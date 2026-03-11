@@ -1,6 +1,5 @@
 import SessionCallEmbed from "@/components/session/SessionCallEmbed";
 import BackButton from "@/components/ui/BackButton";
-import StarBackground from "@/components/StarBackground";
 
 type Props = {
   params: Promise<{ sessionId: string }>;
@@ -10,8 +9,6 @@ export default async function CallPage({ params }: Props) {
   const { sessionId } = await params;
   return (
     <div className="relative min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))] transition-colors duration-300">
-      <StarBackground />
-
       <div className="relative z-10 mx-auto max-w-6xl px-6 py-8">
         {/* Top bar */}
         <div className="mb-6 flex items-center gap-3">

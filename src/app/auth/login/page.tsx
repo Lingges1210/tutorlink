@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AuthSplitLayout from "@/components/AuthSplitLayout";
 import { LoginAnimationHandle } from "@/components/LoginAnimation";
-import StarBackground from "@/components/StarBackground";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -92,7 +91,7 @@ export default function LoginPage() {
 
   return (
     <>
-      <StarBackground />
+      
 
       <style>{`
         @keyframes shake {

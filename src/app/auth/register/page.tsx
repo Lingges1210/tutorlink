@@ -2,7 +2,6 @@
 
 import { FormEvent, useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import StarBackground from "@/components/StarBackground";
 
 function getPasswordStrength(password: string) {
   let score = 0;
@@ -201,7 +200,6 @@ export default function RegisterPage() {
 
       {/* ── Star background ── */}
       <div className="relative min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
-        <StarBackground />
 
         <div className="relative z-10 mx-auto mb-12 mt-10 max-w-md px-4">
           <div
@@ -216,15 +214,7 @@ export default function RegisterPage() {
           >
             {/* Header */}
             <div className="mb-6">
-              <div
-                className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl text-lg"
-                style={{
-                  background: "linear-gradient(135deg, rgb(var(--primary) / 0.15), rgb(var(--primary2) / 0.1))",
-                  border: "1px solid rgb(var(--primary) / 0.2)",
-                }}
-              >
-                🎓
-              </div>
+              
               <h1 className="text-xl font-semibold leading-tight" style={{ color: "rgb(var(--fg))" }}>
                 Create your TutorLink account
               </h1>
