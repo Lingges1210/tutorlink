@@ -20,6 +20,12 @@ import {
   ShieldAlert,
   User,
   X,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Ban,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -98,33 +104,58 @@ function getCategoryLabel(value: string) {
   return CATEGORY_OPTIONS.find((c) => c.value === value)?.label ?? value;
 }
 
-// ─── Status / Priority badges ─────────────────────────────────────────────────
+// ─── Status / Priority config ─────────────────────────────────────────────────
 
-function statusClasses(status: string) {
+function statusConfig(status: string) {
   switch (status) {
     case "OPEN":
-      return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+      return {
+        cls: "border-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-300",
+        dot: "bg-amber-400",
+        icon: <Clock className="h-3 w-3" />,
+        glow: "shadow-amber-500/20",
+      };
     case "IN_REVIEW":
-      return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+      return {
+        cls: "border-sky-400/40 bg-sky-400/10 text-sky-600 dark:text-sky-300",
+        dot: "bg-sky-400",
+        icon: <AlertCircle className="h-3 w-3" />,
+        glow: "shadow-sky-500/20",
+      };
     case "RESOLVED":
-      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+      return {
+        cls: "border-emerald-400/40 bg-emerald-400/10 text-emerald-600 dark:text-emerald-300",
+        dot: "bg-emerald-400",
+        icon: <CheckCircle2 className="h-3 w-3" />,
+        glow: "shadow-emerald-500/20",
+      };
     case "DISMISSED":
-      return "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300";
+      return {
+        cls: "border-rose-400/40 bg-rose-400/10 text-rose-600 dark:text-rose-300",
+        dot: "bg-rose-400",
+        icon: <Ban className="h-3 w-3" />,
+        glow: "shadow-rose-500/20",
+      };
     default:
-      return "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]";
+      return {
+        cls: "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]",
+        dot: "bg-[rgb(var(--muted2))]",
+        icon: null,
+        glow: "",
+      };
   }
 }
 
 function priorityClasses(priority: string) {
   switch (priority) {
     case "URGENT":
-      return "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300";
+      return "border-rose-400/40 bg-rose-400/10 text-rose-600 dark:text-rose-300";
     case "HIGH":
-      return "border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300";
+      return "border-orange-400/40 bg-orange-400/10 text-orange-600 dark:text-orange-300";
     case "MEDIUM":
-      return "border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300";
+      return "border-indigo-400/40 bg-indigo-400/10 text-indigo-600 dark:text-indigo-300";
     case "LOW":
-      return "border-zinc-500/30 bg-zinc-500/10 text-zinc-700 dark:text-zinc-300";
+      return "border-zinc-400/40 bg-zinc-400/10 text-zinc-600 dark:text-zinc-300";
     default:
       return "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]";
   }
@@ -136,23 +167,29 @@ function TabButton({
   active,
   onClick,
   children,
+  icon,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  icon?: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={[
-        "rounded-full px-3 py-1 text-[11px] font-semibold border transition-all duration-150",
+        "relative inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12px] font-semibold border transition-all duration-200",
         active
-          ? "border-[rgb(var(--primary))] text-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.08)]"
-          : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
+          ? "border-[rgb(var(--primary)/0.5)] text-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.08)] shadow-sm"
+          : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))] hover:border-[rgb(var(--border))]",
       ].join(" ")}
     >
+      {icon}
       {children}
+      {active && (
+        <span className="absolute bottom-0 left-1/2 h-0.5 w-6 -translate-x-1/2 translate-y-px rounded-full bg-[rgb(var(--primary))]" />
+      )}
     </button>
   );
 }
@@ -162,27 +199,30 @@ function ViewTab({
   label,
   onClick,
   count,
+  icon,
 }: {
   active: boolean;
   label: string;
   onClick: () => void;
   count: number;
+  icon?: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={[
-        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition",
+        "inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-[11px] font-semibold transition-all duration-200",
         active
-          ? "border-[rgb(var(--primary))] text-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.08)]"
-          : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
+          ? "border-[rgb(var(--primary)/0.4)] text-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.08)] shadow-sm"
+          : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]",
       ].join(" ")}
     >
+      {icon}
       {label}
       <span
         className={[
-          "rounded-full px-1.5 py-0.5 text-[10px]",
+          "rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums",
           active
             ? "bg-[rgb(var(--primary)/0.15)] text-[rgb(var(--primary))]"
             : "bg-[rgb(var(--card2))] text-[rgb(var(--muted2))]",
@@ -198,27 +238,71 @@ function MetricCard({
   label,
   value,
   tone = "default",
+  icon,
 }: {
   label: string;
   value: number;
   tone?: "default" | "amber" | "sky" | "emerald" | "rose";
+  icon?: React.ReactNode;
 }) {
-  const toneClass =
-    tone === "amber"
-      ? "border-amber-500/20 bg-amber-500/5"
-      : tone === "sky"
-      ? "border-sky-500/20 bg-sky-500/5"
-      : tone === "emerald"
-      ? "border-emerald-500/20 bg-emerald-500/5"
-      : tone === "rose"
-      ? "border-rose-500/20 bg-rose-500/5"
-      : "border-[rgb(var(--border))] bg-[rgb(var(--card2))]";
+  const config = {
+    default: {
+      card: "border-[rgb(var(--border))] bg-[rgb(var(--card2))]",
+      value: "text-[rgb(var(--fg))]",
+      label: "text-[rgb(var(--muted2))]",
+      icon: "text-[rgb(var(--muted2))] bg-[rgb(var(--card))]",
+      bar: "bg-[rgb(var(--muted2)/0.3)]",
+    },
+    amber: {
+      card: "border-amber-400/25 bg-amber-400/5 dark:bg-amber-400/[0.07]",
+      value: "text-amber-600 dark:text-amber-300",
+      label: "text-amber-600/70 dark:text-amber-400/70",
+      icon: "text-amber-500 bg-amber-400/15",
+      bar: "bg-amber-400/50",
+    },
+    sky: {
+      card: "border-sky-400/25 bg-sky-400/5 dark:bg-sky-400/[0.07]",
+      value: "text-sky-600 dark:text-sky-300",
+      label: "text-sky-600/70 dark:text-sky-400/70",
+      icon: "text-sky-500 bg-sky-400/15",
+      bar: "bg-sky-400/50",
+    },
+    emerald: {
+      card: "border-emerald-400/25 bg-emerald-400/5 dark:bg-emerald-400/[0.07]",
+      value: "text-emerald-600 dark:text-emerald-300",
+      label: "text-emerald-600/70 dark:text-emerald-400/70",
+      icon: "text-emerald-500 bg-emerald-400/15",
+      bar: "bg-emerald-400/50",
+    },
+    rose: {
+      card: "border-rose-400/25 bg-rose-400/5 dark:bg-rose-400/[0.07]",
+      value: "text-rose-600 dark:text-rose-300",
+      label: "text-rose-600/70 dark:text-rose-400/70",
+      icon: "text-rose-500 bg-rose-400/15",
+      bar: "bg-rose-400/50",
+    },
+  }[tone];
 
   return (
-    <div className={`rounded-2xl border p-4 ${toneClass}`}>
-      <div className="text-xs text-[rgb(var(--muted2))]">{label}</div>
-      <div className="mt-1 text-2xl font-bold text-[rgb(var(--fg))]">{value}</div>
-    </div>
+    <motion.div
+      whileHover={{ y: -2, scale: 1.01 }}
+      transition={{ duration: 0.15 }}
+      className={`rounded-2xl border p-4 transition-shadow hover:shadow-md ${config.card}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1">
+          <div className={`text-[11px] font-medium ${config.label}`}>{label}</div>
+          <div className={`mt-1.5 text-3xl font-bold tabular-nums tracking-tight ${config.value}`}>
+            {value}
+          </div>
+        </div>
+        {icon && (
+          <div className={`rounded-xl p-2 ${config.icon}`}>
+            {icon}
+          </div>
+        )}
+      </div>
+    </motion.div>
   );
 }
 
@@ -252,10 +336,9 @@ export default function ReportsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("ACTIVE");
   const [currentPage, setCurrentPage] = useState(1);
 
-  // ── Tab — auto-open submit if URL params present ──
   const [tab, setTab] = useState<TabKey>(hasPreset ? "submit" : "list");
 
-  // ── Submit state — seeded from URL params ──
+  // ── Submit state ──
   const [category, setCategory] = useState(presetCategory);
   const [subject, setSubject] = useState(presetSubject);
   const [description, setDescription] = useState("");
@@ -283,7 +366,6 @@ export default function ReportsPage() {
     }
   }
 
-  // ── Open evidence ──
   async function openEvidence(reportId: string) {
     try {
       setOpeningEvidenceId(reportId);
@@ -299,7 +381,6 @@ export default function ReportsPage() {
     }
   }
 
-  // ── Submit report ──
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitLoading(true);
@@ -325,7 +406,6 @@ export default function ReportsPage() {
       setEvidenceFile(null);
       setCategory("GENERAL_COMPLAINT");
       setReportedUserId("");
-      // Refresh list and switch to it after a beat
       await loadReports();
       setTimeout(() => {
         setTab("list");
@@ -338,15 +418,9 @@ export default function ReportsPage() {
     }
   }
 
-  useEffect(() => {
-    loadReports();
-  }, []);
+  useEffect(() => { loadReports(); }, []);
+  useEffect(() => { setCurrentPage(1); }, [query, viewMode]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [query, viewMode]);
-
-  // ── Derived counts ──
   const counts = useMemo(() => ({
     all: reports.length,
     open: reports.filter((r) => r.status === "OPEN").length,
@@ -357,7 +431,6 @@ export default function ReportsPage() {
     past: reports.filter((r) => isPastReport(r)).length,
   }), [reports]);
 
-  // ── Filtered + paginated ──
   const filteredReports = useMemo(() => {
     const q = query.trim().toLowerCase();
     return reports.filter((r) => {
@@ -377,178 +450,242 @@ export default function ReportsPage() {
     return filteredReports.slice(start, start + PAGE_SIZE);
   }, [filteredReports, currentPage]);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+
       {/* ── Header ── */}
       <motion.div
-        layout="position"
-        className="rounded-3xl border p-6 border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] shadow-[0_20px_60px_rgb(var(--shadow)/0.10)]"
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+        className="relative overflow-hidden rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-sm"
       >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">Reports</h1>
-            <p className="mt-1 text-sm text-[rgb(var(--muted))]">
-              Submit complaints, appeals, and issues or track existing ones.
-            </p>
+        {/* Subtle gradient orb */}
+        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[rgb(var(--primary)/0.08)] blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-12 left-1/3 h-32 w-32 rounded-full bg-[rgb(var(--primary)/0.05)] blur-2xl" />
+
+        <div className="relative flex flex-wrap items-center justify-between gap-4 px-6 py-5">
+          <div className="flex items-center gap-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[rgb(var(--primary)/0.12)] ring-1 ring-[rgb(var(--primary)/0.2)]">
+              <ShieldAlert className="h-5 w-5 text-[rgb(var(--primary))]" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-[rgb(var(--fg))]">Reports</h1>
+              <p className="text-xs text-[rgb(var(--muted2))]">
+                Submit, track, and manage your complaints &amp; appeals
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <TabButton active={tab === "list"} onClick={() => setTab("list")}>
+          <div className="flex items-center gap-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-1.5">
+            <TabButton
+              active={tab === "list"}
+              onClick={() => setTab("list")}
+              icon={<FileText className="h-3.5 w-3.5" />}
+            >
               My Reports
+              {counts.all > 0 && (
+                <span className="ml-0.5 rounded-md bg-[rgb(var(--primary)/0.12)] px-1.5 py-0.5 text-[10px] font-bold text-[rgb(var(--primary))]">
+                  {counts.all}
+                </span>
+              )}
             </TabButton>
-            <TabButton active={tab === "submit"} onClick={() => setTab("submit")}>
-              <span className="flex items-center gap-1">
-                <Plus className="h-3 w-3" />
-                New Report
-              </span>
+            <TabButton
+              active={tab === "submit"}
+              onClick={() => setTab("submit")}
+              icon={<Plus className="h-3.5 w-3.5" />}
+            >
+              New Report
             </TabButton>
           </div>
         </div>
       </motion.div>
 
       {/* ── Content ── */}
-      <div className="rounded-3xl border p-5 border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]">
+      <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-sm overflow-hidden">
         <AnimatePresence mode="wait" initial={false}>
 
           {/* ════════════ LIST TAB ════════════ */}
           {tab === "list" && (
             <motion.div
               key="list"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-              className="space-y-5"
+              initial={{ opacity: 0, x: -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 16 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="p-5 space-y-5"
             >
               {/* Metrics */}
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <MetricCard label="Total" value={counts.all} />
-                <MetricCard label="Open" value={counts.open} tone="amber" />
-                <MetricCard label="In Review" value={counts.review} tone="sky" />
-                <MetricCard label="Resolved" value={counts.resolved} tone="emerald" />
-                <MetricCard label="Dismissed" value={counts.dismissed} tone="rose" />
+                <MetricCard label="Total" value={counts.all} icon={<FileText className="h-4 w-4" />} />
+                <MetricCard label="Open" value={counts.open} tone="amber" icon={<Clock className="h-4 w-4" />} />
+                <MetricCard label="In Review" value={counts.review} tone="sky" icon={<AlertCircle className="h-4 w-4" />} />
+                <MetricCard label="Resolved" value={counts.resolved} tone="emerald" icon={<CheckCircle2 className="h-4 w-4" />} />
+                <MetricCard label="Dismissed" value={counts.dismissed} tone="rose" icon={<Ban className="h-4 w-4" />} />
               </div>
 
               {/* Filter bar */}
               {!loading && !listErr && reports.length > 0 && (
-                <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                >
                   <div className="flex flex-wrap gap-2">
-                    <ViewTab active={viewMode === "ACTIVE"} label="Active" count={counts.active} onClick={() => setViewMode("ACTIVE")} />
-                    <ViewTab active={viewMode === "PAST"} label="Past" count={counts.past} onClick={() => setViewMode("PAST")} />
-                    <ViewTab active={viewMode === "ALL"} label="All" count={counts.all} onClick={() => setViewMode("ALL")} />
-                  </div>
-
-                  <div className="relative w-full sm:max-w-xs">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[rgb(var(--muted2))]" />
-                    <input
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Search reports..."
-                      className="w-full rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] py-2 pl-9 pr-4 text-xs outline-none placeholder:text-[rgb(var(--muted2))]"
+                    <ViewTab
+                      active={viewMode === "ACTIVE"}
+                      label="Active"
+                      count={counts.active}
+                      onClick={() => setViewMode("ACTIVE")}
+                      icon={<span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />}
                     />
-                    {query && (
-                      <button
-                        type="button"
-                        onClick={() => setQuery("")}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[rgb(var(--muted2))] hover:text-[rgb(var(--fg))]"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
+                    <ViewTab
+                      active={viewMode === "PAST"}
+                      label="Past"
+                      count={counts.past}
+                      onClick={() => setViewMode("PAST")}
+                      icon={<Archive className="h-3 w-3" />}
+                    />
+                    <ViewTab
+                      active={viewMode === "ALL"}
+                      label="All"
+                      count={counts.all}
+                      onClick={() => setViewMode("ALL")}
+                    />
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={loadReports}
-                    disabled={loading}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1.5 text-[11px] font-semibold text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-50"
-                  >
-                    {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCcw className="h-3 w-3" />}
-                    Refresh
-                  </button>
-                </div>
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-full sm:w-64">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[rgb(var(--muted2))]" />
+                      <input
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Search reports…"
+                        className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] py-2 pl-9 pr-8 text-xs text-[rgb(var(--fg))] outline-none placeholder:text-[rgb(var(--muted2))] focus:border-[rgb(var(--primary)/0.5)] focus:ring-1 focus:ring-[rgb(var(--primary)/0.2)] transition-all"
+                      />
+                      {query && (
+                        <button
+                          type="button"
+                          onClick={() => setQuery("")}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[rgb(var(--muted2))] hover:text-[rgb(var(--fg))] transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={loadReports}
+                      disabled={loading}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-[11px] font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))] disabled:opacity-50 transition-all"
+                    >
+                      {loading
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <RefreshCcw className="h-3.5 w-3.5" />}
+                      Refresh
+                    </button>
+                  </div>
+                </motion.div>
               )}
 
               {/* States */}
               {loading ? (
-                <div className="flex items-center justify-center gap-2 py-14 text-sm text-[rgb(var(--muted2))]">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading reports…
+                <div className="flex flex-col items-center justify-center gap-3 py-20 text-sm text-[rgb(var(--muted2))]">
+                  <div className="relative">
+                    <div className="h-10 w-10 rounded-full border-2 border-[rgb(var(--border))] border-t-[rgb(var(--primary))] animate-spin" />
+                  </div>
+                  <span className="text-xs">Loading your reports…</span>
                 </div>
               ) : listErr ? (
-                <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
+                <div className="flex items-start gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/8 px-4 py-3.5 text-sm text-rose-600 dark:text-rose-300">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   {listErr}
                 </div>
               ) : reports.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-12 text-center">
-                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[rgb(var(--card))]">
-                    <ShieldAlert className="h-5 w-5 text-[rgb(var(--muted2))]" />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.97 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-14 text-center"
+                >
+                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[rgb(var(--card))] border border-[rgb(var(--border))] shadow-sm">
+                    <ShieldAlert className="h-6 w-6 text-[rgb(var(--muted2))]" />
                   </div>
-                  <p className="text-sm text-[rgb(var(--muted2))]">You haven't submitted any reports yet.</p>
+                  <p className="font-medium text-sm text-[rgb(var(--fg))]">No reports yet</p>
+                  <p className="mt-1 text-xs text-[rgb(var(--muted2))]">You haven't submitted any reports.</p>
                   <button
                     type="button"
                     onClick={() => setTab("submit")}
-                    className="mt-4 inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]"
+                    className="mt-5 inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--primary)/0.3)] bg-[rgb(var(--primary)/0.08)] px-4 py-2 text-xs font-semibold text-[rgb(var(--primary))] hover:bg-[rgb(var(--primary)/0.13)] transition-all"
                   >
-                    <Plus className="h-3 w-3" />
+                    <Plus className="h-3.5 w-3.5" />
                     Submit your first report
                   </button>
-                </div>
+                </motion.div>
               ) : filteredReports.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-12 text-center">
+                <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-14 text-center">
                   <Archive className="mx-auto mb-3 h-6 w-6 text-[rgb(var(--muted2))]" />
-                  <p className="text-sm text-[rgb(var(--muted2))]">No reports match your search.</p>
+                  <p className="text-sm font-medium text-[rgb(var(--fg))]">No results</p>
+                  <p className="mt-1 text-xs text-[rgb(var(--muted2))]">No reports match your current filters.</p>
                 </div>
               ) : (
                 <>
-                  <div className="text-xs text-[rgb(var(--muted2))]">
-                    Showing {paginatedReports.length} of {filteredReports.length} reports
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] text-[rgb(var(--muted2))]">
+                      Showing <span className="font-semibold text-[rgb(var(--fg))]">{paginatedReports.length}</span> of <span className="font-semibold text-[rgb(var(--fg))]">{filteredReports.length}</span> reports
+                    </p>
                   </div>
 
                   <div className="space-y-3">
-                    {paginatedReports.map((report) => {
+                    {paginatedReports.map((report, i) => {
                       const archived = isPastReport(report);
+                      const sc = statusConfig(report.status);
                       return (
-                        <div
+                        <motion.div
                           key={report.id}
-                          className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4"
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.18, delay: i * 0.04 }}
+                          className={`group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 transition-all duration-200 hover:border-[rgb(var(--border))] hover:shadow-md ${archived ? "opacity-70" : ""}`}
                         >
                           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                             <div className="min-w-0 flex-1 space-y-3">
-                              {/* Badges */}
-                              <div className="flex flex-wrap gap-2">
-                                <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold ${statusClasses(report.status)}`}>
+
+                              {/* Header row */}
+                              <div className="flex flex-wrap items-center gap-2">
+                                {/* Status with animated dot */}
+                                <span className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-[11px] font-semibold shadow-sm ${sc.cls}`}>
+                                  <span className={`h-1.5 w-1.5 rounded-full ${sc.dot} animate-pulse`} />
                                   {niceLabel(report.status)}
                                 </span>
-                                <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold ${priorityClasses(report.priority)}`}>
+                                <span className={`inline-flex rounded-xl border px-2.5 py-1 text-[11px] font-semibold ${priorityClasses(report.priority)}`}>
                                   {niceLabel(report.priority)} Priority
                                 </span>
-                                <span className="inline-flex rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-[11px] font-semibold text-[rgb(var(--fg))]">
+                                <span className="inline-flex rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2.5 py-1 text-[11px] font-semibold text-[rgb(var(--muted))]">
                                   {niceLabel(report.category)}
                                 </span>
                                 {archived && (
-                                  <span className="inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-[11px] font-semibold text-[rgb(var(--muted2))]">
+                                  <span className="inline-flex items-center gap-1 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2.5 py-1 text-[11px] font-semibold text-[rgb(var(--muted2))]">
                                     <Archive className="h-3 w-3" /> Archived
                                   </span>
                                 )}
                               </div>
 
-                              <div className="text-sm font-semibold text-[rgb(var(--fg))]">{report.subject}</div>
+                              <div className="text-sm font-semibold text-[rgb(var(--fg))] leading-snug">{report.subject}</div>
 
                               {/* Description */}
-                              <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3">
-                                <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted2))]">
+                              <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3.5">
+                                <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--muted2))]">
                                   <MessageSquareText className="h-3 w-3" /> Description
                                 </div>
-                                <p className="text-xs text-[rgb(var(--muted))] leading-5">{report.description}</p>
+                                <p className="text-xs text-[rgb(var(--muted))] leading-[1.7]">{report.description}</p>
                               </div>
 
                               {/* Meta grid */}
                               <div className="grid gap-2 md:grid-cols-3">
                                 <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3">
-                                  <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted2))]">
+                                  <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--muted2))]">
                                     <CalendarDays className="h-3 w-3" /> Submitted
                                   </div>
                                   <div className="text-xs font-medium text-[rgb(var(--fg))]">
@@ -557,13 +694,13 @@ export default function ReportsPage() {
                                 </div>
 
                                 <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3">
-                                  <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted2))]">
+                                  <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--muted2))]">
                                     <User className="h-3 w-3" /> Reported User
                                   </div>
                                   {report.reportedUser ? (
                                     <div className="text-xs">
-                                      <div className="font-medium text-[rgb(var(--fg))]">{report.reportedUser.name || "Unnamed"}</div>
-                                      <div className="text-[rgb(var(--muted2))]">{report.reportedUser.email}</div>
+                                      <div className="font-semibold text-[rgb(var(--fg))]">{report.reportedUser.name || "Unnamed"}</div>
+                                      <div className="text-[rgb(var(--muted2))] truncate">{report.reportedUser.email}</div>
                                     </div>
                                   ) : (
                                     <span className="text-xs text-[rgb(var(--muted2))]">Not specified</span>
@@ -571,7 +708,7 @@ export default function ReportsPage() {
                                 </div>
 
                                 <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3">
-                                  <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted2))]">
+                                  <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--muted2))]">
                                     <Paperclip className="h-3 w-3" /> Evidence
                                   </div>
                                   {report.evidenceUrl ? (
@@ -579,7 +716,7 @@ export default function ReportsPage() {
                                       type="button"
                                       onClick={() => openEvidence(report.id)}
                                       disabled={openingEvidenceId === report.id}
-                                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-[rgb(var(--primary))] hover:underline disabled:opacity-50"
+                                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-[rgb(var(--primary))] hover:underline disabled:opacity-50 transition-opacity"
                                     >
                                       {openingEvidenceId === report.id
                                         ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -594,42 +731,58 @@ export default function ReportsPage() {
                             </div>
 
                             {/* Admin panel */}
-                            <div className="w-full xl:w-72 shrink-0">
-                              <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3">
-                                <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted2))]">
+                            <div className="w-full xl:w-[270px] shrink-0">
+                              <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3.5 h-full">
+                                <div className="mb-2.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--muted2))]">
                                   <ShieldAlert className="h-3 w-3" /> Admin Response
                                 </div>
-                                <p className="text-xs leading-5 text-[rgb(var(--muted))]">
-                                  {report.adminNotes || "No admin notes yet."}
-                                </p>
-
-                                <div className="mt-3 space-y-1 text-[11px] text-[rgb(var(--muted2))]">
+                                {report.adminNotes ? (
+                                  <p className="text-xs leading-[1.7] text-[rgb(var(--muted))]">{report.adminNotes}</p>
+                                ) : (
+                                  <div className="flex items-center gap-2 rounded-lg bg-[rgb(var(--card2))] border border-[rgb(var(--border))] px-2.5 py-2">
+                                    <Clock className="h-3 w-3 text-[rgb(var(--muted2))] shrink-0" />
+                                    <span className="text-[11px] text-[rgb(var(--muted2))]">Awaiting admin review</span>
+                                  </div>
+                                )}
+                                <div className="mt-3 space-y-1.5 text-[11px] text-[rgb(var(--muted2))]">
                                   {report.reviewedByAdmin && (
-                                    <div>Reviewed by: <span className="font-medium text-[rgb(var(--fg))]">{report.reviewedByAdmin.name || report.reviewedByAdmin.email}</span></div>
+                                    <div className="flex items-center gap-1.5">
+                                      <User className="h-3 w-3 shrink-0" />
+                                      <span>Reviewed by </span>
+                                      <span className="font-semibold text-[rgb(var(--fg))]">{report.reviewedByAdmin.name || report.reviewedByAdmin.email}</span>
+                                    </div>
                                   )}
                                   {report.resolvedAt && (
-                                    <div>Resolved: <span className="font-medium text-[rgb(var(--fg))]">{new Date(report.resolvedAt).toLocaleDateString()} ({daysAgoLabel(report.resolvedAt)})</span></div>
+                                    <div className="flex items-center gap-1.5">
+                                      <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" />
+                                      <span className="font-semibold text-[rgb(var(--fg))]">
+                                        {new Date(report.resolvedAt).toLocaleDateString()} · {daysAgoLabel(report.resolvedAt)}
+                                      </span>
+                                    </div>
                                   )}
-                                  <div>Updated: <span className="font-medium text-[rgb(var(--fg))]">{new Date(report.updatedAt).toLocaleString()}</span></div>
+                                  <div className="flex items-center gap-1.5 pt-0.5 border-t border-[rgb(var(--border))]">
+                                    <RefreshCcw className="h-3 w-3 shrink-0" />
+                                    Updated {new Date(report.updatedAt).toLocaleString()}
+                                  </div>
                                 </div>
                               </div>
                             </div>
                           </div>
-                        </div>
+                        </motion.div>
                       );
                     })}
                   </div>
 
                   {/* Pagination */}
                   {totalPages > 1 && (
-                    <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2">
                       <button
                         type="button"
                         onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                         disabled={currentPage === 1}
-                        className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1.5 text-[11px] font-semibold disabled:opacity-40"
+                        className="inline-flex items-center gap-1 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-[11px] font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))] disabled:opacity-40 transition-all"
                       >
-                        Prev
+                        <ChevronLeft className="h-3.5 w-3.5" /> Prev
                       </button>
                       {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                         <button
@@ -637,10 +790,10 @@ export default function ReportsPage() {
                           type="button"
                           onClick={() => setCurrentPage(page)}
                           className={[
-                            "rounded-full px-3 py-1.5 text-[11px] font-semibold border",
+                            "rounded-xl px-3.5 py-2 text-[11px] font-semibold border transition-all",
                             currentPage === page
-                              ? "border-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.08)] text-[rgb(var(--primary))]"
-                              : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
+                              ? "border-[rgb(var(--primary)/0.4)] bg-[rgb(var(--primary)/0.1)] text-[rgb(var(--primary))] shadow-sm"
+                              : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]",
                           ].join(" ")}
                         >
                           {page}
@@ -650,9 +803,9 @@ export default function ReportsPage() {
                         type="button"
                         onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                         disabled={currentPage === totalPages}
-                        className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1.5 text-[11px] font-semibold disabled:opacity-40"
+                        className="inline-flex items-center gap-1 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-[11px] font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))] disabled:opacity-40 transition-all"
                       >
-                        Next
+                        Next <ChevronRight className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   )}
@@ -665,64 +818,76 @@ export default function ReportsPage() {
           {tab === "submit" && (
             <motion.div
               key="submit"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-              className="space-y-5"
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -16 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="p-5 space-y-5"
             >
-              <div className="grid gap-5 lg:grid-cols-[1.4fr_0.6fr]">
+              <div className="grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
+
                 {/* Form */}
                 <div className="space-y-4">
-                  <div className="text-xs font-semibold text-[rgb(var(--fg))]">Submit a Report</div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-5 w-0.5 rounded-full bg-[rgb(var(--primary))]" />
+                    <span className="text-sm font-bold text-[rgb(var(--fg))]">Submit a Report</span>
+                  </div>
 
-                  {/* Context banner — shown when arriving from session/chat deep link */}
+                  {/* Context banner */}
                   {hasPreset && (
-                    <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-4 space-y-3">
-                      <div className="text-xs font-semibold text-red-950 dark:text-red-300">Report Context</div>
-                      <div className="grid gap-2 text-xs sm:grid-cols-2">
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-2xl border border-rose-500/30 bg-rose-500/8 p-4 space-y-3"
+                    >
+                      <div className="flex items-center gap-2 text-xs font-bold text-rose-700 dark:text-rose-300">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        Report Context
+                      </div>
+                      <div className="grid gap-2.5 text-xs sm:grid-cols-2">
                         {presetSource && (
-                          <div>
-                            <div className="text-red-800 dark:text-red-400/70">Source</div>
-                            <div className="font-medium text-red-950 dark:text-red-300">{presetSource}</div>
+                          <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2.5">
+                            <div className="text-[10px] uppercase tracking-wider font-semibold text-rose-500/70 dark:text-rose-400/70 mb-1">Source</div>
+                            <div className="font-semibold text-rose-700 dark:text-rose-300">{presetSource}</div>
                           </div>
                         )}
                         {presetReportedRole && (
-                          <div>
-                            <div className="text-red-800 dark:text-red-400/70">Reported Role</div>
-                            <div className="font-medium text-red-950 dark:text-red-300">{presetReportedRole}</div>
+                          <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2.5">
+                            <div className="text-[10px] uppercase tracking-wider font-semibold text-rose-500/70 dark:text-rose-400/70 mb-1">Reported Role</div>
+                            <div className="font-semibold text-rose-700 dark:text-rose-300">{presetReportedRole}</div>
                           </div>
                         )}
                         {presetSubject && (
-                          <div className="sm:col-span-2">
-                            <div className="text-red-800 dark:text-red-400/70">Subject</div>
-                            <div className="font-medium text-red-950 dark:text-red-300">{presetSubject}</div>
+                          <div className="sm:col-span-2 rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2.5">
+                            <div className="text-[10px] uppercase tracking-wider font-semibold text-rose-500/70 dark:text-rose-400/70 mb-1">Subject</div>
+                            <div className="font-semibold text-rose-700 dark:text-rose-300">{presetSubject}</div>
                           </div>
                         )}
                         {presetSessionId && (
-                          <div>
-                            <div className="text-red-800 dark:text-red-400/70">Session ID</div>
-                            <div className="font-mono text-[10px] text-red-950 dark:text-red-300">{presetSessionId}</div>
+                          <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2.5">
+                            <div className="text-[10px] uppercase tracking-wider font-semibold text-rose-500/70 dark:text-rose-400/70 mb-1">Session ID</div>
+                            <div className="font-mono text-[11px] text-rose-700 dark:text-rose-300 break-all">{presetSessionId}</div>
                           </div>
                         )}
                         {presetChatChannelId && (
-                          <div>
-                            <div className="text-red-800 dark:text-red-400/70">Chat Channel ID</div>
-                            <div className="font-mono text-[10px] text-red-950 dark:text-red-300">{presetChatChannelId}</div>
+                          <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2.5">
+                            <div className="text-[10px] uppercase tracking-wider font-semibold text-rose-500/70 dark:text-rose-400/70 mb-1">Chat Channel ID</div>
+                            <div className="font-mono text-[11px] text-rose-700 dark:text-rose-300 break-all">{presetChatChannelId}</div>
                           </div>
                         )}
                       </div>
-                    </div>
+                    </motion.div>
                   )}
 
                   <form onSubmit={onSubmit} className="space-y-4">
+
                     {/* Category */}
-                    <div>
-                      <label className="mb-1.5 block text-xs font-semibold text-[rgb(var(--muted))]">Category</label>
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-[rgb(var(--muted2))]">Category</label>
                       <select
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        className="w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-sm outline-none text-[rgb(var(--fg))]"
+                        className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-sm text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary)/0.5)] focus:ring-1 focus:ring-[rgb(var(--primary)/0.2)] transition-all appearance-none cursor-pointer"
                       >
                         {CATEGORY_OPTIONS.map((opt) => (
                           <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -731,117 +896,157 @@ export default function ReportsPage() {
                     </div>
 
                     {/* Subject */}
-                    <div>
-                      <label className="mb-1.5 block text-xs font-semibold text-[rgb(var(--muted))]">Subject</label>
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-[rgb(var(--muted2))]">Subject</label>
                       <input
                         value={subject}
                         onChange={(e) => setSubject(e.target.value)}
                         placeholder="Brief title of your issue"
                         required
-                        className="w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-sm outline-none text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))]"
+                        className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-sm text-[rgb(var(--fg))] outline-none placeholder:text-[rgb(var(--muted2))] focus:border-[rgb(var(--primary)/0.5)] focus:ring-1 focus:ring-[rgb(var(--primary)/0.2)] transition-all"
                       />
                     </div>
 
                     {/* Description */}
-                    <div>
-                      <label className="mb-1.5 block text-xs font-semibold text-[rgb(var(--muted))]">Description</label>
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-[rgb(var(--muted2))]">Description</label>
                       <textarea
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                         placeholder="Explain clearly what happened and include any important details."
                         rows={6}
                         required
-                        className="w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-sm outline-none resize-none text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))]"
+                        className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-sm text-[rgb(var(--fg))] outline-none resize-none placeholder:text-[rgb(var(--muted2))] focus:border-[rgb(var(--primary)/0.5)] focus:ring-1 focus:ring-[rgb(var(--primary)/0.2)] transition-all leading-relaxed"
                       />
                     </div>
 
-                    {/* Evidence */}
-                    <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
-                      <label className="mb-2 flex items-center gap-2 text-xs font-semibold text-[rgb(var(--muted))]">
-                        <Paperclip className="h-3.5 w-3.5" /> Evidence (optional)
+                    {/* Evidence upload */}
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-[rgb(var(--muted2))]">
+                        Evidence <span className="normal-case font-normal text-[rgb(var(--muted2))]">(optional)</span>
                       </label>
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
-                        onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
-                        className="block w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-2.5 text-xs outline-none file:mr-3 file:rounded-lg file:border-0 file:bg-[rgb(var(--card2))] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[rgb(var(--fg))]"
-                      />
-                      <p className="mt-2 text-[11px] text-[rgb(var(--muted2))]">PNG, JPG, WEBP, PDF — max 5 MB</p>
+                      <div className="rounded-xl border-2 border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 transition-colors hover:border-[rgb(var(--primary)/0.3)]">
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+                          onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
+                          className="block w-full text-xs text-[rgb(var(--muted))] file:mr-3 file:rounded-lg file:border file:border-[rgb(var(--border))] file:bg-[rgb(var(--card))] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[rgb(var(--fg))] file:cursor-pointer hover:file:bg-[rgb(var(--card2))] transition-all"
+                        />
+                        <p className="mt-2 text-[11px] text-[rgb(var(--muted2))]">PNG, JPG, WEBP, PDF — max 5 MB</p>
 
-                      {evidenceFile && (
-                        <div className="mt-3 flex items-center justify-between rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2.5">
-                          <div className="flex items-center gap-2 text-xs font-semibold text-[rgb(var(--fg))]">
-                            <FileText className="h-3.5 w-3.5 text-[rgb(var(--primary))]" />
-                            {evidenceFile.name}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-[rgb(var(--muted2))]">{(evidenceFile.size / 1024 / 1024).toFixed(2)} MB</span>
-                            <button
-                              type="button"
-                              onClick={() => setEvidenceFile(null)}
-                              className="text-[rgb(var(--muted2))] hover:text-[rgb(var(--fg))]"
+                        <AnimatePresence>
+                          {evidenceFile && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="mt-3 overflow-hidden"
                             >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                              <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2.5">
+                                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                                  {evidenceFile.name}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] text-emerald-600/70 dark:text-emerald-400/70">{(evidenceFile.size / 1024 / 1024).toFixed(2)} MB</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEvidenceFile(null)}
+                                    className="text-emerald-600/60 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     </div>
 
                     {/* Feedback */}
-                    {submitMsg && (
-                      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
-                        {submitMsg}
-                      </div>
-                    )}
-                    {submitErr && (
-                      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
-                        {submitErr}
-                      </div>
-                    )}
+                    <AnimatePresence>
+                      {submitMsg && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          className="flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300"
+                        >
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                          {submitMsg}
+                        </motion.div>
+                      )}
+                      {submitErr && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          className="flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/8 px-4 py-3 text-sm text-rose-600 dark:text-rose-300"
+                        >
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                          {submitErr}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
                     <button
                       type="submit"
                       disabled={submitLoading}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-[rgb(var(--primary))] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+                      className="group inline-flex items-center gap-2 rounded-xl bg-[rgb(var(--primary))] px-5 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90 active:scale-[0.98] disabled:opacity-60 transition-all duration-150"
                     >
-                      {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      {submitLoading
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Send className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />}
                       {submitLoading ? "Submitting…" : "Submit Report"}
                     </button>
                   </form>
                 </div>
 
                 {/* Sidebar */}
-                <div className="space-y-4">
-                  {/* Current category */}
+                <div className="space-y-3">
+
+                  {/* Selected category */}
                   <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
-                    <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-[rgb(var(--fg))]">
-                      <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
-                      Selected Category
+                    <div className="mb-2.5 flex items-center gap-2">
+                      <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-400/15">
+                        <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
+                      </div>
+                      <span className="text-xs font-bold text-[rgb(var(--fg))]">Selected Category</span>
                     </div>
-                    <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2.5 text-sm font-medium text-[rgb(var(--fg))]">
+                    <div className="rounded-xl border border-[rgb(var(--primary)/0.2)] bg-[rgb(var(--primary)/0.06)] px-3 py-2.5 text-sm font-semibold text-[rgb(var(--primary))]">
                       {getCategoryLabel(category)}
                     </div>
                   </div>
 
                   {/* Tips */}
                   <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
-                    <div className="mb-3 text-xs font-semibold text-[rgb(var(--fg))]">Tips for a good report</div>
-                    <ul className="space-y-2 text-xs text-[rgb(var(--muted))] leading-5">
-                      <li className="flex gap-2"><span className="text-[rgb(var(--primary))]">·</span> Be specific about what happened and when.</li>
-                      <li className="flex gap-2"><span className="text-[rgb(var(--primary))]">·</span> Include names or session IDs if relevant.</li>
-                      <li className="flex gap-2"><span className="text-[rgb(var(--primary))]">·</span> Upload screenshots or PDFs as evidence.</li>
-                      <li className="flex gap-2"><span className="text-[rgb(var(--primary))]">·</span> Use the subject as a short, clear summary.</li>
+                    <div className="mb-3 text-xs font-bold text-[rgb(var(--fg))]">Tips for a good report</div>
+                    <ul className="space-y-2.5">
+                      {[
+                        "Be specific about what happened and when.",
+                        "Include names or session IDs if relevant.",
+                        "Upload screenshots or PDFs as evidence.",
+                        "Use the subject as a short, clear summary.",
+                      ].map((tip, i) => (
+                        <li key={i} className="flex items-start gap-2.5 text-xs text-[rgb(var(--muted))] leading-[1.6]">
+                          <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-md bg-[rgb(var(--primary)/0.1)] text-[9px] font-bold text-[rgb(var(--primary))]">
+                            {i + 1}
+                          </span>
+                          {tip}
+                        </li>
+                      ))}
                     </ul>
                   </div>
 
-                  {/* Quick link to list */}
+                  {/* Quick link */}
                   <button
                     type="button"
                     onClick={() => setTab("list")}
-                    className="w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-xs font-semibold text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] transition-all"
+                    className="group w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-xs font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card))] transition-all flex items-center justify-between"
                   >
-                    View existing reports →
+                    <span>View existing reports</span>
+                    <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                   </button>
                 </div>
               </div>
