@@ -46,7 +46,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
                   {/* Right side */}
                   <div className="flex items-center gap-1.5">
-                    <ThemeToggle />
 
                     {/* Nav links */}
                     <div className="hidden items-center gap-1 md:flex">
@@ -103,6 +102,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                         </span>
                       </Link>
                     </div>
+
+                    {/* Theme toggle — between nav and profile */}
+                    <ThemeToggle />
 
                     {/* Auth actions */}
                     <NavbarActions />
