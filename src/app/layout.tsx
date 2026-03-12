@@ -21,92 +21,110 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <UserPresenceBeacon />
           <div className="relative flex min-h-screen flex-col">
+
             {/* GLOBAL HEADER */}
-            <header className="sticky top-0 z-50 border-b border-[rgb(var(--border))] bg-[rgb(var(--bg) / 0.75)] backdrop-blur">
-              <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-                {/* Brand */}
-                <Link href="/" className="flex items-center">
-                <div className="relative h-9 w-[155px] flex-shrink-0">
-                  <Image
-                  src="/logo.png"
-                  alt="TutorLink Logo"
-                  width={130}
-                  height={32}
-                  className="h-10 w-auto object-contain flex-shrink-0"
-                  priority
-                />
-                </div>
-              </Link>
+            <header className="sticky top-0 z-50">
+              {/* Thin animated gradient accent line at very top */}
+              <div className="h-[2.5px] w-full bg-gradient-to-r from-[rgb(var(--primary))] via-[rgb(var(--primary2,var(--primary)))] to-[rgb(var(--primary))] opacity-80" />
 
-                {/* Right side */}
-                <div className="flex items-center gap-2">
-                  {/* Theme toggle FIRST (moved to "Home" position area) */}
-                  <ThemeToggle />
+              <div className="border-b border-[rgb(var(--border))]/60 bg-[rgb(var(--bg))]/50 backdrop-blur-xl">
+                <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
 
-                  {/* Make Home & Find Tutor look like Dashboard (same pill style) */}
-                  <div className="hidden items-center gap-2 md:flex">
-                    <Link
-                      href="/"
-                      className="rounded-xl px-3 py-2 text-sm font-medium hover:bg-[rgb(var(--card)/0.9)]"
-                    >
-                      Home
-                    </Link>
-
-                    <Link
-                      href="/find-tutor"
-                      className="rounded-xl px-3 py-2 text-sm font-medium hover:bg-[rgb(var(--card)/0.9)]"
-                    >
-                      Find Tutor
-                    </Link>
-
-                    {/* NEW: AI Hub */}
-                    <Link
-                      href="/study"
-                      className="rounded-xl px-3 py-2 text-sm font-medium hover:bg-[rgb(var(--card)/0.9)]"
-                      title="AI-powered study tools"
-                    >
-                      AI Hub
-                    </Link>
-
-                    {/*  NEW: SOS Help in header */}
-                      <Link
-                    href="/sos"
-                    className="
-                      rounded-xl px-3 py-2 text-sm font-semibold text-white
-                      bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary2))]
-                      shadow-[0_8px_20px_rgba(0,0,0,0.25)]
-                      hover:opacity-95
-                      transition
-                    "
-                    title="Request urgent academic help"
-                  >
-                    SOS Help
+                  {/* Brand */}
+                  <Link href="/" className="flex items-center group">
+                    <div className="relative h-9 w-[155px] flex-shrink-0 transition-opacity group-hover:opacity-85">
+                      <Image
+                        src="/logo.png"
+                        alt="TutorLink Logo"
+                        width={130}
+                        height={32}
+                        className="h-10 w-auto object-contain flex-shrink-0"
+                        priority
+                      />
+                    </div>
                   </Link>
-                  </div>
 
-                  {/* Auth actions (will show Dashboard + Logout OR Login + Join) */}
-                  <NavbarActions />
-                </div>
-              </nav>
+                  {/* Right side */}
+                  <div className="flex items-center gap-1.5">
+                    <ThemeToggle />
+
+                    {/* Nav links */}
+                    <div className="hidden items-center gap-1 md:flex">
+                      <Link
+                        href="/"
+                        className="nav-link relative rounded-xl px-3 py-2 text-sm font-medium text-[rgb(var(--muted2))] transition-colors hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card))]"
+                      >
+                        Home
+                      </Link>
+
+                      <Link
+                        href="/find-tutor"
+                        className="nav-link relative rounded-xl px-3 py-2 text-sm font-medium text-[rgb(var(--muted2))] transition-colors hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card))]"
+                      >
+                        Find Tutor
+                      </Link>
+
+                      {/* AI Hub — subtle shimmer badge */}
+                      <Link
+                        href="/study"
+                        className="nav-link group/ai relative rounded-xl px-3 py-2 text-sm font-medium text-[rgb(var(--muted2))] transition-colors hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card))]"
+                        title="AI-powered study tools"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          AI Hub
+                          <span className="inline-flex items-center rounded-full bg-[rgb(var(--primary))]/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--primary))] transition-colors group-hover/ai:bg-[rgb(var(--primary))]/25">
+                            New
+                          </span>
+                        </span>
+                      </Link>
+
+                      {/* SOS Help — vivid gradient pill */}
+                      <Link
+                        href="/sos"
+                        className="
+                          relative ml-1 overflow-hidden rounded-xl px-4 py-2
+                          text-sm font-semibold text-white
+                          bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary2,var(--primary)))]
+                          shadow-[0_4px_14px_rgba(0,0,0,0.18)]
+                          transition-all duration-200
+                          hover:shadow-[0_6px_20px_rgba(0,0,0,0.25)]
+                          hover:scale-[1.03]
+                          active:scale-[0.98]
+                        "
+                        title="Request urgent academic help"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          {/* Pulsing dot */}
+                          <span className="relative flex h-2 w-2">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-60" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+                          </span>
+                          SOS Help
+                        </span>
+                      </Link>
+                    </div>
+
+                    {/* Auth actions */}
+                    <NavbarActions />
+                  </div>
+                </nav>
+              </div>
             </header>
 
             {/* PAGE CONTENT */}
             <main className="flex-1">{children}</main>
 
             {/* GLOBAL FOOTER */}
-            <footer className="border-t border-[rgb(var(--border))] bg-[rgb(var(--bg) / 0.6)]">
+            <footer className="border-t border-[rgb(var(--border))] bg-[rgb(var(--bg))]/60">
               <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-xs text-[rgb(var(--muted2))] md:flex-row md:items-center md:justify-between">
-                <div>© {new Date().getFullYear()} TutorLink • Built for USM</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.7)]" />
+                  © {new Date().getFullYear()} TutorLink • Built for USM
+                </div>
                 <div className="flex gap-4">
-                  <Link className="hover:text-[rgb(var(--fg))]" href="/privacy">
-                    Privacy
-                  </Link>
-                  <Link className="hover:text-[rgb(var(--fg))]" href="/terms">
-                    Terms
-                  </Link>
-                  <Link className="hover:text-[rgb(var(--fg))]" href="/contact">
-                    Contact
-                  </Link>
+                  <Link className="hover:text-[rgb(var(--fg))] transition-colors" href="/privacy">Privacy</Link>
+                  <Link className="hover:text-[rgb(var(--fg))] transition-colors" href="/terms">Terms</Link>
+                  <Link className="hover:text-[rgb(var(--fg))] transition-colors" href="/contact">Contact</Link>
                 </div>
               </div>
             </footer>

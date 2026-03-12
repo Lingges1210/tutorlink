@@ -111,7 +111,7 @@ export default async function StudentLayout({
             type: "link",
             href: "/dashboard/student/report",
             label: "My Reports",
-            icon: "shieldoff",
+            icon: "shield",
           },
           !isTutor
             ? {
@@ -213,7 +213,7 @@ export default async function StudentLayout({
           {
             type: "disabled",
             label: "My Reports (locked)",
-            icon: "shieldoff",
+            icon: "shield",
           },
         ] as SidebarItem[])),
 
