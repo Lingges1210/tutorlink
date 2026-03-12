@@ -231,10 +231,10 @@ export default function HomePage() {
         const a = Math.max(0.05, d.alpha + tw);
         ctx.beginPath();
         ctx.arc(d.x * canvas.width, d.y * canvas.height, d.r, 0, Math.PI * 2);
-        // FIXED: light mode uses deep navy at much higher opacity for visibility
+        // light mode: purple dots; dark mode: white/blue dots
         const dotColor = isDark()
           ? `rgba(200,210,255,${a})`
-          : `rgba(15,20,100,${a * 3.2})`;
+          : `rgba(120,40,220,${a * 3.2})`;
         ctx.fillStyle = dotColor;
         ctx.fill();
       }
@@ -277,10 +277,10 @@ export default function HomePage() {
           ctx.beginPath();
           ctx.moveTo(x1, y1);
           ctx.lineTo(x2, y2);
-          // FIXED: light mode tail is deep indigo at 4.5× opacity for strong visibility
+          // light mode: purple tail; dark mode: white/blue tail
           const tailColor = isDark()
             ? `rgba(230,235,255,${alpha * t * t})`
-            : `rgba(10,15,120,${alpha * t * t * 4.5})`;
+            : `rgba(120,40,220,${alpha * t * t * 4.5})`;
           ctx.strokeStyle = tailColor;
           ctx.lineWidth = s.size * t;
           ctx.lineCap = "round";
@@ -295,10 +295,10 @@ export default function HomePage() {
           grad.addColorStop(0.3, `rgba(200,210,255,${alpha * 0.7})`);
           grad.addColorStop(1,   `rgba(180,190,255,0)`);
         } else {
-          // FIXED: deep navy glow at boosted opacity for punchy light-mode appearance
-          grad.addColorStop(0,   `rgba(5,10,140,${alpha * 1.8})`);
-          grad.addColorStop(0.3, `rgba(20,30,180,${alpha * 1.4})`);
-          grad.addColorStop(1,   `rgba(40,60,200,0)`);
+          // light mode: vivid purple glow
+          grad.addColorStop(0,   `rgba(140,40,255,${alpha * 1.8})`);
+          grad.addColorStop(0.3, `rgba(120,40,220,${alpha * 1.4})`);
+          grad.addColorStop(1,   `rgba(100,30,200,0)`);
         }
         ctx.beginPath();
         ctx.arc(gx, gy, s.size * 3.5, 0, Math.PI * 2);
@@ -308,10 +308,10 @@ export default function HomePage() {
         // solid bright core
         ctx.beginPath();
         ctx.arc(gx, gy, s.size * 0.7, 0, Math.PI * 2);
-        // FIXED: light mode core is crisp dark navy at 2× opacity
+        // light mode: solid purple core
         ctx.fillStyle = isDark()
           ? `rgba(255,255,255,${alpha})`
-          : `rgba(5,10,120,${alpha * 2})`;
+          : `rgba(120,40,220,${alpha * 2})`;
         ctx.fill();
       }
 
@@ -643,7 +643,7 @@ export default function HomePage() {
           pointer-events:none; z-index:0;
           opacity:0.85;
         }
-        /* FIXED: light mode gets contrast+brightness filter to punch up all stars */
+        /* light mode: boost contrast/brightness so purple stars pop */
         @media (prefers-color-scheme: light) {
           .stars-canvas { opacity:1; filter: contrast(1.4) brightness(0.65); }
         }

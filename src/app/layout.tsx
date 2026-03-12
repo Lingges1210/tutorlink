@@ -49,6 +49,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
                     {/* Nav links */}
                     <div className="hidden items-center gap-1 md:flex">
+
+                      {/* Theme toggle — between nav and profile */}
+                    <ThemeToggle />
+
+                    
                       <Link
                         href="/"
                         className="nav-link relative rounded-xl px-3 py-2 text-sm font-medium text-[rgb(var(--muted2))] transition-colors hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card))]"
@@ -103,8 +108,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                       </Link>
                     </div>
 
-                    {/* Theme toggle — between nav and profile */}
-                    <ThemeToggle />
+                    
 
                     {/* Auth actions */}
                     <NavbarActions />
