@@ -8,6 +8,9 @@ import {
   LayoutDashboard,
   Star,
   Timer,
+  Sparkles,
+  GraduationCap,
+  User,
 } from "lucide-react";
 
 type RatingSummary = {
@@ -23,7 +26,6 @@ type SessionsApi = {
     endsAt: string | null;
     durationMin: number | null;
     status: string | null;
-
     subject?: { code?: string | null; title?: string | null } | null;
     student?: { name?: string | null; email?: string | null } | null;
   }>;
@@ -32,7 +34,7 @@ type SessionsApi = {
 type AvailabilityApi = {
   success: boolean;
   availability: string | null;
-  status: string | null; // tutorApplication status (APPROVED, etc)
+  status: string | null;
 };
 
 type BoxState<T> =
@@ -57,23 +59,15 @@ function fmtLocal(iso: string) {
   }
 }
 
-/** ✅ NEW: turn stored availability JSON into a short, human summary */
 function summarizeAvailability(raw: string) {
   const dayOrder = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
   const dayLabel: Record<string, string> = {
-    MON: "Mon",
-    TUE: "Tue",
-    WED: "Wed",
-    THU: "Thu",
-    FRI: "Fri",
-    SAT: "Sat",
-    SUN: "Sun",
+    MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu",
+    FRI: "Fri", SAT: "Sat", SUN: "Sun",
   };
 
   try {
     const parsed = JSON.parse(raw);
-
-    // supports both: [{ day, off, slots }] OR { availability: [...] }
     const rows: any[] = Array.isArray(parsed)
       ? parsed
       : Array.isArray(parsed?.availability)
@@ -81,14 +75,8 @@ function summarizeAvailability(raw: string) {
       : [];
 
     const active = rows.filter((r) => r && r.off === false);
-    if (!active.length) {
-      return {
-        headline: "No active days",
-        detail: "You marked all days as off.",
-      };
-    }
+    if (!active.length) return { headline: "No active days", detail: "You marked all days as off." };
 
-    // sort days nicely
     active.sort(
       (a, b) =>
         dayOrder.indexOf((a.day ?? "").toUpperCase()) -
@@ -99,14 +87,12 @@ function summarizeAvailability(raw: string) {
       .map((r) => dayLabel[(r.day ?? "").toUpperCase()] ?? r.day)
       .filter(Boolean);
 
-    // collect time ranges
     const ranges: string[] = [];
     let slotsCount = 0;
 
     for (const r of active) {
       const slots: any[] = Array.isArray(r.slots) ? r.slots : [];
       slotsCount += slots.length;
-
       for (const s of slots) {
         const start = typeof s?.start === "string" ? s.start : null;
         const end = typeof s?.end === "string" ? s.end : null;
@@ -114,7 +100,6 @@ function summarizeAvailability(raw: string) {
       }
     }
 
-    // unique, keep it short
     const uniqRanges = Array.from(new Set(ranges));
     const rangesPreview =
       uniqRanges.length > 2
@@ -125,15 +110,10 @@ function summarizeAvailability(raw: string) {
       days.length > 4 ? `${days.slice(0, 4).join(", ")}…` : days.join(", ");
 
     return {
-      headline: `${daysPreview}`,
-      detail: rangesPreview
-        ? rangesPreview
-        : `${active.length} day${active.length === 1 ? "" : "s"} set • ${slotsCount} slot${
-            slotsCount === 1 ? "" : "s"
-          }`,
+      headline: daysPreview,
+      detail: rangesPreview || `${active.length} day${active.length === 1 ? "" : "s"} set · ${slotsCount} slot${slotsCount === 1 ? "" : "s"}`,
     };
   } catch {
-    // fallback if not JSON
     const clean = raw.replace(/\s+/g, " ").trim();
     return {
       headline: "Availability set",
@@ -142,371 +122,334 @@ function summarizeAvailability(raw: string) {
   }
 }
 
+/* ── Pulse dot for "live" feel ── */
+function LiveDot() {
+  return (
+    <span className="relative inline-flex h-2 w-2">
+      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[rgb(var(--primary)/0.5)]" />
+      <span className="relative inline-flex h-2 w-2 rounded-full bg-[rgb(var(--primary))]" />
+    </span>
+  );
+}
+
+/* ── Skeleton ── */
+function SkeletonLines() {
+  return (
+    <div className="space-y-2.5">
+      <div className="h-5 w-32 animate-pulse rounded-lg bg-[rgb(var(--border)/0.8)]" />
+      <div className="h-3 w-44 animate-pulse rounded-lg bg-[rgb(var(--border)/0.5)]" />
+    </div>
+  );
+}
+
+/* ── Glance Card ── */
 function GlanceCard({
   href,
   title,
   icon,
-  tag = "Today",
+  accent,
+  tag,
   children,
 }: {
   href: string;
   title: string;
   icon: React.ReactNode;
-  tag?: string;
+  accent: string; // tailwind bg class for icon ring
+  tag: string;
   children: React.ReactNode;
 }) {
   return (
     <Link
       href={href}
-      className={[
-        "group relative overflow-hidden rounded-3xl border border-[rgb(var(--border))]",
-        "bg-[rgb(var(--card)/0.7)] p-5 shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]",
-        "transition hover:-translate-y-0.5 hover:bg-[rgb(var(--card)/0.85)]",
-        "focus:outline-none focus:ring-2 focus:ring-[rgb(var(--primary)/0.35)]",
-      ].join(" ")}
+      className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.6)] p-5 shadow-[0_4px_24px_rgb(var(--shadow)/0.07)] backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgb(var(--shadow)/0.14)] hover:bg-[rgb(var(--card)/0.85)] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--primary)/0.4)]"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))]">
-              {icon}
-            </span>
-            <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-              {title}
-            </div>
-          </div>
-
-          <div className="mt-3">{children}</div>
-
-          <div className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-[rgb(var(--primary))]">
-            Open{" "}
-            <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-          </div>
+      {/* Top row */}
+      <div className="flex items-start justify-between gap-2 mb-4">
+        <div className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[rgb(var(--border))] ${accent} transition-transform duration-300 group-hover:scale-110`}>
+          {icon}
         </div>
-
-        <div className="mt-0.5 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-1 text-[10px] font-semibold text-[rgb(var(--muted2))]">
+        <span className="mt-0.5 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[rgb(var(--muted2))]">
           {tag}
-        </div>
+        </span>
       </div>
 
-      <div className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full bg-[rgb(var(--primary)/0.10)] blur-2xl opacity-0 transition group-hover:opacity-100" />
+      {/* Title */}
+      <div className="text-xs font-semibold uppercase tracking-widest text-[rgb(var(--muted2))] mb-2">
+        {title}
+      </div>
+
+      {/* Content */}
+      <div className="min-h-[48px]">{children}</div>
+
+      {/* Footer */}
+      <div className="mt-4 flex items-center gap-1.5 text-xs font-semibold text-[rgb(var(--primary))]">
+        View details
+        <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-1" />
+      </div>
+
+      {/* Hover glow */}
+      <div className="pointer-events-none absolute -bottom-8 -right-8 h-32 w-32 rounded-full bg-[rgb(var(--primary)/0.12)] blur-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
     </Link>
   );
 }
 
-function SkeletonLines() {
+/* ── Stars visual ── */
+function StarBar({ avg, max = 5 }: { avg: number; max?: number }) {
+  const pct = Math.min(100, (avg / max) * 100);
   return (
-    <div className="space-y-2">
-      <div className="h-6 w-24 animate-pulse rounded bg-[rgb(var(--border))]" />
-      <div className="h-3 w-40 animate-pulse rounded bg-[rgb(var(--border))]" />
+    <div className="flex items-center gap-2">
+      <div className="relative h-1.5 w-20 overflow-hidden rounded-full bg-[rgb(var(--border))]">
+        <div
+          className="absolute inset-y-0 left-0 rounded-full bg-[rgb(var(--primary))]"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-xs font-bold text-[rgb(var(--fg))]">
+        {avg.toFixed(1)}
+      </span>
     </div>
   );
 }
 
+/* ══════════════════════════════════════════════════
+   PAGE
+══════════════════════════════════════════════════ */
 export default function TutorDashboardPage() {
-  // prevent double fetch spam in dev strict mode
   const ran = useRef({ rating: false, sessions: false, availability: false });
 
-  const [summary, setSummary] = useState<{ avg: number; count: number } | null>(
-    null
-  );
+  const [summary, setSummary] = useState<{ avg: number; count: number } | null>(null);
+  const [sessions, setSessions] = useState<BoxState<SessionsApi>>({ status: "loading" });
+  const [availability, setAvailability] = useState<BoxState<AvailabilityApi>>({ status: "loading" });
 
-  const [sessions, setSessions] = useState<BoxState<SessionsApi>>({
-    status: "loading",
-  });
-
-  const [availability, setAvailability] = useState<BoxState<AvailabilityApi>>({
-    status: "loading",
-  });
-
-  // ratings
   useEffect(() => {
     if (ran.current.rating) return;
     ran.current.rating = true;
-
     let alive = true;
-
-    const run = async () => {
+    (async () => {
       try {
-        const res = await fetch("/api/tutor/ratings/summary", {
-          cache: "no-store",
-        });
+        const res = await fetch("/api/tutor/ratings/summary", { cache: "no-store" });
         const data: RatingSummary = await res.json().catch(() => ({ ok: false }));
         if (!alive) return;
-
-        if (
-          res.ok &&
-          data.ok &&
-          typeof data.avg === "number" &&
-          typeof data.count === "number" &&
-          data.count > 0
-        ) {
-          setSummary({
-            avg: Math.round(data.avg * 10) / 10,
-            count: data.count,
-          });
-        } else {
-          setSummary(null);
-        }
-      } catch {
-        if (!alive) return;
-        setSummary(null);
-      }
-    };
-
-    run();
-    return () => {
-      alive = false;
-    };
+        if (res.ok && data.ok && typeof data.avg === "number" && typeof data.count === "number" && data.count > 0) {
+          setSummary({ avg: Math.round(data.avg * 10) / 10, count: data.count });
+        } else setSummary(null);
+      } catch { if (!alive) return; setSummary(null); }
+    })();
+    return () => { alive = false; };
   }, []);
 
-  // sessions list (we will pick "next")
   useEffect(() => {
     if (ran.current.sessions) return;
     ran.current.sessions = true;
-
     let alive = true;
-
-    const run = async () => {
+    (async () => {
       try {
         const res = await fetch("/api/tutor/sessions", { cache: "no-store" });
         const data: SessionsApi = await res.json().catch(() => ({ items: [] }));
         if (!alive) return;
-
-        if (res.ok && data && Array.isArray(data.items)) {
-          setSessions(
-            data.items.length ? { status: "ready", data } : { status: "empty" }
-          );
-        } else {
-          setSessions({ status: "empty" });
-        }
-      } catch {
-        if (!alive) return;
-        setSessions({ status: "error" });
-      }
-    };
-
-    run();
-    return () => {
-      alive = false;
-    };
+        if (res.ok && Array.isArray(data?.items)) {
+          setSessions(data.items.length ? { status: "ready", data } : { status: "empty" });
+        } else setSessions({ status: "empty" });
+      } catch { if (!alive) return; setSessions({ status: "error" }); }
+    })();
+    return () => { alive = false; };
   }, []);
 
-  // availability
   useEffect(() => {
     if (ran.current.availability) return;
     ran.current.availability = true;
-
     let alive = true;
-
-    const run = async () => {
+    (async () => {
       try {
         const res = await fetch("/api/tutor/availability", { cache: "no-store" });
-        const data: AvailabilityApi = await res.json().catch(() => ({
-          success: false,
-          availability: null,
-          status: null,
-        }));
+        const data: AvailabilityApi = await res.json().catch(() => ({ success: false, availability: null, status: null }));
         if (!alive) return;
-
-        if (res.ok && data && typeof data.success === "boolean") {
-          // treat as "ready" even if availability is null (we handle UI)
+        if (res.ok && typeof data?.success === "boolean") {
           setAvailability({ status: "ready", data });
-        } else {
-          setAvailability({ status: "empty" });
-        }
-      } catch {
-        if (!alive) return;
-        setAvailability({ status: "error" });
-      }
-    };
-
-    run();
-    return () => {
-      alive = false;
-    };
+        } else setAvailability({ status: "empty" });
+      } catch { if (!alive) return; setAvailability({ status: "error" }); }
+    })();
+    return () => { alive = false; };
   }, []);
 
-  const ratingPill = useMemo(() => {
-    if (!summary) return null;
-
-    return (
-      <div className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1.5 shadow-[0_10px_30px_rgb(var(--shadow)/0.08)]">
-        <Star className="h-4 w-4 text-[rgb(var(--muted2))]" />
-        <div className="text-xs font-semibold text-[rgb(var(--fg))]">
-          {summary.avg.toFixed(1)}
-          <span className="ml-1 text-[rgb(var(--muted2))]">
-            ({summary.count} rating{summary.count === 1 ? "" : "s"})
-          </span>
-        </div>
-      </div>
-    );
-  }, [summary]);
-
-  // compute next session from /api/tutor/sessions
   const nextSession = useMemo(() => {
     if (sessions.status !== "ready") return null;
     const now = Date.now();
-
-    // find first scheduledAt >= now
-    const next = sessions.data.items.find((s) => {
+    return sessions.data.items.find((s) => {
       const t = Date.parse(s.scheduledAt);
       return Number.isFinite(t) && t >= now;
-    });
-
-    return next ?? null;
+    }) ?? null;
   }, [sessions]);
 
   return (
-    <div className="space-y-6">
-      <header className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card) / 0.7)] p-6 shadow-[0_20px_60px_rgb(var(--shadow)/0.10)]">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-[260px]">
-            <div className="inline-flex items-center gap-2">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))]">
-                <LayoutDashboard className="h-5 w-5 text-[rgb(var(--fg))]" />
-              </span>
+    <div className="space-y-5">
+
+      {/* ── HERO HEADER ── */}
+      <header className="relative overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-6 shadow-[0_8px_32px_rgb(var(--shadow)/0.10)] backdrop-blur-sm">
+
+        {/* Decorative blobs */}
+        <div className="pointer-events-none absolute -top-16 -right-16 h-48 w-48 rounded-full bg-[rgb(var(--primary)/0.08)] blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-12 left-8 h-36 w-36 rounded-full bg-[rgb(var(--primary)/0.05)] blur-2xl" />
+
+        <div className="relative flex flex-wrap items-start justify-between gap-5">
+          {/* Left */}
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] shadow-inner">
+                <GraduationCap className="h-5 w-5 text-[rgb(var(--primary))]" />
+              </div>
               <div>
-                <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">
-                  Tutor Dashboard
-                </h1>
-                <p className="mt-0.5 text-sm text-[rgb(var(--muted))]">
-                  Manage tutoring requests, sessions, and your availability.
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-bold tracking-tight text-[rgb(var(--fg))]">
+                    Tutor Dashboard
+                  </h1>
+                  <LiveDot />
+                </div>
+                <p className="text-xs text-[rgb(var(--muted))]">
+                  Your sessions, schedule & ratings — all in one place.
                 </p>
               </div>
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <div className="inline-flex overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))]">
-                <Link
-                  href="/dashboard/student"
-                  className="px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]"
-                >
-                  Student
-                </Link>
-                <Link
-                  href="/dashboard/tutor"
-                  className="border-l border-[rgb(var(--border))] bg-[rgb(var(--primary)/0.14)] px-3 py-2 text-xs font-semibold text-[rgb(var(--primary))]"
-                >
-                  Tutor
-                </Link>
-              </div>
+            {/* Mode switcher */}
+            <div className="mt-4 inline-flex overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-xs font-semibold">
+              <Link
+                href="/dashboard/student"
+                className="flex items-center gap-1.5 px-3.5 py-2 text-[rgb(var(--muted2))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.5)] transition-colors"
+              >
+                <User className="h-3.5 w-3.5" />
+                Student
+              </Link>
+              <Link
+                href="/dashboard/tutor"
+                className="flex items-center gap-1.5 border-l border-[rgb(var(--border))] bg-[rgb(var(--primary)/0.12)] px-3.5 py-2 text-[rgb(var(--primary))]"
+              >
+                <LayoutDashboard className="h-3.5 w-3.5" />
+                Tutor
+              </Link>
             </div>
           </div>
 
-          {ratingPill}
+          {/* Rating badge */}
+          {summary ? (
+            <div className="flex flex-col items-end gap-1.5 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 shadow-[0_4px_16px_rgb(var(--shadow)/0.07)]">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-[rgb(var(--muted2))] uppercase tracking-wider">
+                <Star className="h-3.5 w-3.5 text-[rgb(var(--primary))]" />
+                Your rating
+              </div>
+              <StarBar avg={summary.avg} />
+              <div className="text-[10px] text-[rgb(var(--muted))]">
+                {summary.count} review{summary.count === 1 ? "" : "s"}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1.5 text-[10px] font-semibold text-[rgb(var(--muted))]">
+              <Sparkles className="h-3 w-3" />
+              No ratings yet
+            </div>
+          )}
         </div>
       </header>
 
-      {/* Today at a glance */}
-      <section className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card) / 0.7)] p-6 shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-[rgb(var(--fg))]">
-            Today at a Glance
-          </h2>
+      {/* ── GLANCE SECTION ── */}
+      <section className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.5)] p-5 shadow-[0_4px_20px_rgb(var(--shadow)/0.06)] backdrop-blur-sm">
 
-          
+        <div className="flex items-center gap-2 mb-4">
+          <div className="h-px flex-1 bg-[rgb(var(--border))]" />
+          <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[rgb(var(--muted2))]">
+            Today at a Glance
+          </span>
+          <div className="h-px flex-1 bg-[rgb(var(--border))]" />
         </div>
 
-        {/* ✅ changed md:grid-cols-3 -> md:grid-cols-2 because we removed one card */}
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          {/* ✅ REMOVED: Pending requests card */}
+        <div className="grid gap-4 md:grid-cols-2">
 
-          {/* Next session from /api/tutor/sessions */}
+          {/* ── Next Session ── */}
           <GlanceCard
             href="/dashboard/tutor/sessions"
             title="Next session"
             icon={<CheckCircle2 className="h-5 w-5 text-[rgb(var(--primary))]" />}
+            accent="bg-[rgb(var(--primary)/0.10)]"
             tag="Upcoming"
           >
             {sessions.status === "loading" ? (
               <SkeletonLines />
             ) : sessions.status === "error" ? (
-              <div className="text-xs text-[rgb(var(--muted))]">
-                Sessions unavailable right now.
-              </div>
+              <p className="text-xs text-[rgb(var(--muted))]">Sessions unavailable right now.</p>
             ) : !nextSession ? (
-              <div className="text-xs text-[rgb(var(--muted))]">
-                No upcoming sessions yet.
+              <div className="space-y-0.5">
+                <p className="text-sm font-semibold text-[rgb(var(--fg))]">All clear!</p>
+                <p className="text-xs text-[rgb(var(--muted))]">No upcoming sessions yet.</p>
               </div>
             ) : (
               <div className="space-y-1">
-                <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                <p className="text-sm font-semibold text-[rgb(var(--fg))]">
                   {fmtLocal(nextSession.scheduledAt)}
-                </div>
-                <div className="text-xs text-[rgb(var(--muted))]">
+                </p>
+                <div className="flex items-center gap-1.5 text-xs text-[rgb(var(--muted))]">
+                  <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[rgb(var(--primary)/0.12)] text-[rgb(var(--primary))]">
+                    <User className="h-2.5 w-2.5" />
+                  </span>
                   {nextSession.student?.name ?? "Student"}
-                  <span className="mx-1">•</span>
-                  {nextSession.subject?.code ??
-                    nextSession.subject?.title ??
-                    "Subject"}
+                  <span className="text-[rgb(var(--border))]">·</span>
+                  {nextSession.subject?.code ?? nextSession.subject?.title ?? "Subject"}
                 </div>
               </div>
             )}
           </GlanceCard>
 
-          {/* Availability from /api/tutor/availability */}
+          {/* ── Availability ── */}
           <GlanceCard
             href="/dashboard/tutor/availability"
             title="Availability"
             icon={<Timer className="h-5 w-5 text-[rgb(var(--primary))]" />}
+            accent="bg-[rgb(var(--primary)/0.10)]"
             tag="Schedule"
           >
             {availability.status === "loading" ? (
               <SkeletonLines />
             ) : availability.status === "error" ? (
-              <div className="text-xs text-[rgb(var(--muted))]">
-                Availability unavailable right now.
-              </div>
+              <p className="text-xs text-[rgb(var(--muted))]">Availability unavailable right now.</p>
             ) : availability.status !== "ready" ? (
-              <div className="text-xs text-[rgb(var(--muted))]">Nothing yet.</div>
-            ) : (
-              (() => {
-                const raw = availability.data.availability?.trim() ?? "";
-                const isApproved = availability.data.status === "APPROVED";
+              <p className="text-xs text-[rgb(var(--muted))]">Nothing yet.</p>
+            ) : (() => {
+              const raw = availability.data.availability?.trim() ?? "";
+              const isApproved = availability.data.status === "APPROVED";
 
-                if (!isApproved) {
-                  return (
-                    <div className="space-y-1">
-                      <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                        Not approved yet
-                      </div>
-                      <div className="text-xs text-[rgb(var(--muted))]">
-                        Availability is available after tutor approval.
-                      </div>
-                    </div>
-                  );
-                }
-
-                if (!raw) {
-                  return (
-                    <div className="space-y-1">
-                      <div className="text-xs font-semibold text-[rgb(var(--muted2))]">
-                        No availability set
-                      </div>
-                      <div className="text-xs text-[rgb(var(--muted))]">
-                        Add your times so students can book you.
-                      </div>
-                    </div>
-                  );
-                }
-
-                // ✅ NEW: readable summary instead of raw JSON preview
-                const s = summarizeAvailability(raw);
-
+              if (!isApproved) {
                 return (
-                  <div className="space-y-1">
-                    <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                      {s.headline}
-                    </div>
-                    <div className="text-xs text-[rgb(var(--muted))]">
-                      {s.detail}
-                    </div>
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-semibold text-[rgb(var(--muted2))]">
+                      Pending approval
+                    </p>
+                    <p className="text-xs text-[rgb(var(--muted))]">
+                      Available once your application is approved.
+                    </p>
                   </div>
                 );
-              })()
-            )}
+              }
+
+              if (!raw) {
+                return (
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-semibold text-[rgb(var(--fg))]">Not set yet</p>
+                    <p className="text-xs text-[rgb(var(--muted))]">
+                      Add your times so students can book you.
+                    </p>
+                  </div>
+                );
+              }
+
+              const s = summarizeAvailability(raw);
+              return (
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-[rgb(var(--fg))]">{s.headline}</p>
+                  <p className="text-xs text-[rgb(var(--muted))]">{s.detail}</p>
+                </div>
+              );
+            })()}
           </GlanceCard>
+
         </div>
       </section>
     </div>
