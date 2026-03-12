@@ -1,8 +1,23 @@
-// src/app/dashboard/student/sessions/myBookingsClient.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Calendar, CheckCircle, Star, Video } from "lucide-react";
+import { useEffect, useMemo, useState, memo, useCallback } from "react";
+import {
+  AlertTriangle,
+  Calendar,
+  CheckCircle,
+  Star,
+  Video,
+  Clock,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  MessageCircle,
+  XCircle,
+  RefreshCw,
+  Sparkles,
+  User,
+  Filter,
+} from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -13,14 +28,10 @@ type Row = {
   durationMin: number;
   status: "PENDING" | "ACCEPTED" | "COMPLETED" | "CANCELLED" | string;
   cancelReason: string | null;
-
   assigned: boolean;
-
-  // proposal fields (return from /api/sessions/my)
   proposedAt?: string | null;
   proposedNote?: string | null;
   proposalStatus?: "PENDING" | "ACCEPTED" | "REJECTED" | null;
-
   subject: { code: string; title: string };
   tutor: {
     id: string;
@@ -33,29 +44,31 @@ type Row = {
 
 type RatingResp = {
   ok: boolean;
-  rating:
-    | {
-        id: string;
-        sessionId: string;
-        tutorId: string;
-        studentId: string;
-        rating: number;
-        comment: string | null;
-        createdAt: string;
-        updatedAt: string;
-      }
-    | null;
+  rating: {
+    id: string;
+    sessionId: string;
+    tutorId: string;
+    studentId: string;
+    rating: number;
+    comment: string | null;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
 };
 
 function formatLocalInputValue(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
-    d.getDate()
-  )}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function prettyDate(iso: string) {
-  return new Date(iso).toLocaleString();
+  return new Date(iso).toLocaleString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function getEndTime(s: Row) {
@@ -81,116 +94,406 @@ function countdownLabel(s: Row) {
   const end = getEndTime(s);
   const diff = end - Date.now();
   if (diff <= 0) return "Session ended";
-
   const min = Math.floor(diff / 60000);
   const sec = Math.floor((diff % 60000) / 1000);
   return `${min}m ${sec}s remaining`;
 }
 
-function statusBadgeClass(status: string) {
-  switch (status) {
-    case "PENDING":
-      return `
-        border-amber-500
-        text-amber-600
-        dark:text-amber-400
-        bg-transparent
-      `;
-    case "ACCEPTED":
-      return `
-        border-emerald-500
-        text-emerald-600
-        dark:text-emerald-400
-        bg-transparent
-      `;
-    case "COMPLETED":
-      return `
-        border-slate-500/40
-        bg-slate-500/10
-        text-slate-600
-        dark:text-slate-400
-      `;
-    case "CANCELLED":
-      return `
-        border-rose-500
-        text-rose-600
-        dark:text-rose-400
-        bg-transparent
-      `;
-    default:
-      return `
-        border-[rgb(var(--border))]
-        bg-[rgb(var(--card))]
-        text-[rgb(var(--fg))]
-      `;
-  }
-}
-
-/** show only up to 7 buttons: 1 … 4 5 6 … last */
 function getPastPageItems(current: number, total: number): (number | "…")[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-
   const last = total;
-
-  // near start
   if (current <= 3) return [1, 2, 3, 4, "…", last - 1, last];
-
-  // near end
-  if (current >= total - 2)
-    return [1, 2, "…", last - 3, last - 2, last - 1, last];
-
-  // middle
+  if (current >= total - 2) return [1, 2, "…", last - 3, last - 2, last - 1, last];
   return [1, "…", current - 1, current, current + 1, "…", last];
 }
 
-function Section({
-  kind,
-  title,
-  subtitle,
-  list,
-  children,
-}: {
-  kind: "NEEDS_RATING" | "UPCOMING" | "PAST";
-  title: string;
-  subtitle?: string;
-  list: Row[];
-  children: React.ReactNode;
-}) {
-  if (!list.length) return null;
+const STATUS_CONFIG: Record<string, { label: string; dot: string; badge: string }> = {
+  PENDING: {
+    label: "Pending",
+    dot: "bg-amber-400",
+    badge: "bg-amber-500/10 border-amber-400/60 text-amber-600 dark:text-amber-300",
+  },
+  ACCEPTED: {
+    label: "Accepted",
+    dot: "bg-emerald-400",
+    badge: "bg-emerald-500/10 border-emerald-400/60 text-emerald-600 dark:text-emerald-300",
+  },
+  COMPLETED: {
+    label: "Completed",
+    dot: "bg-slate-400",
+    badge: "bg-slate-500/10 border-slate-400/40 text-slate-500 dark:text-slate-400",
+  },
+  CANCELLED: {
+    label: "Cancelled",
+    dot: "bg-rose-400",
+    badge: "bg-rose-500/10 border-rose-400/60 text-rose-600 dark:text-rose-400",
+  },
+};
 
-  const pill =
-    kind === "NEEDS_RATING"
-      ? "border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-500/10"
-      : "border-[rgb(var(--border))] text-[rgb(var(--fg))] bg-[rgb(var(--card))]";
-
+function StatusBadge({ status }: { status: string }) {
+  const cfg = STATUS_CONFIG[status] ?? {
+    label: status,
+    dot: "bg-slate-400",
+    badge: "bg-slate-500/10 border-slate-400/40 text-slate-500",
+  };
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span
-            className={[
-              "rounded-full border px-3 py-1 text-[11px] font-semibold tracking-wide uppercase",
-              pill,
-            ].join(" ")}
-          >
-            {title}
-          </span>
+    <span
+      className={[
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase",
+        cfg.badge,
+      ].join(" ")}
+    >
+      <span className={["h-1.5 w-1.5 rounded-full", cfg.dot].join(" ")} />
+      {cfg.label}
+    </span>
+  );
+}
 
-          {subtitle ? (
-            <span className="text-xs text-[rgb(var(--muted2))]">{subtitle}</span>
-          ) : null}
-        </div>
-
-        <span className="text-xs text-[rgb(var(--muted2))]">
-          {list.length} item{list.length === 1 ? "" : "s"}
-        </span>
-      </div>
-
-      {children}
+function AvatarPlaceholder({ name }: { name: string | null }) {
+  const initials = name
+    ? name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()
+    : "?";
+  return (
+    <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-[rgb(var(--primary)/0.7)] to-[rgb(var(--primary))] flex items-center justify-center text-white text-xs font-bold shadow-sm">
+      {initials}
     </div>
   );
 }
 
+// ─── SectionHeader (outside, pure) ───────────────────────────────────────────
+function SectionHeader({
+  icon,
+  title,
+  subtitle,
+  count,
+  accent,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  count: number;
+  accent?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 mb-3">
+      <div className="flex items-center gap-2">
+        <div className={["flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold tracking-wide uppercase", accent ?? "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]"].join(" ")}>
+          {icon}
+          {title}
+        </div>
+        {subtitle && <span className="text-xs text-[rgb(var(--muted2))] hidden sm:inline">{subtitle}</span>}
+      </div>
+      <span className="text-[0.7rem] font-semibold text-[rgb(var(--muted2))] bg-[rgb(var(--card))] border border-[rgb(var(--border))] rounded-full px-2 py-0.5">
+        {count}
+      </span>
+    </div>
+  );
+}
+
+// ─── BookingCard props ────────────────────────────────────────────────────────
+type BookingCardProps = {
+  s: Row;
+  focusId: string | null;
+  actionLoading: boolean;
+  ratingBySession: Record<string, { rating: number; comment: string | null }>;
+  // callbacks
+  onJoin: (id: string) => void;
+  onChat: (id: string) => void;
+  onOpenRate: (s: Row) => void;
+  onReschedule: (s: Row) => void;
+  onReport: (s: Row) => void;
+  onCancel: (s: Row) => void;
+  onAcceptProposal: (id: string) => void;
+  onRejectProposal: (id: string) => void;
+};
+
+// ─── BookingCard (OUTSIDE parent — prevents re-creation on every tick) ────────
+const BookingCard = memo(function BookingCard({
+  s,
+  focusId,
+  actionLoading,
+  ratingBySession,
+  onJoin,
+  onChat,
+  onOpenRate,
+  onReschedule,
+  onReport,
+  onCancel,
+  onAcceptProposal,
+  onRejectProposal,
+}: BookingCardProps) {
+  const closed = s.status === "CANCELLED" || s.status === "COMPLETED";
+  const tutorName = s.tutor?.name ?? null;
+  const tutorProgramme = s.tutor?.programme ?? null;
+  const proposalPending = s.proposalStatus === "PENDING" && !!s.proposedAt;
+  const isFocused = focusId === s.id;
+  const canRate = s.status === "COMPLETED" && !!s.tutor;
+  const rated = !!ratingBySession[s.id];
+  const ongoing = isOngoing(s);
+  const soon = isStartingSoon(s);
+
+  // Local tick for countdown — only this card re-renders each second, not the whole tree
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!ongoing) return;
+    const t = setInterval(() => setTick((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [ongoing]);
+
+  return (
+    <motion.div
+      id={`session-${s.id}`}
+      layout
+      initial={false}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8, scale: 0.98 }}
+      transition={{ duration: 0.22, ease: "easeOut" }}
+      className={[
+        "group relative rounded-2xl border overflow-hidden transition-all duration-300",
+        "bg-[rgb(var(--card2))] border-[rgb(var(--border))]",
+        closed ? "opacity-75" : "hover:shadow-[0_8px_32px_rgb(var(--shadow)/0.12)] hover:-translate-y-0.5",
+        ongoing ? "ring-2 ring-[rgb(var(--primary))/0.6] shadow-[0_0_24px_rgb(var(--primary)/0.10)]" : "",
+        soon && !ongoing ? "ring-2 ring-amber-400/70" : "",
+        isFocused ? "ring-2 ring-[rgb(var(--primary))]" : "",
+      ].join(" ")}
+    >
+      {/* Top accent bar */}
+      {ongoing && (
+        <div className="h-0.5 w-full bg-gradient-to-r from-[rgb(var(--primary)/0.4)] via-[rgb(var(--primary))] to-[rgb(var(--primary)/0.4)]" />
+      )}
+      {soon && !ongoing && (
+        <div className="h-0.5 w-full bg-gradient-to-r from-amber-400/40 via-amber-400 to-amber-400/40" />
+      )}
+
+      <div className="p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          {/* Left — info */}
+          <div className="flex items-start gap-3 min-w-0">
+            {/* Avatar */}
+            <div className="shrink-0 mt-0.5">
+              {s.tutor?.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={s.tutor.avatarUrl}
+                  alt={tutorName ?? "Tutor"}
+                  className="h-9 w-9 rounded-full object-cover ring-2 ring-[rgb(var(--border))]"
+                />
+              ) : (
+                <AvatarPlaceholder name={tutorName} />
+              )}
+            </div>
+
+            <div className="min-w-0">
+              {/* Subject */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[0.8rem] font-bold text-[rgb(var(--fg))] leading-tight">
+                  {s.subject.code}
+                </span>
+                <span className="text-[0.75rem] text-[rgb(var(--muted))] truncate max-w-[200px]">
+                  {s.subject.title}
+                </span>
+              </div>
+
+              {/* Tutor line */}
+              <div className="mt-1 flex items-center gap-1.5">
+                <User size={11} className="text-[rgb(var(--muted2))] shrink-0" />
+                {tutorName ? (
+                  <span className="text-xs text-[rgb(var(--muted))]">
+                    {tutorName}
+                    {tutorProgramme && (
+                      <span className="text-[rgb(var(--muted2))]"> · {tutorProgramme}</span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-xs italic text-[rgb(var(--muted2))]">Awaiting tutor assignment…</span>
+                )}
+              </div>
+
+              {/* Date / duration */}
+              <div className="mt-1.5 flex items-center gap-1.5 text-xs text-[rgb(var(--muted2))]">
+                <Clock size={11} className="shrink-0" />
+                <span>{prettyDate(s.scheduledAt)}</span>
+                <span className="opacity-50">·</span>
+                <span>{s.durationMin} min</span>
+              </div>
+
+              {/* Ongoing countdown */}
+              <AnimatePresence>
+                {ongoing && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[rgb(var(--primary)/0.12)] border border-[rgb(var(--primary)/0.3)] px-2.5 py-1 text-[0.7rem] font-semibold text-[rgb(var(--primary))]"
+                  >
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[rgb(var(--primary))] opacity-60" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[rgb(var(--primary))]" />
+                    </span>
+                    Live · {countdownLabel(s)}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Starting soon */}
+              {soon && !ongoing && (
+                <motion.div
+                  animate={{ opacity: [1, 0.6, 1] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-400/50 px-2.5 py-1 text-[0.7rem] font-semibold text-amber-600 dark:text-amber-300"
+                >
+                  Starting soon
+                </motion.div>
+              )}
+            </div>
+          </div>
+
+          {/* Right — badge + actions */}
+          <div className="flex flex-col items-end gap-2.5 shrink-0">
+            <StatusBadge status={s.status} />
+
+            <div className="flex flex-wrap justify-end items-center gap-1.5">
+              {/* Join call */}
+              {s.status === "ACCEPTED" && !!s.tutor && ongoing && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.97 }}
+                  disabled={actionLoading}
+                  onClick={() => onJoin(s.id)}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white bg-[rgb(var(--primary))] shadow-[0_4px_14px_rgb(var(--primary)/0.35)] hover:opacity-90 disabled:opacity-60 transition-all"
+                  title="Join call"
+                >
+                  <Video className="h-3.5 w-3.5" />
+                  Join
+                </motion.button>
+              )}
+
+              {/* Chat */}
+              {s.status === "ACCEPTED" && !!s.tutor && ongoing && (
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  disabled={actionLoading}
+                  onClick={() => onChat(s.id)}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60 transition-colors"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  Chat
+                </motion.button>
+              )}
+
+              {/* Rate */}
+              {canRate && (
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  disabled={rated}
+                  onClick={() => onOpenRate(s)}
+                  className={[
+                    "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border transition-all",
+                    rated
+                      ? "border-slate-400/40 bg-slate-500/10 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                      : "border-amber-400/50 bg-amber-500/10 text-amber-600 dark:text-amber-300 hover:bg-amber-500/20",
+                  ].join(" ")}
+                  title={rated ? "Already rated" : "Rate tutor"}
+                >
+                  <Star size={13} className={rated ? "fill-current" : ""} />
+                  {rated ? "Rated" : "Rate"}
+                </motion.button>
+              )}
+
+              {/* Reschedule */}
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                disabled={closed || proposalPending}
+                onClick={() => onReschedule(s)}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-40 transition-colors"
+                title={proposalPending ? "Resolve pending proposal first" : ""}
+              >
+                <RefreshCw size={12} />
+                Reschedule
+              </motion.button>
+
+              {/* Report */}
+              {s.tutor && (
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => onReport(s)}
+                  className="flex items-center gap-1 rounded-lg p-1.5 border border-rose-400/30 bg-rose-500/8 text-rose-500 hover:bg-rose-500/15 transition-colors"
+                  title="Report session or tutor"
+                >
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                </motion.button>
+              )}
+
+              {/* Cancel */}
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                disabled={closed}
+                onClick={() => onCancel(s)}
+                className="flex items-center gap-1 rounded-lg p-1.5 border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] hover:border-rose-400/50 hover:text-rose-500 hover:bg-rose-500/8 disabled:opacity-40 transition-all"
+                title="Cancel booking"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+              </motion.button>
+            </div>
+          </div>
+        </div>
+
+        {/* Proposal banner */}
+        <AnimatePresence initial={false}>
+          {proposalPending && (
+            <motion.div
+              key={`proposal-${s.id}`}
+              initial={{ opacity: 0, y: 8, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.98 }}
+              transition={{ duration: 0.18 }}
+              className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgb(var(--primary)/0.3)] bg-[rgb(var(--primary)/0.06)] px-4 py-3"
+            >
+              <div className="min-w-0">
+                <div className="text-[0.8rem] font-semibold text-[rgb(var(--fg))] flex items-center gap-1.5">
+                  <Sparkles size={13} className="text-[rgb(var(--primary))]" />
+                  Tutor proposed a new time
+                </div>
+                <div className="mt-0.5 text-[0.75rem] text-[rgb(var(--muted2))] truncate">
+                  {prettyDate(s.proposedAt!)}
+                  {s.proposedNote && ` · ${s.proposedNote}`}
+                </div>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  disabled={actionLoading}
+                  onClick={() => onAcceptProposal(s.id)}
+                  className="rounded-lg px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:opacity-90 disabled:opacity-60 shadow-sm transition-all"
+                >
+                  {actionLoading ? "…" : "Accept"}
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  disabled={actionLoading}
+                  onClick={() => onRejectProposal(s.id)}
+                  className="rounded-lg px-3 py-1.5 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60 transition-colors"
+                >
+                  Reject
+                </motion.button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Cancel reason */}
+        {s.status === "CANCELLED" && s.cancelReason && (
+          <div className="mt-3 flex items-center gap-1.5 text-[0.7rem] text-[rgb(var(--muted2))] bg-rose-500/5 border border-rose-400/20 rounded-lg px-3 py-2">
+            <XCircle size={11} className="shrink-0 text-rose-400" />
+            {s.cancelReason}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+});
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function MyBookingsClient() {
   const router = useRouter();
   const pathname = usePathname();
@@ -209,14 +512,11 @@ export default function MyBookingsClient() {
   );
   const [reason, setReason] = useState("");
 
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   const [showPast, setShowPast] = useState(false);
-
-  const [pastFilter, setPastFilter] = useState<"ALL" | "COMPLETED" | "CANCELLED">(
-    "ALL"
-  );
+  const [pastFilter, setPastFilter] = useState<"ALL" | "COMPLETED" | "CANCELLED">("ALL");
 
   const PAST_PAGE_SIZE = 5;
   const [pastPage, setPastPage] = useState(1);
@@ -228,7 +528,6 @@ export default function MyBookingsClient() {
   const [rateHover, setRateHover] = useState<number>(0);
   const [rateComment, setRateComment] = useState<string>("");
   const [rateLoading, setRateLoading] = useState(false);
-
   const [rateConfirmed, setRateConfirmed] = useState(false);
 
   const [ratingBySession, setRatingBySession] = useState<
@@ -236,7 +535,6 @@ export default function MyBookingsClient() {
   >({});
 
   const [ratingsHydrated, setRatingsHydrated] = useState(false);
-  const [, setTick] = useState(0);
 
   function closeModal() {
     setMode(null);
@@ -257,25 +555,15 @@ export default function MyBookingsClient() {
 
   async function hydrateRatingsForCompleted(list: Row[]) {
     const completed = list.filter((s) => s.status === "COMPLETED" && !!s.tutor);
-
     if (completed.length === 0) return;
-
     try {
       const results = await Promise.all(
         completed.map(async (s) => {
           try {
-            const res = await fetch(`/api/sessions/${s.id}/rating`, {
-              cache: "no-store",
-            });
-            const data: RatingResp = await res
-              .json()
-              .catch(() => ({ ok: false, rating: null }));
-
+            const res = await fetch(`/api/sessions/${s.id}/rating`, { cache: "no-store" });
+            const data: RatingResp = await res.json().catch(() => ({ ok: false, rating: null }));
             if (res.ok && data?.ok && data.rating) {
-              return [
-                s.id,
-                { rating: data.rating.rating, comment: data.rating.comment },
-              ] as const;
+              return [s.id, { rating: data.rating.rating, comment: data.rating.comment }] as const;
             }
             return null;
           } catch {
@@ -283,32 +571,24 @@ export default function MyBookingsClient() {
           }
         })
       );
-
       const map: Record<string, { rating: number; comment: string | null }> = {};
       for (const r of results) {
         if (!r) continue;
         map[r[0]] = r[1];
       }
-
       setRatingBySession((prev) => ({ ...prev, ...map }));
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
   async function refresh(opts?: { silent?: boolean }) {
     const silent = !!opts?.silent;
-
     if (!silent) setLoading(true);
     setMsg(null);
-
     try {
       const res = await fetch("/api/sessions/my", { cache: "no-store" });
       const data = await res.json().catch(() => ({}));
       const list = Array.isArray(data.items) ? data.items : [];
-
       setItems(list);
-
       setRatingsHydrated(false);
       await hydrateRatingsForCompleted(list);
       setRatingsHydrated(true);
@@ -317,56 +597,24 @@ export default function MyBookingsClient() {
     }
   }
 
-  useEffect(() => {
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { refresh(); }, []); // eslint-disable-line
 
   useEffect(() => {
-    const t = setInterval(() => {
-      refresh({ silent: true });
-    }, 10_000);
+    const t = setInterval(() => refresh({ silent: true }), 10_000);
     return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // eslint-disable-line
+
+  // NOTE: The global tick is removed. Each BookingCard manages its own countdown tick.
 
   useEffect(() => {
-    const t = setInterval(() => setTick((x) => x + 1), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    let t: any;
-
-    const run = async () => {
-      try {
-        await fetch("/api/reminders/pull", { cache: "no-store" });
-      } catch {}
-    };
-
-    const start = () => {
-      stop();
-      run();
-      t = setInterval(run, 60_000);
-    };
-
-    const stop = () => {
-      if (t) clearInterval(t);
-      t = null;
-    };
-
-    const onVis = () => {
-      if (document.visibilityState === "visible") start();
-      else stop();
-    };
-
+    let t: ReturnType<typeof setInterval> | null = null;
+    const run = async () => { try { await fetch("/api/reminders/pull", { cache: "no-store" }); } catch {} };
+    const start = () => { stop(); run(); t = setInterval(run, 60_000); };
+    const stop = () => { if (t) clearInterval(t); t = null; };
+    const onVis = () => { if (document.visibilityState === "visible") start(); else stop(); };
     onVis();
     document.addEventListener("visibilitychange", onVis);
-
-    return () => {
-      stop();
-      document.removeEventListener("visibilitychange", onVis);
-    };
+    return () => { stop(); document.removeEventListener("visibilitychange", onVis); };
   }, []);
 
   useEffect(() => {
@@ -384,43 +632,18 @@ export default function MyBookingsClient() {
       const isCancelled = it.status === "CANCELLED";
       const isCompleted = it.status === "COMPLETED";
       const hasTutor = !!it.tutor;
-
       const rated = ratingsHydrated ? !!ratingBySession[it.id] : false;
 
-      if (isCancelled) {
-        past.push(it);
-        continue;
-      }
-
-      if (isCompleted && hasTutor && !ratingsHydrated) {
-        past.push(it);
-        continue;
-      }
-
-      if (isCompleted && hasTutor && !rated) {
-        needsRating.push(it);
-        continue;
-      }
-
-      if (it.status === "PENDING" || it.status === "ACCEPTED") {
-        upcoming.push(it);
-        continue;
-      }
-
-      if (isCompleted) {
-        past.push(it);
-        continue;
-      }
-
+      if (isCancelled) { past.push(it); continue; }
+      if (isCompleted && hasTutor && !ratingsHydrated) { past.push(it); continue; }
+      if (isCompleted && hasTutor && !rated) { needsRating.push(it); continue; }
+      if (it.status === "PENDING" || it.status === "ACCEPTED") { upcoming.push(it); continue; }
+      if (isCompleted) { past.push(it); continue; }
       past.push(it);
     }
 
-    needsRating.sort(
-      (a, b) => +new Date(b.scheduledAt) - +new Date(a.scheduledAt)
-    );
-    upcoming.sort(
-      (a, b) => +new Date(a.scheduledAt) - +new Date(b.scheduledAt)
-    );
+    needsRating.sort((a, b) => +new Date(b.scheduledAt) - +new Date(a.scheduledAt));
+    upcoming.sort((a, b) => +new Date(a.scheduledAt) - +new Date(b.scheduledAt));
     past.sort((a, b) => +new Date(b.scheduledAt) - +new Date(a.scheduledAt));
 
     return { needsRating, upcoming, past };
@@ -429,34 +652,20 @@ export default function MyBookingsClient() {
   const activeCount = grouped.upcoming.length + grouped.needsRating.length;
 
   const filteredPast =
-    pastFilter === "ALL"
-      ? grouped.past
-      : grouped.past.filter((x) => x.status === pastFilter);
+    pastFilter === "ALL" ? grouped.past : grouped.past.filter((x) => x.status === pastFilter);
 
-  const totalPastPages = Math.max(
-    1,
-    Math.ceil(filteredPast.length / PAST_PAGE_SIZE)
-  );
+  const totalPastPages = Math.max(1, Math.ceil(filteredPast.length / PAST_PAGE_SIZE));
   const safePastPage = Math.min(pastPage, totalPastPages);
-
-  const pagedPast = filteredPast.slice(
-    (safePastPage - 1) * PAST_PAGE_SIZE,
-    safePastPage * PAST_PAGE_SIZE
-  );
+  const pagedPast = filteredPast.slice((safePastPage - 1) * PAST_PAGE_SIZE, safePastPage * PAST_PAGE_SIZE);
 
   useEffect(() => {
     if (pastPage > totalPastPages) setPastPage(totalPastPages);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalPastPages]);
+  }, [totalPastPages]); // eslint-disable-line
 
   useEffect(() => {
-    if (!focusId) return;
-    if (loading) return;
-    if (!items.length) return;
-
+    if (!focusId || loading || !items.length) return;
     const exists = items.some((x) => x.id === focusId);
     if (!exists) return;
-
     const isFocusedPast = grouped.past.some((x) => x.id === focusId);
     if (isFocusedPast) setShowPast(true);
 
@@ -466,69 +675,47 @@ export default function MyBookingsClient() {
 
     const findAndScroll = () => {
       if (!alive) return;
-
       const el = document.getElementById(`session-${focusId}`);
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
         el.classList.add("focus-glow");
-
         const t = window.setTimeout(() => {
-          const el2 = document.getElementById(`session-${focusId}`);
-          if (el2) el2.classList.remove("focus-glow");
-
+          document.getElementById(`session-${focusId}`)?.classList.remove("focus-glow");
           const next = new URLSearchParams(sp.toString());
           next.delete("focus");
           const qs = next.toString();
           router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
         }, 3000);
-
         return () => window.clearTimeout(t);
       }
-
       tries++;
       if (tries < maxTries) window.setTimeout(findAndScroll, 120);
     };
 
     requestAnimationFrame(() => window.setTimeout(findAndScroll, 0));
-
-    return () => {
-      alive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusId, loading, items.length, grouped.past.length, showPast]);
+    return () => { alive = false; };
+  }, [focusId, loading, items.length, grouped.past.length, showPast]); // eslint-disable-line
 
   async function doReschedule() {
     if (!activeId) return;
-
     const chosen = new Date(newTime);
-    if (Number.isNaN(chosen.getTime())) {
-      setMsg("Please choose a valid date/time.");
-      return;
-    }
-
-    if (chosen.getTime() < Date.now() + 5 * 60 * 1000) {
-      setMsg("Choose a time at least 5 minutes from now.");
-      return;
-    }
-
+    if (Number.isNaN(chosen.getTime())) { setMsg({ text: "Please choose a valid date/time.", type: "error" }); return; }
+    if (chosen.getTime() < Date.now() + 5 * 60 * 1000) { setMsg({ text: "Choose a time at least 5 minutes from now.", type: "error" }); return; }
     setActionLoading(true);
     setMsg(null);
-
     try {
       const res = await fetch(`/api/sessions/${activeId}/reschedule`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scheduledAt: chosen.toISOString() }),
       });
-
       const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) setMsg(data?.message ?? "Reschedule failed.");
+      if (!res.ok) setMsg({ text: data?.message ?? "Reschedule failed.", type: "error" });
       else {
         closeModal();
         await refresh({ silent: true });
         await fetch("/api/reminders/pull", { cache: "no-store" });
-        setMsg("Booking rescheduled successfully.");
+        setMsg({ text: "Booking rescheduled successfully.", type: "success" });
       }
     } finally {
       setActionLoading(false);
@@ -537,74 +724,62 @@ export default function MyBookingsClient() {
 
   async function doCancel() {
     if (!activeId) return;
-
     setActionLoading(true);
     setMsg(null);
-
     try {
       const res = await fetch(`/api/sessions/${activeId}/cancel`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason }),
       });
-
       const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) setMsg(data?.message ?? "Cancel failed.");
+      if (!res.ok) setMsg({ text: data?.message ?? "Cancel failed.", type: "error" });
       else {
         closeModal();
         await refresh({ silent: true });
         await fetch("/api/reminders/pull", { cache: "no-store" });
-        setMsg("Booking cancelled successfully.");
+        setMsg({ text: "Booking cancelled successfully.", type: "success" });
       }
     } finally {
       setActionLoading(false);
     }
   }
 
-  async function acceptProposal(id: string) {
+  const acceptProposal = useCallback(async (id: string) => {
     setActionLoading(true);
     setMsg(null);
-
     try {
-      const res = await fetch(`/api/sessions/${id}/proposal/accept`, {
-        method: "POST",
-      });
+      const res = await fetch(`/api/sessions/${id}/proposal/accept`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) setMsg(data?.message ?? "Accept proposal failed.");
+      if (!res.ok) setMsg({ text: data?.message ?? "Accept proposal failed.", type: "error" });
       else {
         await refresh({ silent: true });
         await fetch("/api/reminders/pull", { cache: "no-store" });
-        setMsg("Proposal accepted. Session updated.");
+        setMsg({ text: "Proposal accepted. Session updated.", type: "success" });
       }
     } finally {
       setActionLoading(false);
     }
-  }
+  }, []); // eslint-disable-line
 
-  async function rejectProposal(id: string) {
+  const rejectProposal = useCallback(async (id: string) => {
     setActionLoading(true);
     setMsg(null);
-
     try {
-      const res = await fetch(`/api/sessions/${id}/proposal/reject`, {
-        method: "POST",
-      });
+      const res = await fetch(`/api/sessions/${id}/proposal/reject`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) setMsg(data?.message ?? "Reject proposal failed.");
+      if (!res.ok) setMsg({ text: data?.message ?? "Reject proposal failed.", type: "error" });
       else {
         await refresh({ silent: true });
         await fetch("/api/reminders/pull", { cache: "no-store" });
-        setMsg("Proposal rejected.");
+        setMsg({ text: "Proposal rejected.", type: "success" });
       }
     } finally {
       setActionLoading(false);
     }
-  }
+  }, []); // eslint-disable-line
 
-  async function startChat(sessionId: string) {
+  const startChat = useCallback(async (sessionId: string) => {
     try {
       const r = await fetch("/api/chat/channel-from-session", {
         method: "POST",
@@ -613,37 +788,30 @@ export default function MyBookingsClient() {
       });
       const j = await r.json();
       if (j?.ok && j.channelId) {
-        router.push(
-          `/messaging?channelId=${j.channelId}&returnTo=/dashboard/student/sessions&focus=${sessionId}`
-        );
+        router.push(`/messaging?channelId=${j.channelId}&returnTo=/dashboard/student/sessions&focus=${sessionId}`);
       } else {
-        setMsg(j?.message ?? "Unable to start chat.");
+        setMsg({ text: j?.message ?? "Unable to start chat.", type: "error" });
       }
     } catch {
-      setMsg("Unable to start chat.");
+      setMsg({ text: "Unable to start chat.", type: "error" });
     }
-  }
+  }, [router]);
 
-  function openReportForm(s: Row) {
-  if (!s.tutor) return;
-
-  const params = new URLSearchParams({
-    sessionId: s.id,
-    reportedUserId: s.tutor.id,
-    reportedRole: "TUTOR",
-    subject: `${s.subject.code} — ${s.subject.title}`,
-    source: "SESSION",
-  });
-
-  router.push(`/dashboard/student/report?${params.toString()}`);
-}
-
-  async function openRateModal(s: Row) {
-    if (s.status !== "COMPLETED") return;
+  const openReportForm = useCallback((s: Row) => {
     if (!s.tutor) return;
+    const params = new URLSearchParams({
+      sessionId: s.id,
+      reportedUserId: s.tutor.id,
+      reportedRole: "TUTOR",
+      subject: `${s.subject.code} — ${s.subject.title}`,
+      source: "SESSION",
+    });
+    router.push(`/dashboard/student/report?${params.toString()}`);
+  }, [router]);
 
+  const openRateModal = useCallback(async (s: Row) => {
+    if (s.status !== "COMPLETED" || !s.tutor) return;
     const tutorName = s.tutor?.name ?? "Tutor";
-
     setRateOpen(true);
     setRateSessionId(s.id);
     setRateTutorName(tutorName);
@@ -652,687 +820,546 @@ export default function MyBookingsClient() {
     setRateComment("");
     setRateConfirmed(false);
     setMsg(null);
-
     const cached = ratingBySession[s.id];
-    if (cached) {
-      setRateValue(cached.rating);
-      setRateComment(cached.comment ?? "");
-      return;
-    }
-
+    if (cached) { setRateValue(cached.rating); setRateComment(cached.comment ?? ""); return; }
     try {
       setRateLoading(true);
-      const res = await fetch(`/api/sessions/${s.id}/rating`, {
-        cache: "no-store",
-      });
-      const data: RatingResp = await res
-        .json()
-        .catch(() => ({ ok: false, rating: null }));
-
+      const res = await fetch(`/api/sessions/${s.id}/rating`, { cache: "no-store" });
+      const data: RatingResp = await res.json().catch(() => ({ ok: false, rating: null }));
       if (res.ok && data?.ok && data.rating) {
-        setRatingBySession((prev) => ({
-          ...prev,
-          [s.id]: { rating: data.rating!.rating, comment: data.rating!.comment },
-        }));
+        setRatingBySession((prev) => ({ ...prev, [s.id]: { rating: data.rating!.rating, comment: data.rating!.comment } }));
         setRateValue(data.rating.rating);
         setRateComment(data.rating.comment ?? "");
       }
     } finally {
       setRateLoading(false);
     }
-  }
+  }, [ratingBySession]);
+
+  const handleReschedule = useCallback((s: Row) => {
+    setActiveId(s.id);
+    setMode("RESCHEDULE");
+    setNewTime(formatLocalInputValue(new Date(s.scheduledAt)));
+    setMsg(null);
+  }, []);
+
+  const handleCancel = useCallback((s: Row) => {
+    setActiveId(s.id);
+    setMode("CANCEL");
+    setReason("");
+    setMsg(null);
+  }, []);
+
+  const handleJoin = useCallback((id: string) => {
+    router.push(`/call/${id}`);
+  }, [router]);
 
   useEffect(() => {
-    if (loading) return;
-    if (!focusId) return;
-    if (rateParam !== "1") return;
-    if (rateOpen) return;
-
+    if (loading || !focusId || rateParam !== "1" || rateOpen) return;
     const s = items.find((x) => x.id === focusId);
-    if (!s) return;
-    if (s.status !== "COMPLETED" || !s.tutor) return;
-
+    if (!s || s.status !== "COMPLETED" || !s.tutor) return;
     const next = new URLSearchParams(sp.toString());
     next.delete("rate");
     const qs = next.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-
     openRateModal(s);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, focusId, rateParam, items.length, rateOpen]);
+  }, [loading, focusId, rateParam, items.length, rateOpen]); // eslint-disable-line
 
   async function submitRating() {
     if (!rateSessionId) return;
-
-    if (ratingBySession[rateSessionId]) {
-      setMsg("You already rated this session.");
-      return;
-    }
-
+    if (ratingBySession[rateSessionId]) { setMsg({ text: "You already rated this session.", type: "error" }); return; }
     const rating = Number(rateValue);
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-      setMsg("Please select a rating from 1 to 5.");
-      return;
-    }
-    if (rateComment.trim().length > 500) {
-      setMsg("Comment too long (max 500 chars).");
-      return;
-    }
-
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) { setMsg({ text: "Please select a rating from 1 to 5.", type: "error" }); return; }
+    if (rateComment.trim().length > 500) { setMsg({ text: "Comment too long (max 500 chars).", type: "error" }); return; }
     setRateLoading(true);
     setMsg(null);
-
     try {
       const res = await fetch(`/api/sessions/${rateSessionId}/rating`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rating,
-          comment: rateComment.trim() ? rateComment.trim() : undefined,
-          confirmed: rateConfirmed ? true : null,
-        }),
+        body: JSON.stringify({ rating, comment: rateComment.trim() ? rateComment.trim() : undefined, confirmed: rateConfirmed ? true : null }),
       });
-
       const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setMsg(data?.message ?? "Rating failed.");
-        return;
-      }
-
-      setRatingBySession((prev) => ({
-        ...prev,
-        [rateSessionId]: {
-          rating,
-          comment: rateComment.trim() ? rateComment.trim() : null,
-        },
-      }));
-
+      if (!res.ok) { setMsg({ text: data?.message ?? "Rating failed.", type: "error" }); return; }
+      setRatingBySession((prev) => ({ ...prev, [rateSessionId]: { rating, comment: rateComment.trim() ? rateComment.trim() : null } }));
       closeRate();
-      setMsg("Thanks! Your rating has been submitted.");
+      setMsg({ text: "Thanks! Your rating has been submitted.", type: "success" });
       await refresh({ silent: true });
     } finally {
       setRateLoading(false);
     }
   }
 
-  function BookingCard({ s }: { s: Row }) {
-    const closed = s.status === "CANCELLED" || s.status === "COMPLETED";
-    const tutorName = s.tutor?.name ?? "Waiting for tutor…";
-    const tutorProgramme = s.tutor?.programme ?? null;
-    const unassigned = !s.tutor;
-
-    const proposalPending = s.proposalStatus === "PENDING" && !!s.proposedAt;
-    const isFocused = focusId === s.id;
-
-    const canRate = s.status === "COMPLETED" && !!s.tutor;
-    const rated = !!ratingBySession[s.id];
-
-    const ongoing = isOngoing(s);
-    const showCall = s.status === "ACCEPTED" && !!s.tutor && ongoing;
-
-    return (
-      <div
-        id={`session-${s.id}`}
-        className={[
-          "rounded-2xl border p-4 border-[rgb(var(--border))] bg-[rgb(var(--card2))] transition-all duration-300",
-          closed ? "opacity-80" : "",
-          ongoing ? "ring-2 ring-[rgb(var(--primary))]" : "",
-          isStartingSoon(s) && !ongoing ? "ring-2 ring-amber-400 animate-pulse" : "",
-          isFocused ? "ring-2 ring-[rgb(var(--primary))]" : "",
-        ].join(" ")}
-      >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-              {s.subject.code} — {s.subject.title}
-            </div>
-
-            <div className="mt-1 text-xs text-[rgb(var(--muted))]">
-              Tutor: {tutorName}
-              {tutorProgramme ? ` · ${tutorProgramme}` : ""}
-            </div>
-
-            {s.tutor && (
-              <div className="mt-1 text-[0.7rem] font-medium text-emerald-600 dark:text-emerald-400">
-                Tutor assigned: {s.tutor.name ?? "Tutor"}
-              </div>
-            )}
-
-            {unassigned && (
-              <div className="mt-1 text-[0.7rem] text-[rgb(var(--muted2))]">
-                Waiting for tutor...
-              </div>
-            )}
-
-            <div className="mt-1 text-xs text-[rgb(var(--muted2))]">
-              {prettyDate(s.scheduledAt)} · {s.durationMin} min
-            </div>
-
-            {ongoing && (
-              <motion.div
-                initial={{ opacity: 0.6, y: 2 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-                className="mt-1 text-xs text-[rgb(var(--primary))] font-medium"
-              >
-                {countdownLabel(s)}
-              </motion.div>
-            )}
-
-            <AnimatePresence initial={false}>
-              {proposalPending && (
-                <motion.div
-                  key={`proposal-${s.id}`}
-                  initial={{ opacity: 0, y: 10, scale: 0.985 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -10, scale: 0.985 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
-                  className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <div className="text-[0.8rem] font-semibold text-[rgb(var(--fg))]">
-                      Tutor proposed a new time
-                    </div>
-                    <div className="mt-0.5 text-[0.75rem] text-[rgb(var(--muted2))] truncate">
-                      {prettyDate(s.proposedAt!)}
-                      {s.proposedNote ? ` · ${s.proposedNote}` : ""}
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 shrink-0">
-                    <motion.button
-                      whileTap={{ scale: 0.98 }}
-                      disabled={actionLoading}
-                      onClick={() => acceptProposal(s.id)}
-                      className="rounded-md px-3 py-2 text-xs font-semibold text-white bg-emerald-600 hover:opacity-90 disabled:opacity-60"
-                    >
-                      {actionLoading ? "..." : "Accept"}
-                    </motion.button>
-
-                    <motion.button
-                      whileTap={{ scale: 0.98 }}
-                      disabled={actionLoading}
-                      onClick={() => rejectProposal(s.id)}
-                      className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
-                    >
-                      Reject
-                    </motion.button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <div className="flex flex-col items-end gap-2 self-end">
-            <span
-              className={[
-                "rounded-full px-3 py-1 text-[11px] font-semibold border tracking-wide uppercase",
-                statusBadgeClass(s.status),
-              ].join(" ")}
-            >
-              {s.status}
-            </span>
-
-            <div className="flex flex-wrap justify-end items-center gap-2">
-              {showCall && (
-                <button
-                  disabled={actionLoading}
-                  onClick={() => router.push(`/call/${s.id}`)}
-                  className={[
-                    "rounded-md p-2 border",
-                    "border-[rgb(var(--primary))] bg-[rgb(var(--primary))] text-white",
-                    actionLoading
-                      ? "opacity-60 cursor-not-allowed"
-                      : "hover:opacity-90",
-                  ].join(" ")}
-                  title="Join call"
-                  aria-label="Join call"
-                >
-                  <Video className="h-4 w-4" />
-                </button>
-              )}
-
-              {s.status === "ACCEPTED" && !!s.tutor && ongoing && (
-                <button
-                  disabled={actionLoading}
-                  onClick={() => startChat(s.id)}
-                  className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
-                >
-                  Start chat
-                </button>
-              )}
-
-              {canRate && (
-                <button
-                  disabled={rated}
-                  onClick={() => openRateModal(s)}
-                  className={[
-                    "rounded-md px-3 py-2 text-xs font-semibold border flex items-center gap-2",
-                    rated
-                      ? "border-slate-500/40 bg-slate-500/10 text-slate-600 dark:text-slate-400 cursor-not-allowed"
-                      : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
-                  ].join(" ")}
-                  title={rated ? "You already rated this session." : "Rate tutor"}
-                >
-                  <Star size={14} />
-                  {rated ? "Rated" : "Rate"}
-                </button>
-              )}
-
-              <button
-                disabled={closed || proposalPending}
-                onClick={() => {
-                  setActiveId(s.id);
-                  setMode("RESCHEDULE");
-                  setNewTime(formatLocalInputValue(new Date(s.scheduledAt)));
-                  setMsg(null);
-                }}
-                className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
-                title={
-                  proposalPending
-                    ? "You have a pending proposal. Accept/Reject it first."
-                    : ""
-                }
-              >
-                Reschedule
-              </button>
-
-              {s.tutor && (
-            <button
-              onClick={() => openReportForm(s)}
-              className="rounded-md p-2 border border-red-500/40 bg-red-500/10 text-red-600 transition hover:bg-red-500/15 dark:text-red-300"
-              title="Report this session or tutor"
-              aria-label="Report this session or tutor"
-            >
-              <AlertTriangle className="h-4 w-4" />
-            </button>
-          )}
-
-              <button
-                disabled={closed}
-                onClick={() => {
-                  setActiveId(s.id);
-                  setMode("CANCEL");
-                  setReason("");
-                  setMsg(null);
-                }}
-                className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {s.status === "CANCELLED" && s.cancelReason && (
-          <div className="mt-2 text-[0.7rem] text-[rgb(var(--muted2))]">
-            Reason: {s.cancelReason}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  const leftPill = grouped.upcoming.length > 0 ? "SESSIONS" : "SESSIONS";
-  const leftMeta =
-    activeCount > 0
-      ? `${activeCount} item${activeCount === 1 ? "" : "s"}`
-      : "No active sessions";
-
   return (
-    <div className="space-y-6">
-      <div className="rounded-3xl border p-6 border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] shadow-[0_20px_60px_rgb(var(--shadow)/0.10)]">
-        <div className="flex items-center justify-between gap-4">
+    <div className="space-y-5">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] px-6 py-5 shadow-[0_8px_32px_rgb(var(--shadow)/0.08)]">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl font-semibold text-[rgb(var(--fg))]">
+            <h1 className="text-xl font-bold text-[rgb(var(--fg))] tracking-tight flex items-center gap-2">
+              <BookOpen size={20} className="text-[rgb(var(--primary))]" />
               My Bookings
             </h1>
-            <p className="mt-1 text-sm text-[rgb(var(--muted))]">
-              Track your session requests and manage reschedules/cancellations.
+            <p className="mt-0.5 text-sm text-[rgb(var(--muted))]">
+              Track session requests and manage reschedules or cancellations.
             </p>
           </div>
 
           <a
             href="/dashboard/student/sessions/calendar"
-            className="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgb(var(--shadow)/0.35)]"
+            className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white bg-[rgb(var(--primary))] shadow-[0_4px_14px_rgb(var(--primary)/0.30)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgb(var(--primary)/0.40)]"
           >
-            <Calendar size={16} />
-            Open Calendar
+            <Calendar size={14} />
+            Calendar
           </a>
         </div>
       </div>
 
-      {msg && (
-        <div className="flex items-center gap-2 rounded-2xl border p-4 border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] text-sm text-[rgb(var(--fg))]">
-          <CheckCircle size={16} className="opacity-80" />
-          <span>{msg}</span>
-        </div>
-      )}
+      {/* ── Toast ──────────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {msg && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            transition={{ duration: 0.18 }}
+            className={[
+              "flex items-center gap-2.5 rounded-xl border px-4 py-3 text-sm font-medium",
+              msg.type === "success"
+                ? "border-emerald-400/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                : "border-rose-400/50 bg-rose-500/10 text-rose-700 dark:text-rose-300",
+            ].join(" ")}
+          >
+            {msg.type === "success"
+              ? <CheckCircle size={15} className="shrink-0" />
+              : <XCircle size={15} className="shrink-0" />
+            }
+            {msg.text}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <div className="rounded-3xl border p-5 border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]">
+      {/* ── Main Panel ─────────────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-5 shadow-[0_8px_32px_rgb(var(--shadow)/0.06)]">
         {loading ? (
-          <div className="text-sm text-[rgb(var(--muted2))]">Loading…</div>
+          <div className="flex flex-col gap-3 py-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-5 animate-pulse">
+                <div className="flex gap-3">
+                  <div className="h-9 w-9 rounded-full bg-[rgb(var(--muted2)/0.2)]" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-1/3 rounded bg-[rgb(var(--muted2)/0.2)]" />
+                    <div className="h-2.5 w-1/4 rounded bg-[rgb(var(--muted2)/0.15)]" />
+                    <div className="h-2.5 w-2/5 rounded bg-[rgb(var(--muted2)/0.12)]" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : items.length === 0 ? (
-          <div className="text-sm text-[rgb(var(--muted2))]">No bookings yet.</div>
+          <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-12 text-center">
+            <BookOpen size={32} className="mx-auto text-[rgb(var(--muted2))] opacity-40 mb-3" />
+            <p className="text-sm font-medium text-[rgb(var(--muted))]">No bookings yet</p>
+            <p className="mt-1 text-xs text-[rgb(var(--muted2))]">Your scheduled sessions will appear here.</p>
+          </div>
         ) : (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
+          <div className="space-y-5">
+            {/* Toolbar */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2">
-                <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-[11px] font-semibold tracking-wide text-[rgb(var(--fg))]">
-                  {leftPill}
+                <span className="text-xs font-bold text-[rgb(var(--fg))] bg-[rgb(var(--card))] border border-[rgb(var(--border))] rounded-full px-3 py-1 uppercase tracking-wide">
+                  Sessions
                 </span>
-
                 <span className="text-xs text-[rgb(var(--muted2))]">
-                  {leftMeta}
+                  {activeCount > 0 ? `${activeCount} active` : "No active sessions"}
                 </span>
               </div>
 
-              <button
+              <motion.button
+                whileTap={{ scale: 0.97 }}
                 type="button"
-                onClick={() =>
-                  setShowPast((p) => {
-                    const next = !p;
-                    setPastPage(1);
-                    if (!next) setPastFilter("ALL");
-                    return next;
-                  })
-                }
-                className="rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]"
+                onClick={() => setShowPast((p) => { const next = !p; setPastPage(1); if (!next) setPastFilter("ALL"); return next; })}
+                className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] transition-colors"
               >
-                {showPast ? "Hide Past" : `Show Past (${grouped.past.length})`}
-              </button>
+                {showPast ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                {showPast ? "Hide Past" : `Past (${grouped.past.length})`}
+              </motion.button>
             </div>
 
+            {/* Active content */}
             {activeCount === 0 && !showPast ? (
-              <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-8 text-center text-sm text-[rgb(var(--muted2))]">
-                No active sessions at the moment.
-                <div className="mt-2 text-xs text-[rgb(var(--muted2))]">
-                  Past sessions are available in the archive.
-                </div>
+              <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-8 text-center">
+                <p className="text-sm text-[rgb(var(--muted))]">No active sessions right now.</p>
+                <p className="mt-1 text-xs text-[rgb(var(--muted2))]">Past sessions are archived below.</p>
               </div>
             ) : (
               <div className="space-y-6">
-                <Section
-                  kind="UPCOMING"
-                  title="Upcoming"
-                  subtitle="Scheduled sessions"
-                  list={grouped.upcoming}
-                >
-                  <div className="space-y-3">
-                    {grouped.upcoming.map((s) => (
-                      <BookingCard key={s.id} s={s} />
-                    ))}
-                  </div>
-                </Section>
-
-                <Section
-                  kind="NEEDS_RATING"
-                  title="Needs rating"
-                  subtitle="Session ended — please rate your tutor"
-                  list={grouped.needsRating}
-                >
-                  <div className="space-y-3">
-                    {grouped.needsRating.map((s) => (
-                      <BookingCard key={s.id} s={s} />
-                    ))}
-                  </div>
-                </Section>
-              </div>
-            )}
-
-            {showPast && (
-              <div className="pt-2">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-[11px] font-semibold tracking-wide text-[rgb(var(--fg))]">
-                      PAST
-                    </span>
-                    <span className="text-xs text-[rgb(var(--muted2))]">
-                      Completed (rated) and cancelled sessions
-                    </span>
-                  </div>
-
-                  <div className="flex gap-2">
-                    {(["ALL", "COMPLETED", "CANCELLED"] as const).map((k) => (
-                      <button
-                        key={k}
-                        onClick={() => {
-                          setPastFilter(k);
-                          setPastPage(1);
-                        }}
-                        className={[
-                          "rounded-full px-3 py-1 text-[11px] font-semibold border transition-all duration-150",
-                          k === pastFilter
-                            ? "border-[rgb(var(--primary))] text-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.08)]"
-                            : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
-                        ].join(" ")}
-                      >
-                        {k}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {filteredPast.length === 0 ? (
-                  <div className="text-sm text-[rgb(var(--muted2))]">
-                    No past sessions.
-                  </div>
-                ) : (
-                  <>
+                {/* Upcoming */}
+                {grouped.upcoming.length > 0 && (
+                  <div>
+                    <SectionHeader
+                      icon={<Clock size={11} />}
+                      title="Upcoming"
+                      subtitle="Scheduled sessions"
+                      count={grouped.upcoming.length}
+                      accent="border-[rgb(var(--primary)/0.5)] bg-[rgb(var(--primary)/0.08)] text-[rgb(var(--primary))]"
+                    />
                     <div className="space-y-3">
-                      {pagedPast.map((s) => (
-                        <BookingCard key={s.id} s={s} />
-                      ))}
+                      <AnimatePresence>
+                        {grouped.upcoming.map((s) => (
+                          <BookingCard
+                            key={s.id}
+                            s={s}
+                            focusId={focusId}
+                            actionLoading={actionLoading}
+                            ratingBySession={ratingBySession}
+                            onJoin={handleJoin}
+                            onChat={startChat}
+                            onOpenRate={openRateModal}
+                            onReschedule={handleReschedule}
+                            onReport={openReportForm}
+                            onCancel={handleCancel}
+                            onAcceptProposal={acceptProposal}
+                            onRejectProposal={rejectProposal}
+                          />
+                        ))}
+                      </AnimatePresence>
                     </div>
+                  </div>
+                )}
 
-                    {totalPastPages > 1 && (
-                      <div className="flex flex-wrap items-center justify-center gap-2 pt-3">
-                        {getPastPageItems(safePastPage, totalPastPages).map(
-                          (it, idx) =>
-                            it === "…" ? (
-                              <span
-                                key={`dots-${idx}`}
-                                className="px-2 text-xs text-[rgb(var(--muted2))]"
-                              >
-                                …
-                              </span>
-                            ) : (
-                              <button
-                                key={it}
-                                onClick={() => setPastPage(it)}
-                                className={[
-                                  "rounded-full px-3 py-1 text-[11px] font-semibold border transition-all duration-150",
-                                  it === safePastPage
-                                    ? "border-[rgb(var(--primary))] text-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.08)]"
-                                    : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)]",
-                                ].join(" ")}
-                              >
-                                {it}
-                              </button>
-                            )
-                        )}
-                      </div>
-                    )}
-                  </>
+                {/* Needs rating */}
+                {grouped.needsRating.length > 0 && (
+                  <div>
+                    <SectionHeader
+                      icon={<Star size={11} />}
+                      title="Rate your tutor"
+                      subtitle="Session ended"
+                      count={grouped.needsRating.length}
+                      accent="border-amber-400/60 bg-amber-500/10 text-amber-600 dark:text-amber-300"
+                    />
+                    <div className="space-y-3">
+                      <AnimatePresence>
+                        {grouped.needsRating.map((s) => (
+                          <BookingCard
+                            key={s.id}
+                            s={s}
+                            focusId={focusId}
+                            actionLoading={actionLoading}
+                            ratingBySession={ratingBySession}
+                            onJoin={handleJoin}
+                            onChat={startChat}
+                            onOpenRate={openRateModal}
+                            onReschedule={handleReschedule}
+                            onReport={openReportForm}
+                            onCancel={handleCancel}
+                            onAcceptProposal={acceptProposal}
+                            onRejectProposal={rejectProposal}
+                          />
+                        ))}
+                      </AnimatePresence>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
+
+            {/* Past */}
+            <AnimatePresence>
+              {showPast && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.22 }}
+                  className="overflow-hidden pt-1"
+                >
+                  <div className="border-t border-[rgb(var(--border))] pt-5">
+                    <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                      <SectionHeader
+                        icon={<Filter size={11} />}
+                        title="Past"
+                        subtitle="Completed & cancelled"
+                        count={filteredPast.length}
+                      />
+
+                      <div className="flex gap-1.5">
+                        {(["ALL", "COMPLETED", "CANCELLED"] as const).map((k) => (
+                          <motion.button
+                            key={k}
+                            whileTap={{ scale: 0.96 }}
+                            onClick={() => { setPastFilter(k); setPastPage(1); }}
+                            className={[
+                              "rounded-full px-3 py-1 text-[10px] font-bold border transition-all duration-150 uppercase tracking-wide",
+                              k === pastFilter
+                                ? "border-[rgb(var(--primary))] text-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.10)]"
+                                : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] hover:bg-[rgb(var(--card)/0.6)]",
+                            ].join(" ")}
+                          >
+                            {k}
+                          </motion.button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {filteredPast.length === 0 ? (
+                      <p className="text-sm text-[rgb(var(--muted2))]">No past sessions found.</p>
+                    ) : (
+                      <>
+                        <div className="space-y-3">
+                          <AnimatePresence>
+                            {pagedPast.map((s) => (
+                              <BookingCard
+                                key={s.id}
+                                s={s}
+                                focusId={focusId}
+                                actionLoading={actionLoading}
+                                ratingBySession={ratingBySession}
+                                onJoin={handleJoin}
+                                onChat={startChat}
+                                onOpenRate={openRateModal}
+                                onReschedule={handleReschedule}
+                                onReport={openReportForm}
+                                onCancel={handleCancel}
+                                onAcceptProposal={acceptProposal}
+                                onRejectProposal={rejectProposal}
+                              />
+                            ))}
+                          </AnimatePresence>
+                        </div>
+
+                        {totalPastPages > 1 && (
+                          <div className="flex flex-wrap items-center justify-center gap-1.5 pt-4">
+                            {getPastPageItems(safePastPage, totalPastPages).map((it, idx) =>
+                              it === "…" ? (
+                                <span key={`dots-${idx}`} className="px-2 text-xs text-[rgb(var(--muted2))]">…</span>
+                              ) : (
+                                <motion.button
+                                  key={it}
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => setPastPage(it)}
+                                  className={[
+                                    "rounded-full w-8 h-8 text-[11px] font-bold border transition-all",
+                                    it === safePastPage
+                                      ? "border-[rgb(var(--primary))] text-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.10)]"
+                                      : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] hover:bg-[rgb(var(--card)/0.6)]",
+                                  ].join(" ")}
+                                >
+                                  {it}
+                                </motion.button>
+                              )
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
       </div>
 
-      {mode && activeId && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
-          onMouseDown={() => {
-            if (!actionLoading) closeModal();
-          }}
-        >
-          <div
-            className="w-full max-w-md rounded-3xl border p-5 border-[rgb(var(--border))] bg-[rgb(var(--card2))] shadow-[0_30px_120px_rgb(var(--shadow)/0.35)]"
-            onMouseDown={(e) => e.stopPropagation()}
+      {/* ── Reschedule / Cancel Modal ───────────────────────────────────────── */}
+      <AnimatePresence>
+        {mode && activeId && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 grid place-items-center bg-black/50 backdrop-blur-sm p-4"
+            onMouseDown={() => { if (!actionLoading) closeModal(); }}
           >
-            <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-              {mode === "RESCHEDULE" ? "Reschedule booking" : "Cancel booking"}
-            </div>
-
-            {mode === "RESCHEDULE" ? (
-              <div className="mt-4">
-                <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
-                  New date & time
-                </label>
-                <input
-                  type="datetime-local"
-                  value={newTime}
-                  onChange={(e) => setNewTime(e.target.value)}
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))]"
-                />
-              </div>
-            ) : (
-              <div className="mt-4">
-                <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
-                  Reason (optional)
-                </label>
-                <input
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="e.g. timetable clash"
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))]"
-                />
-              </div>
-            )}
-
-            <div className="mt-5 flex gap-2">
-              <button
-                disabled={actionLoading}
-                onClick={closeModal}
-                className="flex-1 rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
-              >
-                Close
-              </button>
-
-              <button
-                disabled={actionLoading}
-                onClick={mode === "RESCHEDULE" ? doReschedule : doCancel}
-                className="flex-1 rounded-md px-3 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgb(var(--shadow)/0.35)] disabled:opacity-70"
-              >
-                {actionLoading
-                  ? "Working…"
-                  : mode === "RESCHEDULE"
-                  ? "Reschedule"
-                  : "Cancel booking"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {rateOpen && rateSessionId && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
-          onMouseDown={() => {
-            if (!rateLoading) closeRate();
-          }}
-        >
-          <div
-            className="w-full max-w-md rounded-3xl border p-5 border-[rgb(var(--border))] bg-[rgb(var(--card2))] shadow-[0_30px_120px_rgb(var(--shadow)/0.35)]"
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-              Rate your tutor
-            </div>
-            <div className="mt-1 text-xs text-[rgb(var(--muted2))]">
-              Tutor: {rateTutorName}
-            </div>
-
-            <div className="mt-4">
-              <div className="text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-2">
-                Rating
-              </div>
-
-              <div className="flex items-center gap-1">
-                {Array.from({ length: 5 }, (_, i) => i + 1).map((n) => {
-                  const on = (rateHover || rateValue) >= n;
-                  return (
-                    <button
-                      key={n}
-                      type="button"
-                      disabled={rateLoading || !!ratingBySession[rateSessionId]}
-                      onMouseEnter={() => setRateHover(n)}
-                      onMouseLeave={() => setRateHover(0)}
-                      onClick={() => setRateValue(n)}
-                      className={[
-                        "p-1 rounded-md transition-all",
-                        rateLoading || !!ratingBySession[rateSessionId]
-                          ? "opacity-60 cursor-not-allowed"
-                          : "hover:bg-[rgb(var(--card)/0.6)]",
-                      ].join(" ")}
-                      title={`${n} star${n === 1 ? "" : "s"}`}
-                    >
-                      <Star size={22} className={on ? "fill-current" : ""} />
-                    </button>
-                  );
-                })}
-                <span className="ml-2 text-xs text-[rgb(var(--muted2))]">
-                  {rateValue}/5
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="w-full max-w-md rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] shadow-[0_32px_80px_rgb(0,0,0,0.20)] p-6"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                {mode === "RESCHEDULE"
+                  ? <RefreshCw size={16} className="text-[rgb(var(--primary))]" />
+                  : <XCircle size={16} className="text-rose-500" />
+                }
+                <span className="text-sm font-bold text-[rgb(var(--fg))]">
+                  {mode === "RESCHEDULE" ? "Reschedule booking" : "Cancel booking"}
                 </span>
               </div>
+              <p className="text-xs text-[rgb(var(--muted2))] mb-5">
+                {mode === "RESCHEDULE"
+                  ? "Choose a new date and time for your session."
+                  : "Are you sure you want to cancel this session?"}
+              </p>
 
-              {ratingBySession[rateSessionId] && (
-                <div className="mt-2 text-[0.75rem] text-slate-600 dark:text-slate-400">
-                  You already rated this session.
+              {mode === "RESCHEDULE" ? (
+                <div>
+                  <label className="block text-[0.7rem] font-semibold text-[rgb(var(--muted2))] mb-1.5 uppercase tracking-wide">
+                    New date & time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={newTime}
+                    onChange={(e) => setNewTime(e.target.value)}
+                    className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary)/0.15)] transition-all"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-[0.7rem] font-semibold text-[rgb(var(--muted2))] mb-1.5 uppercase tracking-wide">
+                    Reason (optional)
+                  </label>
+                  <input
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="e.g. timetable clash"
+                    className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary)/0.15)] transition-all"
+                  />
                 </div>
               )}
-            </div>
 
-            <div className="mt-4">
-              <label className="block text-[0.7rem] font-medium text-[rgb(var(--muted2))] mb-1">
-                Comment (optional)
-              </label>
-              <textarea
-                value={rateComment}
-                onChange={(e) => setRateComment(e.target.value)}
-                placeholder="Share feedback (optional)…"
-                disabled={rateLoading || !!ratingBySession[rateSessionId]}
-                className="w-full min-h-[90px] resize-none rounded-md border px-3 py-2 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))] disabled:opacity-60"
-              />
-              <div className="mt-1 text-[0.7rem] text-[rgb(var(--muted2))]">
-                {Math.min(rateComment.length, 500)}/500
+              <div className="mt-5 flex gap-2">
+                <button
+                  disabled={actionLoading}
+                  onClick={closeModal}
+                  className="flex-1 rounded-xl px-3 py-2.5 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60 transition-colors"
+                >
+                  Close
+                </button>
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  disabled={actionLoading}
+                  onClick={mode === "RESCHEDULE" ? doReschedule : doCancel}
+                  className={[
+                    "flex-1 rounded-xl px-3 py-2.5 text-xs font-bold text-white transition-all disabled:opacity-70",
+                    mode === "RESCHEDULE"
+                      ? "bg-[rgb(var(--primary))] shadow-[0_4px_14px_rgb(var(--primary)/0.30)] hover:opacity-90"
+                      : "bg-rose-600 shadow-[0_4px_14px_rgb(239,68,68,0.25)] hover:opacity-90",
+                  ].join(" ")}
+                >
+                  {actionLoading ? "Working…" : mode === "RESCHEDULE" ? "Reschedule" : "Cancel booking"}
+                </motion.button>
               </div>
-            </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-            <label className="mt-4 flex items-center gap-2 text-xs text-[rgb(var(--fg))]">
-              <input
-                type="checkbox"
-                checked={rateConfirmed}
-                onChange={(e) => setRateConfirmed(e.target.checked)}
-                disabled={rateLoading || !!ratingBySession[rateSessionId]}
-                className="h-4 w-4 accent-[rgb(var(--primary))]"
-              />
-              I confirm this session happened
-            </label>
+      {/* ── Rate Modal ──────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {rateOpen && rateSessionId && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 grid place-items-center bg-black/50 backdrop-blur-sm p-4"
+            onMouseDown={() => { if (!rateLoading) closeRate(); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="w-full max-w-md rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] shadow-[0_32px_80px_rgb(0,0,0,0.20)] p-6"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2 mb-0.5">
+                <Star size={16} className="text-amber-400 fill-amber-400" />
+                <span className="text-sm font-bold text-[rgb(var(--fg))]">Rate your tutor</span>
+              </div>
+              <p className="text-xs text-[rgb(var(--muted2))] mb-5">
+                {rateTutorName} · Share how your session went
+              </p>
 
-            <div className="mt-5 flex gap-2">
-              <button
-                disabled={rateLoading}
-                onClick={closeRate}
-                className="flex-1 rounded-md px-3 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60"
-              >
-                Close
-              </button>
+              {/* Stars */}
+              <div className="mb-5">
+                <div className="text-[0.7rem] font-semibold text-[rgb(var(--muted2))] mb-2.5 uppercase tracking-wide">Rating</div>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: 5 }, (_, i) => i + 1).map((n) => {
+                    const on = (rateHover || rateValue) >= n;
+                    return (
+                      <motion.button
+                        key={n}
+                        type="button"
+                        whileHover={{ scale: 1.2 }}
+                        whileTap={{ scale: 0.9 }}
+                        disabled={rateLoading || !!ratingBySession[rateSessionId]}
+                        onMouseEnter={() => setRateHover(n)}
+                        onMouseLeave={() => setRateHover(0)}
+                        onClick={() => setRateValue(n)}
+                        className={["p-0.5 rounded transition-all", rateLoading || !!ratingBySession[rateSessionId] ? "opacity-60 cursor-not-allowed" : ""].join(" ")}
+                        title={`${n} star${n === 1 ? "" : "s"}`}
+                      >
+                        <Star
+                          size={28}
+                          className={on ? "text-amber-400 fill-amber-400" : "text-[rgb(var(--muted2))]"}
+                        />
+                      </motion.button>
+                    );
+                  })}
+                  <span className="ml-2 text-sm font-bold text-[rgb(var(--fg))]">{rateValue}<span className="text-xs font-normal text-[rgb(var(--muted2))]">/5</span></span>
+                </div>
 
-              <button
-                disabled={rateLoading || !!ratingBySession[rateSessionId]}
-                onClick={submitRating}
-                className="flex-1 rounded-md px-3 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-90 disabled:opacity-60"
-              >
-                {rateLoading ? "Submitting…" : "Submit rating"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                {ratingBySession[rateSessionId] && (
+                  <div className="mt-2 text-[0.75rem] text-slate-500 dark:text-slate-400">
+                    You already rated this session.
+                  </div>
+                )}
+              </div>
+
+              {/* Comment */}
+              <div className="mb-5">
+                <label className="block text-[0.7rem] font-semibold text-[rgb(var(--muted2))] mb-1.5 uppercase tracking-wide">
+                  Comment (optional)
+                </label>
+                <textarea
+                  value={rateComment}
+                  onChange={(e) => setRateComment(e.target.value)}
+                  placeholder="Share feedback…"
+                  disabled={rateLoading || !!ratingBySession[rateSessionId]}
+                  rows={3}
+                  className="w-full resize-none rounded-xl border px-3 py-2.5 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary)/0.15)] disabled:opacity-60 transition-all"
+                />
+                <div className="mt-1 text-right text-[0.65rem] text-[rgb(var(--muted2))]">
+                  {Math.min(rateComment.length, 500)}/500
+                </div>
+              </div>
+
+              {/* Confirm checkbox */}
+              <label className="flex items-center gap-2.5 text-xs text-[rgb(var(--fg))] cursor-pointer mb-5 select-none">
+                <input
+                  type="checkbox"
+                  checked={rateConfirmed}
+                  onChange={(e) => setRateConfirmed(e.target.checked)}
+                  disabled={rateLoading || !!ratingBySession[rateSessionId]}
+                  className="h-4 w-4 rounded accent-[rgb(var(--primary))]"
+                />
+                I confirm this session happened
+              </label>
+
+              <div className="flex gap-2">
+                <button
+                  disabled={rateLoading}
+                  onClick={closeRate}
+                  className="flex-1 rounded-xl px-3 py-2.5 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60 transition-colors"
+                >
+                  Close
+                </button>
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  disabled={rateLoading || !!ratingBySession[rateSessionId]}
+                  onClick={submitRating}
+                  className="flex-1 rounded-xl px-3 py-2.5 text-xs font-bold text-white bg-amber-500 shadow-[0_4px_14px_rgb(245,158,11,0.30)] hover:opacity-90 disabled:opacity-60 transition-all"
+                >
+                  {rateLoading ? "Submitting…" : "Submit rating"}
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
