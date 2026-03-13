@@ -1,11 +1,22 @@
 "use client";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    const footer = document.querySelector("footer");
+    if (footer) footer.style.display = "none";
+    return () => {
+      document.body.style.overflow = "";
+      const footer = document.querySelector("footer");
+      if (footer) footer.style.display = "";
+    };
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -54,14 +65,8 @@ export default function ForgotPasswordPage() {
           70%  { box-shadow: 0 0 0 6px rgb(var(--primary) / 0); }
           100% { box-shadow: 0 0 0 0 rgb(var(--primary) / 0); }
         }
-
-        .forgot-card {
-          animation: fadeSlideUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-        }
-        .status-msg {
-          animation: slideDown 0.25s ease both;
-        }
-
+        .forgot-card { animation: fadeSlideUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+        .status-msg { animation: slideDown 0.25s ease both; }
         .email-input {
           width: 100%;
           border-radius: 12px;
@@ -73,16 +78,12 @@ export default function ForgotPasswordPage() {
           color: rgb(var(--fg));
           transition: border-color 0.2s, box-shadow 0.2s;
         }
-        .email-input::placeholder {
-          color: rgb(var(--muted2));
-          opacity: 0.7;
-        }
+        .email-input::placeholder { color: rgb(var(--muted2)); opacity: 0.7; }
         .email-input:focus {
           border-color: rgb(var(--primary));
           box-shadow: 0 0 0 3px rgb(var(--primary) / 0.12);
           animation: pulse-ring 0.5s ease-out;
         }
-
         .submit-btn {
           position: relative;
           width: 100%;
@@ -108,22 +109,10 @@ export default function ForgotPasswordPage() {
           opacity: 0;
           transition: opacity 0.2s;
         }
-        .submit-btn:not(:disabled):hover {
-          transform: translateY(-2px);
-          box-shadow: 0 10px 28px rgb(var(--primary) / 0.38);
-        }
-        .submit-btn:not(:disabled):hover::before {
-          opacity: 1;
-          animation: shimmer 0.9s linear;
-        }
-        .submit-btn:not(:disabled):active {
-          transform: translateY(0);
-        }
-        .submit-btn:disabled {
-          opacity: 0.55;
-          cursor: not-allowed;
-        }
-
+        .submit-btn:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgb(var(--primary) / 0.38); }
+        .submit-btn:not(:disabled):hover::before { opacity: 1; animation: shimmer 0.9s linear; }
+        .submit-btn:not(:disabled):active { transform: translateY(0); }
+        .submit-btn:disabled { opacity: 0.55; cursor: not-allowed; }
         .spinner {
           display: inline-block;
           width: 14px; height: 14px;
@@ -134,7 +123,6 @@ export default function ForgotPasswordPage() {
           vertical-align: middle;
           margin-right: 6px;
         }
-
         .back-link {
           color: rgb(var(--primary));
           text-decoration: none;
@@ -152,99 +140,93 @@ export default function ForgotPasswordPage() {
         .back-link:hover::after { width: 100%; }
       `}</style>
 
-      <div className="relative min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
-        <div className="relative z-10 flex min-h-screen items-center justify-center px-4">
-          <div
-            className="forgot-card w-full max-w-md rounded-3xl border p-7"
-            style={{
-              borderColor: "rgb(var(--border))",
-              background: "rgb(var(--card) / 0.75)",
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
-              boxShadow: "0 24px 64px rgb(var(--shadow) / 0.18), 0 1px 0 rgb(var(--border))",
-            }}
-          >
-            {/* Icon */}
-            <div
-              className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl text-xl"
-              style={{
-                background: "linear-gradient(135deg, rgb(var(--primary) / 0.15), rgb(var(--primary2) / 0.1))",
-                border: "1px solid rgb(var(--primary) / 0.2)",
-              }}
-            >
-              🔑
+      <div
+        className="flex items-center justify-center px-4 bg-[rgb(var(--bg))] text-[rgb(var(--fg))]"
+        style={{ height: "calc(100vh - 56px)" }}
+      >
+        <div
+          className="forgot-card w-full max-w-md rounded-3xl border p-6"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgb(var(--card) / 0.75)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            boxShadow: "0 24px 64px rgb(var(--shadow) / 0.18), 0 1px 0 rgb(var(--border))",
+          }}
+        >
+          {/* Header: icon + title on one line, subtitle indented to align with title */}
+          <div className="mb-5">
+            <div className="flex items-center gap-3">
+              <div
+                className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
+                style={{
+                  background: "linear-gradient(135deg, rgb(var(--primary) / 0.15), rgb(var(--primary2) / 0.1))",
+                  border: "1px solid rgb(var(--primary) / 0.2)",
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgb(var(--primary))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="7.5" cy="15.5" r="5.5"/>
+                  <path d="M21 2l-9.6 9.6"/>
+                  <path d="M15.5 7.5l3 3L22 7l-3-3"/>
+                </svg>
+              </div>
+              <h1 className="text-xl font-semibold leading-tight" style={{ color: "rgb(var(--fg))" }}>
+                Reset your password
+              </h1>
             </div>
-
-            {/* Heading */}
-            <h1 className="text-xl font-semibold" style={{ color: "rgb(var(--fg))" }}>
-              Reset your password
-            </h1>
             <p className="mt-1.5 text-sm leading-relaxed" style={{ color: "rgb(var(--muted))" }}>
               Enter your registered USM email. We'll send you a password reset link.
             </p>
-
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-              <div>
-                <label
-                  className="mb-1.5 block text-xs font-semibold uppercase tracking-wider"
-                  style={{ color: "rgb(var(--muted))" }}
-                >
-                  Email address
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="yourid@student.usm.my"
-                  className="email-input"
-                />
-              </div>
-
-              <button type="submit" disabled={loading} className="submit-btn">
-                {loading ? (
-                  <>
-                    <span className="spinner" />
-                    Sending link...
-                  </>
-                ) : (
-                  "Send reset link →"
-                )}
-              </button>
-            </form>
-
-            {/* Status */}
-            {status && (
-              <div
-                className={`status-msg mt-4 flex items-start gap-2 rounded-xl px-3.5 py-3 text-xs ${
-                  status.type === "success"
-                    ? "bg-emerald-500/10 text-emerald-400"
-                    : "bg-rose-500/10 text-rose-400"
-                }`}
-                style={{
-                  border: `1.5px solid ${
-                    status.type === "success"
-                      ? "rgb(16 185 129 / 0.3)"
-                      : "rgb(251 113 133 / 0.3)"
-                  }`,
-                }}
-              >
-                <span className="mt-0.5 flex-shrink-0">
-                  {status.type === "success" ? "✓" : "✕"}
-                </span>
-                <span>{status.msg}</span>
-              </div>
-            )}
-
-            {/* Footer */}
-            <p className="mt-5 text-xs" style={{ color: "rgb(var(--muted2))" }}>
-              Remembered your password?{" "}
-              <Link href="/auth/login" className="back-link">
-                Back to login
-              </Link>
-            </p>
           </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label
+                className="mb-1.5 block text-xs font-semibold uppercase tracking-wider"
+                style={{ color: "rgb(var(--muted))" }}
+              >
+                Email address
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="yourid@student.usm.my"
+                className="email-input"
+              />
+            </div>
+
+            <button type="submit" disabled={loading} className="submit-btn">
+              {loading ? (
+                <><span className="spinner" />Sending link...</>
+              ) : (
+                "Send reset link →"
+              )}
+            </button>
+          </form>
+
+          {/* Status */}
+          {status && (
+            <div
+              className={`status-msg mt-3 flex items-start gap-2 rounded-xl px-3.5 py-3 text-xs ${
+                status.type === "success" ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
+              }`}
+              style={{
+                border: `1.5px solid ${status.type === "success" ? "rgb(16 185 129 / 0.3)" : "rgb(251 113 133 / 0.3)"}`,
+              }}
+            >
+              <span className="mt-0.5 flex-shrink-0">{status.type === "success" ? "✓" : "✕"}</span>
+              <span>{status.msg}</span>
+            </div>
+          )}
+
+          {/* Footer */}
+          <p className="mt-4 text-xs" style={{ color: "rgb(var(--muted2))" }}>
+            Remembered your password?{" "}
+            <Link href="/auth/login" className="back-link">Back to login</Link>
+          </p>
         </div>
       </div>
     </>
