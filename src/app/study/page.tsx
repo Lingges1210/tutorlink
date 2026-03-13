@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Sparkles,
@@ -15,6 +15,17 @@ import {
   Target,
   ListChecks,
 } from "lucide-react";
+
+const STEP_ANIM = `
+@keyframes stepFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes labelFadeIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+`;
 
 // ── Floating Particles + Rockets + Astronauts Canvas ─────────────────────
 function FloatingParticles() {
@@ -41,11 +52,10 @@ function FloatingParticles() {
       wobble: number; wobbleSpeed: number;
     }[] = [];
 
-    // Astronauts float in a fixed lazy orbit/drift — always on screen
     const astronauts: {
-      cx: number; cy: number;          // centre of drift orbit
-      orbitRx: number; orbitRy: number; // orbit radii
-      phase: number;                    // current angle in orbit
+      cx: number; cy: number;
+      orbitRx: number; orbitRy: number;
+      phase: number;
       orbitSpeed: number;
       bobPhase: number;
       bobSpeed: number;
@@ -62,7 +72,6 @@ function FloatingParticles() {
     resize();
     window.addEventListener("resize", resize);
 
-    // Particles
     for (let i = 0; i < 55; i++) {
       const shapes = ["circle", "ring", "dot", "cross"] as const;
       particles.push({
@@ -78,7 +87,6 @@ function FloatingParticles() {
       });
     }
 
-    // Rockets
     function spawnRocket() {
       const side = Math.floor(Math.random() * 4);
       let x = 0, y = 0, angle = 0;
@@ -86,12 +94,10 @@ function FloatingParticles() {
       else if (side === 1) { x = canvas!.width + 60; y = Math.random() * canvas!.height; angle = Math.PI + (Math.random() * 0.5 - 0.25); }
       else if (side === 2) { x = Math.random() * canvas!.width; y = -60; angle = Math.PI / 2 + (Math.random() * 0.5 - 0.25); }
       else { x = Math.random() * canvas!.width; y = canvas!.height + 60; angle = -Math.PI / 2 + (Math.random() * 0.5 - 0.25); }
-      // Bigger sizes: 32–58px
       rockets.push({ x, y, angle, speed: 0.8 + Math.random() * 1.0, size: 32 + Math.random() * 26, alpha: 0.32 + Math.random() * 0.28, trailPoints: [], wobble: 0, wobbleSpeed: 0.016 + Math.random() * 0.012 });
     }
     for (let i = 0; i < 3; i++) spawnRocket();
 
-    // Astronauts — place in safe zones (corners / edges away from centre content)
     const astroSeeds = [
       { cx: 0.08, cy: 0.18 },
       { cx: 0.91, cy: 0.25 },
@@ -116,21 +122,18 @@ function FloatingParticles() {
 
     function isDark() { return document.documentElement.classList.contains("dark"); }
 
-    // ── Draw Rocket ──
     function drawRocket(x: number, y: number, angle: number, size: number, alpha: number, col: string) {
       ctx!.save();
       ctx!.translate(x, y);
       ctx!.rotate(angle + Math.PI / 2);
       ctx!.globalAlpha = alpha;
 
-      // Glow aura
       const aura = ctx!.createRadialGradient(0, 0, 0, 0, 0, size * 1.8);
       aura.addColorStop(0, `rgba(${col},0.12)`);
       aura.addColorStop(1, `rgba(${col},0)`);
       ctx!.beginPath(); ctx!.arc(0, 0, size * 1.8, 0, Math.PI * 2);
       ctx!.fillStyle = aura; ctx!.fill();
 
-      // Body
       ctx!.beginPath();
       ctx!.moveTo(0, -size);
       ctx!.bezierCurveTo(size * 0.42, -size * 0.5, size * 0.42, size * 0.28, 0, size * 0.52);
@@ -138,12 +141,10 @@ function FloatingParticles() {
       ctx!.fillStyle = `rgba(${col},${alpha * 0.85})`;
       ctx!.fill();
 
-      // Outline
       ctx!.strokeStyle = `rgba(${col},${alpha * 0.5})`;
       ctx!.lineWidth = 1;
       ctx!.stroke();
 
-      // Window
       ctx!.beginPath();
       ctx!.arc(0, -size * 0.22, size * 0.24, 0, Math.PI * 2);
       ctx!.fillStyle = `rgba(${col},${alpha * 1.5})`;
@@ -152,7 +153,6 @@ function FloatingParticles() {
       ctx!.lineWidth = 0.8;
       ctx!.stroke();
 
-      // Left fin
       ctx!.beginPath();
       ctx!.moveTo(-size * 0.38, size * 0.18);
       ctx!.lineTo(-size * 0.78, size * 0.65);
@@ -161,7 +161,6 @@ function FloatingParticles() {
       ctx!.fillStyle = `rgba(${col},${alpha * 0.5})`;
       ctx!.fill();
 
-      // Right fin
       ctx!.beginPath();
       ctx!.moveTo(size * 0.38, size * 0.18);
       ctx!.lineTo(size * 0.78, size * 0.65);
@@ -170,7 +169,6 @@ function FloatingParticles() {
       ctx!.fillStyle = `rgba(${col},${alpha * 0.5})`;
       ctx!.fill();
 
-      // Flame core
       const fl = ctx!.createRadialGradient(0, size * 0.62, 0, 0, size * 1.0, size * 0.55);
       fl.addColorStop(0, `rgba(255,215,60,${alpha * 1.1})`);
       fl.addColorStop(0.4, `rgba(255,100,20,${alpha * 0.7})`);
@@ -182,7 +180,6 @@ function FloatingParticles() {
       ctx!.restore();
     }
 
-    // ── Draw Astronaut ──
     function drawAstronaut(x: number, y: number, size: number, alpha: number, rotation: number, col: string) {
       ctx!.save();
       ctx!.translate(x, y);
@@ -191,7 +188,6 @@ function FloatingParticles() {
 
       const s = size;
 
-      // Suit body (oval torso)
       ctx!.beginPath();
       ctx!.ellipse(0, s * 0.12, s * 0.38, s * 0.44, 0, 0, Math.PI * 2);
       ctx!.fillStyle = `rgba(${col},${alpha * 0.55})`;
@@ -200,7 +196,6 @@ function FloatingParticles() {
       ctx!.lineWidth = 1.2;
       ctx!.stroke();
 
-      // Helmet (sphere)
       ctx!.beginPath();
       ctx!.arc(0, -s * 0.35, s * 0.3, 0, Math.PI * 2);
       ctx!.fillStyle = `rgba(${col},${alpha * 0.45})`;
@@ -209,19 +204,16 @@ function FloatingParticles() {
       ctx!.lineWidth = 1.5;
       ctx!.stroke();
 
-      // Visor (darker ellipse inside helmet)
       ctx!.beginPath();
       ctx!.ellipse(0, -s * 0.35, s * 0.18, s * 0.14, 0, 0, Math.PI * 2);
       ctx!.fillStyle = `rgba(${col},${alpha * 0.9})`;
       ctx!.fill();
 
-      // Visor glint
       ctx!.beginPath();
       ctx!.ellipse(-s * 0.06, -s * 0.4, s * 0.05, s * 0.035, -0.5, 0, Math.PI * 2);
       ctx!.fillStyle = `rgba(255,255,255,${alpha * 0.5})`;
       ctx!.fill();
 
-      // Left arm
       ctx!.beginPath();
       ctx!.moveTo(-s * 0.35, -s * 0.05);
       ctx!.bezierCurveTo(-s * 0.65, s * 0.0, -s * 0.7, s * 0.3, -s * 0.5, s * 0.42);
@@ -230,7 +222,6 @@ function FloatingParticles() {
       ctx!.lineCap = "round";
       ctx!.stroke();
 
-      // Right arm
       ctx!.beginPath();
       ctx!.moveTo(s * 0.35, -s * 0.05);
       ctx!.bezierCurveTo(s * 0.65, s * 0.0, s * 0.7, s * 0.3, s * 0.5, s * 0.42);
@@ -238,7 +229,6 @@ function FloatingParticles() {
       ctx!.strokeStyle = `rgba(${col},${alpha * 0.5})`;
       ctx!.stroke();
 
-      // Left leg
       ctx!.beginPath();
       ctx!.moveTo(-s * 0.2, s * 0.52);
       ctx!.bezierCurveTo(-s * 0.25, s * 0.75, -s * 0.35, s * 0.85, -s * 0.3, s * 0.95);
@@ -246,7 +236,6 @@ function FloatingParticles() {
       ctx!.strokeStyle = `rgba(${col},${alpha * 0.45})`;
       ctx!.stroke();
 
-      // Right leg
       ctx!.beginPath();
       ctx!.moveTo(s * 0.2, s * 0.52);
       ctx!.bezierCurveTo(s * 0.25, s * 0.75, s * 0.35, s * 0.85, s * 0.3, s * 0.95);
@@ -254,13 +243,11 @@ function FloatingParticles() {
       ctx!.strokeStyle = `rgba(${col},${alpha * 0.45})`;
       ctx!.stroke();
 
-      // Chest pack
       ctx!.beginPath();
       ctx!.roundRect(-s * 0.14, -s * 0.05, s * 0.28, s * 0.22, s * 0.04);
       ctx!.fillStyle = `rgba(${col},${alpha * 0.7})`;
       ctx!.fill();
 
-      // Tether line (squiggly)
       ctx!.beginPath();
       ctx!.moveTo(s * 0.38, s * 0.12);
       ctx!.bezierCurveTo(s * 0.6, -s * 0.1, s * 0.8, s * 0.2, s * 0.9, s * 0.05);
@@ -284,7 +271,6 @@ function FloatingParticles() {
       const dark = isDark();
       const baseColor = dark ? "200,210,255" : "99,102,241";
 
-      // ── Particles ──
       for (const p of particles) {
         p.pulse += p.pulseSpeed;
         const ga = p.alpha * (0.6 + 0.4 * Math.sin(p.pulse));
@@ -316,7 +302,6 @@ function FloatingParticles() {
         ctx.restore();
       }
 
-      // Connecting lines
       for (let i = 0; i < particles.length; i++) {
         for (let j = i + 1; j < particles.length; j++) {
           const dx = particles[i].x - particles[j].x;
@@ -332,7 +317,6 @@ function FloatingParticles() {
         }
       }
 
-      // ── Rockets ──
       rocketSpawnTimer++;
       if (rocketSpawnTimer > 300 && rockets.length < 4) { spawnRocket(); rocketSpawnTimer = 0; }
 
@@ -345,7 +329,6 @@ function FloatingParticles() {
         r.trailPoints.unshift({ x: r.x, y: r.y });
         if (r.trailPoints.length > 60) r.trailPoints.pop();
 
-        // Coloured trail
         for (let tt = 0; tt < r.trailPoints.length - 1; tt++) {
           const prog = 1 - tt / r.trailPoints.length;
           ctx.beginPath();
@@ -364,7 +347,6 @@ function FloatingParticles() {
         }
       }
 
-      // ── Astronauts ──
       for (const a of astronauts) {
         a.phase += a.orbitSpeed;
         a.bobPhase += a.bobSpeed;
@@ -389,13 +371,18 @@ function FloatingParticles() {
 // ── Tab Button ─────────────────────────────────────────────────────────────
 function TabButton({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick}
-      className={["inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-300",
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "relative inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-200",
         active
           ? "bg-[rgb(var(--fg))] text-[rgb(var(--bg))] shadow-[0_4px_20px_rgb(var(--shadow)/0.3)] scale-[1.02]"
-          : "bg-transparent border border-[rgb(var(--border))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:border-[rgb(var(--fg)/0.3)]",
+          : "bg-transparent border border-[rgb(var(--border))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:border-[rgb(var(--fg)/0.3)] hover:scale-[1.01]",
       ].join(" ")}
-    >{children}</button>
+    >
+      {children}
+    </button>
   );
 }
 
@@ -475,15 +462,28 @@ const HOW_PLAN = [
 export default function StudyMain() {
   const router = useRouter();
   const sp = useSearchParams();
-  const tab = (sp.get("tab") ?? "hub") as "hub" | "plan";
+
+  // Derive URL tab, but keep a local copy for instant UI response
+  const urlTab = (sp.get("tab") ?? "hub") as "hub" | "plan";
+  const [tab, setTabState] = useState<"hub" | "plan">(urlTab);
+
+  // Sync local state if URL changes externally (browser back/forward)
+  useEffect(() => {
+    setTabState(urlTab);
+  }, [urlTab]);
+
+  function setTab(next: "hub" | "plan") {
+    if (next === tab) return;
+    setTabState(next);                       // instant — no navigation lag
+    router.replace(`/study?tab=${next}`);    // silent URL update, no history entry
+  }
 
   const howItWorks = tab === "hub" ? HOW_HUB : HOW_PLAN;
   const modeLabel = tab === "hub" ? "Active Recall Engine" : "AI Study Plan Generator";
 
-  function setTab(next: "hub" | "plan") { router.push(`/study?tab=${next}`); }
-
   return (
     <div className="min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
+      <style>{STEP_ANIM}</style>
       <FloatingParticles />
 
       {/* Background atmosphere */}
@@ -536,7 +536,15 @@ export default function StudyMain() {
                     Study Plan
                   </TabButton>
                 </div>
-                <span className="text-[11px] text-[rgb(var(--muted2))] pl-1">— {modeLabel}</span>
+
+                {/* Animated mode label */}
+                <span
+                  key={modeLabel}
+                  className="text-[11px] text-[rgb(var(--muted2))] pl-1"
+                  style={{ animation: "labelFadeIn 0.22s ease-out both" }}
+                >
+                  — {modeLabel}
+                </span>
               </div>
             </div>
 
@@ -553,20 +561,39 @@ export default function StudyMain() {
           {/* ── How it Works — switches with tab ── */}
           <section className="rounded-2xl border p-6 border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.45)] dark:bg-[rgb(var(--card2)/0.35)] backdrop-blur-sm">
             <div className="flex items-center justify-between gap-3 pb-5 border-b border-[rgb(var(--border))]">
-              <div className="inline-flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]">
+              {/* Section title animates on tab change */}
+              <div
+                key={`title-${tab}`}
+                className="inline-flex items-center gap-2 text-sm font-semibold text-[rgb(var(--fg))]"
+                style={{ animation: "labelFadeIn 0.22s ease-out both" }}
+              >
                 <div className="h-6 w-6 rounded-lg bg-[rgb(var(--fg))] flex items-center justify-center">
                   <Wand2 className="h-3.5 w-3.5 text-[rgb(var(--bg))]" />
                 </div>
                 How {tab === "hub" ? "Study Hub" : "Study Plan"} Works
               </div>
-              <div className="text-[11px] text-[rgb(var(--muted2))] font-medium">
+              <div
+                key={`meta-${tab}`}
+                className="text-[11px] text-[rgb(var(--muted2))] font-medium"
+                style={{ animation: "labelFadeIn 0.25s ease-out both" }}
+              >
                 {modeLabel} · 4 steps
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 md:grid-cols-4 gap-3">
-              {howItWorks.map((s) => (
-                <StepCard key={s.num} {...s} />
+            {/* Steps grid — keyed to tab so animation replays on every switch */}
+            <div
+              key={tab}
+              className="mt-5 grid grid-cols-1 md:grid-cols-4 gap-3"
+              style={{ animation: "stepFadeIn 0.3s ease-out both" }}
+            >
+              {howItWorks.map((s, i) => (
+                <div
+                  key={s.num}
+                  style={{ animation: `stepFadeIn 0.3s ease-out ${i * 55}ms both` }}
+                >
+                  <StepCard {...s} />
+                </div>
               ))}
             </div>
           </section>

@@ -14,34 +14,96 @@ function esc(s: string) {
     .replaceAll("'", "&#039;");
 }
 
-function fmtLocal(iso: string) {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString(undefined, {
-      weekday: "short",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
+/* ==========================================================================
+   DESIGN TOKENS
+   ========================================================================== */
+const T = {
+  // Brand
+  brand:         "#5b21b6",   // violet-800 — deep, premium
+  brandMid:      "#7c3aed",   // violet-600 — CTA hover
+  brandLight:    "#ede9fe",   // violet-100 — accent surfaces
+  brandText:     "#4c1d95",   // violet-900 — brand text on light bg
+
+  // Neutrals (force-light palette)
+  pageBg:        "#f4f4f6",   // warm off-white
+  cardBg:        "#ffffff",
+  cardBg2:       "#fafafa",   // inner surfaces / info blocks
+  textPrimary:   "#0f0f10",   // near-black
+  textSecondary: "#52525b",   // zinc-600
+  textMuted:     "#a1a1aa",   // zinc-400
+  border:        "#e4e4e7",   // zinc-200
+  borderStrong:  "#d4d4d8",   // zinc-300
+
+  // Semantic
+  successBg:     "#f0fdf4",
+  successText:   "#15803d",
+  successBorder: "#bbf7d0",
+  dangerBg:      "#fff1f2",
+  dangerText:    "#be123c",
+  dangerBorder:  "#fecdd3",
+  infoBg:        "#f0f9ff",
+  infoText:      "#0369a1",
+  infoBorder:    "#bae6fd",
+  warningBg:     "#fffbeb",
+  warningText:   "#b45309",
+  warningBorder: "#fde68a",
+};
+
+/* ==========================================================================
+   HELPERS
+   ========================================================================== */
+
+function badge(
+  label: string,
+  style: "success" | "danger" | "info" | "warning" | "brand" = "brand"
+) {
+  const map = {
+    success: `background:${T.successBg};color:${T.successText};border:1px solid ${T.successBorder};`,
+    danger:  `background:${T.dangerBg};color:${T.dangerText};border:1px solid ${T.dangerBorder};`,
+    info:    `background:${T.infoBg};color:${T.infoText};border:1px solid ${T.infoBorder};`,
+    warning: `background:${T.warningBg};color:${T.warningText};border:1px solid ${T.warningBorder};`,
+    brand:   `background:${T.brandLight};color:${T.brandText};border:1px solid #c4b5fd;`,
+  };
+  return `<span style="display:inline-block;${map[style]}font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:3px 10px;border-radius:100px;">${esc(label)}</span>`;
 }
+
+function divider() {
+  return `<div style="height:1px;background:${T.border};margin:20px 0;"></div>`;
+}
+
+function metaRow(icon: string, label: string, value: string) {
+  return `
+    <tr>
+      <td style="padding:7px 0;vertical-align:top;">
+        <span style="font-size:15px;line-height:1;">${icon}</span>
+      </td>
+      <td style="padding:7px 0 7px 10px;vertical-align:top;">
+        <span style="font-size:12px;font-weight:600;color:${T.textMuted};text-transform:uppercase;letter-spacing:0.07em;display:block;margin-bottom:1px;">${esc(label)}</span>
+        <span style="font-size:14px;color:${T.textPrimary};font-weight:500;">${esc(value)}</span>
+      </td>
+    </tr>`;
+}
+
+/* ==========================================================================
+   MASTER LAYOUT
+   ========================================================================== */
 
 function brandEmailLayout(opts: {
   subject: string;
   preheader?: string;
+  badgeLabel?: string;
+  badgeStyle?: "success" | "danger" | "info" | "warning" | "brand";
   title: string;
   greetingName?: string | null;
-  bodyHtml: string; // already-safe html
-  cta?: { label: string; href: string };
+  bodyHtml: string;
+  cta?: { label: string; href: string; style?: "primary" | "ghost" };
   footerNote?: string;
 }) {
   const {
     subject,
     preheader,
+    badgeLabel,
+    badgeStyle = "brand",
     title,
     greetingName,
     bodyHtml,
@@ -49,135 +111,153 @@ function brandEmailLayout(opts: {
     footerNote,
   } = opts;
 
-  const appName = "TutorLink";
-  const brand = "#7c3aed"; // violet-600-ish
-
-  /* =========================
-     ✅ Premium LIGHT palette (force light)
-     ========================= */
-  const bg = "#f6f7fb"; // soft app-like background
-  const card = "#ffffff"; // main card
-  const card2 = "#f8fafc"; // subtle inner surface
-  const text = "#111827"; // slate-900
-  const muted = "#6b7280"; // gray-500
-  const border = "rgba(17,24,39,0.10)";
-  const border2 = "rgba(17,24,39,0.08)";
-
+  const appName  = "TutorLink";
+  const appUrl   = process.env.NEXT_PUBLIC_APP_URL ?? "https://tutorlink.example";
   const safePreheader = esc(preheader ?? subject);
+  const year     = new Date().getFullYear();
+
+  const ctaHtml = cta
+    ? `
+      <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:24px;">
+        <tr>
+          <td style="
+            background:${T.brand};
+            border-radius:10px;
+            box-shadow:0 4px 14px rgba(91,33,182,0.28),0 1px 3px rgba(0,0,0,0.08);
+          ">
+            <a href="${esc(cta.href)}"
+               style="
+                 display:inline-block;
+                 padding:12px 24px;
+                 color:#ffffff;
+                 text-decoration:none;
+                 font-size:14px;
+                 font-weight:700;
+                 letter-spacing:0.01em;
+                 border-radius:10px;
+               ">
+              ${esc(cta.label)} &rarr;
+            </a>
+          </td>
+        </tr>
+      </table>`
+    : "";
 
   return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <title>${esc(subject)}</title>
+  <style>
+    a { color: ${T.brand}; }
+    @media (max-width:600px) {
+      .card { padding: 24px 18px !important; }
+      .outer { padding: 20px 12px !important; }
+    }
+  </style>
+</head>
 
-    <!-- ✅ Force light mode (helps prevent auto-dark-mode inversion) -->
-    <meta name="color-scheme" content="light" />
-    <meta name="supported-color-schemes" content="light" />
+<body style="margin:0;padding:0;background-color:${T.pageBg};font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%;">
 
-    <title>${esc(subject)}</title>
-    <style>
-      /* Keep CSS minimal (many clients strip styles). Inline styles are primary. */
-      a { color: ${brand}; }
-    </style>
-  </head>
+  <!-- Preheader -->
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;font-size:1px;">
+    ${safePreheader}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+  </div>
 
-  <body style="margin:0; padding:0; background-color:${bg}; font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Helvetica, Arial;">
-    <!-- preheader (hidden) -->
-    <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">
-      ${safePreheader}
-    </div>
+  <!-- Page wrapper -->
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="${T.pageBg}"
+         style="background-color:${T.pageBg};">
+    <tr>
+      <td class="outer" align="center" style="padding:40px 16px 48px;">
 
-    <!-- Outer background (repeat bg in multiple places to defeat auto-dark-mode + Outlook quirks) -->
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="${bg}"
-      style="background-color:${bg}; width:100%; padding:30px 16px;">
-      <tr>
-        <td align="center" bgcolor="${bg}" style="background-color:${bg};">
+        <!-- ── Container ────────────────────────── -->
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+               style="max-width:600px;width:100%;">
 
-          <!-- Container -->
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px; width:100%;">
-           <!-- Header -->
-<tr>
-  <td align="center" style="padding:0 0 18px 0;">
-    <img
-      src="${process.env.NEXT_PUBLIC_APP_URL}/logo.png"
-      alt="TutorLink"
-      style="display:block; height:52px; width:auto;"
-    />
-  </td>
-</tr>
+          <!-- Logo -->
+          <tr>
+            <td align="center" style="padding:0 0 24px;">
+              <a href="${esc(appUrl)}" style="text-decoration:none;">
+                <img
+                  src="${esc(appUrl)}/logo.png"
+                  alt="${esc(appName)}"
+                  style="display:block;height:44px;width:auto;"
+                />
+              </a>
+            </td>
+          </tr>
 
-            <!-- Main card -->
-            <tr>
-              <td bgcolor="${card}"
+          <!-- Main card -->
+          <tr>
+            <td class="card" bgcolor="${T.cardBg}"
                 style="
-                  background-color:${card};
-                  border:1px solid ${border};
-                  border-radius:18px;
-                  padding:24px;
-                  box-shadow: 0 14px 36px rgba(17,24,39,0.10);
+                  background-color:${T.cardBg};
+                  border:1px solid ${T.border};
+                  border-radius:16px;
+                  padding:36px 36px 32px;
+                  box-shadow:0 1px 3px rgba(0,0,0,0.06),0 8px 24px rgba(0,0,0,0.05);
                 ">
 
-                <div style="color:${muted}; font-size:12px; margin-bottom:8px;">
-                  ${esc(greetingName ? `Hi ${greetingName}` : "Hi there")}
-                </div>
+              <!-- Badge -->
+              ${badgeLabel ? `<div style="margin-bottom:14px;">${badge(badgeLabel, badgeStyle)}</div>` : ""}
 
-                <div style="color:${text}; font-size:20px; font-weight:900; margin:0 0 12px 0; line-height:1.25;">
-                  ${esc(title)}
-                </div>
+              <!-- Title -->
+              <h1 style="margin:0 0 8px;color:${T.textPrimary};font-size:22px;font-weight:800;line-height:1.25;letter-spacing:-0.02em;">
+                ${esc(title)}
+              </h1>
 
-                <div style="color:${text}; font-size:14px; line-height:1.7;">
-                  ${bodyHtml}
-                </div>
+              <!-- Greeting -->
+              <p style="margin:0 0 20px;color:${T.textSecondary};font-size:14px;line-height:1.6;">
+                Hi ${esc(greetingName ?? "there")},
+              </p>
 
-                ${
-                  cta
-                    ? `
-                  <div style="margin-top:18px;">
-                    <a href="${esc(cta.href)}"
-                       style="
-                         display:inline-block;
-                         background-color:${brand};
-                         color:#ffffff;
-                         text-decoration:none;
-                         font-weight:900;
-                         font-size:13px;
-                         padding:11px 16px;
-                         border-radius:12px;
-                         box-shadow: 0 10px 22px rgba(124,58,237,0.22);
-                       ">
-                      ${esc(cta.label)}
-                    </a>
-                  </div>
-                `
-                    : ""
-                }
+              <!-- Body -->
+              <div style="color:${T.textSecondary};font-size:14px;line-height:1.75;">
+                ${bodyHtml}
+              </div>
 
-                <div style="margin-top:20px; border-top:1px solid ${border2}; padding-top:14px; color:${muted}; font-size:12px; line-height:1.55;">
-                  ${esc(
-                    footerNote ??
-                      "If you didn’t request this, you can safely ignore this email."
-                  )}
-                </div>
-              </td>
-            </tr>
+              <!-- CTA -->
+              ${ctaHtml}
 
-            <!-- Footer -->
-            <tr>
-              <td style="padding:14px 4px 0 4px;">
-                <div style="color:${muted}; font-size:12px; text-align:center; line-height:1.5;">
-                  © ${new Date().getFullYear()} ${appName}. All rights reserved.
-                </div>
-              </td>
-            </tr>
+              ${divider()}
 
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
+              <!-- Footer note -->
+              <p style="margin:0;color:${T.textMuted};font-size:12px;line-height:1.6;">
+                ${esc(footerNote ?? "If you didn't request this, you can safely ignore this email.")}
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding:24px 0 0;">
+              <p style="margin:0 0 8px;color:${T.textMuted};font-size:12px;">
+                &copy; ${year} ${esc(appName)}. All rights reserved.
+              </p>
+              <p style="margin:0;font-size:12px;">
+                <a href="${esc(appUrl)}" style="color:${T.textMuted};text-decoration:none;">${esc(appUrl.replace(/^https?:\/\//, ""))}</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+        <!-- ── /Container ─────────────────────── -->
+
+      </td>
+    </tr>
+  </table>
+
+</body>
 </html>`;
 }
+
+/* ==========================================================================
+   SESSION CARD
+   ========================================================================== */
 
 function sessionCardHtml(opts: {
   subjectCode: string;
@@ -185,86 +265,118 @@ function sessionCardHtml(opts: {
   startISO: string;
   endISO?: string;
   extraLines?: string[];
+  highlight?: boolean; // draws a left-border accent
 }) {
-  const title = `${opts.subjectCode} — ${opts.subjectTitle}`;
-  const extra = (opts.extraLines ?? []).filter(Boolean);
+  const { subjectCode, subjectTitle, startISO, endISO, extraLines = [], highlight } = opts;
 
-  // ✅ Pretty time line: "Fri, Mar 6 • 5:00 PM – 5:30 PM"
-  const start = new Date(opts.startISO);
-  const end = opts.endISO ? new Date(opts.endISO) : null;
+  const start = new Date(startISO);
+  const end   = endISO ? new Date(endISO) : null;
 
-  const dateStr = start.toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  const dateStr  = start.toLocaleDateString(undefined, { weekday:"long", month:"long", day:"numeric" });
+  const startTime = start.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+  const endTime   = end ? end.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" }) : null;
 
-  const startTime = start.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
-  const endTime = end
-    ? end.toLocaleTimeString(undefined, {
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    : null;
-
-  const whenLine = `${dateStr} • ${startTime}${endTime ? ` – ${endTime}` : ""}`;
+  const accentBar = highlight
+    ? `border-left:3px solid ${T.brand};border-radius:0 12px 12px 0;`
+    : `border-radius:12px;`;
 
   return `
+  <div style="
+    margin-top:20px;
+    background:${T.cardBg2};
+    border:1px solid ${T.border};
+    ${accentBar}
+    overflow:hidden;
+  ">
+    <!-- Header strip -->
     <div style="
-      margin-top:14px;
-      background-color:#f8fafc;
-      border:1px solid rgba(17,24,39,0.10);
-      border-radius:14px;
-      padding:14px;
+      background:${T.brandLight};
+      padding:12px 16px;
+      border-bottom:1px solid #c4b5fd;
     ">
-      <div style="color:#111827; font-weight:900; font-size:15px; margin-bottom:8px;">
-        ${esc(title)}
-      </div>
-
-      <div style="color:#6b7280; font-size:13px; line-height:1.6;">
-        ${esc(whenLine)}
-      </div>
-
-      ${
-        extra.length
-          ? `<div style="margin-top:10px; border-top:1px solid rgba(17,24,39,0.08); padding-top:10px; color:#6b7280; font-size:12px; line-height:1.6;">
-              ${extra
-                .map((x) => `<div>${esc(x)}</div>`)
-                .join("")}
-            </div>`
-          : ""
-      }
+      <span style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${T.brandText};">
+        ${esc(subjectCode)}
+      </span>
     </div>
-  `;
+
+    <!-- Body -->
+    <div style="padding:14px 16px;">
+      <p style="margin:0 0 10px;font-size:15px;font-weight:700;color:${T.textPrimary};line-height:1.3;">
+        ${esc(subjectTitle.replace(/^[\s:–—-]+/, "").trim())}
+      </p>
+
+      <!-- Date / time rows -->
+      <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;">
+        <tr>
+          <td style="width:16px;vertical-align:middle;padding-top:1px;">
+            <!-- Calendar icon -->
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;">
+              <rect x="1" y="3" width="14" height="12" rx="2" stroke="${T.textMuted}" stroke-width="1.4" fill="none"/>
+              <path d="M1 7h14" stroke="${T.textMuted}" stroke-width="1.4"/>
+              <path d="M5 1v3M11 1v3" stroke="${T.textMuted}" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </td>
+          <td style="padding-left:8px;vertical-align:middle;">
+            <span style="font-size:13px;color:${T.textSecondary};">${esc(dateStr)}</span>
+          </td>
+        </tr>
+        <tr><td colspan="2" style="height:6px;"></td></tr>
+        <tr>
+          <td style="width:16px;vertical-align:middle;padding-top:1px;">
+            <!-- Clock icon -->
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;">
+              <circle cx="8" cy="8" r="6.5" stroke="${T.textMuted}" stroke-width="1.4" fill="none"/>
+              <path d="M8 5v3.5l2 1.5" stroke="${T.textMuted}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </td>
+          <td style="padding-left:8px;vertical-align:middle;">
+            <span style="font-size:13px;color:${T.textSecondary};">
+              ${esc(startTime)}${endTime ? ` &ndash; ${esc(endTime)}` : ""}
+            </span>
+          </td>
+        </tr>
+      </table>
+
+      ${extraLines.filter(Boolean).length ? `
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid ${T.border};">
+          ${extraLines.filter(Boolean).map(l =>
+            `<p style="margin:0 0 4px;font-size:12px;color:${T.textSecondary};">${esc(l)}</p>`
+          ).join("")}
+        </div>` : ""}
+    </div>
+  </div>`;
 }
 
-/* =========================
-   Emails
-   ========================= */
+/* ==========================================================================
+   EMAILS
+   ========================================================================== */
 
 export async function sendApprovalEmail(email: string, name?: string) {
-  const subject = "Your TutorLink account has been verified";
+  const subject = "Your TutorLink account is verified";
 
   const html = brandEmailLayout({
     subject,
-    preheader: "You now have full access to TutorLink.",
-    title: "Account verified",
-    greetingName: name ?? "there",
+    preheader: "Welcome aboard — you now have full access to TutorLink.",
+    badgeLabel: "Account Verified",
+    badgeStyle: "success",
+    title: "You're all set!",
+    greetingName: name,
     bodyHtml: `
-      <p style="margin:0 0 10px 0;">Your TutorLink account has been <b>successfully verified</b>.</p>
-      <p style="margin:0;">You now have full access to all features.</p>
+      <p style="margin:0 0 12px;">
+        Great news — your TutorLink account has been <strong style="color:${T.textPrimary};">successfully verified</strong>.
+        You now have full access to all features.
+      </p>
+      <p style="margin:0;">
+        Head to your dashboard to browse available tutors, book sessions, or manage your schedule.
+      </p>
     `,
     cta: {
-      label: "Open TutorLink",
+      label: "Go to Dashboard",
       href: process.env.NEXT_PUBLIC_APP_URL
         ? `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`
-        : "https://tutorlink.example",
+        : "https://tutorlink.example/dashboard",
     },
-    footerNote: "Welcome aboard — we’re glad to have you.",
+    footerNote: "Welcome to TutorLink — we're glad to have you on board.",
   });
 
   await resend.emails.send({
@@ -276,30 +388,39 @@ export async function sendApprovalEmail(email: string, name?: string) {
 }
 
 export async function sendRejectionEmail(email: string, reason?: string) {
-  const subject = "TutorLink verification update";
+  const subject = "TutorLink verification — action required";
 
   const reasonBlock = reason
-    ? `<p style="margin:10px 0 0 0;"><b>Reason:</b> ${esc(reason)}</p>`
+    ? `
+      <div style="margin:16px 0;background:${T.dangerBg};border:1px solid ${T.dangerBorder};border-radius:10px;padding:14px 16px;">
+        <p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:${T.dangerText};">Reason</p>
+        <p style="margin:0;font-size:14px;color:${T.textPrimary};">${esc(reason)}</p>
+      </div>`
     : "";
 
   const html = brandEmailLayout({
     subject,
-    preheader:
-      "Your verification was not approved. You can re-upload and try again.",
+    preheader: "Your verification was not approved. You can re-upload and try again.",
+    badgeLabel: "Verification Unsuccessful",
+    badgeStyle: "danger",
     title: "Verification not approved",
-    greetingName: "there",
+    greetingName: null,
     bodyHtml: `
-      <p style="margin:0 0 10px 0;">Your TutorLink verification was <b>not approved</b>.</p>
+      <p style="margin:0 0 4px;">
+        Unfortunately, your TutorLink verification could not be approved at this time.
+      </p>
       ${reasonBlock}
-      <p style="margin:10px 0 0 0;">You may re-upload your matric card or contact support.</p>
+      <p style="margin:0;">
+        You may re-upload your matric card or reach out to our support team for help.
+      </p>
     `,
     cta: {
-      label: "Go to Verification",
+      label: "Re-upload Verification",
       href: process.env.NEXT_PUBLIC_APP_URL
         ? `${process.env.NEXT_PUBLIC_APP_URL}/verify`
-        : "https://tutorlink.example",
+        : "https://tutorlink.example/verify",
     },
-    footerNote: "If you believe this is a mistake, reply to this email for help.",
+    footerNote: "If you believe this is a mistake, simply reply to this email and we'll look into it.",
   });
 
   await resend.emails.send({
@@ -310,39 +431,43 @@ export async function sendRejectionEmail(email: string, reason?: string) {
   });
 }
 
+export function computeOneHourBeforeISO(sessionISO: string) {
+  const start      = new Date(sessionISO).getTime();
+  const oneHourBefore = new Date(start - 60 * 60 * 1000);
+  const minFuture  = new Date(Date.now() + 60 * 1000);
+  const finalTime  = oneHourBefore > minFuture ? oneHourBefore : minFuture;
+  return finalTime.toISOString();
+}
+
 export async function scheduleSessionReminderEmail(opts: {
   sessionId: string;
   toEmail: string;
   toName?: string | null;
   subjectCode: string;
   subjectTitle: string;
-  scheduledAtISO: string; // when the email should be sent
+  scheduledAtISO: string;
 }) {
-  const {
-    sessionId,
-    toEmail,
-    toName,
-    subjectCode,
-    subjectTitle,
-    scheduledAtISO,
-  } = opts;
-
-  const subject = `Reminder: ${subjectCode} session in 1 hour`;
+  const { sessionId, toEmail, toName, subjectCode, subjectTitle, scheduledAtISO } = opts;
+  const subject = `Reminder: Your ${subjectCode} session starts in 1 hour`;
 
   const html = brandEmailLayout({
     subject,
-    preheader: "Your session starts in 1 hour.",
-    title: "Session reminder",
-    greetingName: toName ?? "there",
+    preheader: "Your tutoring session is coming up. Get ready!",
+    badgeLabel: "Session Reminder",
+    badgeStyle: "warning",
+    title: "Your session is coming up",
+    greetingName: toName,
     bodyHtml: `
-      <p style="margin:0 0 10px 0;">This is a friendly reminder that your session starts in <b>1 hour</b>.</p>
-      ${sessionCardHtml({
-        subjectCode,
-        subjectTitle,
-        startISO: scheduledAtISO,
-      })}
-      <p style="margin:12px 0 0 0;">Be ready a few minutes early so you can start on time.</p>
+      <p style="margin:0 0 4px;">
+        Just a heads-up — your session starts in <strong style="color:${T.textPrimary};">1 hour</strong>.
+        Make sure you're in a quiet spot and ready to go.
+      </p>
+      ${sessionCardHtml({ subjectCode, subjectTitle, startISO: scheduledAtISO, highlight: true })}
+      <p style="margin:16px 0 0;font-size:13px;color:${T.textMuted};">
+        We recommend joining a few minutes early to test your connection.
+      </p>
     `,
+    footerNote: "You're receiving this because you have a session booked on TutorLink.",
   });
 
   const resp = await resend.emails.send({
@@ -364,14 +489,6 @@ export async function scheduleSessionReminderEmail(opts: {
   return emailId;
 }
 
-export function computeOneHourBeforeISO(sessionISO: string) {
-  const start = new Date(sessionISO).getTime();
-  const oneHourBefore = new Date(start - 60 * 60 * 1000);
-  const minFuture = new Date(Date.now() + 60 * 1000);
-  const finalTime = oneHourBefore > minFuture ? oneHourBefore : minFuture;
-  return finalTime.toISOString();
-}
-
 export async function cancelScheduledEmail(resendEmailId: string) {
   try {
     await resend.emails.cancel(resendEmailId);
@@ -384,79 +501,57 @@ export async function sendSessionInviteEmail(opts: {
   mode: "ACCEPTED" | "RESCHEDULED" | "CANCELLED";
   toEmail: string;
   toName?: string | null;
-
   subjectCode: string;
   subjectTitle: string;
-
   startISO: string;
   endISO: string;
-
   uid: string;
   sequence: number;
-
   organizerName: string;
   organizerEmail: string;
-
   cancelReason?: string | null;
 }) {
-  const start = new Date(opts.startISO);
-  const end = new Date(opts.endISO);
-
+  const start  = new Date(opts.startISO);
+  const end    = new Date(opts.endISO);
   const method = opts.mode === "CANCELLED" ? "CANCEL" : "REQUEST";
 
-  const title = `TutorLink Session: ${opts.subjectCode}`;
-  const descriptionLines = [
-    `Course: ${opts.subjectCode} — ${opts.subjectTitle}`,
-    `Start: ${start.toLocaleString()}`,
-    `End: ${end.toLocaleString()}`,
-    opts.mode === "CANCELLED" && opts.cancelReason
-      ? `Reason: ${opts.cancelReason}`
-      : null,
-  ].filter(Boolean);
-
-  const ics = buildIcs({
-    method,
-    uid: opts.uid,
-    sequence: opts.sequence,
-    start,
-    end,
-    title,
-    description: descriptionLines.join("\n"),
-    organizerName: opts.organizerName,
-    organizerEmail: opts.organizerEmail,
-    attendeeName: opts.toName ?? "User",
-    attendeeEmail: opts.toEmail,
-  });
+  const modeConfig = {
+    ACCEPTED:    { badgeStyle: "success" as const, badgeLabel: "Session Confirmed",   title: "Session confirmed",  preheader: "Your session is confirmed. A calendar invite is attached." },
+    RESCHEDULED: { badgeStyle: "warning" as const, badgeLabel: "Session Updated",     title: "Session rescheduled", preheader: "Your session time has changed. Please update your calendar." },
+    CANCELLED:   { badgeStyle: "danger"  as const, badgeLabel: "Session Cancelled",   title: "Session cancelled",  preheader: "Your session has been cancelled." },
+  }[opts.mode];
 
   const subject =
-    opts.mode === "CANCELLED"
-      ? `Cancelled: ${opts.subjectCode} session`
-      : opts.mode === "RESCHEDULED"
-      ? `Updated: ${opts.subjectCode} session time`
-      : `Confirmed: ${opts.subjectCode} session invite`;
+    opts.mode === "CANCELLED"   ? `Cancelled: ${opts.subjectCode} session` :
+    opts.mode === "RESCHEDULED" ? `Updated: ${opts.subjectCode} session` :
+                                   `Confirmed: ${opts.subjectCode} session`;
 
-  const base64Ics = Buffer.from(ics, "utf-8").toString("base64");
+  const cancelReasonBlock = opts.mode === "CANCELLED" && opts.cancelReason
+    ? `
+      <div style="margin-top:16px;background:${T.dangerBg};border:1px solid ${T.dangerBorder};border-radius:10px;padding:14px 16px;">
+        <p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:${T.dangerText};">Cancellation reason</p>
+        <p style="margin:0;font-size:14px;color:${T.textPrimary};">${esc(opts.cancelReason)}</p>
+      </div>`
+    : "";
 
   const bodyIntro =
     opts.mode === "CANCELLED"
-      ? `<p style="margin:0;">This email confirms your session has been <b>cancelled</b>.</p>`
-      : `<p style="margin:0;">Please add the attached <b>calendar invite</b> to get automatic reminders.</p>`;
+      ? `<p style="margin:0;">Your session has been <strong style="color:${T.textPrimary};">cancelled</strong>. We're sorry for any inconvenience.</p>`
+      : opts.mode === "RESCHEDULED"
+      ? `<p style="margin:0;">Your session has been <strong style="color:${T.textPrimary};">rescheduled</strong>. A calendar invite is attached — please update your calendar.</p>`
+      : `<p style="margin:0;">Your session is <strong style="color:${T.textPrimary};">confirmed</strong>! A calendar invite is attached for easy scheduling.</p>`;
 
-  const extra =
-    opts.mode === "CANCELLED" && opts.cancelReason
-      ? [`Reason: ${opts.cancelReason}`]
-      : [];
+  const extra = opts.mode === "CANCELLED" && opts.cancelReason
+    ? [`Reason: ${opts.cancelReason}`]
+    : [];
 
   const html = brandEmailLayout({
     subject,
-    preheader: "Calendar invite attached.",
-    title:
-      opts.mode === "CANCELLED"
-        ? "Session cancelled"
-        : opts.mode === "RESCHEDULED"
-        ? "Session updated"
-        : "Session confirmed",
-    greetingName: opts.toName ?? "there",
+    preheader: modeConfig.preheader,
+    badgeLabel: modeConfig.badgeLabel,
+    badgeStyle: modeConfig.badgeStyle,
+    title: modeConfig.title,
+    greetingName: opts.toName,
     bodyHtml: `
       ${bodyIntro}
       ${sessionCardHtml({
@@ -465,10 +560,38 @@ export async function sendSessionInviteEmail(opts: {
         startISO: opts.startISO,
         endISO: opts.endISO,
         extraLines: extra,
+        highlight: opts.mode !== "CANCELLED",
       })}
-      <p style="margin:12px 0 0 0;">If the session changes again, you'll receive an updated invite.</p>
+      ${cancelReasonBlock}
+      ${opts.mode !== "CANCELLED"
+        ? `<p style="margin:16px 0 0;font-size:13px;color:${T.textMuted};">If the session changes again, you'll receive an updated invite automatically.</p>`
+        : ""}
     `,
+    footerNote: "You're receiving this because you have a session booked on TutorLink.",
   });
+
+  const descriptionLines = [
+    `Course: ${opts.subjectCode} — ${opts.subjectTitle}`,
+    `Start: ${start.toLocaleString()}`,
+    `End: ${end.toLocaleString()}`,
+    opts.mode === "CANCELLED" && opts.cancelReason ? `Reason: ${opts.cancelReason}` : null,
+  ].filter(Boolean);
+
+  const ics = buildIcs({
+    method,
+    uid: opts.uid,
+    sequence: opts.sequence,
+    start,
+    end,
+    title: `TutorLink Session: ${opts.subjectCode}`,
+    description: descriptionLines.join("\n"),
+    organizerName: opts.organizerName,
+    organizerEmail: opts.organizerEmail,
+    attendeeName: opts.toName ?? "User",
+    attendeeEmail: opts.toEmail,
+  });
+
+  const base64Ics = Buffer.from(ics, "utf-8").toString("base64");
 
   await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL!,
@@ -494,19 +617,22 @@ export async function sendPasswordResetEmail(opts: {
 
   const html = brandEmailLayout({
     subject,
-    preheader: "Use this link to reset your password.",
-    title: "Reset Password",
-    greetingName: opts.toName ?? "there",
+    preheader: "We received a password reset request for your account.",
+    badgeLabel: "Password Reset",
+    badgeStyle: "info",
+    title: "Reset your password",
+    greetingName: opts.toName,
     bodyHtml: `
-      <p style="margin:0 0 10px 0;">
-        We received a request to reset your TutorLink password.
+      <p style="margin:0 0 12px;">
+        We received a request to reset the password for your TutorLink account.
+        Click the button below to choose a new password.
       </p>
-      <p style="margin:0;">
-        Click the button below to set a new password.
+      <p style="margin:0;font-size:13px;color:${T.textMuted};">
+        This link expires in <strong style="color:${T.textSecondary};">24 hours</strong>.
       </p>
     `,
     cta: { label: "Reset Password", href: opts.resetLink },
-    footerNote: "If you didn’t request this, you can safely ignore this email.",
+    footerNote: "If you didn't request a password reset, you can safely ignore this email — your account is secure.",
   });
 
   await resend.emails.send({
