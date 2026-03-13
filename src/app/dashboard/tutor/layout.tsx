@@ -1,8 +1,8 @@
-// src/app/dashboard/tutor/layout.tsx
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import StudentSidebarNav, { SidebarItem } from "@/components/StudentSidebarNav";
+import RoleSwitcher from "@/components/RoleSwitcher";
 import { Star } from "lucide-react";
 
 export default async function TutorLayout({
@@ -27,8 +27,6 @@ export default async function TutorLayout({
       isDeactivated: true,
       isTutorApproved: true,
       roleAssignments: { select: { role: true } },
-
-      //  rating fields
       avgRating: true,
       ratingCount: true,
     },
@@ -43,7 +41,6 @@ export default async function TutorLayout({
     dbUser.role === "TUTOR" ||
     dbUser.roleAssignments.some((r) => r.role === "TUTOR");
 
-  // Extra safety: if not tutor, kick back
   if (!isTutor) redirect("/dashboard/student");
 
   const tutorItems: SidebarItem[] = [
@@ -70,14 +67,6 @@ export default async function TutorLayout({
       href: "/dashboard/tutor/sessions",
       label: "Sessions",
       icon: "calendar",
-    },
-
-    { type: "divider" },
-    {
-      type: "link",
-      href: "/dashboard/student",
-      label: "Student Dashboard",
-      icon: "dashboard",
     },
   ];
 
@@ -122,6 +111,7 @@ export default async function TutorLayout({
             "
           >
             <div className="p-5">
+              {/* ── User info ── */}
               <div className="mb-4">
                 <div className="text-sm font-semibold text-[rgb(var(--fg))]">
                   {dbUser.name ?? "Tutor"}
@@ -129,7 +119,6 @@ export default async function TutorLayout({
                 <div className="text-xs text-[rgb(var(--muted2))]">
                   {dbUser.email}
                 </div>
-
                 <div className="mt-2 text-[0.7rem] text-[rgb(var(--muted))]">
                   Status:{" "}
                   <span
@@ -143,10 +132,7 @@ export default async function TutorLayout({
                 {/* Rating pill */}
                 {(dbUser.ratingCount ?? 0) > 0 && (
                   <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2.5 py-1">
-                    <Star
-  size={14}
-  className="fill-amber-400 text-amber-400"
-/>
+                    <Star size={14} className="fill-amber-400 text-amber-400" />
                     <span className="text-xs font-semibold text-[rgb(var(--fg))]">
                       {(dbUser.avgRating ?? 0).toFixed(1)}
                       <span className="ml-1 text-[rgb(var(--muted2))]">
@@ -157,6 +143,9 @@ export default async function TutorLayout({
                   </div>
                 )}
               </div>
+
+              {/* ── Role switcher — always shown in tutor layout ── */}
+              <RoleSwitcher />
 
               <StudentSidebarNav items={tutorItems} />
             </div>

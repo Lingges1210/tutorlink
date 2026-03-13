@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import StudentSidebarNav, { SidebarItem } from "@/components/StudentSidebarNav";
+import RoleSwitcher from "@/components/RoleSwitcher";
 
 export default async function StudentLayout({
   children,
@@ -244,6 +245,7 @@ export default async function StudentLayout({
             "
           >
             <div className="p-5">
+              {/* ── User info ── */}
               <div className="mb-4">
                 <div className="text-sm font-semibold text-[rgb(var(--fg))]">
                   {dbUser.name ?? "Student"}
@@ -251,7 +253,6 @@ export default async function StudentLayout({
                 <div className="text-xs text-[rgb(var(--muted2))]">
                   {dbUser.email}
                 </div>
-
                 <div className="mt-2 text-[0.7rem] text-[rgb(var(--muted))]">
                   Status:{" "}
                   <span
@@ -261,6 +262,9 @@ export default async function StudentLayout({
                   </span>
                 </div>
               </div>
+
+              {/* ── Role switcher — only visible when user is also a tutor ── */}
+              {isTutor && <RoleSwitcher />}
 
               <StudentSidebarNav items={sidebarItems} />
             </div>
