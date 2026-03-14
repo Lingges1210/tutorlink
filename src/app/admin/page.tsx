@@ -22,6 +22,12 @@ type OverviewStats = {
   pendingTutorApps: number;
   lockedUsers: number;
   avgTutorRating: number;
+  // Survey
+  avgRating: number;
+  totalRatings: number;
+  surveyEasyFind: number;
+  surveyImproved: number;
+  surveyRecommend: number;
 };
 
 type DayPoint = { day: string; value: number };
@@ -201,6 +207,36 @@ function HBar({
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
+/*  Star rating                                                                */
+/* ─────────────────────────────────────────────────────────────────────────── */
+function StarRating({ rating }: { rating: number }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((s) => {
+        const full = s <= Math.floor(rating);
+        const half = !full && s === Math.ceil(rating) && rating % 1 >= 0.3;
+        return (
+          <svg key={s} viewBox="0 0 20 20" className="h-4 w-4">
+            {half && (
+              <defs>
+                <linearGradient id={`half-${s}`}>
+                  <stop offset="50%" stopColor="rgb(251 191 36)" />
+                  <stop offset="50%" stopColor="rgb(var(--border))" />
+                </linearGradient>
+              </defs>
+            )}
+            <path
+              fill={full ? "rgb(251 191 36)" : half ? `url(#half-${s})` : "rgb(var(--border))"}
+              d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
+            />
+          </svg>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────── */
 /*  SVG icon set for action cards                                              */
 /* ─────────────────────────────────────────────────────────────────────────── */
 const ActionIcons: Record<string, React.ReactNode> = {
@@ -340,6 +376,11 @@ export default function AdminPage() {
     pendingTutorApps: 0,
     lockedUsers: 0,
     avgTutorRating: 0,
+    avgRating: 0,
+    totalRatings: 0,
+    surveyEasyFind: 0,
+    surveyImproved: 0,
+    surveyRecommend: 0,
   });
 
   const [weeklySessions, setWeeklySessions] = useState<DayPoint[]>([]);
@@ -370,10 +411,10 @@ export default function AdminPage() {
         fetch("/api/admin/analytics/charts", { cache: "no-store" }),
       ]);
 
-      const queueData = await queueRes.json().catch(() => null);
+      const queueData     = await queueRes.json().catch(() => null);
       const tutorAppsData = await tutorAppsRes.json().catch(() => null);
-      const overviewData = await overviewRes.json().catch(() => null);
-      const chartsData = await chartsRes.json().catch(() => null);
+      const overviewData  = await overviewRes.json().catch(() => null);
+      const chartsData    = await chartsRes.json().catch(() => null);
 
       if (!queueRes.ok || !queueData?.success)
         throw new Error(queueData?.message || "Failed to load verification queue");
@@ -386,7 +427,8 @@ export default function AdminPage() {
 
       setQueue(Array.isArray(queueData.users) ? queueData.users : []);
       setTutorApps(Array.isArray(tutorAppsData.applications) ? tutorAppsData.applications : []);
-      setStats(overviewData.stats ?? {});
+      // Merge with defaults so new fields never come back undefined
+      setStats((prev) => ({ ...prev, ...(overviewData.stats ?? {}) }));
       setWeeklySessions(Array.isArray(chartsData.weeklySessions) ? chartsData.weeklySessions : []);
       setWeeklySos(Array.isArray(chartsData.weeklySos) ? chartsData.weeklySos : []);
       setTopSubjects(Array.isArray(chartsData.topSubjects) ? chartsData.topSubjects : []);
@@ -404,57 +446,23 @@ export default function AdminPage() {
 
   const statCards = useMemo(
     () => [
-      {
-        label: "Total Users",
-        value: stats.totalUsers,
-        subtitle: "Registered TutorLink users",
-        accent: "primary" as const,
-      },
-      {
-        label: "Active Tutors",
-        value: stats.activeTutors,
-        subtitle: "Approved peer tutors",
-        accent: "emerald" as const,
-      },
-      {
-        label: "Sessions This Week",
-        value: stats.sessionsThisWeek,
-        subtitle: "Completed sessions",
-        accent: "sky" as const,
-      },
-      {
-        label: "SOS Requests",
-        value: stats.sosRequestsThisWeek,
-        subtitle: "Urgent help this week",
-        accent: "rose" as const,
-      },
-      {
-        label: "Pending Verifications",
-        value: stats.pendingVerifications,
-        subtitle: "Awaiting admin review",
-        accent: "amber" as const,
-      },
-      {
-        label: "Pending Tutor Apps",
-        value: stats.pendingTutorApps,
-        subtitle: "Applications in queue",
-        accent: "violet" as const,
-      },
-      {
-        label: "Locked Users",
-        value: stats.lockedUsers,
-        subtitle: "Accounts restricted",
-        accent: "rose" as const,
-      },
-      {
-        label: "Avg Tutor Rating",
-        value: stats.avgTutorRating,
-        subtitle: "Across rated tutors",
-        accent: "emerald" as const,
-      },
+      { label: "Total Users",          value: stats.totalUsers,           subtitle: "Registered TutorLink users", accent: "primary" as const },
+      { label: "Active Tutors",         value: stats.activeTutors,         subtitle: "Approved peer tutors",       accent: "emerald" as const },
+      { label: "Sessions This Week",    value: stats.sessionsThisWeek,     subtitle: "Completed sessions",         accent: "sky"     as const },
+      { label: "SOS Requests",          value: stats.sosRequestsThisWeek,  subtitle: "Urgent help this week",      accent: "rose"    as const },
+      { label: "Pending Verifications", value: stats.pendingVerifications, subtitle: "Awaiting admin review",      accent: "amber"   as const },
+      { label: "Pending Tutor Apps",    value: stats.pendingTutorApps,     subtitle: "Applications in queue",      accent: "violet"  as const },
+      { label: "Locked Users",          value: stats.lockedUsers,          subtitle: "Accounts restricted",        accent: "rose"    as const },
+      { label: "Avg Tutor Rating",      value: stats.avgTutorRating,       subtitle: "Across rated tutors",        accent: "emerald" as const },
     ],
     [stats]
   );
+
+  const surveyItems = useMemo(() => [
+    { label: "Easier to find a tutor",         pct: stats.surveyEasyFind,  color: "bg-emerald-500/65" },
+    { label: "Improved subject understanding", pct: stats.surveyImproved,  color: "bg-sky-500/65" },
+    { label: "Would recommend TutorLink",      pct: stats.surveyRecommend, color: "bg-[rgb(var(--primary)/0.65)]" },
+  ], [stats]);
 
   return (
     <div className="mx-auto mt-6 w-full max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
@@ -463,7 +471,6 @@ export default function AdminPage() {
         {/* ── Header ── */}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            {/* Eyebrow */}
             <p className="mb-1.5 text-[0.65rem] font-black uppercase tracking-[0.2em] text-[rgb(var(--primary)/0.7)]">
               TutorLink &mdash; Admin
             </p>
@@ -476,7 +483,6 @@ export default function AdminPage() {
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            {/* Live indicator */}
             <span className="flex items-center gap-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-[0.68rem] font-bold text-emerald-700 dark:text-emerald-300">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -510,57 +516,13 @@ export default function AdminPage() {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <ActionCard
-                href="/admin/verification-queue"
-                title="Verification Queue"
-                sub="Review pending student verifications."
-                accent="bg-amber-500"
-                badge={pendingVerificationCount}
-                iconKey="verification"
-              />
-              <ActionCard
-                href="/admin/tutor-applications"
-                title="Tutor Applications"
-                sub="Approve or reject tutor onboarding."
-                accent="bg-sky-500"
-                badge={pendingTutorCount}
-                iconKey="tutor"
-              />
-              <ActionCard
-                href="/admin/users"
-                title="Manage Users"
-                sub="Search and manage platform users."
-                accent="bg-violet-500"
-                iconKey="users"
-              />
-              <ActionCard
-                href="/admin/sos-moderation"
-                title="SOS Moderation"
-                sub="Review urgent help requests."
-                accent="bg-rose-500"
-                iconKey="sos"
-              />
-              <ActionCard
-                href="/admin/user-reports"
-                title="User Reports"
-                sub="Review user-submitted reports."
-                accent="bg-orange-500"
-                iconKey="reports"
-              />
-              <ActionCard
-                href="/admin/audit-logs"
-                title="Audit Logs"
-                sub="Inspect admin activity logs."
-                accent="bg-slate-500"
-                iconKey="audit"
-              />
-              <ActionCard
-                href="/admin/reports"
-                title="Activity Reports"
-                sub="Generate system activity summaries."
-                accent="bg-emerald-500"
-                iconKey="activity"
-              />
+              <ActionCard href="/admin/verification-queue" title="Verification Queue"  sub="Review pending student verifications." accent="bg-amber-500"  badge={pendingVerificationCount} iconKey="verification" />
+              <ActionCard href="/admin/tutor-applications" title="Tutor Applications" sub="Approve or reject tutor onboarding."    accent="bg-sky-500"    badge={pendingTutorCount}         iconKey="tutor" />
+              <ActionCard href="/admin/users"              title="Manage Users"        sub="Search and manage platform users."      accent="bg-violet-500"                                   iconKey="users" />
+              <ActionCard href="/admin/sos-moderation"    title="SOS Moderation"      sub="Review urgent help requests."           accent="bg-rose-500"                                     iconKey="sos" />
+              <ActionCard href="/admin/user-reports"      title="User Reports"        sub="Review user-submitted reports."         accent="bg-orange-500"                                   iconKey="reports" />
+              <ActionCard href="/admin/audit-logs"        title="Audit Logs"          sub="Inspect admin activity logs."           accent="bg-slate-500"                                    iconKey="audit" />
+              <ActionCard href="/admin/reports"           title="Activity Reports"    sub="Generate system activity summaries."    accent="bg-emerald-500"                                  iconKey="activity" />
             </div>
           </div>
         </section>
@@ -602,38 +564,20 @@ export default function AdminPage() {
               <div className={shell}>
                 <div className="px-6 py-5">
                   <div className="mb-4 flex items-start justify-between gap-3">
-                    <SectionHeading
-                      title="Weekly Tutoring Sessions"
-                      sub="Completed sessions over the last 7 days."
-                    />
-                    <span className="shrink-0 rounded-full border border-[rgb(var(--primary)/0.25)] bg-[rgb(var(--primary)/0.08)] px-2.5 py-1 text-[0.62rem] font-bold text-[rgb(var(--primary))]">
-                      7-day
-                    </span>
+                    <SectionHeading title="Weekly Tutoring Sessions" sub="Completed sessions over the last 7 days." />
+                    <span className="shrink-0 rounded-full border border-[rgb(var(--primary)/0.25)] bg-[rgb(var(--primary)/0.08)] px-2.5 py-1 text-[0.62rem] font-bold text-[rgb(var(--primary))]">7-day</span>
                   </div>
-                  <BarChart
-                    data={weeklySessions}
-                    color="bg-[rgb(var(--primary)/0.75)]"
-                    empty="No completed sessions in the last 7 days."
-                  />
+                  <BarChart data={weeklySessions} color="bg-[rgb(var(--primary)/0.75)]" empty="No completed sessions in the last 7 days." />
                 </div>
               </div>
 
               <div className={shell}>
                 <div className="px-6 py-5">
                   <div className="mb-4 flex items-start justify-between gap-3">
-                    <SectionHeading
-                      title="Weekly SOS Volume"
-                      sub="SOS requests created over the last 7 days."
-                    />
-                    <span className="shrink-0 rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-[0.62rem] font-bold text-rose-600 dark:text-rose-300">
-                      7-day
-                    </span>
+                    <SectionHeading title="Weekly SOS Volume" sub="SOS requests created over the last 7 days." />
+                    <span className="shrink-0 rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-[0.62rem] font-bold text-rose-600 dark:text-rose-300">7-day</span>
                   </div>
-                  <BarChart
-                    data={weeklySos}
-                    color="bg-rose-500/70"
-                    empty="No SOS activity recorded in the last 7 days."
-                  />
+                  <BarChart data={weeklySos} color="bg-rose-500/70" empty="No SOS activity recorded in the last 7 days." />
                 </div>
               </div>
             </section>
@@ -642,10 +586,7 @@ export default function AdminPage() {
             <section className="grid gap-5 lg:grid-cols-2">
               <div className={shell}>
                 <div className="px-6 py-5">
-                  <SectionHeading
-                    title="Top Subjects"
-                    sub="Ranked by completed tutoring sessions."
-                  />
+                  <SectionHeading title="Top Subjects" sub="Ranked by completed tutoring sessions." />
                   {topSubjects.length === 0 ? (
                     <div className="flex h-40 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-xs text-[rgb(var(--muted))]">
                       No subject data available yet.
@@ -653,13 +594,7 @@ export default function AdminPage() {
                   ) : (
                     <div className="space-y-3.5">
                       {topSubjects.map((item) => (
-                        <HBar
-                          key={item.name}
-                          label={item.name}
-                          value={item.value}
-                          max={maxTopSubjects}
-                          color="bg-[rgb(var(--primary)/0.75)]"
-                        />
+                        <HBar key={item.name} label={item.name} value={item.value} max={maxTopSubjects} color="bg-[rgb(var(--primary)/0.75)]" />
                       ))}
                     </div>
                   )}
@@ -668,10 +603,7 @@ export default function AdminPage() {
 
               <div className={shell}>
                 <div className="px-6 py-5">
-                  <SectionHeading
-                    title="Session Status Breakdown"
-                    sub="Distribution of all session states in the system."
-                  />
+                  <SectionHeading title="Session Status Breakdown" sub="Distribution of all session states in the system." />
                   {sessionStatusBreakdown.length === 0 ? (
                     <div className="flex h-40 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-xs text-[rgb(var(--muted))]">
                       No session status data available yet.
@@ -686,13 +618,7 @@ export default function AdminPage() {
                           s === "CANCELLED" ? "bg-rose-500/70" :
                           "bg-amber-500/70";
                         return (
-                          <HBar
-                            key={item.status}
-                            pill={<StatusPill status={item.status} />}
-                            value={item.value}
-                            max={maxStatusValue}
-                            color={color}
-                          />
+                          <HBar key={item.status} pill={<StatusPill status={item.status} />} value={item.value} max={maxStatusValue} color={color} />
                         );
                       })}
                     </div>
@@ -710,65 +636,56 @@ export default function AdminPage() {
                   <div className="mb-5 flex items-start justify-between gap-3">
                     <SectionHeading
                       title="Student Satisfaction"
-                      sub="Mock survey results from TutorLink students."
+                      sub="Based on post-session survey responses."
                     />
                     <span className="shrink-0 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-1 text-[0.62rem] font-bold uppercase tracking-wider text-[rgb(var(--muted))]">
-                      Sample data
+                      {stats.totalRatings} response{stats.totalRatings !== 1 ? "s" : ""}
                     </span>
                   </div>
 
-                  {/* Score + stars */}
-                  <div className="mb-5 flex items-center gap-4 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-4">
-                    <div className="text-center">
-                      <p className="text-4xl font-black leading-none text-[rgb(var(--fg))]">4.6</p>
-                      <p className="mt-1 text-[0.62rem] font-semibold uppercase tracking-wider text-[rgb(var(--muted))]">out of 5</p>
+                  {stats.totalRatings === 0 ? (
+                    <div className="flex h-40 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-xs text-[rgb(var(--muted))]">
+                      No survey responses yet.
                     </div>
-                    <div className="h-10 w-px bg-[rgb(var(--border))]" />
-                    <div>
-                      {/* Star row */}
-                      <div className="flex items-center gap-0.5">
-                        {[1,2,3,4].map((i) => (
-                          <svg key={i} viewBox="0 0 20 20" className="h-4 w-4 fill-amber-400">
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                          </svg>
-                        ))}
-                        {/* Half star */}
-                        <svg viewBox="0 0 20 20" className="h-4 w-4">
-                          <defs>
-                            <linearGradient id="halfStar">
-                              <stop offset="50%" stopColor="rgb(251 191 36)" />
-                              <stop offset="50%" stopColor="rgb(var(--border))" />
-                            </linearGradient>
-                          </defs>
-                          <path fill="url(#halfStar)" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
+                  ) : (
+                    <>
+                      {/* Score + stars */}
+                      <div className="mb-5 flex items-center gap-4 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-4">
+                        <div className="text-center">
+                          <p className="text-4xl font-black leading-none text-[rgb(var(--fg))]">
+                            {(stats.avgRating ?? 0).toFixed(1)}
+                          </p>
+                          <p className="mt-1 text-[0.62rem] font-semibold uppercase tracking-wider text-[rgb(var(--muted))]">out of 5</p>
+                        </div>
+                        <div className="h-10 w-px bg-[rgb(var(--border))]" />
+                        <div>
+                          <StarRating rating={stats.avgRating ?? 0} />
+                          <p className="mt-1.5 text-[0.68rem] text-[rgb(var(--muted))]">
+                            Based on {stats.totalRatings} survey response{stats.totalRatings !== 1 ? "s" : ""}
+                          </p>
+                        </div>
                       </div>
-                      <p className="mt-1.5 text-[0.68rem] text-[rgb(var(--muted))]">Based on student surveys</p>
-                    </div>
-                  </div>
 
-                  {/* Survey stats */}
-                  <div className="space-y-3">
-                    {[
-                      { label: "Easier to find a tutor", pct: 92, color: "bg-emerald-500/65" },
-                      { label: "Improved subject understanding", pct: 88, color: "bg-sky-500/65" },
-                      { label: "Would recommend TutorLink", pct: 85, color: "bg-[rgb(var(--primary)/0.65)]" },
-                    ].map((item) => (
-                      <div key={item.label} className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[0.72rem] text-[rgb(var(--muted))]">{item.label}</span>
-                          <span className="text-[0.72rem] font-black text-[rgb(var(--fg))]">{item.pct}%</span>
-                        </div>
-                        <div className="h-2 overflow-hidden rounded-full bg-[rgb(var(--border))]">
-                          <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.pct}%` }} />
-                        </div>
+                      {/* Survey bars */}
+                      <div className="space-y-3">
+                        {surveyItems.map((item) => (
+                          <div key={item.label} className="space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[0.72rem] text-[rgb(var(--muted))]">{item.label}</span>
+                              <span className="text-[0.72rem] font-black text-[rgb(var(--fg))]">{item.pct}%</span>
+                            </div>
+                            <div className="h-2 overflow-hidden rounded-full bg-[rgb(var(--border))]">
+                              <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.pct}%` }} />
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* ── Platform Health ── */}
+              {/* ── Platform Health — UNTOUCHED ── */}
               <div className={shell}>
                 <div className="px-6 py-5">
                   <div className="mb-5 flex items-start justify-between gap-3">
