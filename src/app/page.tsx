@@ -231,10 +231,10 @@ export default function HomePage() {
         const a = Math.max(0.05, d.alpha + tw);
         ctx.beginPath();
         ctx.arc(d.x * canvas.width, d.y * canvas.height, d.r, 0, Math.PI * 2);
-        // light mode: purple dots; dark mode: white/blue dots
+        // dark mode: white/blue dots; light mode: vivid purple dots
         const dotColor = isDark()
-          ? `rgba(200,210,255,${a})`
-          : `rgba(120,40,220,${a * 3.2})`;
+          ? `rgba(255,255,255,${a})`
+          : `rgba(138,43,226,${a})`;
         ctx.fillStyle = dotColor;
         ctx.fill();
       }
@@ -277,10 +277,10 @@ export default function HomePage() {
           ctx.beginPath();
           ctx.moveTo(x1, y1);
           ctx.lineTo(x2, y2);
-          // light mode: purple tail; dark mode: white/blue tail
+          // dark mode: white tail; light mode: vivid purple tail
           const tailColor = isDark()
-            ? `rgba(230,235,255,${alpha * t * t})`
-            : `rgba(120,40,220,${alpha * t * t * 4.5})`;
+            ? `rgba(255,255,255,${alpha * t * t})`
+            : `rgba(138,43,226,${alpha * t * t})`;
           ctx.strokeStyle = tailColor;
           ctx.lineWidth = s.size * t;
           ctx.lineCap = "round";
@@ -292,13 +292,13 @@ export default function HomePage() {
         const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, s.size * 3.5);
         if (isDark()) {
           grad.addColorStop(0,   `rgba(255,255,255,${alpha})`);
-          grad.addColorStop(0.3, `rgba(200,210,255,${alpha * 0.7})`);
-          grad.addColorStop(1,   `rgba(180,190,255,0)`);
+          grad.addColorStop(0.3, `rgba(255,255,255,${alpha * 0.6})`);
+          grad.addColorStop(1,   `rgba(255,255,255,0)`);
         } else {
           // light mode: vivid purple glow
-          grad.addColorStop(0,   `rgba(140,40,255,${alpha * 1.8})`);
-          grad.addColorStop(0.3, `rgba(120,40,220,${alpha * 1.4})`);
-          grad.addColorStop(1,   `rgba(100,30,200,0)`);
+          grad.addColorStop(0,   `rgba(138,43,226,${alpha})`);
+          grad.addColorStop(0.3, `rgba(138,43,226,${alpha * 0.6})`);
+          grad.addColorStop(1,   `rgba(138,43,226,0)`);
         }
         ctx.beginPath();
         ctx.arc(gx, gy, s.size * 3.5, 0, Math.PI * 2);
@@ -308,10 +308,10 @@ export default function HomePage() {
         // solid bright core
         ctx.beginPath();
         ctx.arc(gx, gy, s.size * 0.7, 0, Math.PI * 2);
-        // light mode: solid purple core
+        // dark mode: white core; light mode: vivid purple core
         ctx.fillStyle = isDark()
           ? `rgba(255,255,255,${alpha})`
-          : `rgba(120,40,220,${alpha * 2})`;
+          : `rgba(138,43,226,${alpha})`;
         ctx.fill();
       }
 
@@ -643,11 +643,6 @@ export default function HomePage() {
           pointer-events:none; z-index:0;
           opacity:0.85;
         }
-        /* light mode: boost contrast/brightness so purple stars pop */
-        @media (prefers-color-scheme: light) {
-          .stars-canvas { opacity:1; filter: contrast(1.4) brightness(0.65); }
-        }
-        :root:not(.dark) .stars-canvas { opacity:1; filter: contrast(1.4) brightness(0.65); }
 
         /* star sparkles */
         .sparkle {
