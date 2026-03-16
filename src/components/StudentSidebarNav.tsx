@@ -12,8 +12,8 @@ import {
   ShieldOff,
   BarChart3,
   Trophy,
-  Gift, //  NEW
-  Shield, //  NEW
+  Gift,
+  Shield,
 } from "lucide-react";
 
 export type SidebarIconKey =
@@ -26,8 +26,8 @@ export type SidebarIconKey =
   | "shieldoff"
   | "progress"
   | "trophy"
-  | "gift" //  NEW
-  | "shield"; //  NEW
+  | "gift"
+  | "shield";
 
 export type SidebarItem =
   | {
@@ -54,8 +54,8 @@ const ICONS: Record<SidebarIconKey, React.ElementType> = {
   shieldoff: ShieldOff,
   progress: BarChart3,
   trophy: Trophy,
-  gift: Gift, //  NEW
-  shield: Shield, //  NEW
+  gift: Gift,
+  shield: Shield,
 };
 
 export default function StudentSidebarNav({
@@ -115,6 +115,7 @@ export default function StudentSidebarNav({
           <Link
             key={`lnk-${idx}`}
             href={it.href}
+            prefetch={false}
             className={[
               "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition",
               active
