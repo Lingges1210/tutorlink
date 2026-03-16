@@ -438,43 +438,51 @@ export default function MessagingClient() {
     return () => { cancelled = true; };
   }, [activeId, meId, applyMessagesResponse, refreshConversations]);
 
-  // ── Supabase realtime: INSERT only, no polling fallback ───────────────
-  // We trust realtime for new messages. The 1500ms poll is REMOVED.
-  const realtimeDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   useEffect(() => {
-    if (!activeId || !meId) return;
-    const channelId = activeId;
-    const supabase = supabaseBrowser;
+  if (!activeId || !meId) return;
+  const channelId = activeId;
+  const supabase = supabaseBrowser;
 
-    const channel = supabase
-      .channel(`chat-messages-${channelId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "ChatMessage" },
-        async (payload: { new: Record<string, unknown> }) => {
-          const row = payload.new as {
-            id: string;
-            channelId: string;
-            senderId: string;
-            text: string;
-            createdAt: string;
-            isDeleted?: boolean;
-            deletedAt?: string | null;
-          };
-          if (row.channelId !== channelId) return;
+  const channel = supabase
+    .channel(`chat-messages-${channelId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "ChatMessage",
+        filter: `channelId=eq.${channelId}`,
+      },
+      async (payload: { new: Record<string, unknown> }) => {
+        const row = payload.new as {
+          id: string;
+          channelId: string;
+          senderId: string;
+          text: string;
+          createdAt: string;
+          isDeleted?: boolean;
+          deletedAt?: string | null;
+        };
 
-          // Deduplicate: skip if we already have this message
-          let alreadyExists = false;
-          setMessages((prev) => {
-            alreadyExists = prev.some((m) => m.id === row.id);
-            return prev;
-          });
-          if (alreadyExists) return;
+        const incoming: Msg = {
+          id: row.id,
+          senderId: row.senderId,
+          text: row.text ?? "",
+          createdAt: row.createdAt,
+          isDeleted: row.isDeleted,
+          deletedAt: row.deletedAt ?? null,
+        };
 
-          // Debounce rapid-fire inserts (e.g. bulk sends) into a single fetch
-          if (realtimeDebounce.current) clearTimeout(realtimeDebounce.current);
-          realtimeDebounce.current = setTimeout(async () => {
+        mergeMessages([incoming]);
+
+        setTimeout(() => {
+          bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 20);
+
+        if (row.senderId !== meId) {
+          await markChatRead(channelId);
+
+          setTimeout(async () => {
             const j = await fetch(
               `/api/chat/messages?channelId=${channelId}&take=30`,
               { cache: "no-store" }
@@ -482,24 +490,19 @@ export default function MessagingClient() {
               .then((r) => r.json())
               .catch(() => null);
 
-            applyMessagesResponse(j, channelId, "smooth");
-
-            if (row.senderId !== meId) {
-              await markChatRead(channelId);
-            }
-
-            // Debounce the conversation refresh too — one call regardless of burst
-            refreshConversations(channelId);
-          }, 120);
+            applyMessagesResponse(j, channelId, null);
+          }, 400);
         }
-      )
-      .subscribe();
 
-    return () => {
-      if (realtimeDebounce.current) clearTimeout(realtimeDebounce.current);
-      supabase.removeChannel(channel);
-    };
-  }, [activeId, meId, applyMessagesResponse, refreshConversations]);
+        refreshConversations(channelId);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [activeId, meId, mergeMessages, refreshConversations, applyMessagesResponse]);
 
   // ── Typing poll: slow (3s), zero DB hits (uses in-memory store) ───────
   // Typing poll is now cheap: /api/chat/typing reads from memory, no DB.
@@ -613,8 +616,9 @@ export default function MessagingClient() {
     void pingTyping(false);
     setText(""); setSendErr(null); setUploading(true);
     try {
-      const uploaded: UploadPayload[] = [];
-      for (const f of pickedFiles) uploaded.push(await uploadAttachment(activeId, f));
+      const uploaded = await Promise.all(
+  pickedFiles.map((f) => uploadAttachment(activeId, f))
+);
       const r = await fetch("/api/chat/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
