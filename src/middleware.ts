@@ -26,22 +26,32 @@ async function getAccessState(request: NextRequest, accessToken: string) {
 }
 
 export async function middleware(request: NextRequest) {
-  const response = NextResponse.next();
   const pathname = request.nextUrl.pathname;
+
+  let response = NextResponse.next({
+    request,
+  });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name) {
-          return request.cookies.get(name)?.value;
+        getAll() {
+          return request.cookies.getAll();
         },
-        set(name, value, options) {
-          response.cookies.set({ name, value, ...options });
-        },
-        remove(name, options) {
-          response.cookies.set({ name, value: "", ...options });
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => {
+            request.cookies.set(name, value);
+          });
+
+          response = NextResponse.next({
+            request,
+          });
+
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
         },
       },
     }
@@ -67,7 +77,12 @@ export async function middleware(request: NextRequest) {
     needsSOS ||
     needsFindTutor;
 
-  if (!session && needsProtectedArea) {
+  const allowedWhenLocked =
+    pathname === "/account-locked" ||
+    pathname === "/account-locked/appeal" ||
+    pathname.startsWith("/api/account-lock-appeal");
+
+  if (!session && (needsProtectedArea || allowedWhenLocked)) {
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
@@ -77,7 +92,7 @@ export async function middleware(request: NextRequest) {
 
   const access = await getAccessState(request, session.access_token);
 
-  if (!access && needsProtectedArea) {
+  if (!access && (needsProtectedArea || allowedWhenLocked)) {
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
@@ -87,7 +102,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/auth/login?error=deactivated", request.url));
   }
 
-  if (access?.accountLockStatus === "LOCKED") {
+  if (access?.accountLockStatus === "LOCKED" && !allowedWhenLocked) {
     return NextResponse.redirect(new URL("/account-locked", request.url));
   }
 
@@ -114,5 +129,8 @@ export const config = {
     "/sos/:path*",
     "/find-tutor",
     "/find-tutor/:path*",
+    "/account-locked",
+    "/account-locked/appeal",
+    "/api/account-lock-appeal",
   ],
 };

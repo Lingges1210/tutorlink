@@ -24,7 +24,7 @@ export default function AccountLockedPage() {
 
         <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
-            href="/report?category=ACCOUNT_LOCK_APPEAL"
+            href="/account-locked/appeal"
             className="inline-flex rounded-2xl border border-[rgb(var(--border))] px-4 py-3 text-sm font-medium hover:bg-[rgb(var(--bg))]"
           >
             Submit Appeal
