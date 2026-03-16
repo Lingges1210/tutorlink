@@ -5,9 +5,7 @@ import { createServerClient } from "@supabase/ssr";
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  let response = NextResponse.next({
-    request,
-  });
+  let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,11 +19,7 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) => {
             request.cookies.set(name, value);
           });
-
-          response = NextResponse.next({
-            request,
-          });
-
+          response = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, options);
           });
@@ -34,18 +28,15 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  // ✅ Use getUser() instead of getSession() for secure server-side check
+  const { data: { user } } = await supabase.auth.getUser();
 
   const needsDashboard = pathname.startsWith("/dashboard");
   const needsAdmin = pathname.startsWith("/admin");
-  const needsMessaging =
-    pathname === "/messaging" || pathname.startsWith("/messaging/");
+  const needsMessaging = pathname === "/messaging" || pathname.startsWith("/messaging/");
   const needsStudy = pathname === "/study" || pathname.startsWith("/study/");
   const needsSOS = pathname === "/sos" || pathname.startsWith("/sos/");
-  const needsFindTutor =
-    pathname === "/find-tutor" || pathname.startsWith("/find-tutor/");
+  const needsFindTutor = pathname === "/find-tutor" || pathname.startsWith("/find-tutor/");
 
   const needsProtectedArea =
     needsDashboard ||
@@ -60,7 +51,8 @@ export async function middleware(request: NextRequest) {
     pathname === "/account-locked/appeal" ||
     pathname.startsWith("/api/account-lock-appeal");
 
-  if (!session && (needsProtectedArea || allowedWhenLocked)) {
+  // ✅ Check user instead of session
+  if (!user && (needsProtectedArea || allowedWhenLocked)) {
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
