@@ -8,6 +8,8 @@ import NavbarActions from "@/components/NavbarActions";
 import Image from "next/image";
 import UserPresenceBeacon from "@/components/presence/UserPresenceBeacon";
 
+export const dynamic = "force-dynamic"; // ✅ add this line
+
 export const metadata: Metadata = {
   title: "TutorLink – USM Peer Tutoring",
   description:
