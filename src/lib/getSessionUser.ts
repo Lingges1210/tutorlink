@@ -8,7 +8,6 @@ export const getSessionUser = cache(async () => {
   const supabase = await supabaseServerComponent();
   const { data: { user }, error } = await supabase.auth.getUser();
   
-  console.log("getSessionUser - supabase user:", user?.email ?? "NULL", "error:", error?.message ?? "none");
 
   if (!user?.email) return null;
 
@@ -32,7 +31,6 @@ export const getSessionUser = cache(async () => {
     },
   });
 
-  console.log("getSessionUser - dbUser:", dbUser?.email ?? "NULL");
   
   return dbUser;
 });

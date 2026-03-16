@@ -1,33 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  AlertTriangle,
-  Archive,
-  CalendarDays,
-  ExternalLink,
-  FileText,
-  Loader2,
-  MessageSquareText,
-  Paperclip,
-  Plus,
-  RefreshCcw,
-  Search,
-  Send,
-  ShieldAlert,
-  User,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  Ban,
+  AlertTriangle, Archive, CalendarDays, ExternalLink, FileText,
+  Loader2, MessageSquareText, Paperclip, Plus, RefreshCcw, Search,
+  Send, ShieldAlert, User, X, ChevronLeft, ChevronRight,
+  CheckCircle2, Clock, AlertCircle, Ban,
 } from "lucide-react";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 
 type ReportItem = {
   id: string;
@@ -41,23 +24,12 @@ type ReportItem = {
   createdAt: string;
   updatedAt: string;
   resolvedAt: string | null;
-  reportedUser: {
-    id: string;
-    name: string | null;
-    email: string;
-    role: string;
-  } | null;
-  reviewedByAdmin: {
-    id: string;
-    name: string | null;
-    email: string;
-  } | null;
+  reportedUser: { id: string; name: string | null; email: string; role: string } | null;
+  reviewedByAdmin: { id: string; name: string | null; email: string } | null;
 };
 
 type ViewMode = "ACTIVE" | "PAST" | "ALL";
 type TabKey = "list" | "submit";
-
-// ─── Constants ────────────────────────────────────────────────────────────────
 
 const CATEGORY_OPTIONS = [
   { value: "ACCOUNT_LOCK_APPEAL", label: "Account Lock Appeal" },
@@ -71,14 +43,8 @@ const CATEGORY_OPTIONS = [
 
 const PAGE_SIZE = 5;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function niceLabel(value: string) {
-  return value
-    .toLowerCase()
-    .split("_")
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join(" ");
+  return value.toLowerCase().split("_").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
 }
 
 function isPastReport(report: ReportItem) {
@@ -91,9 +57,7 @@ function isPastReport(report: ReportItem) {
 }
 
 function daysAgoLabel(dateString: string) {
-  const diffDays = Math.floor(
-    (Date.now() - new Date(dateString).getTime()) / (24 * 60 * 60 * 1000)
-  );
+  const diffDays = Math.floor((Date.now() - new Date(dateString).getTime()) / (24 * 60 * 60 * 1000));
   if (diffDays <= 0) return "Today";
   if (diffDays === 1) return "1 day ago";
   return `${diffDays} days ago`;
@@ -103,75 +67,28 @@ function getCategoryLabel(value: string) {
   return CATEGORY_OPTIONS.find((c) => c.value === value)?.label ?? value;
 }
 
-// ─── Status / Priority config ─────────────────────────────────────────────────
-
 function statusConfig(status: string) {
   switch (status) {
-    case "OPEN":
-      return {
-        cls: "border-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-300",
-        dot: "bg-amber-400",
-        icon: <Clock className="h-3 w-3" />,
-        glow: "shadow-amber-500/20",
-      };
-    case "IN_REVIEW":
-      return {
-        cls: "border-sky-400/40 bg-sky-400/10 text-sky-600 dark:text-sky-300",
-        dot: "bg-sky-400",
-        icon: <AlertCircle className="h-3 w-3" />,
-        glow: "shadow-sky-500/20",
-      };
-    case "RESOLVED":
-      return {
-        cls: "border-emerald-400/40 bg-emerald-400/10 text-emerald-600 dark:text-emerald-300",
-        dot: "bg-emerald-400",
-        icon: <CheckCircle2 className="h-3 w-3" />,
-        glow: "shadow-emerald-500/20",
-      };
-    case "DISMISSED":
-      return {
-        cls: "border-rose-400/40 bg-rose-400/10 text-rose-600 dark:text-rose-300",
-        dot: "bg-rose-400",
-        icon: <Ban className="h-3 w-3" />,
-        glow: "shadow-rose-500/20",
-      };
-    default:
-      return {
-        cls: "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]",
-        dot: "bg-[rgb(var(--muted2))]",
-        icon: null,
-        glow: "",
-      };
+    case "OPEN": return { cls: "border-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-300", dot: "bg-amber-400", icon: <Clock className="h-3 w-3" />, glow: "shadow-amber-500/20" };
+    case "IN_REVIEW": return { cls: "border-sky-400/40 bg-sky-400/10 text-sky-600 dark:text-sky-300", dot: "bg-sky-400", icon: <AlertCircle className="h-3 w-3" />, glow: "shadow-sky-500/20" };
+    case "RESOLVED": return { cls: "border-emerald-400/40 bg-emerald-400/10 text-emerald-600 dark:text-emerald-300", dot: "bg-emerald-400", icon: <CheckCircle2 className="h-3 w-3" />, glow: "shadow-emerald-500/20" };
+    case "DISMISSED": return { cls: "border-rose-400/40 bg-rose-400/10 text-rose-600 dark:text-rose-300", dot: "bg-rose-400", icon: <Ban className="h-3 w-3" />, glow: "shadow-rose-500/20" };
+    default: return { cls: "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]", dot: "bg-[rgb(var(--muted2))]", icon: null, glow: "" };
   }
 }
 
 function priorityClasses(priority: string) {
   switch (priority) {
-    case "URGENT":
-      return "border-rose-400/40 bg-rose-400/10 text-rose-600 dark:text-rose-300";
-    case "HIGH":
-      return "border-orange-400/40 bg-orange-400/10 text-orange-600 dark:text-orange-300";
-    case "MEDIUM":
-      return "border-indigo-400/40 bg-indigo-400/10 text-indigo-600 dark:text-indigo-300";
-    case "LOW":
-      return "border-zinc-400/40 bg-zinc-400/10 text-zinc-600 dark:text-zinc-300";
-    default:
-      return "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]";
+    case "URGENT": return "border-rose-400/40 bg-rose-400/10 text-rose-600 dark:text-rose-300";
+    case "HIGH": return "border-orange-400/40 bg-orange-400/10 text-orange-600 dark:text-orange-300";
+    case "MEDIUM": return "border-indigo-400/40 bg-indigo-400/10 text-indigo-600 dark:text-indigo-300";
+    case "LOW": return "border-zinc-400/40 bg-zinc-400/10 text-zinc-600 dark:text-zinc-300";
+    default: return "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]";
   }
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function TabButton({
-  active,
-  onClick,
-  children,
-  icon,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  icon?: React.ReactNode;
+function TabButton({ active, onClick, children, icon }: {
+  active: boolean; onClick: () => void; children: React.ReactNode; icon?: React.ReactNode;
 }) {
   return (
     <button
@@ -181,30 +98,17 @@ function TabButton({
         "relative inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12px] font-semibold border transition-all duration-200",
         active
           ? "border-[rgb(var(--primary)/0.5)] text-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.08)] shadow-sm"
-          : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))] hover:border-[rgb(var(--border))]",
+          : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]",
       ].join(" ")}
     >
-      {icon}
-      {children}
-      {active && (
-        <span className="absolute bottom-0 left-1/2 h-0.5 w-6 -translate-x-1/2 translate-y-px rounded-full bg-[rgb(var(--primary))]" />
-      )}
+      {icon}{children}
+      {active && <span className="absolute bottom-0 left-1/2 h-0.5 w-6 -translate-x-1/2 translate-y-px rounded-full bg-[rgb(var(--primary))]" />}
     </button>
   );
 }
 
-function ViewTab({
-  active,
-  label,
-  onClick,
-  count,
-  icon,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-  count: number;
-  icon?: React.ReactNode;
+function ViewTab({ active, label, onClick, count, icon }: {
+  active: boolean; label: string; onClick: () => void; count: number; icon?: React.ReactNode;
 }) {
   return (
     <button
@@ -217,95 +121,37 @@ function ViewTab({
           : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]",
       ].join(" ")}
     >
-      {icon}
-      {label}
-      <span
-        className={[
-          "rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums",
-          active
-            ? "bg-[rgb(var(--primary)/0.15)] text-[rgb(var(--primary))]"
-            : "bg-[rgb(var(--card2))] text-[rgb(var(--muted2))]",
-        ].join(" ")}
-      >
+      {icon}{label}
+      <span className={["rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums", active ? "bg-[rgb(var(--primary)/0.15)] text-[rgb(var(--primary))]" : "bg-[rgb(var(--card2))] text-[rgb(var(--muted2))]"].join(" ")}>
         {count}
       </span>
     </button>
   );
 }
 
-function MetricCard({
-  label,
-  value,
-  tone = "default",
-  icon,
-}: {
-  label: string;
-  value: number;
-  tone?: "default" | "amber" | "sky" | "emerald" | "rose";
-  icon?: React.ReactNode;
+function MetricCard({ label, value, tone = "default", icon }: {
+  label: string; value: number; tone?: "default" | "amber" | "sky" | "emerald" | "rose"; icon?: React.ReactNode;
 }) {
   const config = {
-    default: {
-      card: "border-[rgb(var(--border))] bg-[rgb(var(--card2))]",
-      value: "text-[rgb(var(--fg))]",
-      label: "text-[rgb(var(--muted2))]",
-      icon: "text-[rgb(var(--muted2))] bg-[rgb(var(--card))]",
-      bar: "bg-[rgb(var(--muted2)/0.3)]",
-    },
-    amber: {
-      card: "border-amber-400/25 bg-amber-400/5 dark:bg-amber-400/[0.07]",
-      value: "text-amber-600 dark:text-amber-300",
-      label: "text-amber-600/70 dark:text-amber-400/70",
-      icon: "text-amber-500 bg-amber-400/15",
-      bar: "bg-amber-400/50",
-    },
-    sky: {
-      card: "border-sky-400/25 bg-sky-400/5 dark:bg-sky-400/[0.07]",
-      value: "text-sky-600 dark:text-sky-300",
-      label: "text-sky-600/70 dark:text-sky-400/70",
-      icon: "text-sky-500 bg-sky-400/15",
-      bar: "bg-sky-400/50",
-    },
-    emerald: {
-      card: "border-emerald-400/25 bg-emerald-400/5 dark:bg-emerald-400/[0.07]",
-      value: "text-emerald-600 dark:text-emerald-300",
-      label: "text-emerald-600/70 dark:text-emerald-400/70",
-      icon: "text-emerald-500 bg-emerald-400/15",
-      bar: "bg-emerald-400/50",
-    },
-    rose: {
-      card: "border-rose-400/25 bg-rose-400/5 dark:bg-rose-400/[0.07]",
-      value: "text-rose-600 dark:text-rose-300",
-      label: "text-rose-600/70 dark:text-rose-400/70",
-      icon: "text-rose-500 bg-rose-400/15",
-      bar: "bg-rose-400/50",
-    },
+    default: { card: "border-[rgb(var(--border))] bg-[rgb(var(--card2))]", value: "text-[rgb(var(--fg))]", label: "text-[rgb(var(--muted2))]", icon: "text-[rgb(var(--muted2))] bg-[rgb(var(--card))]" },
+    amber: { card: "border-amber-400/25 bg-amber-400/5 dark:bg-amber-400/[0.07]", value: "text-amber-600 dark:text-amber-300", label: "text-amber-600/70 dark:text-amber-400/70", icon: "text-amber-500 bg-amber-400/15" },
+    sky: { card: "border-sky-400/25 bg-sky-400/5 dark:bg-sky-400/[0.07]", value: "text-sky-600 dark:text-sky-300", label: "text-sky-600/70 dark:text-sky-400/70", icon: "text-sky-500 bg-sky-400/15" },
+    emerald: { card: "border-emerald-400/25 bg-emerald-400/5 dark:bg-emerald-400/[0.07]", value: "text-emerald-600 dark:text-emerald-300", label: "text-emerald-600/70 dark:text-emerald-400/70", icon: "text-emerald-500 bg-emerald-400/15" },
+    rose: { card: "border-rose-400/25 bg-rose-400/5 dark:bg-rose-400/[0.07]", value: "text-rose-600 dark:text-rose-300", label: "text-rose-600/70 dark:text-rose-400/70", icon: "text-rose-500 bg-rose-400/15" },
   }[tone];
 
   return (
-    <motion.div
-      whileHover={{ y: -2, scale: 1.01 }}
-      transition={{ duration: 0.15 }}
-      className={`rounded-2xl border p-4 transition-shadow hover:shadow-md ${config.card}`}
-    >
+    <motion.div whileHover={{ y: -2, scale: 1.01 }} transition={{ duration: 0.15 }} className={`rounded-2xl border p-4 transition-shadow hover:shadow-md ${config.card}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1">
           <div className={`text-[11px] font-medium ${config.label}`}>{label}</div>
-          <div className={`mt-1.5 text-3xl font-bold tabular-nums tracking-tight ${config.value}`}>
-            {value}
-          </div>
+          <div className={`mt-1.5 text-3xl font-bold tabular-nums tracking-tight ${config.value}`}>{value}</div>
         </div>
-        {icon && (
-          <div className={`rounded-xl p-2 ${config.icon}`}>
-            {icon}
-          </div>
-        )}
+        {icon && <div className={`rounded-xl p-2 ${config.icon}`}>{icon}</div>}
       </div>
     </motion.div>
   );
 }
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
 
 function getDefaultCategory(source: string, explicit: string | null) {
   if (explicit) return explicit;
@@ -326,18 +172,23 @@ export default function ReportsPage() {
   const presetChatChannelId  = sp.get("chatChannelId") ?? "";
   const hasPreset = !!(presetSource || presetSubject || presetReportedUserId || presetSessionId || presetChatChannelId);
 
-  // ── List state ──
-  const [reports, setReports] = useState<ReportItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [listErr, setListErr] = useState<string | null>(null);
+  const [tab, setTab] = useState<TabKey>(hasPreset ? "submit" : "list");
   const [openingEvidenceId, setOpeningEvidenceId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("ACTIVE");
   const [currentPage, setCurrentPage] = useState(1);
 
-  const [tab, setTab] = useState<TabKey>(hasPreset ? "submit" : "list");
+  // ✅ SWR — instant on revisit within 30s
+  const { data: reportsData, isLoading: loading, error, mutate } = useSWR(
+    "/api/reports/my",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 30_000 }
+  );
 
-  // ── Submit state ──
+  const reports: ReportItem[] = reportsData?.reports ?? [];
+  const listErr = error ? "Failed to load reports." : null;
+
+  // Submit state
   const [category, setCategory] = useState(presetCategory);
   const [subject, setSubject] = useState(presetSubject);
   const [description, setDescription] = useState("");
@@ -349,29 +200,12 @@ export default function ReportsPage() {
   const [submitMsg, setSubmitMsg] = useState<string | null>(null);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
 
-  // ── Load reports ──
-  async function loadReports() {
-    try {
-      setLoading(true);
-      setListErr(null);
-      const res = await fetch("/api/reports/my", { method: "GET", cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to load reports");
-      setReports(data.reports || []);
-    } catch (e: any) {
-      setListErr(e?.message || "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function openEvidence(reportId: string) {
     try {
       setOpeningEvidenceId(reportId);
       const res = await fetch(`/api/reports/${reportId}/evidence`, { cache: "no-store" });
       const data = await res.json();
-      if (!res.ok || !data?.ok || !data?.signedUrl)
-        throw new Error(data?.error || "Failed to open evidence");
+      if (!res.ok || !data?.ok || !data?.signedUrl) throw new Error(data?.error || "Failed to open evidence");
       window.open(data.signedUrl, "_blank", "noopener,noreferrer");
     } catch (e: any) {
       alert(e?.message || "Failed to open evidence");
@@ -405,20 +239,14 @@ export default function ReportsPage() {
       setEvidenceFile(null);
       setCategory("GENERAL_COMPLAINT");
       setReportedUserId("");
-      await loadReports();
-      setTimeout(() => {
-        setTab("list");
-        setSubmitMsg(null);
-      }, 1800);
+      await mutate(); // ✅ refetch reports after submit
+      setTimeout(() => { setTab("list"); setSubmitMsg(null); }, 1800);
     } catch (e: any) {
       setSubmitErr(e?.message || "Something went wrong");
     } finally {
       setSubmitLoading(false);
     }
   }
-
-  useEffect(() => { loadReports(); }, []);
-  useEffect(() => { setCurrentPage(1); }, [query, viewMode]);
 
   const counts = useMemo(() => ({
     all: reports.length,
@@ -452,17 +280,15 @@ export default function ReportsPage() {
   return (
     <div className="space-y-5">
 
-      {/* ── Header ── */}
+      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
         className="relative overflow-hidden rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-sm"
       >
-        {/* Subtle gradient orb */}
         <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[rgb(var(--primary)/0.08)] blur-3xl" />
         <div className="pointer-events-none absolute -bottom-12 left-1/3 h-32 w-32 rounded-full bg-[rgb(var(--primary)/0.05)] blur-2xl" />
-
         <div className="relative flex flex-wrap items-center justify-between gap-4 px-6 py-5">
           <div className="flex items-center gap-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[rgb(var(--primary)/0.12)] ring-1 ring-[rgb(var(--primary)/0.2)]">
@@ -470,41 +296,28 @@ export default function ReportsPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-[rgb(var(--fg))]">Reports</h1>
-              <p className="text-xs text-[rgb(var(--muted2))]">
-                Submit, track, and manage your complaints &amp; appeals
-              </p>
+              <p className="text-xs text-[rgb(var(--muted2))]">Submit, track, and manage your complaints &amp; appeals</p>
             </div>
           </div>
-
           <div className="flex items-center gap-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-1.5">
-            <TabButton
-              active={tab === "list"}
-              onClick={() => setTab("list")}
-              icon={<FileText className="h-3.5 w-3.5" />}
-            >
+            <TabButton active={tab === "list"} onClick={() => setTab("list")} icon={<FileText className="h-3.5 w-3.5" />}>
               My Reports
               {counts.all > 0 && (
-                <span className="ml-0.5 rounded-md bg-[rgb(var(--primary)/0.12)] px-1.5 py-0.5 text-[10px] font-bold text-[rgb(var(--primary))]">
-                  {counts.all}
-                </span>
+                <span className="ml-0.5 rounded-md bg-[rgb(var(--primary)/0.12)] px-1.5 py-0.5 text-[10px] font-bold text-[rgb(var(--primary))]">{counts.all}</span>
               )}
             </TabButton>
-            <TabButton
-              active={tab === "submit"}
-              onClick={() => setTab("submit")}
-              icon={<Plus className="h-3.5 w-3.5" />}
-            >
+            <TabButton active={tab === "submit"} onClick={() => setTab("submit")} icon={<Plus className="h-3.5 w-3.5" />}>
               New Report
             </TabButton>
           </div>
         </div>
       </motion.div>
 
-      {/* ── Content ── */}
+      {/* Content */}
       <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-sm overflow-hidden">
         <AnimatePresence mode="wait" initial={false}>
 
-          {/* ════════════ LIST TAB ════════════ */}
+          {/* LIST TAB */}
           {tab === "list" && (
             <motion.div
               key="list"
@@ -532,57 +345,32 @@ export default function ReportsPage() {
                   className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex flex-wrap gap-2">
-                    <ViewTab
-                      active={viewMode === "ACTIVE"}
-                      label="Active"
-                      count={counts.active}
-                      onClick={() => setViewMode("ACTIVE")}
-                      icon={<span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />}
-                    />
-                    <ViewTab
-                      active={viewMode === "PAST"}
-                      label="Past"
-                      count={counts.past}
-                      onClick={() => setViewMode("PAST")}
-                      icon={<Archive className="h-3 w-3" />}
-                    />
-                    <ViewTab
-                      active={viewMode === "ALL"}
-                      label="All"
-                      count={counts.all}
-                      onClick={() => setViewMode("ALL")}
-                    />
+                    <ViewTab active={viewMode === "ACTIVE"} label="Active" count={counts.active} onClick={() => { setViewMode("ACTIVE"); setCurrentPage(1); }} icon={<span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />} />
+                    <ViewTab active={viewMode === "PAST"} label="Past" count={counts.past} onClick={() => { setViewMode("PAST"); setCurrentPage(1); }} icon={<Archive className="h-3 w-3" />} />
+                    <ViewTab active={viewMode === "ALL"} label="All" count={counts.all} onClick={() => { setViewMode("ALL"); setCurrentPage(1); }} />
                   </div>
-
                   <div className="flex items-center gap-2">
                     <div className="relative w-full sm:w-64">
                       <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[rgb(var(--muted2))]" />
                       <input
                         value={query}
-                        onChange={(e) => setQuery(e.target.value)}
+                        onChange={(e) => { setQuery(e.target.value); setCurrentPage(1); }}
                         placeholder="Search reports…"
                         className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] py-2 pl-9 pr-8 text-xs text-[rgb(var(--fg))] outline-none placeholder:text-[rgb(var(--muted2))] focus:border-[rgb(var(--primary)/0.5)] focus:ring-1 focus:ring-[rgb(var(--primary)/0.2)] transition-all"
                       />
                       {query && (
-                        <button
-                          type="button"
-                          onClick={() => setQuery("")}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[rgb(var(--muted2))] hover:text-[rgb(var(--fg))] transition-colors"
-                        >
+                        <button type="button" onClick={() => setQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[rgb(var(--muted2))] hover:text-[rgb(var(--fg))] transition-colors">
                           <X className="h-3 w-3" />
                         </button>
                       )}
                     </div>
-
                     <button
                       type="button"
-                      onClick={loadReports}
+                      onClick={() => mutate()} // ✅ SWR mutate instead of loadReports
                       disabled={loading}
                       className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-[11px] font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))] disabled:opacity-50 transition-all"
                     >
-                      {loading
-                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        : <RefreshCcw className="h-3.5 w-3.5" />}
+                      {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
                       Refresh
                     </button>
                   </div>
@@ -592,15 +380,12 @@ export default function ReportsPage() {
               {/* States */}
               {loading ? (
                 <div className="flex flex-col items-center justify-center gap-3 py-20 text-sm text-[rgb(var(--muted2))]">
-                  <div className="relative">
-                    <div className="h-10 w-10 rounded-full border-2 border-[rgb(var(--border))] border-t-[rgb(var(--primary))] animate-spin" />
-                  </div>
+                  <div className="h-10 w-10 rounded-full border-2 border-[rgb(var(--border))] border-t-[rgb(var(--primary))] animate-spin" />
                   <span className="text-xs">Loading your reports…</span>
                 </div>
               ) : listErr ? (
                 <div className="flex items-start gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/8 px-4 py-3.5 text-sm text-rose-600 dark:text-rose-300">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  {listErr}
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{listErr}
                 </div>
               ) : reports.length === 0 ? (
                 <motion.div
@@ -618,8 +403,7 @@ export default function ReportsPage() {
                     onClick={() => setTab("submit")}
                     className="mt-5 inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--primary)/0.3)] bg-[rgb(var(--primary)/0.08)] px-4 py-2 text-xs font-semibold text-[rgb(var(--primary))] hover:bg-[rgb(var(--primary)/0.13)] transition-all"
                   >
-                    <Plus className="h-3.5 w-3.5" />
-                    Submit your first report
+                    <Plus className="h-3.5 w-3.5" />Submit your first report
                   </button>
                 </motion.div>
               ) : filteredReports.length === 0 ? (
@@ -646,14 +430,11 @@ export default function ReportsPage() {
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ duration: 0.18, delay: i * 0.04 }}
-                          className={`group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 transition-all duration-200 hover:border-[rgb(var(--border))] hover:shadow-md ${archived ? "opacity-70" : ""}`}
+                          className={`group rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 transition-all duration-200 hover:shadow-md ${archived ? "opacity-70" : ""}`}
                         >
                           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                             <div className="min-w-0 flex-1 space-y-3">
-
-                              {/* Header row */}
                               <div className="flex flex-wrap items-center gap-2">
-                                {/* Status with animated dot */}
                                 <span className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-[11px] font-semibold shadow-sm ${sc.cls}`}>
                                   <span className={`h-1.5 w-1.5 rounded-full ${sc.dot} animate-pulse`} />
                                   {niceLabel(report.status)}
@@ -673,7 +454,6 @@ export default function ReportsPage() {
 
                               <div className="text-sm font-semibold text-[rgb(var(--fg))] leading-snug">{report.subject}</div>
 
-                              {/* Description */}
                               <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3.5">
                                 <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--muted2))]">
                                   <MessageSquareText className="h-3 w-3" /> Description
@@ -681,17 +461,13 @@ export default function ReportsPage() {
                                 <p className="text-xs text-[rgb(var(--muted))] leading-[1.7]">{report.description}</p>
                               </div>
 
-                              {/* Meta grid */}
                               <div className="grid gap-2 md:grid-cols-3">
                                 <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3">
                                   <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--muted2))]">
                                     <CalendarDays className="h-3 w-3" /> Submitted
                                   </div>
-                                  <div className="text-xs font-medium text-[rgb(var(--fg))]">
-                                    {new Date(report.createdAt).toLocaleString()}
-                                  </div>
+                                  <div className="text-xs font-medium text-[rgb(var(--fg))]">{new Date(report.createdAt).toLocaleString()}</div>
                                 </div>
-
                                 <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3">
                                   <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--muted2))]">
                                     <User className="h-3 w-3" /> Reported User
@@ -705,7 +481,6 @@ export default function ReportsPage() {
                                     <span className="text-xs text-[rgb(var(--muted2))]">Not specified</span>
                                   )}
                                 </div>
-
                                 <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3">
                                   <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--muted2))]">
                                     <Paperclip className="h-3 w-3" /> Evidence
@@ -717,9 +492,7 @@ export default function ReportsPage() {
                                       disabled={openingEvidenceId === report.id}
                                       className="inline-flex items-center gap-1.5 text-xs font-semibold text-[rgb(var(--primary))] hover:underline disabled:opacity-50 transition-opacity"
                                     >
-                                      {openingEvidenceId === report.id
-                                        ? <Loader2 className="h-3 w-3 animate-spin" />
-                                        : <ExternalLink className="h-3 w-3" />}
+                                      {openingEvidenceId === report.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ExternalLink className="h-3 w-3" />}
                                       View file
                                     </button>
                                   ) : (
@@ -729,7 +502,6 @@ export default function ReportsPage() {
                               </div>
                             </div>
 
-                            {/* Admin panel */}
                             <div className="w-full xl:w-[270px] shrink-0">
                               <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-3.5 h-full">
                                 <div className="mb-2.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[rgb(var(--muted2))]">
@@ -772,38 +544,20 @@ export default function ReportsPage() {
                     })}
                   </div>
 
-                  {/* Pagination */}
                   {totalPages > 1 && (
                     <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
-                        className="inline-flex items-center gap-1 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-[11px] font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))] disabled:opacity-40 transition-all"
-                      >
+                      <button type="button" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}
+                        className="inline-flex items-center gap-1 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-[11px] font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))] disabled:opacity-40 transition-all">
                         <ChevronLeft className="h-3.5 w-3.5" /> Prev
                       </button>
                       {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                        <button
-                          key={page}
-                          type="button"
-                          onClick={() => setCurrentPage(page)}
-                          className={[
-                            "rounded-xl px-3.5 py-2 text-[11px] font-semibold border transition-all",
-                            currentPage === page
-                              ? "border-[rgb(var(--primary)/0.4)] bg-[rgb(var(--primary)/0.1)] text-[rgb(var(--primary))] shadow-sm"
-                              : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]",
-                          ].join(" ")}
-                        >
+                        <button key={page} type="button" onClick={() => setCurrentPage(page)}
+                          className={["rounded-xl px-3.5 py-2 text-[11px] font-semibold border transition-all", currentPage === page ? "border-[rgb(var(--primary)/0.4)] bg-[rgb(var(--primary)/0.1)] text-[rgb(var(--primary))] shadow-sm" : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]"].join(" ")}>
                           {page}
                         </button>
                       ))}
-                      <button
-                        type="button"
-                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={currentPage === totalPages}
-                        className="inline-flex items-center gap-1 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-[11px] font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))] disabled:opacity-40 transition-all"
-                      >
+                      <button type="button" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                        className="inline-flex items-center gap-1 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-[11px] font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))] disabled:opacity-40 transition-all">
                         Next <ChevronRight className="h-3.5 w-3.5" />
                       </button>
                     </div>
@@ -813,7 +567,7 @@ export default function ReportsPage() {
             </motion.div>
           )}
 
-          {/* ════════════ SUBMIT TAB ════════════ */}
+          {/* SUBMIT TAB */}
           {tab === "submit" && (
             <motion.div
               key="submit"
@@ -824,135 +578,62 @@ export default function ReportsPage() {
               className="p-5 space-y-5"
             >
               <div className="grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
-
-                {/* Form */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
                     <div className="h-5 w-0.5 rounded-full bg-[rgb(var(--primary))]" />
                     <span className="text-sm font-bold text-[rgb(var(--fg))]">Submit a Report</span>
                   </div>
 
-                  {/* Context banner */}
                   {hasPreset && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="rounded-2xl border border-rose-500/30 bg-rose-500/8 p-4 space-y-3"
-                    >
+                    <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-rose-500/30 bg-rose-500/8 p-4 space-y-3">
                       <div className="flex items-center gap-2 text-xs font-bold text-rose-700 dark:text-rose-300">
-                        <AlertTriangle className="h-3.5 w-3.5" />
-                        Report Context
+                        <AlertTriangle className="h-3.5 w-3.5" />Report Context
                       </div>
                       <div className="grid gap-2.5 text-xs sm:grid-cols-2">
-                        {presetSource && (
-                          <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2.5">
-                            <div className="text-[10px] uppercase tracking-wider font-semibold text-rose-500/70 dark:text-rose-400/70 mb-1">Source</div>
-                            <div className="font-semibold text-rose-700 dark:text-rose-300">{presetSource}</div>
-                          </div>
-                        )}
-                        {presetReportedRole && (
-                          <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2.5">
-                            <div className="text-[10px] uppercase tracking-wider font-semibold text-rose-500/70 dark:text-rose-400/70 mb-1">Reported Role</div>
-                            <div className="font-semibold text-rose-700 dark:text-rose-300">{presetReportedRole}</div>
-                          </div>
-                        )}
-                        {presetSubject && (
-                          <div className="sm:col-span-2 rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2.5">
-                            <div className="text-[10px] uppercase tracking-wider font-semibold text-rose-500/70 dark:text-rose-400/70 mb-1">Subject</div>
-                            <div className="font-semibold text-rose-700 dark:text-rose-300">{presetSubject}</div>
-                          </div>
-                        )}
-                        {presetSessionId && (
-                          <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2.5">
-                            <div className="text-[10px] uppercase tracking-wider font-semibold text-rose-500/70 dark:text-rose-400/70 mb-1">Session ID</div>
-                            <div className="font-mono text-[11px] text-rose-700 dark:text-rose-300 break-all">{presetSessionId}</div>
-                          </div>
-                        )}
-                        {presetChatChannelId && (
-                          <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2.5">
-                            <div className="text-[10px] uppercase tracking-wider font-semibold text-rose-500/70 dark:text-rose-400/70 mb-1">Chat Channel ID</div>
-                            <div className="font-mono text-[11px] text-rose-700 dark:text-rose-300 break-all">{presetChatChannelId}</div>
-                          </div>
-                        )}
+                        {presetSource && <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2.5"><div className="text-[10px] uppercase tracking-wider font-semibold text-rose-500/70 dark:text-rose-400/70 mb-1">Source</div><div className="font-semibold text-rose-700 dark:text-rose-300">{presetSource}</div></div>}
+                        {presetReportedRole && <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2.5"><div className="text-[10px] uppercase tracking-wider font-semibold text-rose-500/70 dark:text-rose-400/70 mb-1">Reported Role</div><div className="font-semibold text-rose-700 dark:text-rose-300">{presetReportedRole}</div></div>}
+                        {presetSubject && <div className="sm:col-span-2 rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2.5"><div className="text-[10px] uppercase tracking-wider font-semibold text-rose-500/70 dark:text-rose-400/70 mb-1">Subject</div><div className="font-semibold text-rose-700 dark:text-rose-300">{presetSubject}</div></div>}
+                        {presetSessionId && <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2.5"><div className="text-[10px] uppercase tracking-wider font-semibold text-rose-500/70 dark:text-rose-400/70 mb-1">Session ID</div><div className="font-mono text-[11px] text-rose-700 dark:text-rose-300 break-all">{presetSessionId}</div></div>}
+                        {presetChatChannelId && <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2.5"><div className="text-[10px] uppercase tracking-wider font-semibold text-rose-500/70 dark:text-rose-400/70 mb-1">Chat Channel ID</div><div className="font-mono text-[11px] text-rose-700 dark:text-rose-300 break-all">{presetChatChannelId}</div></div>}
                       </div>
                     </motion.div>
                   )}
 
                   <form onSubmit={onSubmit} className="space-y-4">
-
-                    {/* Category */}
                     <div className="space-y-1.5">
                       <label className="block text-[11px] font-semibold uppercase tracking-wider text-[rgb(var(--muted2))]">Category</label>
-                      <select
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-sm text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary)/0.5)] focus:ring-1 focus:ring-[rgb(var(--primary)/0.2)] transition-all appearance-none cursor-pointer"
-                      >
-                        {CATEGORY_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
+                      <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-sm text-[rgb(var(--fg))] outline-none focus:border-[rgb(var(--primary)/0.5)] focus:ring-1 focus:ring-[rgb(var(--primary)/0.2)] transition-all appearance-none cursor-pointer">
+                        {CATEGORY_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                       </select>
                     </div>
 
-                    {/* Subject */}
                     <div className="space-y-1.5">
                       <label className="block text-[11px] font-semibold uppercase tracking-wider text-[rgb(var(--muted2))]">Subject</label>
-                      <input
-                        value={subject}
-                        onChange={(e) => setSubject(e.target.value)}
-                        placeholder="Brief title of your issue"
-                        required
-                        className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-sm text-[rgb(var(--fg))] outline-none placeholder:text-[rgb(var(--muted2))] focus:border-[rgb(var(--primary)/0.5)] focus:ring-1 focus:ring-[rgb(var(--primary)/0.2)] transition-all"
-                      />
+                      <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Brief title of your issue" required className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-sm text-[rgb(var(--fg))] outline-none placeholder:text-[rgb(var(--muted2))] focus:border-[rgb(var(--primary)/0.5)] focus:ring-1 focus:ring-[rgb(var(--primary)/0.2)] transition-all" />
                     </div>
 
-                    {/* Description */}
                     <div className="space-y-1.5">
                       <label className="block text-[11px] font-semibold uppercase tracking-wider text-[rgb(var(--muted2))]">Description</label>
-                      <textarea
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Explain clearly what happened and include any important details."
-                        rows={6}
-                        required
-                        className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-sm text-[rgb(var(--fg))] outline-none resize-none placeholder:text-[rgb(var(--muted2))] focus:border-[rgb(var(--primary)/0.5)] focus:ring-1 focus:ring-[rgb(var(--primary)/0.2)] transition-all leading-relaxed"
-                      />
+                      <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Explain clearly what happened and include any important details." rows={6} required className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-sm text-[rgb(var(--fg))] outline-none resize-none placeholder:text-[rgb(var(--muted2))] focus:border-[rgb(var(--primary)/0.5)] focus:ring-1 focus:ring-[rgb(var(--primary)/0.2)] transition-all leading-relaxed" />
                     </div>
 
-                    {/* Evidence upload */}
                     <div className="space-y-1.5">
                       <label className="block text-[11px] font-semibold uppercase tracking-wider text-[rgb(var(--muted2))]">
                         Evidence <span className="normal-case font-normal text-[rgb(var(--muted2))]">(optional)</span>
                       </label>
                       <div className="rounded-xl border-2 border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 transition-colors hover:border-[rgb(var(--primary)/0.3)]">
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
-                          onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
-                          className="block w-full text-xs text-[rgb(var(--muted))] file:mr-3 file:rounded-lg file:border file:border-[rgb(var(--border))] file:bg-[rgb(var(--card))] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[rgb(var(--fg))] file:cursor-pointer hover:file:bg-[rgb(var(--card2))] transition-all"
-                        />
+                        <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf" onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)} className="block w-full text-xs text-[rgb(var(--muted))] file:mr-3 file:rounded-lg file:border file:border-[rgb(var(--border))] file:bg-[rgb(var(--card))] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[rgb(var(--fg))] file:cursor-pointer hover:file:bg-[rgb(var(--card2))] transition-all" />
                         <p className="mt-2 text-[11px] text-[rgb(var(--muted2))]">PNG, JPG, WEBP, PDF — max 5 MB</p>
-
                         <AnimatePresence>
                           {evidenceFile && (
-                            <motion.div
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: "auto" }}
-                              exit={{ opacity: 0, height: 0 }}
-                              className="mt-3 overflow-hidden"
-                            >
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mt-3 overflow-hidden">
                               <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-3 py-2.5">
                                 <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                                  {evidenceFile.name}
+                                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />{evidenceFile.name}
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className="text-[11px] text-emerald-600/70 dark:text-emerald-400/70">{(evidenceFile.size / 1024 / 1024).toFixed(2)} MB</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setEvidenceFile(null)}
-                                    className="text-emerald-600/60 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
-                                  >
+                                  <button type="button" onClick={() => setEvidenceFile(null)} className="text-emerald-600/60 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors">
                                     <X className="h-3.5 w-3.5" />
                                   </button>
                                 </div>
@@ -963,49 +644,27 @@ export default function ReportsPage() {
                       </div>
                     </div>
 
-                    {/* Feedback */}
                     <AnimatePresence>
                       {submitMsg && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0 }}
-                          className="flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300"
-                        >
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                          {submitMsg}
+                        <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />{submitMsg}
                         </motion.div>
                       )}
                       {submitErr && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0 }}
-                          className="flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/8 px-4 py-3 text-sm text-rose-600 dark:text-rose-300"
-                        >
-                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                          {submitErr}
+                        <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/8 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{submitErr}
                         </motion.div>
                       )}
                     </AnimatePresence>
 
-                    <button
-                      type="submit"
-                      disabled={submitLoading}
-                      className="group inline-flex items-center gap-2 rounded-xl bg-[rgb(var(--primary))] px-5 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90 active:scale-[0.98] disabled:opacity-60 transition-all duration-150"
-                    >
-                      {submitLoading
-                        ? <Loader2 className="h-4 w-4 animate-spin" />
-                        : <Send className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />}
+                    <button type="submit" disabled={submitLoading} className="group inline-flex items-center gap-2 rounded-xl bg-[rgb(var(--primary))] px-5 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90 active:scale-[0.98] disabled:opacity-60 transition-all duration-150">
+                      {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />}
                       {submitLoading ? "Submitting…" : "Submit Report"}
                     </button>
                   </form>
                 </div>
 
-                {/* Sidebar */}
                 <div className="space-y-3">
-
-                  {/* Selected category */}
                   <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
                     <div className="mb-2.5 flex items-center gap-2">
                       <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-400/15">
@@ -1018,32 +677,19 @@ export default function ReportsPage() {
                     </div>
                   </div>
 
-                  {/* Tips */}
                   <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
                     <div className="mb-3 text-xs font-bold text-[rgb(var(--fg))]">Tips for a good report</div>
                     <ul className="space-y-2.5">
-                      {[
-                        "Be specific about what happened and when.",
-                        "Include names or session IDs if relevant.",
-                        "Upload screenshots or PDFs as evidence.",
-                        "Use the subject as a short, clear summary.",
-                      ].map((tip, i) => (
+                      {["Be specific about what happened and when.", "Include names or session IDs if relevant.", "Upload screenshots or PDFs as evidence.", "Use the subject as a short, clear summary."].map((tip, i) => (
                         <li key={i} className="flex items-start gap-2.5 text-xs text-[rgb(var(--muted))] leading-[1.6]">
-                          <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-md bg-[rgb(var(--primary)/0.1)] text-[9px] font-bold text-[rgb(var(--primary))]">
-                            {i + 1}
-                          </span>
+                          <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-md bg-[rgb(var(--primary)/0.1)] text-[9px] font-bold text-[rgb(var(--primary))]">{i + 1}</span>
                           {tip}
                         </li>
                       ))}
                     </ul>
                   </div>
 
-                  {/* Quick link */}
-                  <button
-                    type="button"
-                    onClick={() => setTab("list")}
-                    className="group w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-xs font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card))] transition-all flex items-center justify-between"
-                  >
+                  <button type="button" onClick={() => setTab("list")} className="group w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3 text-xs font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card))] transition-all flex items-center justify-between">
                     <span>View existing reports</span>
                     <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                   </button>

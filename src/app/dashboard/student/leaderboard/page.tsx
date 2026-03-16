@@ -1,20 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowLeft,
-  RefreshCcw,
-  Trophy,
-  Users,
-  Award,
-  Crown,
-  Flame,
-  Zap,
-  Star,
-  TrendingUp,
+  ArrowLeft, RefreshCcw, Trophy, Users, Award, Crown, Flame, Zap, Star, TrendingUp,
 } from "lucide-react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 
 type Scope = "ALL" | "STUDENTS" | "TUTORS";
 
@@ -35,10 +28,6 @@ type LeaderboardRes = {
     };
   }>;
 };
-
-/* =========================
-   AVATAR
-   ========================= */
 
 function getInitials(name: string | null | undefined, email: string) {
   const base = (name?.trim() || "").split(/\s+/).filter(Boolean);
@@ -62,22 +51,12 @@ function getGradient(str: string) {
   return AVATAR_GRADIENTS[Math.abs(h) % AVATAR_GRADIENTS.length];
 }
 
-function Avatar({
-  name,
-  email,
-  src,
-  size = 44,
-  ringClass,
-}: {
-  name: string | null;
-  email: string;
-  src?: string | null;
-  size?: number;
-  ringClass?: string;
+function Avatar({ name, email, src, size = 44, ringClass }: {
+  name: string | null; email: string; src?: string | null;
+  size?: number; ringClass?: string;
 }) {
   const initials = getInitials(name, email);
   const gradient = getGradient(email || name || "U");
-
   return (
     <div
       className={`relative shrink-0 overflow-hidden rounded-full ${ringClass ?? "ring-2 ring-[rgb(var(--border))]"}`}
@@ -99,9 +78,6 @@ function Avatar({
   );
 }
 
-/* =========================
-   PULSE DOT
-   ========================= */
 function PulseDot({ color = "bg-emerald-400" }: { color?: string }) {
   return (
     <span className="relative flex h-2 w-2">
@@ -111,19 +87,8 @@ function PulseDot({ color = "bg-emerald-400" }: { color?: string }) {
   );
 }
 
-/* =========================
-   SCOPE TABS
-   ========================= */
-function ScopeTab({
-  active,
-  label,
-  icon,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  icon: React.ReactNode;
-  onClick: () => void;
+function ScopeTab({ active, label, icon, onClick }: {
+  active: boolean; label: string; icon: React.ReactNode; onClick: () => void;
 }) {
   return (
     <button
@@ -142,41 +107,23 @@ function ScopeTab({
   );
 }
 
-/* =========================
-   STAT CHIP
-   ========================= */
-function StatChip({
-  label,
-  value,
-  icon,
-  accent,
-}: {
-  label: string;
-  value: string | number;
-  icon: React.ReactNode;
-  accent?: string;
+function StatChip({ label, value, icon, accent }: {
+  label: string; value: string | number; icon: React.ReactNode; accent?: string;
 }) {
   return (
     <motion.div
       whileHover={{ y: -2 }}
       className="flex items-center gap-3 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.9)] px-4 py-3 shadow-sm"
     >
-      <div className={`rounded-xl p-2.5 ${accent ?? "bg-[rgb(var(--primary)/0.12)]"}`}>
-        {icon}
-      </div>
+      <div className={`rounded-xl p-2.5 ${accent ?? "bg-[rgb(var(--primary)/0.12)]"}`}>{icon}</div>
       <div className="min-w-0">
-        <div className="text-[10px] font-bold uppercase tracking-widest text-[rgb(var(--muted2))]">
-          {label}
-        </div>
+        <div className="text-[10px] font-bold uppercase tracking-widest text-[rgb(var(--muted2))]">{label}</div>
         <div className="truncate text-base font-extrabold text-[rgb(var(--fg))]">{value}</div>
       </div>
     </motion.div>
   );
 }
 
-/* =========================
-   PODIUM CARD
-   ========================= */
 const podiumConfig = {
   1: {
     badge: "bg-gradient-to-br from-yellow-300 to-amber-400 text-amber-900",
@@ -210,16 +157,9 @@ const podiumConfig = {
   },
 };
 
-function ChampionCard({
-  r,
-  place,
-}: {
-  r: LeaderboardRes["rows"][number];
-  place: 1 | 2 | 3;
-}) {
+function ChampionCard({ r, place }: { r: LeaderboardRes["rows"][number]; place: 1 | 2 | 3 }) {
   const cfg = podiumConfig[place];
   const name = r.user?.name ?? r.user?.email ?? "Unknown";
-
   return (
     <motion.div
       layout
@@ -235,36 +175,22 @@ function ChampionCard({
       ].join(" ")}
     >
       <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${cfg.gradient} opacity-80`} />
-
       <div className="relative flex items-start justify-between gap-2">
         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-extrabold ${cfg.badge}`}>
-          {cfg.icon}
-          {cfg.label}
+          {cfg.icon}{cfg.label}
         </span>
         <div className="text-right">
           <div className="text-[10px] font-bold uppercase tracking-widest text-[rgb(var(--muted2))]">pts</div>
-          <div className="text-3xl font-black tabular-nums text-[rgb(var(--fg))] leading-none">
-            {r.points.toLocaleString()}
-          </div>
+          <div className="text-3xl font-black tabular-nums text-[rgb(var(--fg))] leading-none">{r.points.toLocaleString()}</div>
         </div>
       </div>
-
       <div className="relative mt-5 flex items-center gap-3">
-        <Avatar
-          name={r.user?.name ?? null}
-          email={r.user?.email ?? ""}
-          src={r.user?.avatarUrl ?? null}
-          size={50}
-          ringClass={cfg.ringClass}
-        />
+        <Avatar name={r.user?.name ?? null} email={r.user?.email ?? ""} src={r.user?.avatarUrl ?? null} size={50} ringClass={cfg.ringClass} />
         <div className="min-w-0">
           <div className="truncate text-sm font-extrabold text-[rgb(var(--fg))]">{name}</div>
-          <div className="text-[11px] text-[rgb(var(--muted2))] font-medium capitalize">
-            {r.user?.role ?? ""}
-          </div>
+          <div className="text-[11px] text-[rgb(var(--muted2))] font-medium capitalize">{r.user?.role ?? ""}</div>
         </div>
       </div>
-
       <div className="relative mt-4 h-1.5 rounded-full overflow-hidden bg-[rgb(var(--border))]">
         <motion.div
           className={`h-full rounded-full bg-gradient-to-r ${cfg.barColor}`}
@@ -277,20 +203,10 @@ function ChampionCard({
   );
 }
 
-/* =========================
-   RANK ROW
-   ========================= */
-function RankRow({
-  r,
-  meUserId,
-  index,
-}: {
-  r: LeaderboardRes["rows"][number];
-  meUserId: string | null;
-  index: number;
+function RankRow({ r, meUserId, index }: {
+  r: LeaderboardRes["rows"][number]; meUserId: string | null; index: number;
 }) {
   const isMe = r.userId === meUserId;
-
   return (
     <motion.div
       layout
@@ -306,97 +222,66 @@ function RankRow({
       ].join(" ")}
     >
       <div className="col-span-2">
-        <span
-          className={`inline-block w-9 text-center rounded-lg py-0.5 text-xs font-black tabular-nums
-            ${r.rank <= 10 ? "bg-[rgb(var(--primary)/0.1)] text-[rgb(var(--primary))]" : "text-[rgb(var(--muted2))]"}`}
-        >
+        <span className={`inline-block w-9 text-center rounded-lg py-0.5 text-xs font-black tabular-nums ${r.rank <= 10 ? "bg-[rgb(var(--primary)/0.1)] text-[rgb(var(--primary))]" : "text-[rgb(var(--muted2))]"}`}>
           #{r.rank}
         </span>
       </div>
-
       <div className="col-span-7 flex items-center gap-3 min-w-0">
-        <Avatar
-          name={r.user?.name ?? null}
-          email={r.user?.email ?? ""}
-          src={r.user?.avatarUrl ?? null}
-          size={34}
-        />
+        <Avatar name={r.user?.name ?? null} email={r.user?.email ?? ""} src={r.user?.avatarUrl ?? null} size={34} />
         <div className="min-w-0">
           <div className="flex items-center gap-2 min-w-0">
             <span className="truncate text-sm font-bold text-[rgb(var(--fg))]">
               {r.user?.name ?? r.user?.email ?? "Unknown"}
             </span>
             {isMe && (
-              <span className="shrink-0 rounded-full bg-[rgb(var(--primary))] px-2 py-0.5 text-[10px] font-extrabold text-white">
-                You
-              </span>
+              <span className="shrink-0 rounded-full bg-[rgb(var(--primary))] px-2 py-0.5 text-[10px] font-extrabold text-white">You</span>
             )}
           </div>
-          <div className="text-[11px] font-medium text-[rgb(var(--muted2))] capitalize">
-            {r.user?.role ?? ""}
-          </div>
+          <div className="text-[11px] font-medium text-[rgb(var(--muted2))] capitalize">{r.user?.role ?? ""}</div>
         </div>
       </div>
-
       <div className="col-span-3 text-right">
-        <span className="text-sm font-black tabular-nums text-[rgb(var(--fg))]">
-          {r.points.toLocaleString()}
-        </span>
+        <span className="text-sm font-black tabular-nums text-[rgb(var(--fg))]">{r.points.toLocaleString()}</span>
         <div className="text-[10px] font-semibold text-[rgb(var(--muted2))]">pts</div>
       </div>
     </motion.div>
   );
 }
 
-/* =========================
-   PAGE
-   ========================= */
 export default function StudentLeaderboardPage() {
   const [scope, setScope] = useState<Scope>("ALL");
-  const [data, setData] = useState<LeaderboardRes | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  async function fetchLB(isManual = false, nextScope: Scope = scope) {
-    try {
-      if (isManual) setRefreshing(true);
-      const url = `/api/achievements/leaderboard/weekly?limit=50&mode=${encodeURIComponent(nextScope)}`;
-      const r = await fetch(url, { cache: "no-store" });
-      const j = (await r.json()) as LeaderboardRes;
-      setData(j);
-      setLastUpdated(new Date());
-    } catch {
-      /* ignore */
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+  // ✅ SWR — instant on revisit within 15s, refetches when scope changes
+  const { data, isLoading: loading, mutate } = useSWR<LeaderboardRes>(
+    `/api/achievements/leaderboard/weekly?limit=50&mode=${encodeURIComponent(scope)}`,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 15_000,
+      onSuccess: () => setLastUpdated(new Date()),
     }
-  }
+  );
 
-  useEffect(() => {
-    fetchLB(false, scope);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope]);
+  async function handleRefresh() {
+    setRefreshing(true);
+    await mutate();
+    setRefreshing(false);
+  }
 
   const rows = useMemo(() => (data?.ok ? data.rows : []), [data]);
   const top3 = useMemo(() => rows.filter((r) => r.rank <= 3), [rows]);
   const rest = useMemo(() => rows.filter((r) => r.rank > 3), [rows]);
   const meUserId = data?.meUserId ?? null;
   const myRow = useMemo(() => rows.find((r) => r.userId === meUserId) ?? null, [rows, meUserId]);
-  const nextRow = useMemo(
-    () => (myRow ? rows.find((r) => r.rank === myRow.rank - 1) ?? null : null),
-    [rows, myRow]
-  );
-  const pointsToNext = useMemo(
-    () => (myRow && nextRow ? Math.max(0, nextRow.points - myRow.points + 1) : null),
-    [myRow, nextRow]
-  );
+  const nextRow = useMemo(() => (myRow ? rows.find((r) => r.rank === myRow.rank - 1) ?? null : null), [rows, myRow]);
+  const pointsToNext = useMemo(() => (myRow && nextRow ? Math.max(0, nextRow.points - myRow.points + 1) : null), [myRow, nextRow]);
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 space-y-5">
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <Link
@@ -406,31 +291,25 @@ export default function StudentLeaderboardPage() {
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to Achievements
           </Link>
-
           <div className="mt-2 flex items-center gap-3">
-            <h1 className="text-2xl font-black tracking-tight text-[rgb(var(--fg))]">
-              Leaderboard
-            </h1>
+            <h1 className="text-2xl font-black tracking-tight text-[rgb(var(--fg))]">Leaderboard</h1>
             <div className="flex items-center gap-1.5 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-1 text-[11px] font-bold text-[rgb(var(--muted))]">
               <PulseDot color="bg-emerald-400" />
               Live
             </div>
           </div>
-
           <p className="mt-1 text-sm text-[rgb(var(--muted))]">
             Weekly rankings · resets every Monday
             {lastUpdated && (
               <span className="ml-2 text-[rgb(var(--muted2))]">
-                · updated{" "}
-                {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                · updated {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </span>
             )}
           </p>
         </div>
-
         <motion.button
           whileTap={{ scale: 0.94 }}
-          onClick={() => fetchLB(true, scope)}
+          onClick={handleRefresh}
           disabled={refreshing}
           className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-2.5 text-xs font-bold text-[rgb(var(--fg))] shadow-sm hover:border-[rgb(var(--primary)/0.35)] transition-all disabled:opacity-55"
         >
@@ -439,9 +318,8 @@ export default function StudentLeaderboardPage() {
         </motion.button>
       </div>
 
-      {/* ── Champions ── */}
+      {/* Champions */}
       <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.65)] p-5 shadow-[0_8px_40px_rgb(var(--shadow)/0.07)]">
-
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
             <div className="rounded-xl bg-gradient-to-br from-yellow-400 to-amber-500 p-2 shadow-md shadow-amber-400/30">
@@ -452,7 +330,6 @@ export default function StudentLeaderboardPage() {
               <div className="text-[11px] text-[rgb(var(--muted2))]">Top performers this week</div>
             </div>
           </div>
-
           <div className="flex items-center gap-1 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-1">
             <ScopeTab active={scope === "ALL"} label="All" icon={<Star className="h-3 w-3" />} onClick={() => setScope("ALL")} />
             <ScopeTab active={scope === "STUDENTS"} label="Students" icon={<Users className="h-3 w-3" />} onClick={() => setScope("STUDENTS")} />
@@ -500,7 +377,7 @@ export default function StudentLeaderboardPage() {
         </div>
       </div>
 
-      {/* ── Full Rankings ── */}
+      {/* Full Rankings */}
       <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.65)] p-5 shadow-[0_8px_40px_rgb(var(--shadow)/0.05)]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -509,9 +386,7 @@ export default function StudentLeaderboardPage() {
             </div>
             <span className="text-sm font-extrabold text-[rgb(var(--fg))]">Full Rankings</span>
           </div>
-          <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-1 text-[11px] font-bold text-[rgb(var(--muted2))]">
-            Top 50
-          </span>
+          <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-1 text-[11px] font-bold text-[rgb(var(--muted2))]">Top 50</span>
         </div>
 
         <div className="mt-4 overflow-hidden rounded-2xl border border-[rgb(var(--border))]">

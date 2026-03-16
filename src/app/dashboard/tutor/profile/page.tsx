@@ -1,11 +1,12 @@
 "use client";
 
-// src/app/dashboard/tutor/profile/page.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Star, Plus, Trash2, BookOpen,
   TrendingUp, Calendar, Award, Sparkles, ChevronRight,
 } from "lucide-react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 
 type Subject = { id: string; code: string; title: string };
 type ProfileResp = {
@@ -64,7 +65,9 @@ const SUBJECT_GRADIENTS = [
   "from-rose-500/10  to-pink-500/10  border-rose-500/20",
 ];
 
-function SubjectPill({ subject, onRemove, saving }: { subject: Subject; onRemove: () => void; saving: boolean }) {
+function SubjectPill({ subject, onRemove, saving }: {
+  subject: Subject; onRemove: () => void; saving: boolean;
+}) {
   const g = SUBJECT_GRADIENTS[subject.code.charCodeAt(0) % SUBJECT_GRADIENTS.length];
   return (
     <div className={`group flex items-center justify-between gap-3 rounded-2xl border bg-gradient-to-r ${g} px-4 py-3 transition-all duration-200 hover:-translate-y-px hover:shadow-[0_4px_16px_rgb(var(--shadow)/0.10)]`}>
@@ -86,48 +89,49 @@ function SubjectPill({ subject, onRemove, saving }: { subject: Subject; onRemove
 }
 
 export default function TutorProfilePage() {
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
-  const [msg, setMsg]           = useState<{ text: string; ok: boolean } | null>(null);
-  const [profile, setProfile]   = useState<ProfileResp | null>(null);
-  const [allSubjects, setAll]   = useState<Subject[]>([]);
-  const [selId, setSelId]       = useState("");
-  const [customCode, setCode]   = useState("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [selId, setSelId] = useState("");
+  const [customCode, setCode] = useState("");
   const [customTitle, setTitle] = useState("");
 
-  async function loadAll() {
-    setLoading(true); setMsg(null);
-    try {
-      const [p, s] = await Promise.all([
-        fetch("/api/tutor/profile", { cache: "no-store" }),
-        fetch("/api/subjects",      { cache: "no-store" }),
-      ]);
-      const pj: ProfileResp  = await p.json().catch(() => ({ ok: false }));
-      const sj: SubjectsResp = await s.json().catch(() => ({ ok: false, subjects: [] }));
-      setProfile(pj);
-      setAll(Array.isArray(sj.subjects) ? sj.subjects : []);
-    } finally { setLoading(false); }
-  }
+  // ✅ SWR — both fetches, instant on revisit
+  const { data: profileData, isLoading: loadingProfile, mutate: mutateProfile } = useSWR<ProfileResp>(
+    "/api/tutor/profile",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 30_000 }
+  );
 
-  useEffect(() => { loadAll(); }, []);
+  const { data: subjectsData, isLoading: loadingSubjects } = useSWR<SubjectsResp>(
+    "/api/subjects",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
 
-const mySubjects = useMemo(() => {
-  return profile?.tutor?.subjects ?? [];
-}, [profile?.tutor?.subjects]);
+  const loading = loadingProfile || loadingSubjects;
 
-const availableAdd = useMemo(() => {
-  const set = new Set(mySubjects.map((x) => x.id));
-  return allSubjects.filter((x) => !set.has(x.id));
-}, [allSubjects, mySubjects]);
+  const mySubjects = useMemo(() => profileData?.tutor?.subjects ?? [], [profileData]);
+  const allSubjects = useMemo(() => (Array.isArray(subjectsData?.subjects) ? subjectsData.subjects : []), [subjectsData]);
+
+  const availableAdd = useMemo(() => {
+    const set = new Set(mySubjects.map((x) => x.id));
+    return allSubjects.filter((x) => !set.has(x.id));
+  }, [allSubjects, mySubjects]);
 
   async function addSubject() {
     if (!selId) return;
     setSaving(true); setMsg(null);
     try {
-      const res  = await fetch("/api/tutor/subjects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subjectId: selId }) });
+      const res = await fetch("/api/tutor/subjects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subjectId: selId }),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ text: data?.message ?? "Failed.", ok: false }); return; }
-      setSelId(""); await loadAll(); setMsg({ text: "Subject added!", ok: true });
+      setSelId("");
+      await mutateProfile(); // ✅ refetch profile after add
+      setMsg({ text: "Subject added!", ok: true });
     } finally { setSaving(false); }
   }
 
@@ -136,20 +140,31 @@ const availableAdd = useMemo(() => {
     if (!code || !title) { setMsg({ text: "Enter both code and title.", ok: false }); return; }
     setSaving(true); setMsg(null);
     try {
-      const res  = await fetch("/api/tutor/subjects/custom", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, title }) });
+      const res = await fetch("/api/tutor/subjects/custom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, title }),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ text: data?.message ?? "Failed.", ok: false }); return; }
-      setCode(""); setTitle(""); await loadAll(); setMsg({ text: "Custom subject added!", ok: true });
+      setCode(""); setTitle("");
+      await mutateProfile(); // ✅ refetch profile after custom add
+      setMsg({ text: "Custom subject added!", ok: true });
     } finally { setSaving(false); }
   }
 
   async function removeSubject(subjectId: string) {
     setSaving(true); setMsg(null);
     try {
-      const res  = await fetch("/api/tutor/subjects", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subjectId }) });
+      const res = await fetch("/api/tutor/subjects", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subjectId }),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ text: data?.message ?? "Failed.", ok: false }); return; }
-      await loadAll(); setMsg({ text: "Subject removed.", ok: true });
+      await mutateProfile(); // ✅ refetch profile after remove
+      setMsg({ text: "Subject removed.", ok: true });
     } finally { setSaving(false); }
   }
 
@@ -166,12 +181,14 @@ const availableAdd = useMemo(() => {
     );
   }
 
-  const tutor = profile?.tutor, stats = profile?.stats, reviews = profile?.reviews ?? [];
+  const tutor = profileData?.tutor;
+  const stats = profileData?.stats;
+  const reviews = profileData?.reviews ?? [];
 
   return (
     <div className="space-y-5">
 
-      {/* ── HERO ── */}
+      {/* HERO */}
       <div className="relative overflow-hidden rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-6 shadow-[0_20px_60px_rgb(var(--shadow)/0.08)]">
         <div className="pointer-events-none absolute -top-14 -right-14 h-52 w-52 rounded-full bg-[rgb(var(--primary))] opacity-[0.06] blur-3xl" />
         <div className="pointer-events-none absolute -bottom-10 -left-10 h-40 w-40 rounded-full bg-violet-500 opacity-[0.05] blur-3xl" />
@@ -220,7 +237,7 @@ const availableAdd = useMemo(() => {
         </div>
       </div>
 
-      {/* ── STATS ── */}
+      {/* STATS */}
       {stats && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <StatCard icon={TrendingUp} label="Sessions completed" value={stats.completedCount}       blobCls="bg-violet-500"  iconBg="bg-violet-500/10"  iconCls="text-violet-500"  />
@@ -229,7 +246,7 @@ const availableAdd = useMemo(() => {
         </div>
       )}
 
-      {/* ── SUBJECTS + ADD ── */}
+      {/* SUBJECTS + ADD */}
       <div className="grid gap-4 md:grid-cols-[1fr_340px] md:items-start">
 
         {/* Subjects list */}
@@ -279,14 +296,22 @@ const availableAdd = useMemo(() => {
               <h2 className="text-sm font-bold text-[rgb(var(--fg))]">Quick Add</h2>
             </div>
             <div className="flex gap-2">
-              <select value={selId} onChange={(e) => setSelId(e.target.value)}
+              <select
+                value={selId}
+                onChange={(e) => setSelId(e.target.value)}
                 disabled={saving || availableAdd.length === 0}
-                className="h-9 flex-1 min-w-0 rounded-xl border px-3 text-xs outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] transition-all focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] disabled:opacity-50">
+                className="h-9 flex-1 min-w-0 rounded-xl border px-3 text-xs outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] transition-all focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] disabled:opacity-50"
+              >
                 <option value="">{availableAdd.length === 0 ? "All subjects added" : "Choose subject…"}</option>
-                {availableAdd.map((s) => <option key={s.id} value={s.id}>{s.code} — {s.title}</option>)}
+                {availableAdd.map((s) => (
+                  <option key={s.id} value={s.id}>{s.code} — {s.title}</option>
+                ))}
               </select>
-              <button onClick={addSubject} disabled={saving || !selId}
-                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-[rgb(var(--primary))] px-4 text-xs font-bold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md active:scale-95 disabled:opacity-50">
+              <button
+                onClick={addSubject}
+                disabled={saving || !selId}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-[rgb(var(--primary))] px-4 text-xs font-bold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md active:scale-95 disabled:opacity-50"
+              >
                 <Plus size={13} /> Add
               </button>
             </div>
@@ -305,14 +330,25 @@ const availableAdd = useMemo(() => {
             </div>
             <p className="mb-4 text-[0.72rem] text-[rgb(var(--muted2))]">Can&apos;t find yours? Add a custom one.</p>
             <div className="space-y-2">
-              <input value={customCode} onChange={(e) => setCode(e.target.value)}
-                placeholder="Subject code (e.g. CPT112)" disabled={saving}
-                className="h-9 w-full rounded-xl border px-3 text-xs outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] transition-all focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] disabled:opacity-50" />
-              <input value={customTitle} onChange={(e) => setTitle(e.target.value)}
-                placeholder="Subject title (e.g. Discrete Structures)" disabled={saving}
-                className="h-9 w-full rounded-xl border px-3 text-xs outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] transition-all focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] disabled:opacity-50" />
-              <button onClick={addCustomSubject} disabled={saving || !customCode.trim() || !customTitle.trim()}
-                className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[rgb(var(--primary))] to-violet-500 text-xs font-bold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.99] disabled:opacity-50">
+              <input
+                value={customCode}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="Subject code (e.g. CPT112)"
+                disabled={saving}
+                className="h-9 w-full rounded-xl border px-3 text-xs outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] transition-all focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] disabled:opacity-50"
+              />
+              <input
+                value={customTitle}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Subject title (e.g. Discrete Structures)"
+                disabled={saving}
+                className="h-9 w-full rounded-xl border px-3 text-xs outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] transition-all focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] disabled:opacity-50"
+              />
+              <button
+                onClick={addCustomSubject}
+                disabled={saving || !customCode.trim() || !customTitle.trim()}
+                className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[rgb(var(--primary))] to-violet-500 text-xs font-bold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.99] disabled:opacity-50"
+              >
                 <Sparkles size={12} /> Add custom subject
               </button>
             </div>
@@ -326,7 +362,7 @@ const availableAdd = useMemo(() => {
         </div>
       </div>
 
-      {/* ── REVIEWS ── */}
+      {/* REVIEWS */}
       <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -363,19 +399,13 @@ const availableAdd = useMemo(() => {
                   <StarsRow value={r.rating} />
                 </div>
                 <div className="mt-3 border-t border-[rgb(var(--border))] pt-3">
-                  {r.comment?.trim()
-                    ? (
-                      <p className="text-xs leading-relaxed text-[rgb(var(--muted))]">
-                        &quot;{r.comment}&quot;
-                      </p>
-                    )
-                    : (
-                      <p className="text-xs italic text-[rgb(var(--muted2))] opacity-50">
-                        No comment provided.
-                      </p>
-                    )}
+                  {r.comment?.trim() ? (
+                    <p className="text-xs leading-relaxed text-[rgb(var(--muted))]">&quot;{r.comment}&quot;</p>
+                  ) : (
+                    <p className="text-xs italic text-[rgb(var(--muted2))] opacity-50">No comment provided.</p>
+                  )}
                 </div>
-            </div>
+              </div>
             ))
           )}
         </div>

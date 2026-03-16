@@ -251,31 +251,31 @@ export default function UserMenuClient({
           <div className="px-2 py-1">
             <SectionLabel>Quick Access</SectionLabel>
             <MenuItem
-              href={dashboardHref}
+              href="/dashboard/student"
               onClick={() => setOpen(false)}
               icon={<LayoutDashboard size={13} />}
               label="Dashboard"
             />
             <MenuItem
-              href={`${dashboardHref}/profile`}
+              href="/dashboard/student/profile"
               onClick={() => setOpen(false)}
               icon={<User size={13} />}
               label="Profile"
             />
             <MenuItem
-              href={`${dashboardHref}/progress`}
+              href="/dashboard/student/progress"
               onClick={() => setOpen(false)}
               icon={<TrendingUp size={13} />}
               label="Progress"
             />
             <MenuItem
-              href={`${dashboardHref}/achievements`}
+              href="/dashboard/student/achievements"
               onClick={() => setOpen(false)}
               icon={<Trophy size={13} />}
               label="Achievements"
             />
             <MenuItem
-              href={`${dashboardHref}/rewards`}
+              href="/dashboard/student/rewards"
               onClick={() => setOpen(false)}
               icon={<Gift size={13} />}
               label="Rewards Shop"
@@ -283,7 +283,7 @@ export default function UserMenuClient({
 
             <SectionLabel>Bookings</SectionLabel>
             <MenuItem
-              href={`${dashboardHref}/sessions`}
+              href="/dashboard/student/sessions"
               onClick={() => setOpen(false)}
               icon={<CalendarClock size={13} />}
               label="My Bookings"
@@ -300,7 +300,7 @@ export default function UserMenuClient({
               }
             />
             <MenuItem
-              href={`${dashboardHref}/report`}
+              href="/dashboard/student/reports"
               onClick={() => setOpen(false)}
               icon={<Shield size={13} />}
               label="My Reports"
@@ -308,13 +308,13 @@ export default function UserMenuClient({
 
             <SectionLabel>Settings</SectionLabel>
             <MenuItem
-              href={`${dashboardHref}/security/change-password`}
+              href="/dashboard/student/security/change-password"
               onClick={() => setOpen(false)}
               icon={<Lock size={13} />}
               label="Change Password"
             />
             <MenuItem
-              href={`${dashboardHref}/security/deactivate`}
+              href="/dashboard/student/security/deactivate"
               onClick={() => setOpen(false)}
               icon={<ShieldOff size={13} />}
               label="Deactivate Account"
