@@ -542,19 +542,18 @@ export default function MessagingClient() {
           }, 20);
 
           if (row.senderId !== meId) {
-            await markChatRead(channelId);
+          await markChatRead(channelId);
 
-            setTimeout(async () => {
-              const j = await fetch(
-                `/api/chat/messages?channelId=${channelId}&take=30`,
-                { cache: "no-store" }
-              )
-                .then((r) => r.json())
-                .catch(() => null);
+          void (async () => {
+            const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
+              cache: "no-store",
+            })
+              .then((r) => r.json())
+              .catch(() => null);
 
-              applyMessagesResponse(j, channelId, null);
-            }, 400);
-          }
+            applyMessagesResponse(j, channelId, null);
+          })();
+        }
 
           refreshConversations(channelId);
         }
