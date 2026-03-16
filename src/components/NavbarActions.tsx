@@ -1,20 +1,16 @@
 import Link from "next/link";
-import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { prisma } from "@/lib/prisma";
+import { getSessionUser } from "@/lib/getSessionUser";
 import UserMenuClient from "@/components/UserMenuClient";
 import HeaderRealtimeActions from "@/components/HeaderRealtimeActions";
 
 export default async function NavbarActions() {
-  const supabase = await supabaseServerComponent();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const dbUser = await getSessionUser();
 
-  if (!user?.email) {
+  if (!dbUser) {
     return (
       <div className="flex items-center gap-2 pl-1">
         <span className="hidden h-5 w-px bg-[rgb(var(--border))] md:block" />
-
         <Link
           href="/auth/login"
           className="
@@ -29,7 +25,6 @@ export default async function NavbarActions() {
         >
           Login
         </Link>
-
         <Link
           href="/auth/register"
           className="
@@ -57,56 +52,38 @@ export default async function NavbarActions() {
     );
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { email: user.email.toLowerCase() },
-    select: {
-      id: true,
-      role: true,
-      name: true,
-      email: true,
-      avatarUrl: true,
-      isTutorApproved: true,
-      roleAssignments: { select: { role: true } },
-    },
-  });
+  // ✅ Run both Prisma queries in parallel instead of sequentially
+  const [initialUnread, chatUnreadResult] = await Promise.all([
+    prisma.notification.count({
+      where: { userId: dbUser.id, readAt: null },
+    }),
+    prisma.$queryRaw<Array<{ total: bigint }>>`
+      SELECT COALESCE(COUNT(m."id"), 0) AS total
+      FROM "ChatRead" r
+      JOIN "ChatMessage" m
+        ON m."channelId" = r."channelId"
+       AND m."createdAt" > r."lastReadAt"
+       AND m."senderId" <> r."userId"
+      WHERE r."userId" = ${dbUser.id};
+    `,
+  ]);
+
+  const initialChatUnread = Number(chatUnreadResult?.[0]?.total ?? 0);
 
   const isTutor =
-    !!dbUser &&
-    (dbUser.role === "TUTOR" ||
-      dbUser.isTutorApproved ||
-      (dbUser.roleAssignments ?? []).some((r) => r.role === "TUTOR"));
+    dbUser.role === "TUTOR" ||
+    dbUser.isTutorApproved ||
+    (dbUser.roleAssignments ?? []).some((r) => r.role === "TUTOR");
 
   const dashboardHref =
-    dbUser?.role === "TUTOR" ? "/dashboard/tutor" : "/dashboard/student";
-
-  const initialUnread = dbUser?.id
-    ? await prisma.notification.count({
-        where: { userId: dbUser.id, readAt: null },
-      })
-    : 0;
-
-  const initialChatUnread = dbUser?.id
-    ? Number(
-        (
-          await prisma.$queryRaw<Array<{ total: bigint }>>`
-            SELECT COALESCE(COUNT(m."id"), 0) AS total
-            FROM "ChatRead" r
-            JOIN "ChatMessage" m
-              ON m."channelId" = r."channelId"
-             AND m."createdAt" > r."lastReadAt"
-             AND m."senderId" <> r."userId"
-            WHERE r."userId" = ${dbUser.id};
-          `
-        )?.[0]?.total ?? 0
-      )
-    : 0;
+    dbUser.role === "TUTOR" ? "/dashboard/tutor" : "/dashboard/student";
 
   return (
     <div className="flex items-center gap-1.5 pl-1">
       <span className="hidden h-5 w-px bg-[rgb(var(--border))] md:block" />
 
       <HeaderRealtimeActions
-        userId={dbUser?.id ?? null}
+        userId={dbUser.id}
         isTutor={isTutor}
         initialUnread={initialUnread}
         initialChatUnread={initialChatUnread}
@@ -114,9 +91,9 @@ export default async function NavbarActions() {
       />
 
       <UserMenuClient
-        name={dbUser?.name ?? null}
-        email={dbUser?.email ?? user.email}
-        avatarUrl={dbUser?.avatarUrl ?? null}
+        name={dbUser.name ?? null}
+        email={dbUser.email}
+        avatarUrl={dbUser.avatarUrl ?? null}
         dashboardHref={dashboardHref}
       />
     </div>

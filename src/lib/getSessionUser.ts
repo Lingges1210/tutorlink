@@ -9,19 +9,18 @@ export const getSessionUser = cache(async () => {
 
   if (!user?.email) return null;
 
-  const dbUser = await prisma.user.findUnique({
+  return prisma.user.findUnique({
     where: { email: user.email.toLowerCase() },
     select: {
       id: true,
       name: true,
       email: true,
       role: true,
+      avatarUrl: true,          // ✅ needed by NavbarActions
       verificationStatus: true,
       isDeactivated: true,
       isTutorApproved: true,
       roleAssignments: { select: { role: true } },
     },
   });
-
-  return dbUser;
 });
