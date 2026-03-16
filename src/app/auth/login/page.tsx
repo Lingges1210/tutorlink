@@ -80,8 +80,8 @@ export default function LoginPage() {
       setStatus("Login successful. Redirecting...");
       animation?.success();
 
-      // ✅ Just replace — no refresh(), no setTimeout()
-      router.replace(targetPath);
+      // ✅ Full page navigation instead of client-side routing
+      window.location.href = targetPath;
       return;
     } catch (err: unknown) {
       setStatus(err instanceof Error ? err.message : "Unexpected error");

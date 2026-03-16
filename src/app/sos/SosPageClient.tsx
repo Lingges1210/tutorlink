@@ -317,16 +317,106 @@ useEffect(() => {
   }
 
   if (loadingRoles) {
-    return (
-      <div className="mx-auto max-w-4xl px-4 py-10 flex items-center justify-center">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-          className="h-7 w-7 rounded-full border-2 border-[rgb(var(--primary))/0.2] border-t-[rgb(var(--primary))]"
-        />
+  return (
+    <>
+      <style>{`
+        @keyframes shimmer { to { transform: translateX(200%); } }
+        @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
+      `}</style>
+      <div className="pt-10 pb-10">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 space-y-6">
+
+          {/* Header skeleton */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-3">
+              {/* Live chip */}
+              <div
+                className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
+                style={{ border: "1px solid rgb(var(--border))", background: "rgb(var(--card2))" }}
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                </span>
+                <div className="h-3 w-32 rounded-full animate-pulse" style={{ background: "rgb(var(--border))" }} />
+              </div>
+              {/* Title */}
+              <div className="space-y-2">
+                <div className="h-9 w-44 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
+                <div className="h-4 w-72 rounded-lg animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.6 }} />
+              </div>
+            </div>
+            {/* Button skeleton */}
+            <div className="hidden sm:block h-10 w-28 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
+          </div>
+
+          {/* Main card skeleton */}
+          <div
+            className="rounded-3xl overflow-hidden"
+            style={{ border: "1px solid rgb(var(--border))", background: "rgb(var(--card))" }}
+          >
+            {/* Top accent */}
+            <div className="h-px w-full" style={{ background: "linear-gradient(90deg, transparent, rgba(139,92,246,0.5), transparent)" }} />
+
+            {/* Tabs row skeleton */}
+            <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4" style={{ borderBottom: "1px solid rgb(var(--border))" }}>
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-28 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
+                <div className="h-8 w-24 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.5 }} />
+              </div>
+              <div className="h-8 w-20 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
+            </div>
+
+            {/* Cards skeleton */}
+            <div className="p-5 space-y-3">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="relative rounded-2xl p-5 overflow-hidden"
+                  style={{ border: "1px solid rgb(var(--border))", background: "rgb(var(--card2))" }}
+                >
+                  {/* Shimmer sweep */}
+                  <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_infinite] bg-gradient-to-r from-transparent via-[rgba(128,128,128,0.06)] to-transparent" />
+                  {/* Left accent bar */}
+                  <div
+                    className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl opacity-40"
+                    style={{ background: "linear-gradient(to bottom, rgb(139,92,246), rgb(217,70,239))" }}
+                  />
+                  <div className="pl-3 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-2 flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="h-5 w-16 rounded-full animate-pulse" style={{ background: "rgb(var(--border))" }} />
+                          <div className="h-4 w-40 rounded-lg animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.7 }} />
+                        </div>
+                        <div className="h-3.5 w-full rounded animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.5 }} />
+                        <div className="h-3.5 w-4/5 rounded animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.4 }} />
+                      </div>
+                      <div className="h-6 w-24 rounded-full animate-pulse shrink-0" style={{ background: "rgb(var(--border))" }} />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="h-3 w-12 rounded animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.5 }} />
+                      <div className="h-3 w-16 rounded animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.4 }} />
+                      <div className="h-5 w-14 rounded-full animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.4 }} />
+                    </div>
+                    <div className="flex justify-end gap-2 mt-1">
+                      <div className="h-9 w-16 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.5 }} />
+                      <div className="h-9 w-20 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.6 }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Bottom accent */}
+            <div className="h-px w-full" style={{ background: "linear-gradient(90deg, transparent, rgba(217,70,239,0.35), transparent)" }} />
+          </div>
+
+        </div>
       </div>
-    );
-  }
+    </>
+  );
+}
 
   return (
     <>
