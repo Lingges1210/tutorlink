@@ -28,6 +28,7 @@ function DashboardSwitcher({
     <div className="inline-flex overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))]">
       <Link
         href="/dashboard/student"
+        prefetch={false}
         className={[
           "px-4 py-1.5 text-xs font-semibold transition-all duration-200",
           active === "student"
@@ -39,6 +40,7 @@ function DashboardSwitcher({
       </Link>
       <Link
         href="/dashboard/tutor"
+        prefetch={false}
         className={[
           "px-4 py-1.5 text-xs font-semibold transition-all duration-200 border-l border-[rgb(var(--border))]",
           active === "tutor"
@@ -78,6 +80,7 @@ function PrimaryLinkButton({ href, children }: { href: string; children: ReactNo
   return (
     <Link
       href={href}
+      prefetch={false}
       className="
         inline-flex items-center justify-center gap-1.5
         rounded-lg px-4 py-2 text-xs font-semibold text-white
@@ -112,7 +115,6 @@ function DisabledButton({ children }: { children: ReactNode }) {
   );
 }
 
-/* ── SVG icon set (inline, no emoji) ── */
 function IconSearch() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -197,7 +199,6 @@ function IconStar() {
   );
 }
 
-/* ── Stat pill ── */
 function StatPill({ label, value, icon }: { label: string; value: string; icon: ReactNode }) {
   return (
     <div className="flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2">
@@ -210,7 +211,6 @@ function StatPill({ label, value, icon }: { label: string; value: string; icon: 
   );
 }
 
-/* ── Dashboard Card ── */
 type DashboardCardProps = {
   iconEl: ReactNode;
   title: string;
@@ -234,7 +234,6 @@ function DashboardCard({ iconEl, title, description, action, locked, badge }: Da
           : "opacity-75",
       ].join(" ")}
     >
-      {/* top accent line */}
       <div
         className={[
           "absolute inset-x-0 top-0 h-[1.5px]",
@@ -280,7 +279,6 @@ function DashboardCard({ iconEl, title, description, action, locked, badge }: Da
   );
 }
 
-/* ── Section label ── */
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <p className="mb-3 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[rgb(var(--muted2))]">
@@ -289,9 +287,6 @@ function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
-/* ══════════════════════════════════════
-   Main Component
-══════════════════════════════════════ */
 export default function StudentDashboardClient({ user, isTutor }: Props) {
   const isVerified = user.verificationStatus === "AUTO_VERIFIED";
   const firstName = user.name?.split(" ")[0] ?? "there";
@@ -302,13 +297,9 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
 
   return (
     <div className="space-y-5">
-
-      {/* ── Hero Header ── */}
       <div className="relative overflow-hidden rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.8)] shadow-[0_4px_32px_rgb(var(--shadow)/0.09)] p-6">
-        {/* BG blobs */}
         <div className="pointer-events-none absolute -top-12 -right-12 w-56 h-56 rounded-full bg-[rgb(var(--primary)/0.07)] blur-3xl" />
         <div className="pointer-events-none absolute -bottom-8 left-0 w-40 h-40 rounded-full bg-[rgb(var(--primary)/0.04)] blur-2xl" />
-        {/* Decorative dot grid top-right */}
         <svg className="pointer-events-none absolute top-4 right-4 opacity-[0.04] dark:opacity-[0.07]" width="80" height="80" viewBox="0 0 80 80">
           {Array.from({ length: 5 }).map((_, row) =>
             Array.from({ length: 5 }).map((_, col) => (
@@ -318,7 +309,6 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
         </svg>
 
         <div className="relative flex flex-wrap items-start justify-between gap-4">
-          {/* Left: avatar + name */}
           <div className="flex items-center gap-3">
             <div className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-[rgb(var(--primary)/0.12)] border border-[rgb(var(--primary)/0.22)] text-[rgb(var(--primary))] font-bold text-lg shrink-0 select-none">
               {(user.name ?? "S").charAt(0).toUpperCase()}
@@ -337,20 +327,14 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
             </div>
           </div>
 
-          {/* Right: switcher + badge */}
           <div className="flex flex-wrap items-center gap-2">
             <DashboardSwitcher isTutor={isTutor} active="student" />
             <VerificationBadge status={user.verificationStatus} />
           </div>
         </div>
 
-        {/* Quick stats */}
         <div className="relative mt-5 flex flex-wrap gap-2">
-          <StatPill
-            icon={<IconUser />}
-            label="Role"
-            value="Student"
-          />
+          <StatPill icon={<IconUser />} label="Role" value="Student" />
           <StatPill
             icon={
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -361,15 +345,10 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
             label="Status"
             value={isVerified ? "Verified" : "Pending review"}
           />
-          <StatPill
-            icon={<IconStar />}
-            label="Platform"
-            value="TutorLink"
-          />
+          <StatPill icon={<IconStar />} label="Platform" value="TutorLink" />
         </div>
       </div>
 
-      {/* ── Pending Banner ── */}
       {!isVerified && (
         <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/8 dark:bg-amber-500/10 px-5 py-4">
           <span className="mt-0.5 shrink-0 text-amber-500">
@@ -384,7 +363,6 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
         </div>
       )}
 
-      {/* ── Quick Actions ── */}
       <section>
         <SectionLabel>Quick Actions</SectionLabel>
         <div className="grid gap-4 md:grid-cols-[2fr_1.2fr]">
@@ -394,13 +372,13 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
             description="Use smart matching to connect with verified peers who can help you with any subject."
             badge="Popular"
             action={
-              isVerified
-                ? (
-                  <PrimaryLinkButton href="/find-tutor">
-                    Find a Tutor <IconArrowRight />
-                  </PrimaryLinkButton>
-                )
-                : <DisabledButton>Find a Tutor</DisabledButton>
+              isVerified ? (
+                <PrimaryLinkButton href="/find-tutor">
+                  Find a Tutor <IconArrowRight />
+                </PrimaryLinkButton>
+              ) : (
+                <DisabledButton>Find a Tutor</DisabledButton>
+              )
             }
             locked={!isVerified}
           />
@@ -411,13 +389,13 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
               title="Become a Tutor"
               description="Apply to tutor your peers and build your profile while you learn."
               action={
-                isVerified
-                  ? (
-                    <PrimaryLinkButton href="/dashboard/student/apply-tutor">
-                      Apply Now <IconArrowRight />
-                    </PrimaryLinkButton>
-                  )
-                  : <DisabledButton>Apply as Tutor</DisabledButton>
+                isVerified ? (
+                  <PrimaryLinkButton href="/dashboard/student/apply-tutor">
+                    Apply Now <IconArrowRight />
+                  </PrimaryLinkButton>
+                ) : (
+                  <DisabledButton>Apply as Tutor</DisabledButton>
+                )
               }
               locked={!isVerified}
             />
@@ -425,7 +403,6 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
         </div>
       </section>
 
-      {/* ── Growth ── */}
       <section>
         <SectionLabel>Your Growth</SectionLabel>
         <div className="grid gap-4 md:grid-cols-2">
@@ -434,13 +411,13 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
             title="Progress Tracking"
             description="View study streaks, subject breakdowns, and topic coverage. Export a progress report anytime."
             action={
-              isVerified
-                ? (
-                  <PrimaryLinkButton href="/dashboard/student/progress">
-                    View Progress <IconArrowRight />
-                  </PrimaryLinkButton>
-                )
-                : <DisabledButton>View Progress</DisabledButton>
+              isVerified ? (
+                <PrimaryLinkButton href="/dashboard/student/progress">
+                  View Progress <IconArrowRight />
+                </PrimaryLinkButton>
+              ) : (
+                <DisabledButton>View Progress</DisabledButton>
+              )
             }
             locked={!isVerified}
           />
@@ -450,20 +427,19 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
             description="Track your points, unlock badges, and climb the weekly leaderboard rankings."
             badge="New"
             action={
-              isVerified
-                ? (
-                  <PrimaryLinkButton href="/dashboard/student/achievements">
-                    View Achievements <IconArrowRight />
-                  </PrimaryLinkButton>
-                )
-                : <DisabledButton>View Achievements</DisabledButton>
+              isVerified ? (
+                <PrimaryLinkButton href="/dashboard/student/achievements">
+                  View Achievements <IconArrowRight />
+                </PrimaryLinkButton>
+              ) : (
+                <DisabledButton>View Achievements</DisabledButton>
+              )
             }
             locked={!isVerified}
           />
         </div>
       </section>
 
-      {/* ── History ── */}
       <section>
         <SectionLabel>History</SectionLabel>
         <div className="grid gap-4 md:grid-cols-2">
@@ -472,19 +448,18 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
             title="Session History"
             description="Review notes, topics covered, and feedback from all your past tutoring sessions."
             action={
-              isVerified
-                ? (
-                  <PrimaryLinkButton href="/dashboard/student/progress?tab=history">
-                    Open History <IconArrowRight />
-                  </PrimaryLinkButton>
-                )
-                : <DisabledButton>Open History</DisabledButton>
+              isVerified ? (
+                <PrimaryLinkButton href="/dashboard/student/progress?tab=history">
+                  Open History <IconArrowRight />
+                </PrimaryLinkButton>
+              ) : (
+                <DisabledButton>Open History</DisabledButton>
+              )
             }
             locked={!isVerified}
           />
         </div>
       </section>
-
     </div>
   );
 }

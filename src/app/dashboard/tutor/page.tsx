@@ -161,6 +161,7 @@ function GlanceCard({
   return (
     <Link
       href={href}
+      prefetch={false}
       className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.6)] p-5 shadow-[0_4px_24px_rgb(var(--shadow)/0.07)] backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgb(var(--shadow)/0.14)] hover:bg-[rgb(var(--card)/0.85)] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--primary)/0.4)]"
     >
       {/* Top row */}
@@ -315,6 +316,7 @@ export default function TutorDashboardPage() {
             <div className="mt-4 inline-flex overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-xs font-semibold">
               <Link
                 href="/dashboard/student"
+                prefetch={false}
                 className="flex items-center gap-1.5 px-3.5 py-2 text-[rgb(var(--muted2))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.5)] transition-colors"
               >
                 <User className="h-3.5 w-3.5" />
@@ -322,6 +324,7 @@ export default function TutorDashboardPage() {
               </Link>
               <Link
                 href="/dashboard/tutor"
+                prefetch={false}
                 className="flex items-center gap-1.5 border-l border-[rgb(var(--border))] bg-[rgb(var(--primary)/0.12)] px-3.5 py-2 text-[rgb(var(--primary))]"
               >
                 <LayoutDashboard className="h-3.5 w-3.5" />
