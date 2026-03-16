@@ -65,6 +65,16 @@ export default function MessagingClient() {
   const [conversations, setConversations] = useState<Conv[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  // Ref so realtime closures always read the latest activeId without needing
+  // to re-subscribe the whole channel on every conversation switch.
+  const activeIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
+
+  // Track processed message IDs to deduplicate broadcast vs CDC delivery.
+  const seenMsgIds = useRef<Set<string>>(new Set());
+
   const active = useMemo(
     () => conversations.find((c) => c.id === activeId) ?? null,
     [conversations, activeId]
@@ -104,8 +114,6 @@ export default function MessagingClient() {
   const [otherTyping, setOtherTyping] = useState(false);
   const typingStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSentAt = useRef(0);
-
-  // Set by realtime typing broadcast; auto-clears shortly after silence
   const otherTypingExpiry = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [chatMeta, setChatMeta] = useState<{
@@ -234,18 +242,13 @@ export default function MessagingClient() {
   }, [active?.otherUserId]);
 
   async function pingTyping(isTyping: boolean) {
-  if (!activeId || !meId || !realtimeChannelRef.current) return;
-
-  await realtimeChannelRef.current.send({
-    type: "broadcast",
-    event: "typing",
-    payload: {
-      channelId: activeId,
-      userId: meId,
-      isTyping,
-    },
-  });
-}
+    if (!activeId || !meId || !realtimeChannelRef.current) return;
+    await realtimeChannelRef.current.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { channelId: activeId, userId: meId, isTyping },
+    });
+  }
 
   function validateFile(file: File) {
     const okType = file.type.startsWith("image/") || file.type === "application/pdf";
@@ -346,6 +349,51 @@ export default function MessagingClient() {
     );
     window.dispatchEvent(new Event("chat:unread-refresh"));
   }
+
+  // Shared handler called by both the broadcast and CDC paths.
+  // Deduplicates so the same message is never rendered twice.
+  const handleIncomingRow = useCallback(
+    (
+      channelId: string,
+      msg: Msg,
+      meIdSnap: string
+    ) => {
+      if (seenMsgIds.current.has(msg.id)) return;
+      seenMsgIds.current.add(msg.id);
+
+      mergeMessages([msg]);
+
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      });
+
+      if (msg.senderId !== meIdSnap && channelId === activeIdRef.current) {
+        void markChatRead(channelId);
+      }
+
+      setConversations((prev) => {
+        const found = prev.some((c) => c.id === channelId);
+        if (!found) return prev;
+
+        const updated = prev.map((c) =>
+          c.id === channelId
+            ? {
+                ...c,
+                lastMessage: msg.text?.trim() || "📎 Attachment",
+                lastAt: msg.createdAt,
+                unread:
+                  msg.senderId === meIdSnap || c.id === activeIdRef.current
+                    ? 0
+                    : c.unread + 1,
+              }
+            : c
+        );
+        updated.sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
+        return updated;
+      });
+    },
+    [mergeMessages]
+  );
 
   const convRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshConversations = useCallback((openChannelId?: string | null) => {
@@ -453,6 +501,9 @@ export default function MessagingClient() {
     const channelId = activeId;
     let cancelled = false;
 
+    // Clear dedup set when switching conversations
+    seenMsgIds.current.clear();
+
     async function loadInitialMessages() {
       setLoadingMsgs(true);
       const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
@@ -482,120 +533,175 @@ export default function MessagingClient() {
     };
   }, [activeId, meId, applyMessagesResponse, refreshConversations]);
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Realtime subscription
+  //
+  // Two delivery paths, same dedup set:
+  //
+  //  1. broadcast "new-message"  — sender fires this right after the HTTP POST
+  //     succeeds, carrying the full saved message (with real id & attachments).
+  //     Arrives in ~50–200 ms for both participants. Does NOT require RLS.
+  //     This is the primary path that makes messages pop up for the receiver.
+  //
+  //  2. postgres_changes INSERT  — arrives ~200–800 ms later as a CDC event.
+  //     Acts as a fallback / source of truth (e.g. if broadcast was missed
+  //     because the receiver was briefly offline).  seenMsgIds deduplicates.
+  //
+  //  broadcast: { self: true } means the sender's own tab also receives the
+  //  broadcast — this lets us replace the temp optimistic message with the
+  //  server-confirmed one (real id, real attachments) consistently.
+  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
-  if (!activeId || !meId) return;
+    if (!activeId || !meId) return;
 
-  const channelId = activeId;
-  const supabase = supabaseBrowser;
+    const channelId = activeId;
+    const meIdSnap = meId;
+    const supabase = supabaseBrowser;
 
-  let mounted = true;
-  let channel: ReturnType<typeof supabase.channel> | null = null;
+    let mounted = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-  async function start() {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    async function start() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-    if (!mounted || !session?.access_token) return;
+      if (!mounted || !session?.access_token) return;
 
-    await supabase.realtime.setAuth(session.access_token);
+      await supabase.realtime.setAuth(session.access_token);
 
-    channel = supabase
-      .channel(`chat-room-${channelId}`, {
-        config: {
-          broadcast: { self: false },
-        },
-      })
-      .on(
-  "postgres_changes",
-  {
-    event: "INSERT",
-    schema: "public",
-    table: "ChatMessage",
-    filter: `channelId=eq.${channelId}`,
-  },
-  async (payload) => {
-    const row = payload.new as {
-      id: string;
-      channelId: string;
-      senderId: string;
-      text: string;
-      createdAt: string;
-      isDeleted?: boolean;
-      deletedAt?: string | null;
-    };
+      channel = supabase
+        .channel(`chat-room-${channelId}`, {
+          config: {
+            broadcast: { self: true }, // sender receives their own broadcast too
+          },
+        })
 
-    console.log("MESSAGE INSERT PAYLOAD", row);
-    console.log("BEFORE MERGE", Date.now());
+        // ── Path 1: broadcast "new-message" (fast, no RLS dependency) ───────
+        .on("broadcast", { event: "new-message" }, ({ payload }) => {
+          const data = payload as { channelId: string; message: Msg };
+          if (data.channelId !== channelId) return;
 
-    if (row.channelId !== channelId) return;
+          const msg = data.message;
 
-    const incoming: Msg = {
-      id: row.id,
-      senderId: row.senderId,
-      text: row.text ?? "",
-      createdAt: row.createdAt,
-      isDeleted: row.isDeleted,
-      deletedAt: row.deletedAt ?? null,
-    };
+          // Remove any temp optimistic message from the sender before merging
+          setMessages((prev) => {
+            const withoutTemp = prev.filter(
+              (m) => !(m.id.startsWith("temp-") && m.senderId === msg.senderId)
+            );
+            const map = new Map(withoutTemp.map((m) => [m.id, m]));
+            map.set(msg.id, { ...(map.get(msg.id) ?? {}), ...msg });
+            return Array.from(map.values()).sort(
+              (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            );
+          });
 
-    mergeMessages([incoming]);
+          seenMsgIds.current.add(msg.id);
 
-    console.log("AFTER MERGE", Date.now());
+          requestAnimationFrame(() => {
+            bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+          });
 
-    requestAnimationFrame(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    });
+          if (msg.senderId !== meIdSnap && channelId === activeIdRef.current) {
+            void markChatRead(channelId);
+          }
 
-    if (row.senderId !== meId) {
-      void markChatRead(channelId);
+          setConversations((prev) => {
+            const found = prev.some((c) => c.id === channelId);
+            if (!found) {
+              void refreshConversations(channelId);
+              return prev;
+            }
+            const updated = prev.map((c) =>
+              c.id === channelId
+                ? {
+                    ...c,
+                    lastMessage: msg.text?.trim() || "📎 Attachment",
+                    lastAt: msg.createdAt,
+                    unread:
+                      msg.senderId === meIdSnap || c.id === activeIdRef.current
+                        ? 0
+                        : c.unread + 1,
+                  }
+                : c
+            );
+            updated.sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
+            return updated;
+          });
+        })
+
+        // ── Path 2: postgres CDC INSERT (fallback / source of truth) ─────────
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "ChatMessage",
+            filter: `channelId=eq.${channelId}`,
+          },
+          (payload) => {
+            const row = payload.new as {
+              id: string;
+              channelId: string;
+              senderId: string;
+              text: string;
+              createdAt: string;
+              isDeleted?: boolean;
+              deletedAt?: string | null;
+            };
+
+            if (row.channelId !== channelId) return;
+            // Skip if broadcast already handled this message
+            if (seenMsgIds.current.has(row.id)) return;
+
+            const incoming: Msg = {
+              id: row.id,
+              senderId: row.senderId,
+              text: row.text ?? "",
+              createdAt: row.createdAt,
+              isDeleted: row.isDeleted,
+              deletedAt: row.deletedAt ?? null,
+            };
+
+            handleIncomingRow(channelId, incoming, meIdSnap);
+          }
+        )
+
+        // ── Typing indicator ────────────────────────────────────────────────
+        .on("broadcast", { event: "typing" }, ({ payload }) => {
+          const data = payload as {
+            channelId: string;
+            userId: string;
+            isTyping: boolean;
+          };
+
+          if (data.channelId !== channelId) return;
+          if (data.userId === meIdSnap) return;
+
+          if (data.isTyping) {
+            setOtherTyping(true);
+            if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
+            otherTypingExpiry.current = setTimeout(() => setOtherTyping(false), 2500);
+          } else {
+            setOtherTyping(false);
+            if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
+          }
+        });
+
+      realtimeChannelRef.current = channel;
+      channel.subscribe((status) => {
+        console.log("chat room status", channelId, status);
+      });
     }
 
-    refreshConversations(channelId);
-  }
-)
-      
-      .on("broadcast", { event: "typing" }, ({ payload }) => {
-        const data = payload as {
-          channelId: string;
-          userId: string;
-          isTyping: boolean;
-        };
+    void start();
 
-        if (data.channelId !== channelId) return;
-        if (data.userId === meId) return;
-
-        if (data.isTyping) {
-          setOtherTyping(true);
-          if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
-          otherTypingExpiry.current = setTimeout(() => {
-            setOtherTyping(false);
-          }, 2500);
-        } else {
-          setOtherTyping(false);
-          if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
-        }
-      });
-
-    realtimeChannelRef.current = channel;
-
-    channel.subscribe((status) => {
-      console.log("chat room status", channelId, status);
-    });
-  }
-
-  void start();
-
-  return () => {
-    mounted = false;
-    realtimeChannelRef.current = null;
-    if (channel) supabase.removeChannel(channel);
-  };
-}, [activeId, meId, mergeMessages, refreshConversations]);
-
-useEffect(() => {
-  console.log("MESSAGES STATE UPDATED", messages);
-}, [messages]);
+    return () => {
+      mounted = false;
+      realtimeChannelRef.current = null;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [activeId, meId, mergeMessages, handleIncomingRow, refreshConversations]);
 
   useEffect(() => {
     if (!activeId) return;
@@ -681,6 +787,18 @@ useEffect(() => {
     setSendErr(null);
     setUploading(true);
 
+    // Show optimistic message immediately for the sender
+    const optimisticId = `temp-${Date.now()}`;
+    const optimisticMsg: Msg = {
+      id: optimisticId,
+      senderId: meId ?? "",
+      text: t,
+      createdAt: new Date().toISOString(),
+      attachments: [],
+    };
+    mergeMessages([optimisticMsg]);
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
+
     try {
       const uploaded = await Promise.all(pickedFiles.map((f) => uploadAttachment(activeId, f)));
 
@@ -693,6 +811,8 @@ useEffect(() => {
       const j = await r.json().catch(() => null);
 
       if (!r.ok) {
+        // Roll back optimistic message on failure
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
         setSendErr(j?.message ?? "Failed to send");
         if (r.status === 403 && (j?.message?.toLowerCase?.() ?? "").includes("closed")) {
           setChatMeta((p) => ({ ...p, isChatClosed: true }));
@@ -701,30 +821,62 @@ useEffect(() => {
         return;
       }
 
-      if (j?.ok) {
-        if (j.message) {
-          mergeMessages([j.message as Msg]);
-          setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
+      if (j?.ok && j.message) {
+        const realMsg = j.message as Msg;
+
+        // Replace optimistic with confirmed message
+        setMessages((prev) => {
+          const without = prev.filter((m) => m.id !== optimisticId);
+          const map = new Map(without.map((m) => [m.id, m]));
+          map.set(realMsg.id, realMsg);
+          return Array.from(map.values()).sort(
+            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+        });
+
+        // Mark seen so CDC path doesn't double-render it
+        seenMsgIds.current.add(realMsg.id);
+
+        // ── Broadcast to the other participant (and self, via self:true) ──────
+        // This is what makes the message appear instantly on the receiver's screen.
+        if (realtimeChannelRef.current) {
+          await realtimeChannelRef.current.send({
+            type: "broadcast",
+            event: "new-message",
+            payload: {
+              channelId: activeId,
+              message: realMsg,
+            },
+          });
         }
 
-        setConversations((prev) =>
-          prev.map((c) =>
-            c.id === activeId
-              ? {
-                  ...c,
-                  unread: 0,
-                  lastMessage: t || (pickedFiles.length ? "📎 Attachment" : ""),
-                  lastAt: new Date().toISOString(),
-                }
-              : c
-          )
-        );
-
-        setPickedFiles([]);
-        await markChatRead(activeId);
-        refreshConversations(activeId);
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
       }
+
+      setPickedFiles([]);
+      await markChatRead(activeId);
+
+      setConversations((prev) => {
+        const found = prev.some((c) => c.id === activeId);
+        if (!found) {
+          void refreshConversations(activeId);
+          return prev;
+        }
+        const updated = prev.map((c) =>
+          c.id === activeId
+            ? {
+                ...c,
+                unread: 0,
+                lastMessage: t || (pickedFiles.length ? "📎 Attachment" : ""),
+                lastAt: new Date().toISOString(),
+              }
+            : c
+        );
+        updated.sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
+        return updated;
+      });
     } catch (e: unknown) {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
       setSendErr(e instanceof Error ? e.message : "Failed to send");
       setText(t);
     } finally {
@@ -735,7 +887,8 @@ useEffect(() => {
   const otherReadAtMs = readInfo ? new Date(readInfo.otherLastReadAt).getTime() : 0;
   const lastMyMsgId = (() => {
     for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].senderId === meId) return messages[i].id;
+      if (messages[i].senderId === meId && !messages[i].id.startsWith("temp-"))
+        return messages[i].id;
     }
     return null;
   })();
@@ -744,52 +897,23 @@ useEffect(() => {
 
   const IconOpen = ({ className = "" }: { className?: string }) => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className={className}>
-      <path
-        d="M14 5h5v5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M10 14L19 5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M19 14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M14 5h5v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 14L19 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M19 14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 
   const IconDownload = ({ className = "" }: { className?: string }) => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className={className}>
       <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path
-        d="M7 10l5 5 5-5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M7 10l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 
   const IconPdf = ({ className = "" }: { className?: string }) => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className={className}>
-      <path
-        d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
+      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
       <path d="M14 2v5h5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
     </svg>
   );
@@ -803,32 +927,14 @@ useEffect(() => {
 
   const IconSend = () => (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M22 2L11 13"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M22 2L15 22 11 13 2 9l20-7z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M22 2L15 22 11 13 2 9l20-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 
   const IconAttach = () => (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.48"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.48" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 
@@ -837,47 +943,35 @@ useEffect(() => {
       <style>{`
         .msg-panel { animation: fadeUp 0.22s ease both; }
         @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-
         .conv-item { transition: box-shadow 0.15s, border-color 0.15s, background 0.15s; }
         .conv-item:hover { box-shadow: 0 4px 18px rgba(0,0,0,0.09); }
-
         .bubble-enter { animation: bubbleIn 0.18s cubic-bezier(.34,1.56,.64,1) both; }
         @keyframes bubbleIn { from { opacity:0; transform:scale(0.88); } to { opacity:1; transform:scale(1); } }
-
         .typing-dot { animation: typingPulse 1.2s infinite ease-in-out; }
         .typing-dot:nth-child(2) { animation-delay:0.2s; }
         .typing-dot:nth-child(3) { animation-delay:0.4s; }
         @keyframes typingPulse { 0%,80%,100% { transform:scale(0.7); opacity:0.4; } 40% { transform:scale(1); opacity:1; } }
-
         .send-btn { transition: box-shadow 0.15s, transform 0.1s, opacity 0.15s; }
         .send-btn:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(124,58,237,0.45); }
         .send-btn:not(:disabled):active { transform: translateY(0); }
-
         .pill-filter { transition: all 0.15s; }
         .online-pulse { animation: pulse 2s infinite; }
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
-
         .img-thumb { transition: transform 0.15s, border-color 0.15s; }
         .img-thumb:hover { transform: scale(1.05); }
-
         .load-older-btn { transition: background 0.15s, box-shadow 0.15s; }
         .load-older-btn:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
-
         .attach-chip { animation: chipIn 0.18s ease both; }
         @keyframes chipIn { from { opacity:0; transform:scale(0.85); } to { opacity:1; transform:scale(1); } }
-
         .ctx-menu { animation: ctxIn 0.12s ease both; }
         @keyframes ctxIn { from { opacity:0; transform:scale(0.92) translateY(-4px); } to { opacity:1; transform:scale(1) translateY(0); } }
-
         .viewer-fade { animation: viewerIn 0.2s ease both; }
         @keyframes viewerIn { from { opacity:0; } to { opacity:1; } }
         .viewer-img { animation: viewerImgIn 0.22s cubic-bezier(.34,1.36,.64,1) both; }
         @keyframes viewerImgIn { from { opacity:0; transform:scale(0.93); } to { opacity:1; transform:scale(1); } }
-
         .sidebar-scroll::-webkit-scrollbar { width: 3px; }
         .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
         .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.25); border-radius: 2px; }
-
         .msg-scroll::-webkit-scrollbar { width: 4px; }
         .msg-scroll::-webkit-scrollbar-track { background: transparent; }
         .msg-scroll::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.2); border-radius: 2px; }
@@ -887,12 +981,8 @@ useEffect(() => {
         <div className="mx-auto max-w-6xl space-y-5 px-4 sm:px-6 lg:px-8">
           <header className="flex items-end justify-between gap-4">
             <div>
-              <h1 className="text-[1.6rem] font-bold tracking-tight text-[rgb(var(--fg))]">
-                Messages
-              </h1>
-              <p className="mt-0.5 text-sm text-[rgb(var(--muted))]">
-                Real-time chat between students &amp; tutors
-              </p>
+              <h1 className="text-[1.6rem] font-bold tracking-tight text-[rgb(var(--fg))]">Messages</h1>
+              <p className="mt-0.5 text-sm text-[rgb(var(--muted))]">Real-time chat between students &amp; tutors</p>
             </div>
             {conversations.length > 0 && (
               <div className="flex items-center gap-1.5 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1.5">
@@ -905,6 +995,7 @@ useEffect(() => {
           </header>
 
           <section className="grid h-[calc(100vh-250px)] min-h-[520px] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_20px_60px_rgba(0,0,0,0.10)] lg:grid-cols-[300px_1fr]">
+            {/* ── Sidebar ── */}
             <div className="flex min-h-0 flex-col border-b border-[rgb(var(--border))] bg-[rgb(var(--card2))]/60 lg:border-b-0 lg:border-r">
               <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] px-4 py-3.5">
                 <span className="text-[0.8rem] font-semibold text-[rgb(var(--fg))]">Conversations</span>
@@ -923,13 +1014,7 @@ useEffect(() => {
                     placeholder="Search…"
                   />
                   {q && (
-                    <button
-                      type="button"
-                      onClick={() => setQ("")}
-                      className="opacity-40 hover:opacity-80 text-[rgb(var(--fg))] transition text-xs"
-                    >
-                      ✕
-                    </button>
+                    <button type="button" onClick={() => setQ("")} className="opacity-40 hover:opacity-80 text-[rgb(var(--fg))] transition text-xs">✕</button>
                   )}
                 </div>
               </div>
@@ -959,7 +1044,6 @@ useEffect(() => {
                 {filteredConversations.map((conv) => {
                   const isActive = conv.id === activeId;
                   const isStudent = conv.viewerIsStudent;
-
                   return (
                     <div
                       key={conv.id}
@@ -970,38 +1054,18 @@ useEffect(() => {
                           : "border-[rgb(var(--border))] bg-[rgb(var(--card))] hover:border-[rgb(var(--primary))/0.25]"
                       }`}
                     >
-                      <div
-                        className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full ${
-                          isStudent ? "bg-violet-500" : "bg-fuchsia-500"
-                        }`}
-                      />
-
+                      <div className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full ${isStudent ? "bg-violet-500" : "bg-fuchsia-500"}`} />
                       <div className="flex items-start justify-between gap-2 pl-2">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[0.75rem] font-semibold text-[rgb(var(--fg))]">
-                            {conv.subjectName}
-                          </p>
-                          <p className="mt-0.5 truncate text-[0.68rem] text-[rgb(var(--muted))]">
-                            {conv.name}
-                          </p>
-                          <p className="mt-1 line-clamp-1 text-[0.66rem] text-[rgb(var(--muted2))]">
-                            {conv.lastMessage || "No messages yet"}
-                          </p>
+                          <p className="truncate text-[0.75rem] font-semibold text-[rgb(var(--fg))]">{conv.subjectName}</p>
+                          <p className="mt-0.5 truncate text-[0.68rem] text-[rgb(var(--muted))]">{conv.name}</p>
+                          <p className="mt-1 line-clamp-1 text-[0.66rem] text-[rgb(var(--muted2))]">{conv.lastMessage || "No messages yet"}</p>
                         </div>
-
                         <div className="flex shrink-0 flex-col items-end gap-1.5">
-                          <span
-                            className={`rounded-md px-1.5 py-0.5 text-[0.58rem] font-bold uppercase tracking-wide ${
-                              isStudent
-                                ? "bg-violet-500/10 text-violet-600 dark:text-violet-300"
-                                : "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-300"
-                            }`}
-                          >
+                          <span className={`rounded-md px-1.5 py-0.5 text-[0.58rem] font-bold uppercase tracking-wide ${isStudent ? "bg-violet-500/10 text-violet-600 dark:text-violet-300" : "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-300"}`}>
                             {isStudent ? "S" : "T"}
                           </span>
-                          <span className="text-[0.6rem] text-[rgb(var(--muted2))]">
-                            {timeAgo(conv.lastAt)}
-                          </span>
+                          <span className="text-[0.6rem] text-[rgb(var(--muted2))]">{timeAgo(conv.lastAt)}</span>
                           {conv.unread > 0 && (
                             <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[rgb(var(--primary))] px-1 text-[0.58rem] font-bold text-white">
                               {conv.unread}
@@ -1012,7 +1076,6 @@ useEffect(() => {
                     </div>
                   );
                 })}
-
                 {filteredConversations.length === 0 && (
                   <div className="mt-4 rounded-xl border border-dashed border-[rgb(var(--border))] p-4 text-center">
                     <p className="text-[0.72rem] text-[rgb(var(--muted))]">No conversations found</p>
@@ -1021,77 +1084,43 @@ useEffect(() => {
               </div>
             </div>
 
+            {/* ── Chat panel ── */}
             <div className="flex min-h-0 flex-col">
               <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] bg-[rgb(var(--card))]/80 px-5 py-3.5 backdrop-blur-sm">
                 {active ? (
                   <div className="flex min-w-0 items-center gap-3">
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white shadow-sm ${
-                        active.viewerIsStudent
-                          ? "bg-gradient-to-br from-violet-500 to-purple-600"
-                          : "bg-gradient-to-br from-fuchsia-500 to-pink-600"
-                      }`}
-                    >
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white shadow-sm ${active.viewerIsStudent ? "bg-gradient-to-br from-violet-500 to-purple-600" : "bg-gradient-to-br from-fuchsia-500 to-pink-600"}`}>
                       {active.name.charAt(0).toUpperCase()}
                     </div>
-
                     <div className="min-w-0">
-                      <p className="truncate text-[0.85rem] font-semibold text-[rgb(var(--fg))]">
-                        {active.subjectName}
-                      </p>
+                      <p className="truncate text-[0.85rem] font-semibold text-[rgb(var(--fg))]">{active.subjectName}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[0.68rem] text-[rgb(var(--muted))]">{active.name}</span>
                         {active.otherUserId && userPresence && (
                           <>
-                            <span
-                              className={`h-1.5 w-1.5 rounded-full ${
-                                userPresence.isOnline ? "bg-emerald-500 online-pulse" : "bg-gray-400"
-                              }`}
-                            />
-                            <span
-                              className={`text-[0.65rem] font-medium ${
-                                userPresence.isOnline
-                                  ? "text-emerald-600 dark:text-emerald-400"
-                                  : "text-[rgb(var(--muted2))]"
-                              }`}
-                            >
+                            <span className={`h-1.5 w-1.5 rounded-full ${userPresence.isOnline ? "bg-emerald-500 online-pulse" : "bg-gray-400"}`} />
+                            <span className={`text-[0.65rem] font-medium ${userPresence.isOnline ? "text-emerald-600 dark:text-emerald-400" : "text-[rgb(var(--muted2))]"}`}>
                               {userPresence.isOnline ? "Online" : formatLastSeen(userPresence.lastSeenAt)}
                             </span>
                           </>
                         )}
                       </div>
                     </div>
-
                     {chatMeta.chatCloseAt && !chatMeta.isChatClosed && (
-                      <span
-                        className={`ml-2 rounded-full border px-2.5 py-0.5 text-[0.62rem] font-semibold ${
-                          closeUrgency(chatMeta.chatCloseAt) === "danger"
-                            ? "border-red-400/40 bg-red-500/10 text-red-600 dark:text-red-400"
-                            : closeUrgency(chatMeta.chatCloseAt) === "warn"
-                            ? "border-amber-400/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                            : "border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                        }`}
-                      >
+                      <span className={`ml-2 rounded-full border px-2.5 py-0.5 text-[0.62rem] font-semibold ${closeUrgency(chatMeta.chatCloseAt) === "danger" ? "border-red-400/40 bg-red-500/10 text-red-600 dark:text-red-400" : closeUrgency(chatMeta.chatCloseAt) === "warn" ? "border-amber-400/40 bg-amber-500/10 text-amber-700 dark:text-amber-400" : "border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"}`}>
                         {closeUrgency(chatMeta.chatCloseAt) === "danger" ? "⚠ " : ""}
                         {timeLeft(chatMeta.chatCloseAt)}
                       </span>
                     )}
-
                     {chatMeta.isChatClosed && (
-                      <span className="ml-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-0.5 text-[0.62rem] text-[rgb(var(--muted2))]">
-                        Closed
-                      </span>
+                      <span className="ml-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-0.5 text-[0.62rem] text-[rgb(var(--muted2))]">Closed</span>
                     )}
                   </div>
                 ) : (
                   <p className="text-sm text-[rgb(var(--muted))]">Select a conversation</p>
                 )}
-
                 {active && (
-                  <a
-                    href={`/sessions/${active.sessionId}`}
-                    className="shrink-0 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1.5 text-[0.68rem] font-medium text-[rgb(var(--fg))] transition hover:border-[rgb(var(--primary))/0.4] hover:bg-[rgb(var(--primary))/0.06]"
-                  >
+                  <a href={`/sessions/${active.sessionId}`} className="shrink-0 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1.5 text-[0.68rem] font-medium text-[rgb(var(--fg))] transition hover:border-[rgb(var(--primary))/0.4] hover:bg-[rgb(var(--primary))/0.06]">
                     Session →
                   </a>
                 )}
@@ -1101,16 +1130,7 @@ useEffect(() => {
                 <div className="mx-4 mt-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-[0.72rem] text-[rgb(var(--muted))]">
                   💬 Chat closed
                   {chatMeta.chatCloseAt && (
-                    <>
-                      {" "}
-                      ·{" "}
-                      {new Date(chatMeta.chatCloseAt).toLocaleString([], {
-                        month: "short",
-                        day: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </>
+                    <> · {new Date(chatMeta.chatCloseAt).toLocaleString([], { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</>
                   )}
                 </div>
               )}
@@ -1118,11 +1138,7 @@ useEffect(() => {
               <div className="msg-scroll msg-panel flex-1 overflow-y-auto px-4 py-4 space-y-1">
                 {nextCursor && (
                   <div className="flex justify-center mb-3">
-                    <button
-                      onClick={loadOlder}
-                      disabled={loadingMsgs}
-                      className="load-older-btn rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-1.5 text-[0.68rem] font-medium text-[rgb(var(--muted))] disabled:opacity-50 transition"
-                    >
+                    <button onClick={loadOlder} disabled={loadingMsgs} className="load-older-btn rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-1.5 text-[0.68rem] font-medium text-[rgb(var(--muted))] disabled:opacity-50 transition">
                       {loadingMsgs ? "Loading…" : "↑ Load older"}
                     </button>
                   </div>
@@ -1130,111 +1146,57 @@ useEffect(() => {
 
                 {messages.map((msg, i) => {
                   const isMe = msg.senderId === meId;
+                  const isTemp = msg.id.startsWith("temp-");
                   const isLastMine = isMe && msg.id === lastMyMsgId;
                   const isSeen = isLastMine && new Date(msg.createdAt).getTime() <= otherReadAtMs;
                   const showTime =
                     i === 0 ||
-                    new Date(msg.createdAt).getTime() -
-                      new Date(messages[i - 1].createdAt).getTime() >
-                      5 * 60 * 1000;
+                    new Date(msg.createdAt).getTime() - new Date(messages[i - 1].createdAt).getTime() > 5 * 60 * 1000;
 
                   return (
                     <React.Fragment key={msg.id}>
                       {showTime && (
                         <div className="flex justify-center py-2">
                           <span className="rounded-full bg-[rgb(var(--card2))] border border-[rgb(var(--border))] px-3 py-0.5 text-[0.6rem] text-[rgb(var(--muted2))]">
-                            {new Date(msg.createdAt).toLocaleString([], {
-                              month: "short",
-                              day: "2-digit",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {new Date(msg.createdAt).toLocaleString([], { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </div>
                       )}
-
                       <div
                         className={`flex ${isMe ? "justify-end" : "justify-start"}`}
                         onContextMenu={(e) => {
-                          if (!isMe || msg.isDeleted) return;
+                          if (!isMe || msg.isDeleted || isTemp) return;
                           e.preventDefault();
                           setCtx({ open: true, x: e.clientX, y: e.clientY, messageId: msg.id });
                         }}
                       >
-                        <div
-                          className={`bubble-enter group relative max-w-[68%] ${
-                            isMe ? "items-end" : "items-start"
-                          } flex flex-col`}
-                        >
-                          <div
-                            className={`rounded-2xl px-3.5 py-2.5 text-[0.8rem] leading-relaxed shadow-sm ${
-                              isMe
-                                ? "rounded-br-sm bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-[0_4px_14px_rgba(124,58,237,0.3)]"
-                                : "rounded-bl-sm border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]"
-                            }`}
-                          >
+                        <div className={`bubble-enter group relative max-w-[68%] ${isMe ? "items-end" : "items-start"} flex flex-col`}>
+                          <div className={`rounded-2xl px-3.5 py-2.5 text-[0.8rem] leading-relaxed shadow-sm ${isMe ? `rounded-br-sm bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-[0_4px_14px_rgba(124,58,237,0.3)] ${isTemp ? "opacity-60" : ""}` : "rounded-bl-sm border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]"}`}>
                             {msg.isDeleted ? (
                               <p className="italic text-[0.75rem] opacity-70">Message deleted</p>
                             ) : (
                               <>
                                 {msg.text && <p className="whitespace-pre-wrap break-words">{msg.text}</p>}
-
                                 {msg.attachments?.map((a) => {
                                   const isImg = a.contentType?.startsWith("image/");
                                   const isPdf = a.contentType === "application/pdf";
                                   const kb = Math.max(1, Math.round((a.sizeBytes ?? 0) / 1024));
                                   const sizeLabel = kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`;
-
-                                  const cardBase = isMe
-                                    ? "border-white/20 bg-white/10"
-                                    : "border-[rgb(var(--border))] bg-[rgb(var(--card2))]";
-                                  const btnBase = isMe
-                                    ? "border-white/20 bg-white/15 text-white hover:bg-white/25"
-                                    : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]";
-                                  const dlBtn = isMe
-                                    ? "border-white/30 bg-white text-gray-900 hover:bg-white/90"
-                                    : "border-transparent bg-[rgb(var(--primary))] text-white hover:opacity-90";
+                                  const cardBase = isMe ? "border-white/20 bg-white/10" : "border-[rgb(var(--border))] bg-[rgb(var(--card2))]";
+                                  const btnBase = isMe ? "border-white/20 bg-white/15 text-white hover:bg-white/25" : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]";
+                                  const dlBtn = isMe ? "border-white/30 bg-white text-gray-900 hover:bg-white/90" : "border-transparent bg-[rgb(var(--primary))] text-white hover:opacity-90";
 
                                   if (isImg && a.url) {
                                     return (
                                       <div key={a.id} className="mt-2 overflow-hidden rounded-xl border border-white/10 shadow-lg">
                                         <button type="button" onClick={() => openImageInChat(a.url!)} className="block w-full">
-                                          <Image
-                                            src={a.url}
-                                            alt={a.fileName}
-                                            width={300}
-                                            height={220}
-                                            unoptimized
-                                            className="block h-auto w-full max-w-[300px] hover:opacity-95 transition"
-                                          />
+                                          <Image src={a.url} alt={a.fileName} width={300} height={220} unoptimized className="block h-auto w-full max-w-[300px] hover:opacity-95 transition" />
                                         </button>
-                                        <div
-                                          className={`flex items-center justify-between gap-2 border-t px-2.5 py-1.5 ${
-                                            isMe ? "border-white/10" : "border-[rgb(var(--border))]"
-                                          }`}
-                                        >
-                                          <span
-                                            className={`truncate text-[0.62rem] ${
-                                              isMe ? "text-white/60" : "text-[rgb(var(--muted2))]"
-                                            }`}
-                                          >
-                                            {a.fileName}
-                                          </span>
+                                        <div className={`flex items-center justify-between gap-2 border-t px-2.5 py-1.5 ${isMe ? "border-white/10" : "border-[rgb(var(--border))]"}`}>
+                                          <span className={`truncate text-[0.62rem] ${isMe ? "text-white/60" : "text-[rgb(var(--muted2))]"}`}>{a.fileName}</span>
                                           <div className="flex items-center gap-1">
-                                            <button
-                                              type="button"
-                                              onClick={() => openImageInChat(a.url!)}
-                                              className={`rounded-full border p-1.5 transition ${btnBase}`}
-                                            >
-                                              <IconOpen />
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => forceDownload(a.url!, a.fileName)}
-                                              className={`rounded-full border p-1.5 transition ${dlBtn}`}
-                                            >
-                                              <IconDownload />
-                                            </button>
+                                            <button type="button" onClick={() => openImageInChat(a.url!)} className={`rounded-full border p-1.5 transition ${btnBase}`}><IconOpen /></button>
+                                            <button type="button" onClick={() => forceDownload(a.url!, a.fileName)} className={`rounded-full border p-1.5 transition ${dlBtn}`}><IconDownload /></button>
                                           </div>
                                         </div>
                                       </div>
@@ -1245,77 +1207,34 @@ useEffect(() => {
                                     return (
                                       <div key={a.id} className={`mt-2 overflow-hidden rounded-xl border ${cardBase}`}>
                                         <div className="flex items-center gap-3 px-3 py-2.5">
-                                          <div
-                                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${
-                                              isMe
-                                                ? "border-white/20 bg-white/10 text-white"
-                                                : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]"
-                                            }`}
-                                          >
+                                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${isMe ? "border-white/20 bg-white/10 text-white" : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]"}`}>
                                             <IconPdf />
                                           </div>
                                           <div className="min-w-0 flex-1">
-                                            <p
-                                              className={`truncate text-[0.72rem] font-semibold ${
-                                                isMe ? "text-white" : "text-[rgb(var(--fg))]"
-                                              }`}
-                                            >
-                                              {a.fileName}
-                                            </p>
-                                            <p
-                                              className={`text-[0.6rem] ${
-                                                isMe ? "text-white/55" : "text-[rgb(var(--muted2))]"
-                                              }`}
-                                            >
-                                              PDF · {sizeLabel}
-                                            </p>
+                                            <p className={`truncate text-[0.72rem] font-semibold ${isMe ? "text-white" : "text-[rgb(var(--fg))]"}`}>{a.fileName}</p>
+                                            <p className={`text-[0.6rem] ${isMe ? "text-white/55" : "text-[rgb(var(--muted2))]"}`}>PDF · {sizeLabel}</p>
                                           </div>
                                           <div className="flex shrink-0 items-center gap-1">
-                                            <button
-                                              type="button"
-                                              onClick={() => a.url && window.open(a.url, "_blank")}
-                                              disabled={!a.url}
-                                              className={`rounded-full border p-1.5 transition ${btnBase} disabled:opacity-40`}
-                                            >
-                                              <IconOpen />
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => a.url && forceDownload(a.url, a.fileName)}
-                                              disabled={!a.url}
-                                              className={`rounded-full border p-1.5 transition ${dlBtn} disabled:opacity-40`}
-                                            >
-                                              <IconDownload />
-                                            </button>
+                                            <button type="button" onClick={() => a.url && window.open(a.url, "_blank")} disabled={!a.url} className={`rounded-full border p-1.5 transition ${btnBase} disabled:opacity-40`}><IconOpen /></button>
+                                            <button type="button" onClick={() => a.url && forceDownload(a.url, a.fileName)} disabled={!a.url} className={`rounded-full border p-1.5 transition ${dlBtn} disabled:opacity-40`}><IconDownload /></button>
                                           </div>
                                         </div>
                                       </div>
                                     );
                                   }
-
                                   return null;
                                 })}
                               </>
                             )}
                           </div>
-
-                          <div
-                            className={`mt-1 flex items-center gap-1.5 px-0.5 text-[0.6rem] ${
-                              isMe ? "justify-end text-[rgb(var(--muted2))]" : "text-[rgb(var(--muted2))]"
-                            }`}
-                          >
+                          <div className={`mt-1 flex items-center gap-1.5 px-0.5 text-[0.6rem] ${isMe ? "justify-end text-[rgb(var(--muted2))]" : "text-[rgb(var(--muted2))]"}`}>
                             <span>
-                              {new Date(msg.createdAt).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
+                              {isTemp
+                                ? "Sending…"
+                                : new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                             </span>
-                            {isLastMine && (
-                              <span
-                                className={`text-[0.58rem] font-medium ${
-                                  isSeen ? "text-[rgb(var(--primary))]" : "text-[rgb(var(--muted2))]"
-                                }`}
-                              >
+                            {isLastMine && !isTemp && (
+                              <span className={`text-[0.58rem] font-medium ${isSeen ? "text-[rgb(var(--primary))]" : "text-[rgb(var(--muted2))]"}`}>
                                 {isSeen ? "Seen" : "Sent"}
                               </span>
                             )}
@@ -1340,9 +1259,7 @@ useEffect(() => {
 
                 {messages.length === 0 && active && !loadingMsgs && (
                   <div className="flex flex-col items-center justify-center gap-2 pt-12 text-center">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-xl">
-                      👋
-                    </div>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-xl">👋</div>
                     <p className="text-[0.75rem] text-[rgb(var(--muted))]">No messages yet — say hi!</p>
                   </div>
                 )}
@@ -1354,33 +1271,17 @@ useEffect(() => {
                 <div className="mx-4 mb-2 flex items-center gap-2 rounded-xl border border-red-400/30 bg-red-500/8 px-3 py-2 text-[0.72rem] text-red-600 dark:text-red-400">
                   <span>⚠</span>
                   <span>{sendErr}</span>
-                  <button
-                    type="button"
-                    onClick={() => setSendErr(null)}
-                    className="ml-auto opacity-60 hover:opacity-100"
-                  >
-                    ✕
-                  </button>
+                  <button type="button" onClick={() => setSendErr(null)} className="ml-auto opacity-60 hover:opacity-100">✕</button>
                 </div>
               )}
 
               {pickedFiles.length > 0 && (
                 <div className="mx-4 mb-1 flex flex-wrap gap-1.5">
                   {pickedFiles.map((f, idx) => (
-                    <div
-                      key={`${f.name}-${idx}`}
-                      className="attach-chip flex items-center gap-1.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-1 text-[0.68rem] text-[rgb(var(--fg))]"
-                    >
+                    <div key={`${f.name}-${idx}`} className="attach-chip flex items-center gap-1.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-1 text-[0.68rem] text-[rgb(var(--fg))]">
                       <span className="opacity-50">📎</span>
                       <span className="max-w-[180px] truncate">{f.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => removePickedFile(idx)}
-                        disabled={uploading}
-                        className="opacity-40 hover:opacity-100 transition"
-                      >
-                        ✕
-                      </button>
+                      <button type="button" onClick={() => removePickedFile(idx)} disabled={uploading} className="opacity-40 hover:opacity-100 transition">✕</button>
                     </div>
                   ))}
                 </div>
@@ -1404,16 +1305,12 @@ useEffect(() => {
                       onChange={(e) => {
                         setText(e.target.value);
                         const now = Date.now();
-
                         if (now - lastTypingSentAt.current > 800) {
                           lastTypingSentAt.current = now;
                           void pingTyping(true);
                         }
-
                         if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
-                        typingStopTimer.current = setTimeout(() => {
-                          void pingTyping(false);
-                        }, 1200);
+                        typingStopTimer.current = setTimeout(() => void pingTyping(false), 1200);
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
@@ -1422,15 +1319,7 @@ useEffect(() => {
                         }
                       }}
                       className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-2.5 text-[0.8rem] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] focus:border-[rgb(var(--primary))/0.5] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] transition"
-                      placeholder={
-                        !active
-                          ? "Select a conversation…"
-                          : chatMeta.isChatClosed
-                          ? "Chat is closed"
-                          : uploading
-                          ? "Sending…"
-                          : "Type a message…"
-                      }
+                      placeholder={!active ? "Select a conversation…" : chatMeta.isChatClosed ? "Chat is closed" : uploading ? "Sending…" : "Type a message…"}
                       disabled={inputDisabled}
                     />
                   </div>
@@ -1470,9 +1359,7 @@ useEffect(() => {
       {imgViewer.open && (
         <div
           className="viewer-fade fixed inset-0 z-[60] bg-black/92 backdrop-blur-sm"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeImageViewer();
-          }}
+          onClick={(e) => { if (e.target === e.currentTarget) closeImageViewer(); }}
         >
           <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between px-5 py-4">
             <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70">
@@ -1481,50 +1368,19 @@ useEffect(() => {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const url = imgViewer.urls[imgViewer.idx];
-                  if (url) forceDownload(url, prettyNameFromUrl(url));
-                }}
+                onClick={(e) => { e.stopPropagation(); const url = imgViewer.urls[imgViewer.idx]; if (url) forceDownload(url, prettyNameFromUrl(url)); }}
                 className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white transition hover:bg-white/20"
               >
                 ↓ Download
               </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeImageViewer();
-                }}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/25 text-sm"
-              >
-                ✕
-              </button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); closeImageViewer(); }} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/25 text-sm">✕</button>
             </div>
           </div>
 
           {imgViewer.urls.length > 1 && (
             <>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  prevImage();
-                }}
-                className="absolute left-4 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white text-xl transition hover:bg-white/25"
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  nextImage();
-                }}
-                className="absolute right-4 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white text-xl transition hover:bg-white/25"
-              >
-                ›
-              </button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); prevImage(); }} className="absolute left-4 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white text-xl transition hover:bg-white/25">‹</button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); nextImage(); }} className="absolute right-4 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white text-xl transition hover:bg-white/25">›</button>
             </>
           )}
 
@@ -1537,28 +1393,10 @@ useEffect(() => {
               unoptimized
               draggable={false}
               onClick={(e) => e.stopPropagation()}
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                if (zoom > 1) {
-                  setZoom(1);
-                  setOffset({ x: 0, y: 0 });
-                } else {
-                  setZoom(2);
-                }
-              }}
-              onWheel={(e) => {
-                e.preventDefault();
-                setZoom((z) => Math.min(Math.max(1, z + (e.deltaY > 0 ? -0.2 : 0.2)), 4));
-              }}
-              onMouseDown={(e) => {
-                if (zoom <= 1) return;
-                setDragging(true);
-                dragStart.current = { x: e.clientX - offset.x, y: e.clientY - offset.y };
-              }}
-              onMouseMove={(e) => {
-                if (!dragging) return;
-                setOffset({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y });
-              }}
+              onDoubleClick={(e) => { e.stopPropagation(); if (zoom > 1) { setZoom(1); setOffset({ x: 0, y: 0 }); } else { setZoom(2); } }}
+              onWheel={(e) => { e.preventDefault(); setZoom((z) => Math.min(Math.max(1, z + (e.deltaY > 0 ? -0.2 : 0.2)), 4)); }}
+              onMouseDown={(e) => { if (zoom <= 1) return; setDragging(true); dragStart.current = { x: e.clientX - offset.x, y: e.clientY - offset.y }; }}
+              onMouseMove={(e) => { if (!dragging) return; setOffset({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y }); }}
               onMouseUp={() => setDragging(false)}
               onMouseLeave={() => setDragging(false)}
               className="viewer-img max-h-[80vh] max-w-[90vw] select-none rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
@@ -1581,21 +1419,9 @@ useEffect(() => {
                       key={`${u}-${i}`}
                       type="button"
                       onClick={() => setImgViewer((p) => ({ ...p, idx: i }))}
-                      className={`img-thumb relative shrink-0 overflow-hidden rounded-lg border ${
-                        i === imgViewer.idx
-                          ? "border-white ring-2 ring-white/40"
-                          : "border-white/20 opacity-60 hover:opacity-90"
-                      }`}
+                      className={`img-thumb relative shrink-0 overflow-hidden rounded-lg border ${i === imgViewer.idx ? "border-white ring-2 ring-white/40" : "border-white/20 opacity-60 hover:opacity-90"}`}
                     >
-                      <Image
-                        src={u}
-                        alt={`thumb-${i}`}
-                        width={64}
-                        height={48}
-                        unoptimized
-                        draggable={false}
-                        className="h-12 w-16 object-cover"
-                      />
+                      <Image src={u} alt={`thumb-${i}`} width={64} height={48} unoptimized draggable={false} className="h-12 w-16 object-cover" />
                     </button>
                   ))}
                 </div>
@@ -1609,14 +1435,7 @@ useEffect(() => {
         </div>
       )}
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*,application/pdf"
-        multiple
-        className="hidden"
-        onChange={onPickFiles}
-      />
+      <input ref={fileInputRef} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={onPickFiles} />
     </>
   );
 }
