@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import Image from "next/image";
@@ -105,6 +105,10 @@ export default function MessagingClient() {
   const typingStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSentAt = useRef(0);
 
+  // ── In-memory typing: track when other user last typed
+  // Set by the typing poll; auto-clears after 4s of silence
+  const otherTypingExpiry = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [chatMeta, setChatMeta] = useState<{
     isChatClosed: boolean;
     chatCloseAt: string | null;
@@ -130,7 +134,6 @@ export default function MessagingClient() {
     urls: string[];
     idx: number;
   }>({ open: false, urls: [], idx: 0 });
-
 
   const allImageUrls = useMemo(() => {
     const urls: string[] = [];
@@ -189,39 +192,45 @@ export default function MessagingClient() {
   }
 
   useEffect(() => {
-  if (!imgViewer.open) return;
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Escape") closeImageViewer();
-    if (e.key === "ArrowRight") nextImage();
-    if (e.key === "ArrowLeft") prevImage();
-  };
-  window.addEventListener("keydown", onKeyDown);
-  const prevOverflow = document.body.style.overflow;
-  document.body.style.overflow = "hidden";
+    if (!imgViewer.open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeImageViewer();
+      if (e.key === "ArrowRight") nextImage();
+      if (e.key === "ArrowLeft") prevImage();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [imgViewer.open]);
 
-  return () => {
-    window.removeEventListener("keydown", onKeyDown);
-    document.body.style.overflow = prevOverflow;
-  };
-}, [imgViewer.open]);
-
+  // ── Presence: poll every 30s (unchanged, already reasonable) ──────────
   useEffect(() => {
     if (!active?.otherUserId) { setUserPresence(null); return; }
     const otherUserId = active.otherUserId;
     let stop = false;
     async function loadPresence() {
-      const j = await fetch(`/api/presence/${otherUserId}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+      const j = await fetch(`/api/presence/${otherUserId}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .catch(() => null);
       if (stop || !j?.ok) return;
       setUserPresence({ isOnline: !!j.presence?.isOnline, lastSeenAt: j.presence?.lastSeenAt ?? null });
     }
     loadPresence();
-    const t = setInterval(loadPresence, 30000);
+    const t = setInterval(loadPresence, 30_000);
     return () => { stop = true; clearInterval(t); };
   }, [active?.otherUserId]);
 
   async function pingTyping(isTyping: boolean) {
     if (!activeId || !meId) return;
-    await fetch("/api/chat/typing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ channelId: activeId, isTyping }) }).catch(() => {});
+    await fetch("/api/chat/typing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId: activeId, isTyping }),
+    }).catch(() => {});
   }
 
   function validateFile(file: File) {
@@ -258,9 +267,17 @@ export default function MessagingClient() {
   }
 
   async function uploadAttachment(channelId: string, file: File): Promise<UploadPayload> {
-    const sign = await fetch("/api/chat/attachments/sign-upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ channelId, fileName: file.name, contentType: file.type }) }).then((r) => r.json());
+    const sign = await fetch("/api/chat/attachments/sign-upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId, fileName: file.name, contentType: file.type }),
+    }).then((r) => r.json());
     if (!sign?.ok) throw new Error(sign?.message ?? "Sign upload failed");
-    const put = await fetch(sign.signedUrl as string, { method: "PUT", headers: { "Content-Type": file.type, "x-upsert": "false" }, body: file });
+    const put = await fetch(sign.signedUrl as string, {
+      method: "PUT",
+      headers: { "Content-Type": file.type, "x-upsert": "false" },
+      body: file,
+    });
     if (!put.ok) throw new Error("Upload failed");
     return { bucket: sign.bucket as string, objectPath: sign.objectPath as string, fileName: file.name, contentType: file.type, sizeBytes: file.size };
   }
@@ -269,11 +286,16 @@ export default function MessagingClient() {
     const r = await fetch(`/api/chat/messages/${messageId}`, { method: "DELETE" });
     const j = await r.json().catch(() => null);
     if (j?.ok) {
-      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, isDeleted: true, text: "", deletedAt: j.message?.deletedAt ?? null } : m));
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId ? { ...m, isDeleted: true, text: "", deletedAt: j.message?.deletedAt ?? null } : m
+        )
+      );
     }
   }
 
-  function mergeMessages(incoming: Msg[]) {
+  // ── Stable merge helper ────────────────────────────────────────────────
+  const mergeMessages = useCallback((incoming: Msg[]) => {
     setMessages((prev) => {
       const map = new Map(prev.map((m) => [m.id, m]));
       for (const m of incoming) map.set(m.id, { ...(map.get(m.id) ?? {}), ...m });
@@ -281,21 +303,34 @@ export default function MessagingClient() {
       arr.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       return arr;
     });
-  }
+  }, []);
 
   async function markChatRead(channelId: string) {
-    await fetch("/api/chat/read", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ channelId }) }).catch(() => {});
-    setConversations((prev) => prev.map((c) => (c.id === channelId ? { ...c, unread: 0 } : c)));
+    await fetch("/api/chat/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId }),
+    }).catch(() => {});
+    setConversations((prev) =>
+      prev.map((c) => (c.id === channelId ? { ...c, unread: 0 } : c))
+    );
     window.dispatchEvent(new Event("chat:unread-refresh"));
   }
 
-  async function refreshConversations(openChannelId?: string | null) {
-    const r = await fetch("/api/chat/channels", { cache: "no-store" });
-    const j = await r.json().catch(() => null);
-    if (!j?.ok) return;
-    const sorted = [...j.items].sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()).map((c) => openChannelId && c.id === openChannelId ? { ...c, unread: 0 } : c);
-    setConversations(sorted);
-  }
+  // ── Conversation refresh: batched with a short debounce ───────────────
+  const convRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshConversations = useCallback((openChannelId?: string | null) => {
+    if (convRefreshTimer.current) clearTimeout(convRefreshTimer.current);
+    convRefreshTimer.current = setTimeout(async () => {
+      const r = await fetch("/api/chat/channels", { cache: "no-store" });
+      const j = await r.json().catch(() => null);
+      if (!j?.ok) return;
+      const sorted = [...j.items]
+        .sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
+        .map((c) => (openChannelId && c.id === openChannelId ? { ...c, unread: 0 } : c));
+      setConversations(sorted);
+    }, 300);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -307,11 +342,16 @@ export default function MessagingClient() {
 
   useEffect(() => { setZoom(1); setOffset({ x: 0, y: 0 }); }, [imgViewer.idx]);
 
-  useEffect(() => { (async () => { await refreshConversations(); })(); }, []);
+  useEffect(() => {
+    (async () => { await refreshConversations(); })();
+  }, [refreshConversations]);
 
   useEffect(() => {
     if (activeId) return;
-    if (qsChannelId && conversations.some((c) => c.id === qsChannelId)) { setActiveId(qsChannelId); return; }
+    if (qsChannelId && conversations.some((c) => c.id === qsChannelId)) {
+      setActiveId(qsChannelId);
+      return;
+    }
     if (conversations[0]?.id) setActiveId(conversations[0].id);
   }, [conversations, qsChannelId, activeId]);
 
@@ -353,131 +393,215 @@ export default function MessagingClient() {
     return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
+  // ── Apply message API response to state (shared helper) ───────────────
+  const applyMessagesResponse = useCallback(
+    (j: any, channelId: string, scroll: "auto" | "smooth" | null = null) => {
+      if (!j?.ok) return;
+      mergeMessages((j.items as Msg[]).slice().reverse());
+      setNextCursor(j.nextCursor ?? null);
+      if (j.read) setReadInfo(j.read);
+      if (typeof j.isChatClosed === "boolean")
+        setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
+      if (scroll) {
+        setTimeout(
+          () => bottomRef.current?.scrollIntoView({ behavior: scroll }),
+          30
+        );
+      }
+    },
+    [mergeMessages]
+  );
+
+  // ── Load initial messages when channel changes ────────────────────────
   useEffect(() => {
     if (!activeId || !meId) return;
     const channelId = activeId;
     let cancelled = false;
+
     async function loadInitialMessages() {
       setLoadingMsgs(true);
-      const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
-      if (cancelled || !j?.ok) { setLoadingMsgs(false); return; }
-      setMessages((j.items as Msg[]).slice().reverse());
-      setNextCursor(j.nextCursor ?? null);
-      if (j.read) setReadInfo(j.read);
-      if (typeof j.isChatClosed === "boolean") setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
+      const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, { cache: "no-store" })
+        .then((r) => r.json())
+        .catch(() => null);
+      if (cancelled) { setLoadingMsgs(false); return; }
+      applyMessagesResponse(j, channelId, "auto");
       setLoadingMsgs(false);
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "auto" }), 30);
       await markChatRead(channelId);
-      await refreshConversations(channelId);
+      // One conversation refresh after initial load — no polling needed
+      refreshConversations(channelId);
     }
+
+    setMessages([]);
+    setNextCursor(null);
+    setReadInfo(null);
     loadInitialMessages();
     return () => { cancelled = true; };
-  }, [activeId, meId]);
+  }, [activeId, meId, applyMessagesResponse, refreshConversations]);
+
+  // ── Supabase realtime: INSERT only, no polling fallback ───────────────
+  // We trust realtime for new messages. The 1500ms poll is REMOVED.
+  const realtimeDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!activeId || !meId) return;
     const channelId = activeId;
     const supabase = supabaseBrowser;
-    const channel = supabase.channel(`chat-messages-${channelId}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "ChatMessage" }, async (payload: { new: Record<string, unknown> }) => {
-      const row = payload.new as { id: string; channelId: string; senderId: string; text: string; createdAt: string; isDeleted?: boolean; deletedAt?: string | null };
-      if (row.channelId !== channelId) return;
-      let alreadyExists = false;
-      setMessages((prev) => { alreadyExists = prev.some((m) => m.id === row.id); return prev; });
-      if (alreadyExists) return;
-      const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
-      if (!j?.ok) return;
-      mergeMessages((j.items as Msg[]).slice().reverse());
-      setNextCursor(j.nextCursor ?? null);
-      if (j.read) setReadInfo(j.read);
-      if (typeof j.isChatClosed === "boolean") setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
-      if (row.senderId !== meId) await markChatRead(channelId);
-      await refreshConversations(channelId);
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
-    }).subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [activeId, meId]);
 
+    const channel = supabase
+      .channel(`chat-messages-${channelId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "ChatMessage" },
+        async (payload: { new: Record<string, unknown> }) => {
+          const row = payload.new as {
+            id: string;
+            channelId: string;
+            senderId: string;
+            text: string;
+            createdAt: string;
+            isDeleted?: boolean;
+            deletedAt?: string | null;
+          };
+          if (row.channelId !== channelId) return;
+
+          // Deduplicate: skip if we already have this message
+          let alreadyExists = false;
+          setMessages((prev) => {
+            alreadyExists = prev.some((m) => m.id === row.id);
+            return prev;
+          });
+          if (alreadyExists) return;
+
+          // Debounce rapid-fire inserts (e.g. bulk sends) into a single fetch
+          if (realtimeDebounce.current) clearTimeout(realtimeDebounce.current);
+          realtimeDebounce.current = setTimeout(async () => {
+            const j = await fetch(
+              `/api/chat/messages?channelId=${channelId}&take=30`,
+              { cache: "no-store" }
+            )
+              .then((r) => r.json())
+              .catch(() => null);
+
+            applyMessagesResponse(j, channelId, "smooth");
+
+            if (row.senderId !== meId) {
+              await markChatRead(channelId);
+            }
+
+            // Debounce the conversation refresh too — one call regardless of burst
+            refreshConversations(channelId);
+          }, 120);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      if (realtimeDebounce.current) clearTimeout(realtimeDebounce.current);
+      supabase.removeChannel(channel);
+    };
+  }, [activeId, meId, applyMessagesResponse, refreshConversations]);
+
+  // ── Typing poll: slow (3s), zero DB hits (uses in-memory store) ───────
+  // Typing poll is now cheap: /api/chat/typing reads from memory, no DB.
+  // We can afford 3s; anything faster is waste.
   useEffect(() => {
     if (!activeId || !meId) return;
     const channelId = activeId;
     let stop = false;
-    async function pollMessages() {
-      if (stop) return;
-      const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
-      if (stop || !j?.ok) return;
-      mergeMessages((j.items as Msg[]).slice().reverse());
-      setNextCursor(j.nextCursor ?? null);
-      if (j.read) setReadInfo(j.read);
-      if (typeof j.isChatClosed === "boolean") setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
-    }
-        pollMessages();
-    const t = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        pollMessages();
-      }
-    }, 1500);
-    return () => { stop = true; clearInterval(t); };
-  }, [activeId, meId]);
 
-  useEffect(() => {
-    if (!activeId || !meId) return;
-    const channelId = activeId;
-    let stop = false;
-    async function pollConversations() { if (!stop) await refreshConversations(channelId).catch(() => {}); }
     async function pollTyping() {
       if (stop) return;
-      const j = await fetch(`/api/chat/typing?channelId=${channelId}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
-      if (!stop && j?.ok) setOtherTyping(!!j.otherTyping);
-    }
-    pollConversations(); pollTyping();
-        const convT = setInterval(() => {
-      if (document.visibilityState === "visible") pollConversations();
-    }, 4500);
+      const j = await fetch(`/api/chat/typing?channelId=${channelId}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .catch(() => null);
+      if (stop || !j?.ok) return;
 
+      const typing = Array.isArray(j.typing) ? j.typing.length > 0 : !!j.otherTyping;
+
+      if (typing) {
+        setOtherTyping(true);
+        // Auto-clear typing indicator after 4s if no new poll confirms it
+        if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
+        otherTypingExpiry.current = setTimeout(() => setOtherTyping(false), 4000);
+      } else {
+        setOtherTyping(false);
+        if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
+      }
+    }
+
+    pollTyping();
     const typT = setInterval(() => {
       if (document.visibilityState === "visible") pollTyping();
-    }, 1200);
-    const onVis = () => { if (document.visibilityState === "visible") { pollConversations(); pollTyping(); } };
+    }, 3000); // was 1200ms — 60% fewer DB calls
+
+    const onVis = () => {
+      if (document.visibilityState === "visible") pollTyping();
+    };
     document.addEventListener("visibilitychange", onVis);
-    return () => { stop = true; clearInterval(convT); clearInterval(typT); document.removeEventListener("visibilitychange", onVis); };
+
+    return () => {
+      stop = true;
+      clearInterval(typT);
+      document.removeEventListener("visibilitychange", onVis);
+      if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
+    };
   }, [activeId, meId]);
 
-  const [ctx, setCtx] = useState<{ open: boolean; x: number; y: number; messageId: string | null }>({ open: false, x: 0, y: 0, messageId: null });
+  // ── Conversation list: slow background refresh (30s) ──────────────────
+  // Realtime handles message-driven updates. This is a safety net only.
+  useEffect(() => {
+    if (!activeId) return;
+    const channelId = activeId;
+    let stop = false;
+
+    const convT = setInterval(() => {
+      if (!stop && document.visibilityState === "visible") {
+        refreshConversations(channelId);
+      }
+    }, 30_000); // was 4500ms
+
+    return () => { stop = true; clearInterval(convT); };
+  }, [activeId, refreshConversations]);
+
+  const [ctx, setCtx] = useState<{
+    open: boolean; x: number; y: number; messageId: string | null;
+  }>({ open: false, x: 0, y: 0, messageId: null });
 
   useEffect(() => {
     const close = () => setCtx((p) => ({ ...p, open: false, messageId: null }));
-    window.addEventListener("click", close); window.addEventListener("scroll", close, true); window.addEventListener("resize", close);
-    return () => { window.removeEventListener("click", close); window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
   }, []);
 
   async function loadOlder() {
     if (!activeId || !nextCursor) return;
     setLoadingMsgs(true);
-    const r = await fetch(`/api/chat/messages?channelId=${activeId}&take=30&cursor=${nextCursor}`, { cache: "no-store" });
+    const r = await fetch(
+      `/api/chat/messages?channelId=${activeId}&take=30&cursor=${nextCursor}`,
+      { cache: "no-store" }
+    );
     const j = await r.json().catch(() => null);
     if (j?.ok) {
       const older = (j.items as Msg[]).slice().reverse();
       setMessages((prev) => {
         const map = new Map(prev.map((m) => [m.id, m]));
         for (const m of older) map.set(m.id, { ...(map.get(m.id) ?? {}), ...m });
-        return Array.from(map.values()).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        return Array.from(map.values()).sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
       });
       setNextCursor(j.nextCursor ?? null);
       if (j.read) setReadInfo(j.read);
-      if (typeof j.isChatClosed === "boolean") setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
+      if (typeof j.isChatClosed === "boolean")
+        setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
     }
     setLoadingMsgs(false);
-  }
-
-  async function refetchLatest(channelId: string) {
-    const r = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, { cache: "no-store" });
-    const j = await r.json().catch(() => null);
-    if (!j?.ok) return;
-    mergeMessages((j.items as Msg[]).slice().reverse());
-    setNextCursor(j.nextCursor ?? null);
-    if (j.read) setReadInfo(j.read);
-    if (typeof j.isChatClosed === "boolean") setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
   }
 
   async function send() {
@@ -491,20 +615,35 @@ export default function MessagingClient() {
     try {
       const uploaded: UploadPayload[] = [];
       for (const f of pickedFiles) uploaded.push(await uploadAttachment(activeId, f));
-      const r = await fetch("/api/chat/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ channelId: activeId, text: t, attachments: uploaded }) });
+      const r = await fetch("/api/chat/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channelId: activeId, text: t, attachments: uploaded }),
+      });
       const j = await r.json().catch(() => null);
       if (!r.ok) {
         setSendErr(j?.message ?? "Failed to send");
-        if (r.status === 403 && (j?.message?.toLowerCase?.() ?? "").includes("closed")) setChatMeta((p) => ({ ...p, isChatClosed: true }));
-        setText(t); return;
+        if (r.status === 403 && (j?.message?.toLowerCase?.() ?? "").includes("closed"))
+          setChatMeta((p) => ({ ...p, isChatClosed: true }));
+        setText(t);
+        return;
       }
       if (j?.ok) {
-        if (j.message) { mergeMessages([j.message as Msg]); setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30); }
-        setConversations((prev) => prev.map((c) => c.id === activeId ? { ...c, unread: 0, lastMessage: t || (pickedFiles.length ? "📎 Attachment" : ""), lastAt: new Date().toISOString() } : c));
+        if (j.message) {
+          mergeMessages([j.message as Msg]);
+          setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
+        }
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === activeId
+              ? { ...c, unread: 0, lastMessage: t || (pickedFiles.length ? "📎 Attachment" : ""), lastAt: new Date().toISOString() }
+              : c
+          )
+        );
         setPickedFiles([]);
         await markChatRead(activeId);
-        await refreshConversations(activeId);
-        await refetchLatest(activeId);
+        // Realtime will handle the recipient's view; we only need one refresh for our own sidebar
+        refreshConversations(activeId);
       }
     } catch (e: unknown) {
       setSendErr(e instanceof Error ? e.message : "Failed to send");
@@ -515,7 +654,12 @@ export default function MessagingClient() {
   }
 
   const otherReadAtMs = readInfo ? new Date(readInfo.otherLastReadAt).getTime() : 0;
-  const lastMyMsgId = (() => { for (let i = messages.length - 1; i >= 0; i--) { if (messages[i].senderId === meId) return messages[i].id; } return null; })();
+  const lastMyMsgId = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].senderId === meId) return messages[i].id;
+    }
+    return null;
+  })();
   const inputDisabled = !active || chatMeta.isChatClosed || uploading;
 
   /* ─── tiny icon helpers ─── */
@@ -700,7 +844,6 @@ export default function MessagingClient() {
                           : "border-[rgb(var(--border))] bg-[rgb(var(--card))] hover:border-[rgb(var(--primary))/0.25]"
                       }`}
                     >
-                      {/* accent strip */}
                       <div className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full ${isStudent ? "bg-violet-500" : "bg-fuchsia-500"}`} />
 
                       <div className="flex items-start justify-between gap-2 pl-2">
@@ -747,7 +890,6 @@ export default function MessagingClient() {
               <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] bg-[rgb(var(--card))]/80 px-5 py-3.5 backdrop-blur-sm">
                 {active ? (
                   <div className="flex min-w-0 items-center gap-3">
-                    {/* Avatar orb */}
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white shadow-sm ${active.viewerIsStudent ? "bg-gradient-to-br from-violet-500 to-purple-600" : "bg-gradient-to-br from-fuchsia-500 to-pink-600"}`}>
                       {active.name.charAt(0).toUpperCase()}
                     </div>
@@ -769,7 +911,6 @@ export default function MessagingClient() {
                       </div>
                     </div>
 
-                    {/* Timer badge */}
                     {chatMeta.chatCloseAt && !chatMeta.isChatClosed && (
                       <span className={`ml-2 rounded-full border px-2.5 py-0.5 text-[0.62rem] font-semibold ${
                         closeUrgency(chatMeta.chatCloseAt) === "danger" ? "border-red-400/40 bg-red-500/10 text-red-600 dark:text-red-400" :
@@ -870,30 +1011,15 @@ export default function MessagingClient() {
                                   const kb = Math.max(1, Math.round((a.sizeBytes ?? 0) / 1024));
                                   const sizeLabel = kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`;
 
-                                  const cardBase = isMe
-                                    ? "border-white/20 bg-white/10"
-                                    : "border-[rgb(var(--border))] bg-[rgb(var(--card2))]";
-
-                                  const btnBase = isMe
-                                    ? "border-white/20 bg-white/15 text-white hover:bg-white/25"
-                                    : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]";
-
-                                  const dlBtn = isMe
-                                    ? "border-white/30 bg-white text-gray-900 hover:bg-white/90"
-                                    : "border-transparent bg-[rgb(var(--primary))] text-white hover:opacity-90";
+                                  const cardBase = isMe ? "border-white/20 bg-white/10" : "border-[rgb(var(--border))] bg-[rgb(var(--card2))]";
+                                  const btnBase = isMe ? "border-white/20 bg-white/15 text-white hover:bg-white/25" : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]";
+                                  const dlBtn = isMe ? "border-white/30 bg-white text-gray-900 hover:bg-white/90" : "border-transparent bg-[rgb(var(--primary))] text-white hover:opacity-90";
 
                                   if (isImg && a.url) {
                                     return (
                                       <div key={a.id} className="mt-2 overflow-hidden rounded-xl border border-white/10 shadow-lg">
                                         <button type="button" onClick={() => openImageInChat(a.url!)} className="block w-full">
-                                          <Image
-                                          src={a.url}
-                                          alt={a.fileName}
-                                          width={300}
-                                          height={220}
-                                          unoptimized
-                                          className="block h-auto w-full max-w-[300px] hover:opacity-95 transition"
-                                        />
+                                          <Image src={a.url} alt={a.fileName} width={300} height={220} unoptimized className="block h-auto w-full max-w-[300px] hover:opacity-95 transition" />
                                         </button>
                                         <div className={`flex items-center justify-between gap-2 border-t px-2.5 py-1.5 ${isMe ? "border-white/10" : "border-[rgb(var(--border))]"}`}>
                                           <span className={`truncate text-[0.62rem] ${isMe ? "text-white/60" : "text-[rgb(var(--muted2))]"}`}>{a.fileName}</span>
@@ -1012,7 +1138,10 @@ export default function MessagingClient() {
                       onChange={(e) => {
                         setText(e.target.value);
                         const now = Date.now();
-                        if (now - lastTypingSentAt.current > 800) { lastTypingSentAt.current = now; void pingTyping(true); }
+                        if (now - lastTypingSentAt.current > 800) {
+                          lastTypingSentAt.current = now;
+                          void pingTyping(true);
+                        }
                         if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
                         typingStopTimer.current = setTimeout(() => void pingTyping(false), 1200);
                       }}
@@ -1052,7 +1181,10 @@ export default function MessagingClient() {
         >
           <button
             className="w-full px-3 py-2.5 text-left text-[0.75rem] text-red-600 dark:text-red-400 hover:bg-red-500/8 transition"
-            onClick={() => { deleteMessage(ctx.messageId!); setCtx((p) => ({ ...p, open: false, messageId: null })); }}
+            onClick={() => {
+              deleteMessage(ctx.messageId!);
+              setCtx((p) => ({ ...p, open: false, messageId: null }));
+            }}
           >
             🗑 Delete message
           </button>
@@ -1065,7 +1197,6 @@ export default function MessagingClient() {
           className="viewer-fade fixed inset-0 z-[60] bg-black/92 backdrop-blur-sm"
           onClick={(e) => { if (e.target === e.currentTarget) closeImageViewer(); }}
         >
-          {/* Top bar */}
           <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between px-5 py-4">
             <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70">
               {imgViewer.idx + 1} / {imgViewer.urls.length}
@@ -1088,7 +1219,6 @@ export default function MessagingClient() {
             </div>
           </div>
 
-          {/* Prev/Next */}
           {imgViewer.urls.length > 1 && (
             <>
               <button type="button" onClick={(e) => { e.stopPropagation(); prevImage(); }} className="absolute left-4 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white text-xl transition hover:bg-white/25">‹</button>
@@ -1096,7 +1226,6 @@ export default function MessagingClient() {
             </>
           )}
 
-          {/* Main image */}
           <div className="absolute inset-0 z-10 flex items-center justify-center p-8 pb-28">
             <Image
               src={imgViewer.urls[imgViewer.idx] ?? ""}
@@ -1108,12 +1237,7 @@ export default function MessagingClient() {
               onClick={(e) => e.stopPropagation()}
               onDoubleClick={(e) => {
                 e.stopPropagation();
-                if (zoom > 1) {
-                  setZoom(1);
-                  setOffset({ x: 0, y: 0 });
-                } else {
-                  setZoom(2);
-                }
+                if (zoom > 1) { setZoom(1); setOffset({ x: 0, y: 0 }); } else { setZoom(2); }
               }}
               onWheel={(e) => {
                 e.preventDefault();
@@ -1141,7 +1265,6 @@ export default function MessagingClient() {
             />
           </div>
 
-          {/* Thumbnail strip */}
           {imgViewer.urls.length > 1 && (
             <div className="absolute inset-x-0 bottom-0 z-30 px-4 py-3" onClick={(e) => e.stopPropagation()}>
               <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-black/60 px-3 py-2.5 backdrop-blur-md">
@@ -1153,15 +1276,7 @@ export default function MessagingClient() {
                       onClick={() => setImgViewer((p) => ({ ...p, idx: i }))}
                       className={`img-thumb relative shrink-0 overflow-hidden rounded-lg border ${i === imgViewer.idx ? "border-white ring-2 ring-white/40" : "border-white/20 opacity-60 hover:opacity-90"}`}
                     >
-                      <Image
-                      src={u}
-                      alt={`thumb-${i}`}
-                      width={64}
-                      height={48}
-                      unoptimized
-                      draggable={false}
-                      className="h-12 w-16 object-cover"
-                    />
+                      <Image src={u} alt={`thumb-${i}`} width={64} height={48} unoptimized draggable={false} className="h-12 w-16 object-cover" />
                     </button>
                   ))}
                 </div>

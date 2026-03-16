@@ -1,3 +1,4 @@
+// src/app/api/notifications/unread/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";

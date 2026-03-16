@@ -1,3 +1,4 @@
+// src/app/api/me/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerAnon } from "@/lib/supabaseServerAnon";
@@ -5,7 +6,6 @@ import { supabaseServerAnon } from "@/lib/supabaseServerAnon";
 export async function GET() {
   const supabase = await supabaseServerAnon();
   const { data, error } = await supabase.auth.getUser();
-
   if (error || !data?.user?.email) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
@@ -14,7 +14,6 @@ export async function GET() {
     where: { email: data.user.email.toLowerCase() },
     select: { id: true },
   });
-
   if (!dbUser) {
     return NextResponse.json({ ok: false }, { status: 404 });
   }
