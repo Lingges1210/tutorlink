@@ -1,32 +1,14 @@
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import StudentSidebarNav, { SidebarItem } from "@/components/StudentSidebarNav";
 import RoleSwitcher from "@/components/RoleSwitcher";
+import { getSessionUser } from "@/lib/getSessionUser";
 
 export default async function StudentLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode; // ✅ fix the implicit any
 }) {
-  const supabase = await supabaseServerComponent();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user?.email) redirect("/auth/login");
-
-  const dbUser = await prisma.user.findUnique({
-    where: { email: user.email.toLowerCase() },
-    select: {
-      name: true,
-      email: true,
-      role: true,
-      verificationStatus: true,
-      isDeactivated: true,
-      isTutorApproved: true,
-      roleAssignments: { select: { role: true } },
-    },
-  });
-
+  const dbUser = await getSessionUser(); 
   if (!dbUser) redirect("/auth/login");
   if (dbUser.isDeactivated) redirect("/auth/deactivated");
 
