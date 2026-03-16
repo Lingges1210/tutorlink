@@ -484,6 +484,7 @@ export default function MessagingClient() {
 
   useEffect(() => {
   if (!activeId || !meId) return;
+
   const channelId = activeId;
   const supabase = supabaseBrowser;
 
@@ -506,58 +507,54 @@ export default function MessagingClient() {
         },
       })
       .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "ChatMessage",
-          filter: `channelId=eq.${channelId}`,
-        },
-        async (payload) => {
-          const row = payload.new as {
-            id: string;
-            channelId: string;
-            senderId: string;
-            text: string;
-            createdAt: string;
-            isDeleted?: boolean;
-            deletedAt?: string | null;
-          };
+  "postgres_changes",
+  {
+    event: "INSERT",
+    schema: "public",
+    table: "ChatMessage",
+    filter: `channelId=eq.${channelId}`,
+  },
+  async (payload) => {
+    const row = payload.new as {
+      id: string;
+      channelId: string;
+      senderId: string;
+      text: string;
+      createdAt: string;
+      isDeleted?: boolean;
+      deletedAt?: string | null;
+    };
 
-          if (row.channelId !== channelId) return;
+    console.log("MESSAGE INSERT PAYLOAD", row);
+    console.log("BEFORE MERGE", Date.now());
 
-          const incoming: Msg = {
-            id: row.id,
-            senderId: row.senderId,
-            text: row.text ?? "",
-            createdAt: row.createdAt,
-            isDeleted: row.isDeleted,
-            deletedAt: row.deletedAt ?? null,
-          };
+    if (row.channelId !== channelId) return;
 
-          mergeMessages([incoming]);
+    const incoming: Msg = {
+      id: row.id,
+      senderId: row.senderId,
+      text: row.text ?? "",
+      createdAt: row.createdAt,
+      isDeleted: row.isDeleted,
+      deletedAt: row.deletedAt ?? null,
+    };
 
-          setTimeout(() => {
-            bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-          }, 20);
+    mergeMessages([incoming]);
 
-          if (row.senderId !== meId) {
-          await markChatRead(channelId);
+    console.log("AFTER MERGE", Date.now());
 
-          void (async () => {
-            const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
-              cache: "no-store",
-            })
-              .then((r) => r.json())
-              .catch(() => null);
+    requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
 
-            applyMessagesResponse(j, channelId, null);
-          })();
-        }
+    if (row.senderId !== meId) {
+      void markChatRead(channelId);
+    }
 
-          refreshConversations(channelId);
-        }
-      )
+    refreshConversations(channelId);
+  }
+)
+      
       .on("broadcast", { event: "typing" }, ({ payload }) => {
         const data = payload as {
           channelId: string;
@@ -578,12 +575,13 @@ export default function MessagingClient() {
           setOtherTyping(false);
           if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
         }
-      })
-      .subscribe((status) => {
-        console.log("chat room status", channelId, status);
       });
 
     realtimeChannelRef.current = channel;
+
+    channel.subscribe((status) => {
+      console.log("chat room status", channelId, status);
+    });
   }
 
   void start();
@@ -593,7 +591,11 @@ export default function MessagingClient() {
     realtimeChannelRef.current = null;
     if (channel) supabase.removeChannel(channel);
   };
-}, [activeId, meId, mergeMessages, refreshConversations, applyMessagesResponse]);
+}, [activeId, meId, mergeMessages, refreshConversations]);
+
+useEffect(() => {
+  console.log("MESSAGES STATE UPDATED", messages);
+}, [messages]);
 
   useEffect(() => {
     if (!activeId) return;
