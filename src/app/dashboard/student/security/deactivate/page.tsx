@@ -195,10 +195,10 @@ export default function StudentDeactivatePage() {
             <IconInfo />
           </span>
           <p>
-            Your account will be{" "}
-            <strong style={{ color: "rgb(var(--fg))" }}>disabled</strong> and
-            you'll be logged out. Access is only restored by an admin.
-          </p>
+          Your account will be{" "}
+          <strong style={{ color: "rgb(var(--fg))" }}>disabled</strong> and
+          you&apos;ll be logged out. Access is only restored by an admin.
+        </p>
         </div>
 
         {/* Reason picker */}

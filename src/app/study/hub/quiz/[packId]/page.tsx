@@ -527,12 +527,18 @@ function FlashcardGrid({ flashcards }: { flashcards: { q: string; a: string }[] 
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
 
   function toggle(i: number) {
-    setRevealed((prev) => {
-      const next = new Set(prev);
-      next.has(i) ? next.delete(i) : next.add(i);
-      return next;
-    });
-  }
+  setRevealed((prev) => {
+    const next = new Set(prev);
+
+    if (next.has(i)) {
+      next.delete(i);
+    } else {
+      next.add(i);
+    }
+
+    return next;
+  });
+}
 
   const progress = flashcards.length > 0 ? Math.round((revealed.size / flashcards.length) * 100) : 0;
 

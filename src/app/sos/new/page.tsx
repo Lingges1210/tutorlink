@@ -170,7 +170,6 @@ export default function SOSNewPage() {
 
   // Show list only when user has typed something and no subject is locked in
   const showList = !subjectId && !loading && query.trim().length > 0 && subjects.length > 0;
-  const listH    = Math.min(filtered.length, VISIBLE) * ITEM_H;
 
   return (
     <>
@@ -383,7 +382,7 @@ export default function SOSNewPage() {
               {filtered.length === 0 ? (
                 <div className="flex items-center gap-2 px-4 py-3.5 text-sm text-[rgb(var(--muted))]">
                   <Search className="h-3.5 w-3.5 flex-shrink-0" />
-                  No subjects match "{query}"
+                  No subjects match &quot;{query}&quot;
                 </div>
               ) : (
                 <ul
@@ -547,7 +546,7 @@ export default function SOSNewPage() {
             </span>
           </div>
           <p className="mt-1.5 text-[11px] text-[rgb(var(--muted2))]">
-            Tip: mention the topic + what you've already tried for faster help.
+            Tip: mention the topic + what you&apos;ve already tried for faster help.
           </p>
         </div>
 

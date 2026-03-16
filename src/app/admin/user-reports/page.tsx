@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ReportRow = {
   id: string;
@@ -336,19 +336,25 @@ export default function AdminUserReportsPage() {
 
   const PAGE_SIZE = 8;
 
-  async function load() {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/admin/user-reports", { cache: "no-store" });
-      const data = await res.json();
-      const nextRows = data?.reports || [];
-      setRows(nextRows);
-      if (selectedReport) {
-        const fresh = nextRows.find((r: ReportRow) => r.id === selectedReport.id);
-        if (fresh) { setSelectedReport(fresh); setAdminNotes(fresh.adminNotes || ""); }
+  const load = useCallback(async () => {
+  setLoading(true);
+  try {
+    const res = await fetch("/api/admin/user-reports", { cache: "no-store" });
+    const data = await res.json();
+    const nextRows = data?.reports || [];
+    setRows(nextRows);
+
+    if (selectedReport) {
+      const fresh = nextRows.find((r: ReportRow) => r.id === selectedReport.id);
+      if (fresh) {
+        setSelectedReport(fresh);
+        setAdminNotes(fresh.adminNotes || "");
       }
-    } finally { setLoading(false); }
+    }
+  } finally {
+    setLoading(false);
   }
+}, [selectedReport]);
 
   async function openEvidence(reportId: string) {
     try {
@@ -410,7 +416,9 @@ export default function AdminUserReportsPage() {
     finally { setActionLoading(false); }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+  load();
+}, [load]);
   useEffect(() => { setCurrentPage(1); }, [q, viewMode]);
   useEffect(() => {
     if (!notice) return;
@@ -888,9 +896,9 @@ export default function AdminUserReportsPage() {
                     )}
                   </div>
                   <div className="mt-4 flex items-start gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.5)] px-4 py-3 text-[0.71rem] text-[rgb(var(--muted))]">
-                    <IconWarning className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-                    Actions here affect the selected report and, if applicable, the reported user's account.
-                  </div>
+                  <IconWarning className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                  Actions here affect the selected report and, if applicable, the reported user&apos;s account.
+                </div>
                 </div>
               </div>
             </div>

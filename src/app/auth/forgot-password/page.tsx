@@ -175,7 +175,7 @@ export default function ForgotPasswordPage() {
               </h1>
             </div>
             <p className="mt-1.5 text-sm leading-relaxed" style={{ color: "rgb(var(--muted))" }}>
-              Enter your registered USM email. We'll send you a password reset link.
+              Enter your registered USM email. We&apos;ll send you a password reset link.
             </p>
           </div>
 

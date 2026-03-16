@@ -1,7 +1,7 @@
 // src/app/sos/[id]/page.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -170,57 +170,96 @@ export default function SOSDetailPage() {
     }
   }
 
-  async function load(opts?: { silent?: boolean }) {
-    const silent = !!opts?.silent;
-    if (!id) return;
-    if (!silent) { setError(null); setLoading(true); }
-    try {
-      const res = await fetch(`/api/sos/${encodeURIComponent(id)}`, { cache: "no-store" });
-      const json = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(json?.error || "Not found");
-      setSOS(json.sos || null);
-      setSessionId(json.sessionId ?? null);
-      setChannelId(json.channelId ?? null);
-    } catch (e: any) {
-      if (!silent) setError(e?.message || "Failed to load");
-    } finally {
-      if (!silent) setLoading(false);
-    }
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+  const silent = !!opts?.silent;
+  if (!id) return;
+
+  if (!silent) {
+    setError(null);
+    setLoading(true);
   }
 
-  useEffect(() => { if (id) load(); }, [id]);
+  try {
+    const res = await fetch(`/api/sos/${encodeURIComponent(id)}`, {
+      cache: "no-store",
+    });
+    const json = await res.json().catch(() => null);
+
+    if (!res.ok) throw new Error(json?.error || "Not found");
+
+    setSOS(json.sos || null);
+    setSessionId(json.sessionId ?? null);
+    setChannelId(json.channelId ?? null);
+  } catch (e: any) {
+    if (!silent) setError(e?.message || "Failed to load");
+  } finally {
+    if (!silent) setLoading(false);
+  }
+}, [id]);
 
   useEffect(() => {
-    if (!id) return;
-    const supabase = supabaseBrowser;
-    const channel = supabase
-      .channel(`sos-detail-${id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "SOSRequest", filter: `id=eq.${id}` },
-        () => void load({ silent: true }))
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, [id]);
+  if (id) load();
+}, [id, load]);
 
   useEffect(() => {
-    if (!sos) return;
-    if (sos.status === "ACCEPTED" && channelId) {
-      stopPolling();
-      router.push(`/messaging?channelId=${encodeURIComponent(channelId)}`);
+  if (!id) return;
+
+  const supabase = supabaseBrowser;
+  const channel = supabase
+    .channel(`sos-detail-${id}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "SOSRequest",
+        filter: `id=eq.${id}`,
+      },
+      () => void load({ silent: true })
+    )
+    .subscribe();
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}, [id, load]);
+
+  useEffect(() => {
+  if (!sos) return;
+
+  if (sos.status === "ACCEPTED" && channelId) {
+    stopPolling();
+    router.push(`/messaging?channelId=${encodeURIComponent(channelId)}`);
+  }
+}, [sos, channelId, router]);
+
+  useEffect(() => {
+  if (!id) return;
+
+  const shouldPoll =
+    sos?.status === "SEARCHING" ||
+    (sos?.status === "ACCEPTED" && !channelId);
+
+  if (!shouldPoll) {
+    stopPolling();
+    return;
+  }
+
+  if (pollRef.current) return;
+
+  pollRef.current = setInterval(async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+
+    try {
+      await load({ silent: true });
+    } finally {
+      inFlightRef.current = false;
     }
-  }, [sos, channelId]);
+  }, 2000);
 
-  useEffect(() => {
-    if (!id) return;
-    const shouldPoll = sos?.status === "SEARCHING" || (sos?.status === "ACCEPTED" && !channelId);
-    if (!shouldPoll) { stopPolling(); return; }
-    if (pollRef.current) return;
-    pollRef.current = setInterval(async () => {
-      if (inFlightRef.current) return;
-      inFlightRef.current = true;
-      try { await load({ silent: true }); } finally { inFlightRef.current = false; }
-    }, 2000);
-    return () => stopPolling();
-  }, [id, sos?.status, channelId]);
+  return () => stopPolling();
+}, [id, sos?.status, channelId, load]);
 
   const canCancel = useMemo(() => sos?.status === "SEARCHING" || sos?.status === "ACCEPTED", [sos]);
 
@@ -364,7 +403,7 @@ export default function SOSDetailPage() {
                       Looking for an available tutor…
                     </p>
                     <p className="text-xs text-amber-600/70 dark:text-amber-500/70 mt-0.5">
-                      Hang tight — we'll notify you the moment one accepts.
+                      Hang tight — we&apos;ll notify you the moment one accepts.
                     </p>
                   </div>
                 )}

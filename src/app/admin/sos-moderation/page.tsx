@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, RefreshCw, Search, ShieldAlert, ShieldCheck, ShieldX, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type SosRow = {
   id: string;
@@ -159,25 +159,32 @@ export default function AdminSosModerationPage() {
   const [moderationReason, setModerationReason] = useState("");
   const [adminNotes, setAdminNotes] = useState("");
 
-  async function load() {
-    setLoading(true);
-    setErr(null);
-    try {
-      const params = new URLSearchParams();
-      params.set("view", viewMode);
-      if (search.trim()) params.set("q", search.trim());
-      const res = await fetch(`/api/admin/sos?${params.toString()}`, { cache: "no-store" });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || "Failed to load SOS moderation list");
-      setRows(Array.isArray(data?.requests) ? data.requests : []);
-    } catch (e: any) {
-      setErr(e?.message || "Failed to load SOS moderation list");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const load = useCallback(async () => {
+  setLoading(true);
+  setErr(null);
+  try {
+    const params = new URLSearchParams();
+    params.set("view", viewMode);
+    if (search.trim()) params.set("q", search.trim());
 
-  useEffect(() => { load(); }, [viewMode]);
+    const res = await fetch(`/api/admin/sos?${params.toString()}`, {
+      cache: "no-store",
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || "Failed to load SOS moderation list");
+
+    setRows(Array.isArray(data?.requests) ? data.requests : []);
+  } catch (e: any) {
+    setErr(e?.message || "Failed to load SOS moderation list");
+  } finally {
+    setLoading(false);
+  }
+}, [viewMode, search]);
+
+  useEffect(() => {
+  load();
+}, [load]);
 
   const counts = useMemo(() => {
     const active  = rows.filter((r) => r.moderationStatus !== "REMOVED_BY_ADMIN").length;

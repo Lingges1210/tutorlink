@@ -83,9 +83,7 @@ const badgeDefs: BadgeDef[] = [
    ======================================================= */
 
 declare global {
-  // eslint-disable-next-line no-var
   var __badgesSeeded: boolean | undefined;
-  // eslint-disable-next-line no-var
   var __badgesSeedingPromise: Promise<void> | undefined;
 }
 

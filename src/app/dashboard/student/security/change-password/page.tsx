@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState, useEffect } from "react";
+import { FormEvent, useMemo, useState } from "react";
 
 function getPasswordStrength(password: string) {
   let score = 0;
@@ -117,9 +117,7 @@ export default function ChangePasswordPage() {
   const [capsLockOn, setCapsLockOn] = useState(false);
   const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => { setMounted(true); }, []);
 
   const strength = useMemo(() => getPasswordStrength(newPassword), [newPassword]);
   const match = confirm.length > 0 && newPassword === confirm;

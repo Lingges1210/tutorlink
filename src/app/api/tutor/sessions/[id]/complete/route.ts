@@ -2,8 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
-import { notify } from "@/lib/notify";
-import { seedBadgesOnce, checkAndAwardBadges } from "@/lib/gamification/badges";
+import { seedBadgesOnce } from "@/lib/gamification/badges";
 import { GAMIFICATION_RULES } from "@/lib/gamification/rules";
 
 async function triggerAllocator() {
@@ -27,11 +26,6 @@ function normalizeTopicLabel(s: string) {
     .trim()
     .replace(/\s+/g, " ")
     .replace(/[^\p{L}\p{N}\s\-+.#/()]/gu, "");
-}
-
-function clampInt(n: number, min: number, max: number) {
-  if (Number.isNaN(n)) return min;
-  return Math.max(min, Math.min(max, n));
 }
 
 /* =====================================================
@@ -116,10 +110,6 @@ async function awardPointsInTx(
   return { ok: true, skipped: false, multiplier, finalAmount };
 }
 
-/* =====================================================
-   REST OF FILE UNCHANGED
-===================================================== */
-
 export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> }
@@ -128,14 +118,6 @@ export async function POST(
 
   const body = await req.json().catch(() => null);
   const summary = String(body?.summary ?? "").trim();
-  const nextSteps =
-    typeof body?.nextSteps === "string" && body.nextSteps.trim()
-      ? body.nextSteps.trim()
-      : null;
-
-  const confidenceBefore = clampInt(Number(body?.confidenceBefore), 1, 5);
-  const confidenceAfter = clampInt(Number(body?.confidenceAfter), 1, 5);
-
   const rawTopics: string[] = Array.isArray(body?.topics) ? body.topics : [];
   const topics = rawTopics
     .map((t) => normalizeTopicLabel(String(t ?? "")))
@@ -231,48 +213,43 @@ export async function POST(
     await seedBadgesOnce();
   } catch {}
 
-  let updatedSession: { id: string; studentId: string | null } | null = null;
-
   try {
-    updatedSession = await prisma.$transaction(async (tx) => {
-      const updated = await tx.session.update({
-        where: { id: session.id },
-        data: { status: "COMPLETED", completedAt: new Date() },
-        select: { id: true, studentId: true },
-      });
+  await prisma.$transaction(async (tx) => {
+    await tx.session.update({
+      where: { id: session.id },
+      data: { status: "COMPLETED", completedAt: new Date() },
+    });
 
-      const studentId = session.studentId ?? null;
+    const studentId = session.studentId ?? null;
 
-      if (studentId) {
-        await awardPointsInTx(tx, {
-          userId: studentId,
-          amount: GAMIFICATION_RULES.student.sessionCompleted,
-          description: "Session completed",
-          sessionId: session.id,
-          type: "EARN",
-        });
-      }
-
-      const tutorId = session.tutorId ?? null;
-
-      if (!tutorId) throw new Error("Missing tutorId");
-
+    if (studentId) {
       await awardPointsInTx(tx, {
-        userId: tutorId,
-        amount: GAMIFICATION_RULES.tutor.sessionCompleted,
-        description: "Tutored a session",
+        userId: studentId,
+        amount: GAMIFICATION_RULES.student.sessionCompleted,
+        description: "Session completed",
         sessionId: session.id,
         type: "EARN",
       });
+    }
 
-      return updated;
+    const tutorId = session.tutorId ?? null;
+
+    if (!tutorId) throw new Error("Missing tutorId");
+
+    await awardPointsInTx(tx, {
+      userId: tutorId,
+      amount: GAMIFICATION_RULES.tutor.sessionCompleted,
+      description: "Tutored a session",
+      sessionId: session.id,
+      type: "EARN",
     });
-  } catch {
-    return NextResponse.json(
-      { message: "Unable to save completion details." },
-      { status: 500 }
-    );
-  }
+  });
+} catch {
+  return NextResponse.json(
+    { message: "Unable to save completion details." },
+    { status: 500 }
+  );
+}
 
   await triggerAllocator();
 

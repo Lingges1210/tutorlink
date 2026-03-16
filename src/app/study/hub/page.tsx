@@ -1,8 +1,8 @@
-// src/app/study/page.tsx
+// src/app/study/hub/page.tsx
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, RefreshCcw, BookOpen, MoreVertical,
   Pencil, Trash2, X, AlertTriangle, Clock,
@@ -58,32 +58,42 @@ export default function StudyHub() {
     toastTimer.current = setTimeout(() => setToast(null), 2400);
   }
 
-  async function loadSubjects() {
-    const r = await fetch("/api/study/study-subjects", { cache: "no-store" });
-    const d = await r.json().catch(() => null);
-    if (r.ok && d?.ok) setSubjects(d.subjects ?? []);
-  }
+ const loadSubjects = useCallback(async () => {
+  const r = await fetch("/api/study/study-subjects", { cache: "no-store" });
+  const d = await r.json().catch(() => null);
+  if (r.ok && d?.ok) setSubjects(d.subjects ?? []);
+}, []);
 
-  async function loadMaterials(subjectId?: string) {
-    const qs = subjectId ? `?studySubjectId=${encodeURIComponent(subjectId)}` : "";
-    const r = await fetch(`/api/study/materials${qs}`, { cache: "no-store" });
-    const d = await r.json().catch(() => null);
-    if (!r.ok) throw new Error(d?.error || "Failed to load materials");
-    setItems(d?.materials ?? []);
-  }
+const loadMaterials = useCallback(async (subjectId?: string) => {
+  const qs = subjectId ? `?studySubjectId=${encodeURIComponent(subjectId)}` : "";
+  const r = await fetch(`/api/study/materials${qs}`, { cache: "no-store" });
+  const d = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(d?.error || "Failed to load materials");
+  setItems(d?.materials ?? []);
+}, []);
 
-  async function loadAll() {
-    setErr(null); setLoading(true);
-    try { await loadSubjects(); await loadMaterials(activeSubjectId); }
-    catch (e: any) { setErr(e?.message || "Failed to load"); }
-    finally { setLoading(false); }
+const loadAll = useCallback(async () => {
+  setErr(null);
+  setLoading(true);
+  try {
+    await loadSubjects();
+    await loadMaterials(activeSubjectId);
+  } catch (e: any) {
+    setErr(e?.message || "Failed to load");
+  } finally {
+    setLoading(false);
   }
+}, [loadSubjects, loadMaterials, activeSubjectId]);
 
-  useEffect(() => { loadAll(); }, []); // eslint-disable-line
   useEffect(() => {
-    setErr(null);
-    loadMaterials(activeSubjectId).catch((e: any) => setErr(e?.message || "Failed to load"));
-  }, [activeSubjectId]); // eslint-disable-line
+  loadAll();
+}, [loadAll]);
+
+
+  useEffect(() => {
+  setErr(null);
+  loadMaterials(activeSubjectId).catch((e: any) => setErr(e?.message || "Failed to load"));
+}, [activeSubjectId, loadMaterials]);
 
   useEffect(() => {
     function onPointerDown(e: PointerEvent) {
@@ -412,7 +422,7 @@ export default function StudyHub() {
             </div>
             <div className="p-5 space-y-3">
               <p className="text-sm text-[rgb(var(--muted))]">
-                Delete <span className="font-semibold text-[rgb(var(--fg))]">"{deleteTitle}"</span>? This cannot be undone.
+                Delete <span className="font-semibold text-[rgb(var(--fg))]">&quot;{deleteTitle}&quot;</span>? This cannot be undone.
               </p>
               <div className="rounded-xl border border-amber-400/20 bg-amber-50 dark:bg-amber-500/8 px-3 py-2.5 text-xs text-amber-600 dark:text-amber-400">
                 If this came from a PDF, the stored file will also be removed.

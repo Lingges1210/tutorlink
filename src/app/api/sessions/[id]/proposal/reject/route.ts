@@ -5,9 +5,11 @@ import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { notify } from "@/lib/notify";
 
 export async function POST(
-  _req: Request,
+  request: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
+  void request;
+
   const { id } = await ctx.params;
 
   const supabase = await supabaseServerComponent();
@@ -37,11 +39,10 @@ export async function POST(
     select: {
       id: true,
       studentId: true,
-      tutorId: true, //  ADD
+      tutorId: true,
       status: true,
-      // @ts-ignore
       proposalStatus: true,
-    } as any,
+    },
   });
 
   if (!session || session.studentId !== dbUser.id) {
@@ -55,7 +56,7 @@ export async function POST(
     );
   }
 
-  const proposalStatus = (session as any).proposalStatus as string | null;
+  const proposalStatus = session.proposalStatus;
 
   if (proposalStatus !== "PENDING") {
     return NextResponse.json(
@@ -67,13 +68,15 @@ export async function POST(
   const updated = await prisma.session.update({
     where: { id: session.id },
     data: {
-      // @ts-ignore
       proposalStatus: "REJECTED",
-    } as any,
-    select: { id: true, tutorId: true, studentId: true },
+    },
+    select: {
+      id: true,
+      tutorId: true,
+      studentId: true,
+    },
   });
 
-  //  Notify tutor: proposal rejected
   try {
     if (updated.tutorId) {
       await notify.proposalRejectedToTutor(
@@ -83,7 +86,7 @@ export async function POST(
       );
     }
   } catch {
-    // ignore
+    // ignore notification failure
   }
 
   return NextResponse.json({ success: true });

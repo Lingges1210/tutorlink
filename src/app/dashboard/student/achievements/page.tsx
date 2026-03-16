@@ -13,7 +13,6 @@ import {
   Medal,
   Users,
   ChevronDown,
-  ChevronUp,
   Info,
   Star,
   Zap,
@@ -405,7 +404,9 @@ function RulesCard({
                       <div className="rounded-lg bg-[rgb(var(--card)/0.6)] px-3 py-2 border border-[rgb(var(--border))]">
                         <p className="text-xs text-[rgb(var(--fg))]">Badges unlock automatically when you hit milestones — sessions completed, total points, streaks.</p>
                       </div>
-                      <p className="text-[11px] text-[rgb(var(--muted2))]">Your latest earned badges appear in "My Badges" below.</p>
+                      <p className="text-[11px] text-[rgb(var(--muted2))]">
+                      Your latest earned badges appear in &quot;My Badges&quot; below.
+                    </p>
                     </div>
                   ),
                 },

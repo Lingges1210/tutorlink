@@ -13,7 +13,6 @@ export function FloatingParticles() {
     if (!ctx) return;
 
     let animId: number;
-    let t = 0;
 
     const particles: {
       x: number; y: number; vx: number; vy: number;
@@ -244,7 +243,6 @@ export function FloatingParticles() {
     function draw() {
       if (!ctx || !canvas) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      t++;
 
       const dark = isDark();
       const baseColor = dark ? "200,210,255" : "99,102,241";

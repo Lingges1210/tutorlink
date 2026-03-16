@@ -18,7 +18,6 @@ export default function EditStudentProfilePage() {
   const [loading, setLoading] = useState(false);
   const [prefillLoading, setPrefillLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
 
   // avatar
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -83,7 +82,6 @@ export default function EditStudentProfilePage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setSaved(false);
     if (nameTooShort) { setError("Name must be at least 2 characters."); return; }
     setLoading(true);
     try {

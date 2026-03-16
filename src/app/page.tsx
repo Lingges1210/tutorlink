@@ -1004,10 +1004,6 @@ export default function HomePage() {
             onTouchEnd={()=>setTimeout(()=>setIsPaused(false),2000)}
           >
             {clonedReviews.map((r, ci) => {
-              const posReal = ci === 0 ? reviews.length - 1 : ci === clonedReviews.length - 1 ? 0 : ci - 1;
-              const isActive = posReal === realIdx && (ci !== 0 && ci !== clonedReviews.length - 1
-                || (ci === 0 && realIdx === reviews.length - 1)
-                || (ci === clonedReviews.length - 1 && realIdx === 0));
               const el = trackRef.current;
               const scrollPos = el ? Math.round(el.scrollLeft / STEP) : 1;
               const dist = Math.abs(ci - scrollPos);
@@ -1025,7 +1021,9 @@ export default function HomePage() {
                       }}>★</span>
                     ))}
                   </div>
-                  <p className="text-sm leading-[1.7] mb-5" style={{ color:"rgb(var(--fg))" }}>"{r.quote}"</p>
+                  <p className="text-sm leading-[1.7] mb-5" style={{ color:"rgb(var(--fg))" }}>
+                    &quot;{r.quote}&quot;
+                  </p>
                   <div className="flex items-center gap-2.5 pt-4" style={{ borderTop:"1px solid rgb(var(--border))" }}>
                     <div className="av text-xs">{r.initials}</div>
                     <div>

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import Image from "next/image";
 
 type Conv = {
   id: string;
@@ -130,7 +131,6 @@ export default function MessagingClient() {
     idx: number;
   }>({ open: false, urls: [], idx: 0 });
 
-  const [imgViewerMounted, setImgViewerMounted] = useState(false);
 
   const allImageUrls = useMemo(() => {
     const urls: string[] = [];
@@ -160,7 +160,6 @@ export default function MessagingClient() {
 
   function closeImageViewer() {
     setImgViewer((p) => ({ ...p, open: false }));
-    setImgViewerMounted(false);
   }
 
   function formatLastSeen(iso: string | null) {
@@ -190,22 +189,21 @@ export default function MessagingClient() {
   }
 
   useEffect(() => {
-    if (!imgViewer.open) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeImageViewer();
-      if (e.key === "ArrowRight") nextImage();
-      if (e.key === "ArrowLeft") prevImage();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const t = window.setTimeout(() => setImgViewerMounted(true), 10);
-    return () => {
-      window.clearTimeout(t);
-      window.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [imgViewer.open]);
+  if (!imgViewer.open) return;
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Escape") closeImageViewer();
+    if (e.key === "ArrowRight") nextImage();
+    if (e.key === "ArrowLeft") prevImage();
+  };
+  window.addEventListener("keydown", onKeyDown);
+  const prevOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+
+  return () => {
+    window.removeEventListener("keydown", onKeyDown);
+    document.body.style.overflow = prevOverflow;
+  };
+}, [imgViewer.open]);
 
   useEffect(() => {
     if (!active?.otherUserId) { setUserPresence(null); return; }
@@ -879,7 +877,14 @@ export default function MessagingClient() {
                                     return (
                                       <div key={a.id} className="mt-2 overflow-hidden rounded-xl border border-white/10 shadow-lg">
                                         <button type="button" onClick={() => openImageInChat(a.url!)} className="block w-full">
-                                          <img src={a.url} alt={a.fileName} className="block h-auto w-full max-w-[300px] hover:opacity-95 transition" />
+                                          <Image
+                                          src={a.url}
+                                          alt={a.fileName}
+                                          width={300}
+                                          height={220}
+                                          unoptimized
+                                          className="block h-auto w-full max-w-[300px] hover:opacity-95 transition"
+                                        />
                                         </button>
                                         <div className={`flex items-center justify-between gap-2 border-t px-2.5 py-1.5 ${isMe ? "border-white/10" : "border-[rgb(var(--border))]"}`}>
                                           <span className={`truncate text-[0.62rem] ${isMe ? "text-white/60" : "text-[rgb(var(--muted2))]"}`}>{a.fileName}</span>
@@ -1084,19 +1089,46 @@ export default function MessagingClient() {
 
           {/* Main image */}
           <div className="absolute inset-0 z-10 flex items-center justify-center p-8 pb-28">
-            <img
+            <Image
               src={imgViewer.urls[imgViewer.idx] ?? ""}
               alt="Preview"
+              width={1600}
+              height={1200}
+              unoptimized
               draggable={false}
               onClick={(e) => e.stopPropagation()}
-              onDoubleClick={(e) => { e.stopPropagation(); if (zoom > 1) { setZoom(1); setOffset({ x: 0, y: 0 }); } else setZoom(2); }}
-              onWheel={(e) => { e.preventDefault(); setZoom((z) => Math.min(Math.max(1, z + (e.deltaY > 0 ? -0.2 : 0.2)), 4)); }}
-              onMouseDown={(e) => { if (zoom <= 1) return; setDragging(true); dragStart.current = { x: e.clientX - offset.x, y: e.clientY - offset.y }; }}
-              onMouseMove={(e) => { if (!dragging) return; setOffset({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y }); }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                if (zoom > 1) {
+                  setZoom(1);
+                  setOffset({ x: 0, y: 0 });
+                } else {
+                  setZoom(2);
+                }
+              }}
+              onWheel={(e) => {
+                e.preventDefault();
+                setZoom((z) => Math.min(Math.max(1, z + (e.deltaY > 0 ? -0.2 : 0.2)), 4));
+              }}
+              onMouseDown={(e) => {
+                if (zoom <= 1) return;
+                setDragging(true);
+                dragStart.current = { x: e.clientX - offset.x, y: e.clientY - offset.y };
+              }}
+              onMouseMove={(e) => {
+                if (!dragging) return;
+                setOffset({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y });
+              }}
               onMouseUp={() => setDragging(false)}
               onMouseLeave={() => setDragging(false)}
               className="viewer-img max-h-[80vh] max-w-[90vw] select-none rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
-              style={{ transform: `scale(${zoom}) translate(${offset.x / zoom}px, ${offset.y / zoom}px)`, cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "zoom-in", transition: dragging ? "none" : "transform 0.1s ease" }}
+              style={{
+                transform: `scale(${zoom}) translate(${offset.x / zoom}px, ${offset.y / zoom}px)`,
+                cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "zoom-in",
+                transition: dragging ? "none" : "transform 0.1s ease",
+                width: "auto",
+                height: "auto",
+              }}
             />
           </div>
 
@@ -1112,7 +1144,15 @@ export default function MessagingClient() {
                       onClick={() => setImgViewer((p) => ({ ...p, idx: i }))}
                       className={`img-thumb relative shrink-0 overflow-hidden rounded-lg border ${i === imgViewer.idx ? "border-white ring-2 ring-white/40" : "border-white/20 opacity-60 hover:opacity-90"}`}
                     >
-                      <img src={u} alt={`thumb-${i}`} className="h-12 w-16 object-cover" draggable={false} />
+                      <Image
+                      src={u}
+                      alt={`thumb-${i}`}
+                      width={64}
+                      height={48}
+                      unoptimized
+                      draggable={false}
+                      className="h-12 w-16 object-cover"
+                    />
                     </button>
                   ))}
                 </div>

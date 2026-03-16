@@ -111,11 +111,14 @@ export default function TutorProfilePage() {
 
   useEffect(() => { loadAll(); }, []);
 
-  const mySubjects   = profile?.tutor?.subjects ?? [];
-  const availableAdd = useMemo(() => {
-    const set = new Set(mySubjects.map((x) => x.id));
-    return allSubjects.filter((x) => !set.has(x.id));
-  }, [allSubjects, mySubjects]);
+const mySubjects = useMemo(() => {
+  return profile?.tutor?.subjects ?? [];
+}, [profile?.tutor?.subjects]);
+
+const availableAdd = useMemo(() => {
+  const set = new Set(mySubjects.map((x) => x.id));
+  return allSubjects.filter((x) => !set.has(x.id));
+}, [allSubjects, mySubjects]);
 
   async function addSubject() {
     if (!selId) return;
@@ -300,7 +303,7 @@ export default function TutorProfilePage() {
               </div>
               <span className="text-[0.65rem] text-[rgb(var(--muted2))]">Code auto-standardized</span>
             </div>
-            <p className="mb-4 text-[0.72rem] text-[rgb(var(--muted2))]">Can't find yours? Add a custom one.</p>
+            <p className="mb-4 text-[0.72rem] text-[rgb(var(--muted2))]">Can&apos;t find yours? Add a custom one.</p>
             <div className="space-y-2">
               <input value={customCode} onChange={(e) => setCode(e.target.value)}
                 placeholder="Subject code (e.g. CPT112)" disabled={saving}
@@ -361,10 +364,18 @@ export default function TutorProfilePage() {
                 </div>
                 <div className="mt-3 border-t border-[rgb(var(--border))] pt-3">
                   {r.comment?.trim()
-                    ? <p className="text-xs leading-relaxed text-[rgb(var(--muted))]">"{r.comment}"</p>
-                    : <p className="text-xs italic text-[rgb(var(--muted2))] opacity-50">No comment provided.</p>}
+                    ? (
+                      <p className="text-xs leading-relaxed text-[rgb(var(--muted))]">
+                        &quot;{r.comment}&quot;
+                      </p>
+                    )
+                    : (
+                      <p className="text-xs italic text-[rgb(var(--muted2))] opacity-50">
+                        No comment provided.
+                      </p>
+                    )}
                 </div>
-              </div>
+            </div>
             ))
           )}
         </div>

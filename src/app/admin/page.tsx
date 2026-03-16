@@ -326,38 +326,6 @@ function ActionCard({
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
-/*  Health metric tile                                                         */
-/* ─────────────────────────────────────────────────────────────────────────── */
-function HealthTile({
-  label,
-  value,
-  pct,
-  color,
-  trackColor,
-}: {
-  label: string;
-  value: string;
-  pct: number;
-  color: string;
-  trackColor: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3.5">
-      <div className="flex items-start justify-between gap-3 mb-2.5">
-        <span className="text-[0.72rem] font-semibold text-[rgb(var(--muted))] leading-4">{label}</span>
-        <span className={`text-sm font-black ${color} shrink-0`}>{value}</span>
-      </div>
-      <div className={`h-1.5 overflow-hidden rounded-full ${trackColor}`}>
-        <div
-          className={`h-full rounded-full ${color.replace("text-", "bg-").replace(" dark:text-emerald-300", "").replace(" dark:text-sky-300", "")} opacity-70 transition-all duration-700`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────────────────── */
 /*  Main page                                                                  */
 /* ─────────────────────────────────────────────────────────────────────────── */
 export default function AdminPage() {

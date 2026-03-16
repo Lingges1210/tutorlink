@@ -9,7 +9,6 @@ import {
   CalendarDays,
   ExternalLink,
   FileText,
-  FileWarning,
   Loader2,
   MessageSquareText,
   Paperclip,
@@ -613,7 +612,7 @@ export default function ReportsPage() {
                     <ShieldAlert className="h-6 w-6 text-[rgb(var(--muted2))]" />
                   </div>
                   <p className="font-medium text-sm text-[rgb(var(--fg))]">No reports yet</p>
-                  <p className="mt-1 text-xs text-[rgb(var(--muted2))]">You haven't submitted any reports.</p>
+                  <p className="mt-1 text-xs text-[rgb(var(--muted2))]">You haven&apos;t submitted any reports.</p>
                   <button
                     type="button"
                     onClick={() => setTab("submit")}

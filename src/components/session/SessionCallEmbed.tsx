@@ -100,12 +100,6 @@ const gradientBorder: React.CSSProperties = {
   animation: "sc-fadein .35s ease both",
 };
 
-const innerCard: React.CSSProperties = {
-  borderRadius: 0,
-  background: "transparent",
-  overflow: "hidden",
-};
-
 function useDarkMode() {
   const [isDark, setIsDark] = useState(false);
   useEffect(() => {

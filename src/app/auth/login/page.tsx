@@ -1,13 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import AuthSplitLayout from "@/components/AuthSplitLayout";
 import { LoginAnimationHandle } from "@/components/LoginAnimation";
 
 export default function LoginPage() {
-  const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

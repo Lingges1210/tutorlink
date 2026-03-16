@@ -22,10 +22,6 @@ function dayKeyFromDate(d: Date): DayKey {
   return DAY_KEYS[d.getDay()];
 }
 
-function overlaps(aStart: number, aEnd: number, bStart: number, bEnd: number) {
-  return aStart < bEnd && aEnd > bStart;
-}
-
 function parseAvailability(raw: unknown): DayAvailability[] | null {
   if (typeof raw !== "string" || !raw.trim()) return null;
   try {

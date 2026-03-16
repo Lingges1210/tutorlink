@@ -5,8 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft, CalendarClock, Sparkles, CheckCircle2, Flame,
   Wand2, RefreshCcw, BookOpenCheck, Timer, GraduationCap, AlertCircle,
-  HelpCircle, Moon, Sun, Sunset, Trophy, Target, Zap, BookOpen, X, Star,
-  ChevronRight, Clock, BarChart2, Layers,
+  HelpCircle, Moon, Sun, Sunset, Trophy, Target, BookOpen, X,
+  ChevronRight, Clock, BarChart2, 
 } from "lucide-react";
 import { StudyBackground } from "@/components/FloatingParticles";
 
@@ -653,7 +653,7 @@ export default function StudyPlanPage() {
 
               {/* today tasks */}
               <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold spg-fg">Today's Tasks</p>
+                <p className="text-sm font-semibold spg-fg">Today&apos;s Tasks</p>
                 {todayPack.todays.length>0 && (
                   <span className="text-xs spg-muted">
                     {todayPack.pending.length===0 ? "All done 🎉" : `${todayPack.pending.length} remaining`}
@@ -1020,7 +1020,7 @@ export default function StudyPlanPage() {
               <aside className="space-y-4 spg-up d2">
 
                 <div className="spg-card rounded-2xl p-5 shadow-sm">
-                  <p className="text-xs font-bold spg-fg mb-4">What you'll get</p>
+                  <p className="text-xs font-bold spg-fg mb-4">What you&apos;ll get</p>
                   <div className="space-y-3">
                     {[
                       { Icon:CalendarClock, text:"Daily study blocks, Mon–Sun"          },
@@ -1060,7 +1060,7 @@ export default function StudyPlanPage() {
                 <div className="spg-tip p-4">
                   <p className="text-xs font-bold spg-acc-text mb-1.5">💡 Pro tip</p>
                   <p className="text-xs spg-muted leading-relaxed">
-                    Be specific with weak topics — <em>"2NF/3NF normalization"</em>, <em>"SQL GROUP BY"</em>, <em>"JWT auth flow"</em>.
+                    Be specific with weak topics — <em>&quot;2NF/3NF normalization&quot;</em>, <em>&quot;SQL GROUP BY&quot;</em>, <em>&quot;JWT auth flow&quot;</em>.
                   </p>
                 </div>
 
@@ -1159,7 +1159,6 @@ export default function StudyPlanPage() {
                           <div className="flex-1 flex flex-wrap gap-2 min-w-0">
                             {day.items.map(it=>{
                               const done=it.status==="DONE";
-                              const {Icon}=badgeForType(it.type);
                               return (
                                 <div key={it.id} className="flex flex-col gap-1 min-w-0">
                                   <button type="button" onClick={()=>toggleItem(it)}

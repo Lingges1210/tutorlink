@@ -19,13 +19,7 @@ function clampText(s: string, max = 280) {
   return t.length > max ? t.slice(0, max - 1) + "…" : t;
 }
 
-function asciiSafe(s: string) {
-  return (s ?? "")
-    .replace(/→/g, "->")
-    .replace(/—/g, "-")
-    .replace(/…/g, "...")
-    .replace(/[^\x00-\x7F]/g, ""); // strip any other unicode
-}
+
 
 // ---------- text wrapping (pdf-lib has no auto wrap helper) ----------
 function wrapText(
@@ -102,7 +96,6 @@ function drawTrendChart(opts: {
   const padB = 22;
 
   const cx = x + padL;
-  const cyTop = y - padT;
   const cw = w - padL - padR;
   const ch = h - padT - padB;
 

@@ -182,7 +182,6 @@ export async function POST(
   const studentEmail = dbUser.email;
   const studentName = dbUser.name;
 
-  const sessionId = session.id;
 
   if (session.status === "CANCELLED" || session.status === "COMPLETED") {
     return NextResponse.json(

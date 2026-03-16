@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
-export async function POST(_req: Request) {
+export async function POST() {
   const supabase = await supabaseServerComponent();
   const {
     data: { user },

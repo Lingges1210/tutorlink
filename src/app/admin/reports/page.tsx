@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 type ReportSummary = {
@@ -172,23 +172,29 @@ export default function AdminReportsPage() {
   const [err, setErr] = useState<string | null>(null);
   const [report, setReport] = useState<ReportRes | null>(null);
 
-  async function load() {
-    setLoading(true);
-    setErr(null);
-    try {
-      const qs = new URLSearchParams({ from, to });
-      const res = await fetch(`/api/admin/reports/activity-summary?${qs}`, { cache: "no-store" });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to load report");
-      setReport(data.report ?? null);
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to load report");
-    } finally {
-      setLoading(false);
+const load = useCallback(async () => {
+  setLoading(true);
+  setErr(null);
+  try {
+    const qs = new URLSearchParams({ from, to });
+    const res = await fetch(`/api/admin/reports/activity-summary?${qs}`, {
+      cache: "no-store",
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.success) {
+      throw new Error(data?.message || "Failed to load report");
     }
+    setReport(data.report ?? null);
+  } catch (e: any) {
+    setErr(e?.message ?? "Failed to load report");
+  } finally {
+    setLoading(false);
   }
+}, [from, to]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+  load();
+}, [load]);
 
   const csvHref = useMemo(() => {
     const qs = new URLSearchParams({ from, to, format: "csv" });

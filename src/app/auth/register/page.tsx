@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState, useRef, useEffect } from "react";
+import { FormEvent, useState, useRef } from "react";
 import Link from "next/link";
 
 function getPasswordStrength(password: string) {
@@ -30,10 +30,8 @@ export default function RegisterPage() {
   const [captcha, setCaptcha] = useState("");
   const [status, setStatus] = useState<{ type: "error" | "success"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setMounted(true); }, []);
 
   const strength = getPasswordStrength(password);
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
@@ -573,8 +571,9 @@ function FloatingLabelInput({
     <div className="relative">
       <label
         htmlFor={id}
-        className="pointer-events-none absolute left-3.5 select-none text-xs transition-all duration-200"
+        className="pointer-events-none absolute select-none text-xs transition-all duration-200"
         style={{
+          left: icon ? "2.5rem" : "0.875rem",
           top: active ? "-0.45rem" : "50%",
           transform: active ? "none" : "translateY(-50%)",
           fontSize: active ? "0.65rem" : "0.8rem",
@@ -587,6 +586,15 @@ function FloatingLabelInput({
         {label}
       </label>
 
+      {icon && (
+        <div
+          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2"
+          style={{ color: focused ? "rgb(var(--primary))" : "rgb(var(--muted2))" }}
+        >
+          {icon}
+        </div>
+      )}
+
       <input
         id={id}
         type={type}
@@ -595,8 +603,10 @@ function FloatingLabelInput({
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none"
+        className="w-full rounded-xl border py-2.5 text-sm outline-none"
         style={{
+          paddingLeft: icon ? "2.75rem" : "0.875rem",
+          paddingRight: "0.875rem",
           borderColor: focused ? "rgb(var(--primary))" : "rgb(var(--border))",
           boxShadow: focused ? "0 0 0 3px rgb(var(--primary) / 0.13)" : "none",
           background: "rgb(var(--card2))",

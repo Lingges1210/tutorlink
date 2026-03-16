@@ -160,7 +160,6 @@ function AvatarPlaceholder({ name }: { name: string | null }) {
   );
 }
 
-// ─── SectionHeader (outside, pure) ───────────────────────────────────────────
 function SectionHeader({
   icon,
   title,
@@ -190,13 +189,11 @@ function SectionHeader({
   );
 }
 
-// ─── BookingCard props ────────────────────────────────────────────────────────
 type BookingCardProps = {
   s: Row;
   focusId: string | null;
   actionLoading: boolean;
   ratingBySession: Record<string, { rating: number; comment: string | null }>;
-  // callbacks
   onJoin: (id: string) => void;
   onChat: (id: string) => void;
   onOpenRate: (s: Row) => void;
@@ -207,7 +204,6 @@ type BookingCardProps = {
   onRejectProposal: (id: string) => void;
 };
 
-// ─── BookingCard (OUTSIDE parent — prevents re-creation on every tick) ────────
 const BookingCard = memo(function BookingCard({
   s,
   focusId,
@@ -232,7 +228,6 @@ const BookingCard = memo(function BookingCard({
   const ongoing = isOngoing(s);
   const soon = isStartingSoon(s);
 
-  // Local tick for countdown — only this card re-renders each second, not the whole tree
   const [, setTick] = useState(0);
   useEffect(() => {
     if (!ongoing) return;
@@ -257,7 +252,6 @@ const BookingCard = memo(function BookingCard({
         isFocused ? "ring-2 ring-[rgb(var(--primary))]" : "",
       ].join(" ")}
     >
-      {/* Top accent bar */}
       {ongoing && (
         <div className="h-0.5 w-full bg-gradient-to-r from-[rgb(var(--primary)/0.4)] via-[rgb(var(--primary))] to-[rgb(var(--primary)/0.4)]" />
       )}
@@ -267,9 +261,7 @@ const BookingCard = memo(function BookingCard({
 
       <div className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          {/* Left — info */}
           <div className="flex items-start gap-3 min-w-0">
-            {/* Avatar */}
             <div className="shrink-0 mt-0.5">
               {s.tutor?.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -284,7 +276,6 @@ const BookingCard = memo(function BookingCard({
             </div>
 
             <div className="min-w-0">
-              {/* Subject */}
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[0.8rem] font-bold text-[rgb(var(--fg))] leading-tight">
                   {s.subject.code}
@@ -294,7 +285,6 @@ const BookingCard = memo(function BookingCard({
                 </span>
               </div>
 
-              {/* Tutor line */}
               <div className="mt-1 flex items-center gap-1.5">
                 <User size={11} className="text-[rgb(var(--muted2))] shrink-0" />
                 {tutorName ? (
@@ -309,7 +299,6 @@ const BookingCard = memo(function BookingCard({
                 )}
               </div>
 
-              {/* Date / duration */}
               <div className="mt-1.5 flex items-center gap-1.5 text-xs text-[rgb(var(--muted2))]">
                 <Clock size={11} className="shrink-0" />
                 <span>{prettyDate(s.scheduledAt)}</span>
@@ -317,7 +306,6 @@ const BookingCard = memo(function BookingCard({
                 <span>{s.durationMin} min</span>
               </div>
 
-              {/* Ongoing countdown */}
               <AnimatePresence>
                 {ongoing && (
                   <motion.div
@@ -335,7 +323,6 @@ const BookingCard = memo(function BookingCard({
                 )}
               </AnimatePresence>
 
-              {/* Starting soon */}
               {soon && !ongoing && (
                 <motion.div
                   animate={{ opacity: [1, 0.6, 1] }}
@@ -348,12 +335,10 @@ const BookingCard = memo(function BookingCard({
             </div>
           </div>
 
-          {/* Right — badge + actions */}
           <div className="flex flex-col items-end gap-2.5 shrink-0">
             <StatusBadge status={s.status} />
 
             <div className="flex flex-wrap justify-end items-center gap-1.5">
-              {/* Join call */}
               {s.status === "ACCEPTED" && !!s.tutor && ongoing && (
                 <motion.button
                   whileHover={{ scale: 1.05 }}
@@ -368,7 +353,6 @@ const BookingCard = memo(function BookingCard({
                 </motion.button>
               )}
 
-              {/* Chat */}
               {s.status === "ACCEPTED" && !!s.tutor && ongoing && (
                 <motion.button
                   whileTap={{ scale: 0.97 }}
@@ -381,7 +365,6 @@ const BookingCard = memo(function BookingCard({
                 </motion.button>
               )}
 
-              {/* Rate */}
               {canRate && (
                 <motion.button
                   whileTap={{ scale: 0.97 }}
@@ -400,7 +383,6 @@ const BookingCard = memo(function BookingCard({
                 </motion.button>
               )}
 
-              {/* Reschedule */}
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 disabled={closed || proposalPending}
@@ -412,7 +394,6 @@ const BookingCard = memo(function BookingCard({
                 Reschedule
               </motion.button>
 
-              {/* Report */}
               {s.tutor && (
                 <motion.button
                   whileTap={{ scale: 0.97 }}
@@ -424,7 +405,6 @@ const BookingCard = memo(function BookingCard({
                 </motion.button>
               )}
 
-              {/* Cancel */}
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 disabled={closed}
@@ -438,7 +418,6 @@ const BookingCard = memo(function BookingCard({
           </div>
         </div>
 
-        {/* Proposal banner */}
         <AnimatePresence initial={false}>
           {proposalPending && (
             <motion.div
@@ -481,7 +460,6 @@ const BookingCard = memo(function BookingCard({
           )}
         </AnimatePresence>
 
-        {/* Cancel reason */}
         {s.status === "CANCELLED" && s.cancelReason && (
           <div className="mt-3 flex items-center gap-1.5 text-[0.7rem] text-[rgb(var(--muted2))] bg-rose-500/5 border border-rose-400/20 rounded-lg px-3 py-2">
             <XCircle size={11} className="shrink-0 text-rose-400" />
@@ -535,6 +513,52 @@ export default function MyBookingsClient() {
   >({});
 
   const [ratingsHydrated, setRatingsHydrated] = useState(false);
+
+  // ── Survey state ────────────────────────────────────────────────────────────
+  const [surveyOpen, setSurveyOpen] = useState(false);
+  const [surveySessionId, setSurveySessionId] = useState<string | null>(null);
+  const [surveyRating, setSurveyRating] = useState(0);
+  const [surveyEasier, setSurveyEasier] = useState<boolean | null>(null);
+  const [surveyImproved, setSurveyImproved] = useState<boolean | null>(null);
+  const [surveyRecommend, setSurveyRecommend] = useState<boolean | null>(null);
+  const [surveyComment, setSurveyComment] = useState("");
+  const [surveySubmitting, setSurveySubmitting] = useState(false);
+  const [surveyDone, setSurveyDone] = useState(false);
+
+  function closeSurvey() {
+    setSurveyOpen(false);
+    setSurveySessionId(null);
+    setSurveyRating(0);
+    setSurveyEasier(null);
+    setSurveyImproved(null);
+    setSurveyRecommend(null);
+    setSurveyComment("");
+    setSurveySubmitting(false);
+    setSurveyDone(false);
+  }
+
+  async function submitSurvey() {
+    if (!surveySessionId || surveyRating === 0) return;
+    setSurveySubmitting(true);
+    try {
+      await fetch("/api/survey/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: surveySessionId,
+          rating: surveyRating,
+          easierToFindTutor: surveyEasier ?? false,
+          improvedUnderstanding: surveyImproved ?? false,
+          wouldRecommend: surveyRecommend ?? false,
+          comment: surveyComment || null,
+        }),
+      });
+      setSurveyDone(true);
+    } finally {
+      setSurveySubmitting(false);
+    }
+  }
+  // ───────────────────────────────────────────────────────────────────────────
 
   function closeModal() {
     setMode(null);
@@ -603,8 +627,6 @@ export default function MyBookingsClient() {
     const t = setInterval(() => refresh({ silent: true }), 10_000);
     return () => clearInterval(t);
   }, []); // eslint-disable-line
-
-  // NOTE: The global tick is removed. Each BookingCard manages its own countdown tick.
 
   useEffect(() => {
     let t: ReturnType<typeof setInterval> | null = null;
@@ -882,7 +904,15 @@ export default function MyBookingsClient() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ text: data?.message ?? "Rating failed.", type: "error" }); return; }
       setRatingBySession((prev) => ({ ...prev, [rateSessionId]: { rating, comment: rateComment.trim() ? rateComment.trim() : null } }));
+
+      // ── Open optional survey after rating ──
+      const submittedSessionId = rateSessionId;
       closeRate();
+      setSurveySessionId(submittedSessionId);
+      setSurveyRating(rating);
+      setSurveyOpen(true);
+      // ──────────────────────────────────────
+
       setMsg({ text: "Thanks! Your rating has been submitted.", type: "success" });
       await refresh({ silent: true });
     } finally {
@@ -986,7 +1016,6 @@ export default function MyBookingsClient() {
               </motion.button>
             </div>
 
-            {/* Active content */}
             {activeCount === 0 && !showPast ? (
               <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-8 text-center">
                 <p className="text-sm text-[rgb(var(--muted))]">No active sessions right now.</p>
@@ -994,7 +1023,6 @@ export default function MyBookingsClient() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Upcoming */}
                 {grouped.upcoming.length > 0 && (
                   <div>
                     <SectionHeader
@@ -1028,7 +1056,6 @@ export default function MyBookingsClient() {
                   </div>
                 )}
 
-                {/* Needs rating */}
                 {grouped.needsRating.length > 0 && (
                   <div>
                     <SectionHeader
@@ -1064,7 +1091,6 @@ export default function MyBookingsClient() {
               </div>
             )}
 
-            {/* Past */}
             <AnimatePresence>
               {showPast && (
                 <motion.div
@@ -1273,7 +1299,6 @@ export default function MyBookingsClient() {
                 {rateTutorName} · Share how your session went
               </p>
 
-              {/* Stars */}
               <div className="mb-5">
                 <div className="text-[0.7rem] font-semibold text-[rgb(var(--muted2))] mb-2.5 uppercase tracking-wide">Rating</div>
                 <div className="flex items-center gap-1">
@@ -1309,7 +1334,6 @@ export default function MyBookingsClient() {
                 )}
               </div>
 
-              {/* Comment */}
               <div className="mb-5">
                 <label className="block text-[0.7rem] font-semibold text-[rgb(var(--muted2))] mb-1.5 uppercase tracking-wide">
                   Comment (optional)
@@ -1327,7 +1351,6 @@ export default function MyBookingsClient() {
                 </div>
               </div>
 
-              {/* Confirm checkbox */}
               <label className="flex items-center gap-2.5 text-xs text-[rgb(var(--fg))] cursor-pointer mb-5 select-none">
                 <input
                   type="checkbox"
@@ -1356,6 +1379,146 @@ export default function MyBookingsClient() {
                   {rateLoading ? "Submitting…" : "Submit rating"}
                 </motion.button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Optional Survey Modal ───────────────────────────────────────────── */}
+      <AnimatePresence>
+        {surveyOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 grid place-items-center bg-black/50 backdrop-blur-sm p-4"
+            onMouseDown={() => { if (!surveySubmitting) closeSurvey(); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="w-full max-w-md rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] shadow-[0_32px_80px_rgb(0,0,0,0.20)] p-6"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              {surveyDone ? (
+                /* ── Thank you state ── */
+                <div className="py-4 text-center">
+                  <div className="mb-3 text-4xl">🎉</div>
+                  <h2 className="text-base font-black text-[rgb(var(--fg))]">Thanks for your feedback!</h2>
+                  <p className="mt-1.5 text-xs text-[rgb(var(--muted))]">
+                    Your response helps improve TutorLink for everyone.
+                  </p>
+                  <button
+                    onClick={closeSurvey}
+                    className="mt-5 w-full rounded-xl bg-[rgb(var(--primary))] px-4 py-2.5 text-xs font-bold text-white hover:opacity-90 transition-all"
+                  >
+                    Close
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Header */}
+                  <div className="mb-1 flex items-center gap-2">
+                    <Sparkles size={15} className="text-[rgb(var(--primary))]" />
+                    <span className="text-sm font-bold text-[rgb(var(--fg))]">Quick feedback</span>
+                    <span className="ml-auto text-[0.65rem] text-[rgb(var(--muted2))] border border-[rgb(var(--border))] rounded-full px-2 py-0.5">
+                      Optional
+                    </span>
+                  </div>
+                  <p className="mb-5 text-xs text-[rgb(var(--muted2))]">
+                    30 seconds — helps us improve TutorLink.
+                  </p>
+
+                  <div className="space-y-4">
+                    {/* Star rating */}
+                    <div className="space-y-2">
+                      <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[rgb(var(--muted2))]">
+                        Overall experience
+                      </p>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <motion.button
+                            key={s}
+                            whileHover={{ scale: 1.2 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => setSurveyRating(s)}
+                            className="p-0.5"
+                          >
+                            <Star
+                              size={26}
+                              className={s <= surveyRating ? "text-amber-400 fill-amber-400" : "text-[rgb(var(--muted2))]"}
+                            />
+                          </motion.button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Yes/No questions */}
+                    {(
+                      [
+                        { label: "Was it easier to find a tutor?",     val: surveyEasier,    set: setSurveyEasier },
+                        { label: "Did it improve your understanding?", val: surveyImproved,   set: setSurveyImproved },
+                        { label: "Would you recommend TutorLink?",     val: surveyRecommend, set: setSurveyRecommend },
+                      ] as { label: string; val: boolean | null; set: (v: boolean) => void }[]
+                    ).map(({ label, val, set }) => (
+                      <div key={label} className="space-y-1.5">
+                        <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[rgb(var(--muted2))]">{label}</p>
+                        <div className="flex gap-2">
+                          {([true, false] as const).map((v) => (
+                            <button
+                              key={String(v)}
+                              onClick={() => set(v)}
+                              className={[
+                                "flex-1 rounded-xl border py-2 text-xs font-bold transition-all",
+                                val === v
+                                  ? "border-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.12)] text-[rgb(var(--primary))]"
+                                  : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted))] hover:bg-[rgb(var(--card)/0.6)]",
+                              ].join(" ")}
+                            >
+                              {v ? "Yes" : "No"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Optional comment */}
+                    <div className="space-y-1.5">
+                      <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[rgb(var(--muted2))]">
+                        Any comments? <span className="normal-case font-normal">(optional)</span>
+                      </p>
+                      <textarea
+                        value={surveyComment}
+                        onChange={(e) => setSurveyComment(e.target.value)}
+                        rows={2}
+                        placeholder="Tell us more…"
+                        className="w-full resize-none rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-xs text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary)/0.15)] outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="mt-5 flex gap-2">
+                    <button
+                      onClick={closeSurvey}
+                      disabled={surveySubmitting}
+                      className="flex-1 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] py-2.5 text-xs font-semibold text-[rgb(var(--muted))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60 transition-colors"
+                    >
+                      Skip
+                    </button>
+                    <motion.button
+                      whileTap={{ scale: 0.98 }}
+                      onClick={submitSurvey}
+                      disabled={surveyRating === 0 || surveySubmitting}
+                      className="flex-1 rounded-xl bg-[rgb(var(--primary))] py-2.5 text-xs font-bold text-white shadow-[0_4px_14px_rgb(var(--primary)/0.30)] hover:opacity-90 disabled:opacity-50 transition-all"
+                    >
+                      {surveySubmitting ? "Submitting…" : "Submit"}
+                    </motion.button>
+                  </div>
+                </>
+              )}
             </motion.div>
           </motion.div>
         )}

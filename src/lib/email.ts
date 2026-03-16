@@ -71,19 +71,6 @@ function divider() {
   return `<div style="height:1px;background:${T.border};margin:20px 0;"></div>`;
 }
 
-function metaRow(icon: string, label: string, value: string) {
-  return `
-    <tr>
-      <td style="padding:7px 0;vertical-align:top;">
-        <span style="font-size:15px;line-height:1;">${icon}</span>
-      </td>
-      <td style="padding:7px 0 7px 10px;vertical-align:top;">
-        <span style="font-size:12px;font-weight:600;color:${T.textMuted};text-transform:uppercase;letter-spacing:0.07em;display:block;margin-bottom:1px;">${esc(label)}</span>
-        <span style="font-size:14px;color:${T.textPrimary};font-weight:500;">${esc(value)}</span>
-      </td>
-    </tr>`;
-}
-
 /* ==========================================================================
    MASTER LAYOUT
    ========================================================================== */

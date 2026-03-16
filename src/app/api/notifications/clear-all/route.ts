@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
-export async function POST(_req: Request) {
+export async function POST() {
   const supabase = await supabaseServerComponent();
   const {
     data: { user },
@@ -20,6 +20,7 @@ export async function POST(_req: Request) {
   if (!dbUser || dbUser.isDeactivated) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
+
   if (dbUser.verificationStatus !== "AUTO_VERIFIED") {
     return NextResponse.json({ message: "Not verified" }, { status: 403 });
   }

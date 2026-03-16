@@ -2,7 +2,6 @@
 
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
-import type { NavigateAction } from "react-big-calendar";
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -791,7 +790,7 @@ export default function StudentSessionCalendarPage() {
                 view={view}
                 date={date}
                 onView={(v: View) => setView(v)}
-                onNavigate={(d: Date, _view: View, _action: NavigateAction) => setDate(d)}
+                onNavigate={(d: Date) => setDate(d)}                
                 views={[Views.DAY, Views.WEEK, Views.AGENDA]}
                 step={30}
                 timeslots={2}

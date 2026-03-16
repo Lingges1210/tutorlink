@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { notify } from "@/lib/notify";
 
-/** ---------- availability parsing helpers (same as your reschedule) ---------- */
+/** ---------- availability parsing helpers ---------- */
 type DayKey = "SUN" | "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT";
 type TimeSlot = { start: string; end: string };
 type DayAvailability = { day: DayKey; off: boolean; slots: TimeSlot[] };
@@ -12,6 +12,7 @@ type DayAvailability = { day: DayKey; off: boolean; slots: TimeSlot[] };
 function toMinutes(hhmm: string) {
   if (!hhmm) return 0;
   if (hhmm === "24:00") return 24 * 60;
+
   const [h, m] = hhmm.split(":").map((x) => parseInt(x, 10));
   return h * 60 + m;
 }
@@ -24,6 +25,7 @@ function dayKeyFromDate(d: Date): DayKey {
 function withinSlots(day: DayAvailability, startMin: number, endMin: number) {
   if (day.off) return false;
   if (!Array.isArray(day.slots) || day.slots.length === 0) return false;
+
   return day.slots.some((s) => {
     const a = toMinutes(s.start);
     const b = toMinutes(s.end);
@@ -31,40 +33,59 @@ function withinSlots(day: DayAvailability, startMin: number, endMin: number) {
   });
 }
 
-async function getTutorAvailability(
-  tutorId: string
-): Promise<DayAvailability[] | null> {
-  //  get latest APPROVED tutor application
-  const app = await prisma.tutorApplication
-    .findFirst({
-      where: { userId: tutorId, status: "APPROVED" },
-      orderBy: { createdAt: "desc" },
-      select: { availability: true },
-    })
-    .catch(() => null);
+function isValidDayKey(value: unknown): value is DayKey {
+  return (
+    value === "SUN" ||
+    value === "MON" ||
+    value === "TUE" ||
+    value === "WED" ||
+    value === "THU" ||
+    value === "FRI" ||
+    value === "SAT"
+  );
+}
 
-  const raw = (app as any)?.availability ?? null;
-  if (typeof raw !== "string" || !raw.trim()) return null;
+function isTimeSlot(value: unknown): value is TimeSlot {
+  if (!value || typeof value !== "object") return false;
 
+  const obj = value as Record<string, unknown>;
+  return typeof obj.start === "string" && typeof obj.end === "string";
+}
+
+function parseAvailability(raw: string): DayAvailability[] | null {
   try {
-    const parsed = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
 
     const cleaned: DayAvailability[] = parsed
-      .filter(Boolean)
-      .map((x: any) => ({
-        day: x.day,
-        off: !!x.off,
-        slots: Array.isArray(x.slots) ? x.slots : [],
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+      .map((item) => ({
+        day: item.day,
+        off: Boolean(item.off),
+        slots: Array.isArray(item.slots) ? item.slots.filter(isTimeSlot) : [],
       }))
-      .filter((x: any) => typeof x.day === "string");
+      .filter((item): item is DayAvailability => isValidDayKey(item.day));
 
-    return cleaned.length ? cleaned : null;
+    return cleaned.length > 0 ? cleaned : null;
   } catch {
     return null;
   }
 }
 
+async function getTutorAvailability(
+  tutorId: string
+): Promise<DayAvailability[] | null> {
+  const app = await prisma.tutorApplication.findFirst({
+    where: { userId: tutorId, status: "APPROVED" },
+    orderBy: { createdAt: "desc" },
+    select: { availability: true },
+  });
+
+  const raw = app?.availability;
+  if (typeof raw !== "string" || !raw.trim()) return null;
+
+  return parseAvailability(raw);
+}
 
 async function tutorDeclaredAvailable(
   tutorId: string,
@@ -93,9 +114,11 @@ async function tutorDeclaredAvailable(
 
 /** ---------- route ---------- */
 export async function POST(
-  _req: Request,
+  request: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
+  void request;
+
   const { id } = await ctx.params;
 
   const supabase = await supabaseServerComponent();
@@ -128,14 +151,10 @@ export async function POST(
       tutorId: true,
       status: true,
       durationMin: true,
-
-      // @ts-ignore
       proposedAt: true,
-      // @ts-ignore
       proposedEndAt: true,
-      // @ts-ignore
       proposalStatus: true,
-    } as any,
+    },
   });
 
   if (!session || session.studentId !== dbUser.id) {
@@ -149,9 +168,9 @@ export async function POST(
     );
   }
 
-  const proposalStatus = (session as any).proposalStatus as string | null;
-  const proposedAt = (session as any).proposedAt as Date | null;
-  const proposedEndAt = (session as any).proposedEndAt as Date | null;
+  const proposalStatus = session.proposalStatus;
+  const proposedAt = session.proposedAt;
+  const proposedEndAt = session.proposedEndAt;
 
   if (proposalStatus !== "PENDING" || !proposedAt) {
     return NextResponse.json(
@@ -165,7 +184,7 @@ export async function POST(
   const newEndsAt =
     proposedEndAt ?? new Date(newScheduledAt.getTime() + durationMin * 60_000);
 
-  //  1) Student overlap check (exclude this session)
+  // 1) Student overlap check (exclude this session)
   const studentClash = await prisma.session.findFirst({
     where: {
       id: { not: session.id },
@@ -184,7 +203,7 @@ export async function POST(
     );
   }
 
-  //  2) Tutor checks (only if tutor exists)
+  // 2) Tutor checks
   if (session.tutorId) {
     const tutorClash = await prisma.session.findFirst({
       where: {
@@ -218,7 +237,7 @@ export async function POST(
     }
   }
 
-  //  Apply proposal as the new schedule
+  // Apply proposal as the new schedule
   const updated = await prisma.session.update({
     where: { id: session.id },
     data: {
@@ -226,18 +245,12 @@ export async function POST(
       endsAt: newEndsAt,
       rescheduledAt: new Date(),
       status: "PENDING",
-
-      // @ts-ignore
       proposalStatus: "ACCEPTED",
-      // @ts-ignore
       proposedAt: null,
-      // @ts-ignore
       proposedEndAt: null,
-      // @ts-ignore
       proposedNote: null,
-      // @ts-ignore
       proposedByUserId: null,
-    } as any,
+    },
     select: {
       id: true,
       tutorId: true,
@@ -246,7 +259,7 @@ export async function POST(
     },
   });
 
-  //  Notify tutor: proposal accepted (only if tutor exists)
+  // Notify tutor
   try {
     if (updated.tutorId) {
       await notify.proposalAcceptedToTutor(
@@ -257,7 +270,7 @@ export async function POST(
       );
     }
   } catch {
-    // ignore
+    // ignore notification failure
   }
 
   return NextResponse.json({ success: true });

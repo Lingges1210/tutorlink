@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, Video, Clock, CheckCircle2, XCircle, Zap, Calendar, MessageSquare, ChevronRight } from "lucide-react";
+import Image from "next/image";
 
 type Row = {
   id: string;
@@ -238,9 +239,18 @@ function SessionCard({ s, kind, focusId, items, actionLoading, onAccept, onJoinC
             accepted ? "ring-[rgb(var(--primary)/0.4)] bg-[rgb(var(--primary)/0.1)] text-[rgb(var(--primary))]" :
             "ring-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted2))]"
           ].join(" ")}>
-            {s.student.avatarUrl
-              ? <img src={s.student.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
-              : initials}
+                  {s.student.avatarUrl ? (
+          <Image
+            src={s.student.avatarUrl}
+            alt={`${s.student.name ?? "Student"} avatar`}
+            width={40}
+            height={40}
+            unoptimized
+            className="h-full w-full rounded-full object-cover"
+          />
+        ) : (
+          initials
+        )}
             {ongoing && <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 border-2 border-[rgb(var(--card2))]" />}
           </div>
 
@@ -663,41 +673,59 @@ export default function TutorSessionsClient() {
   const pagedPast = filteredPast.slice((safePastPage - 1) * PAST_PAGE_SIZE, safePastPage * PAST_PAGE_SIZE);
 
   useEffect(() => {
-    if (pastPage > totalPastPages) setPastPage(totalPastPages);
-  }, [totalPastPages]);
+  if (pastPage > totalPastPages) setPastPage(totalPastPages);
+}, [pastPage, totalPastPages]);
 
   useEffect(() => {
-    if (!focusId || loading || !items.length) return;
-    if (!items.some((x) => x.id === focusId)) return;
-    const isFocusedPast = grouped.past.some((x) => x.id === focusId);
-    if (isFocusedPast) {
-      setShowPast(true);
-      const idx = filteredPast.findIndex((x) => x.id === focusId);
-      if (idx >= 0) setPastPage((p) => { const cp = Math.floor(idx / PAST_PAGE_SIZE) + 1; return p === cp ? p : cp; });
+  if (!focusId || loading || !items.length) return;
+  if (!items.some((x) => x.id === focusId)) return;
+
+  const isFocusedPast = grouped.past.some((x) => x.id === focusId);
+
+  if (isFocusedPast) {
+    setShowPast(true);
+
+    const idx = filteredPast.findIndex((x) => x.id === focusId);
+    if (idx >= 0) {
+      setPastPage((p) => {
+        const cp = Math.floor(idx / PAST_PAGE_SIZE) + 1;
+        return p === cp ? p : cp;
+      });
     }
-    let alive = true;
-    let tries = 0;
-    const findAndScroll = () => {
-      if (!alive) return;
-      const el = document.getElementById(`session-${focusId}`);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        el.classList.add("focus-glow");
-        window.setTimeout(() => {
-          document.getElementById(`session-${focusId}`)?.classList.remove("focus-glow");
-          const next = new URLSearchParams(sp.toString());
-          next.delete("focus");
-          const qs = next.toString();
-          router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-        }, 3000);
-      } else {
-        tries++;
-        if (tries < 40) window.setTimeout(findAndScroll, 120);
-      }
-    };
-    requestAnimationFrame(() => window.setTimeout(findAndScroll, 0));
-    return () => { alive = false; };
-  }, [focusId, loading, items.length, grouped.past.length, filteredPast.length, pastFilter, pastPage, showPast]);
+  }
+
+  let alive = true;
+  let tries = 0;
+
+  const findAndScroll = () => {
+    if (!alive) return;
+
+    const el = document.getElementById(`session-${focusId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("focus-glow");
+
+      window.setTimeout(() => {
+        document.getElementById(`session-${focusId}`)?.classList.remove("focus-glow");
+
+        const next = new URLSearchParams(sp.toString());
+        next.delete("focus");
+        const qs = next.toString();
+
+        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      }, 3000);
+    } else {
+      tries++;
+      if (tries < 40) window.setTimeout(findAndScroll, 120);
+    }
+  };
+
+  requestAnimationFrame(() => window.setTimeout(findAndScroll, 0));
+
+  return () => {
+    alive = false;
+  };
+}, [focusId, loading, items, grouped.past, filteredPast, pastFilter, pastPage, showPast, pathname, router, sp]);
 
   const activeCount = grouped.ongoing.length + grouped.upcoming.length + grouped.needsCompletion.length;
 
