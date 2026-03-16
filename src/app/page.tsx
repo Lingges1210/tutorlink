@@ -770,7 +770,7 @@ export default function HomePage() {
                 <Link href="/auth/register" className="btn-grad rounded-2xl px-5 py-2.5 text-sm font-bold text-white">
                   Join with USM Email →
                 </Link>
-                <Link href="/apply-tutor" className="btn-ghost rounded-2xl border px-5 py-2.5 text-sm font-bold"
+                <Link href="/dashboard/student/apply-tutor" className="btn-ghost rounded-2xl border px-5 py-2.5 text-sm font-bold"
                   style={{ borderColor:"rgb(var(--border))", background:"rgb(var(--card)/.6)", color:"rgb(var(--fg))" }}>
                   Become a Tutor
                 </Link>
@@ -1179,7 +1179,7 @@ export default function HomePage() {
                 <Link href="/auth/register" className="btn-grad rounded-2xl px-7 py-3 text-sm font-bold text-white">
                   Join with USM Email →
                 </Link>
-                <Link href="/apply-tutor" className="btn-ghost rounded-2xl border px-7 py-3 text-sm font-bold"
+                <Link href="/dashboard/student/apply-tutor/" className="btn-ghost rounded-2xl border px-7 py-3 text-sm font-bold"
                   style={{ borderColor:"rgb(var(--border))", background:"rgb(var(--card)/.6)", color:"rgb(var(--fg))" }}>
                   Become a Tutor
                 </Link>

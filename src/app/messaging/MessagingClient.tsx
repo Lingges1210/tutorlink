@@ -410,8 +410,12 @@ export default function MessagingClient() {
       if (j.read) setReadInfo(j.read);
       if (typeof j.isChatClosed === "boolean") setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
     }
-    pollMessages();
-    const t = setInterval(pollMessages, 1500);
+        pollMessages();
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        pollMessages();
+      }
+    }, 1500);
     return () => { stop = true; clearInterval(t); };
   }, [activeId, meId]);
 
@@ -426,8 +430,13 @@ export default function MessagingClient() {
       if (!stop && j?.ok) setOtherTyping(!!j.otherTyping);
     }
     pollConversations(); pollTyping();
-    const convT = setInterval(pollConversations, 4500);
-    const typT = setInterval(pollTyping, 1200);
+        const convT = setInterval(() => {
+      if (document.visibilityState === "visible") pollConversations();
+    }, 4500);
+
+    const typT = setInterval(() => {
+      if (document.visibilityState === "visible") pollTyping();
+    }, 1200);
     const onVis = () => { if (document.visibilityState === "visible") { pollConversations(); pollTyping(); } };
     document.addEventListener("visibilitychange", onVis);
     return () => { stop = true; clearInterval(convT); clearInterval(typT); document.removeEventListener("visibilitychange", onVis); };
