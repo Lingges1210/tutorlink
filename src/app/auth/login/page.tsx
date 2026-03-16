@@ -79,9 +79,10 @@ const targetPath =
 
       setStatus("Login successful. Redirecting...");
       animation?.success();
-
-      router.replace(targetPath);
-      router.refresh(); 
+      router.refresh();
+      setTimeout(() => {
+        router.replace(targetPath);
+      }, 100);
       return;
     } catch (err: unknown) {
       setStatus(err instanceof Error ? err.message : "Unexpected error");
