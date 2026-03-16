@@ -2,13 +2,12 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import AuthSplitLayout from "@/components/AuthSplitLayout";
 import { LoginAnimationHandle } from "@/components/LoginAnimation";
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -67,12 +66,16 @@ export default function LoginPage() {
         return;
       }
 
-      const redirectTo = searchParams.get("redirect");
-      const fallbackPath =
-        data?.user?.role === "ADMIN" ? "/admin" : "/dashboard/student";
+      const redirectTo =
+  typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("redirect")
+    : null;
 
-      const targetPath =
-        redirectTo && redirectTo.startsWith("/") ? redirectTo : fallbackPath;
+const fallbackPath =
+  data?.user?.role === "ADMIN" ? "/admin" : "/dashboard/student";
+
+const targetPath =
+  redirectTo && redirectTo.startsWith("/") ? redirectTo : fallbackPath;
 
       setStatus("Login successful. Redirecting...");
       animation?.success();
