@@ -128,9 +128,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   © {new Date().getFullYear()} TutorLink • Built for USM
                 </div>
                 <div className="flex gap-4">
-                  <Link className="hover:text-[rgb(var(--fg))] transition-colors" href="/privacy">Privacy</Link>
-                  <Link className="hover:text-[rgb(var(--fg))] transition-colors" href="/terms">Terms</Link>
-                  <Link className="hover:text-[rgb(var(--fg))] transition-colors" href="/contact">Contact</Link>
+                  <span className="text-[rgb(var(--muted2))] cursor-default">Privacy</span>
+<span className="text-[rgb(var(--muted2))] cursor-default">Terms</span>
+<span className="text-[rgb(var(--muted2))] cursor-default">Contact</span>
                 </div>
               </div>
             </footer>
