@@ -394,43 +394,41 @@ export default function MessagingClient() {
 
       channel = supabase
         .channel(`chat-room-${channelId}`, {
-          config: { broadcast: { self: true } },
+          config: { broadcast: { self: false } }, 
         })
 
         // ── broadcast: new message (fast path) ───────────────────────────────
         .on("broadcast", { event: "new-message" }, ({ payload }) => {
-          const data = payload as { channelId: string; message: Msg };
-          if (data.channelId !== channelId) return;
-          const msg = data.message;
+  const data = payload as { channelId: string; message: Msg };
+  if (data.channelId !== channelId) return;
+  const msg = data.message;
 
-          // Remove optimistic temp message then merge real one
-          const withoutTemp = (useChatStore.getState().messageCache[channelId] ?? [])
-            .filter((m) => !(m.id.startsWith("temp-") && m.senderId === msg.senderId));
-          storeMergeMessages(channelId, [...withoutTemp, msg]);
-          seenMsgIds.current.add(msg.id);
+  // Simple merge — no need to strip temp, sender doesn't receive this
+  storeMergeMessages(channelId, [msg]);
+  seenMsgIds.current.add(msg.id);
 
-          requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
+  requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
 
-          if (msg.senderId !== meIdSnap && channelId === activeIdRef.current) {
-            void markChatRead(channelId);
+  if (msg.senderId !== meIdSnap && channelId === activeIdRef.current) {
+    void markChatRead(channelId);
+  }
+  if (msg.senderId !== meIdSnap && channelId !== activeIdRef.current) {
+    window.dispatchEvent(new Event("chat:unread-refresh"));
+  }
+
+  storeSetConversations(
+    useChatStore.getState().conversations.map((c) =>
+      c.id === channelId
+        ? {
+            ...c,
+            lastMessage: msg.text?.trim() || "📎 Attachment",
+            lastAt: msg.createdAt,
+            unread: msg.senderId === meIdSnap || c.id === activeIdRef.current ? 0 : c.unread + 1,
           }
-          if (msg.senderId !== meIdSnap && channelId !== activeIdRef.current) {
-            window.dispatchEvent(new Event("chat:unread-refresh"));
-          }
-
-          storeSetConversations(
-            useChatStore.getState().conversations.map((c) =>
-              c.id === channelId
-                ? {
-                    ...c,
-                    lastMessage: msg.text?.trim() || "📎 Attachment",
-                    lastAt: msg.createdAt,
-                    unread: msg.senderId === meIdSnap || c.id === activeIdRef.current ? 0 : c.unread + 1,
-                  }
-                : c
-            ).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
-          );
-        })
+        : c
+    ).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
+  );
+})
 
         // ── postgres CDC INSERT (fallback) ────────────────────────────────────
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "ChatMessage", filter: `channelId=eq.${channelId}` }, (payload) => {
@@ -561,40 +559,49 @@ export default function MessagingClient() {
       }
 
       if (j?.ok && j.message) {
-        const realMsg = j.message as Msg;
+  const realMsg = j.message as Msg;
 
-        // Replace optimistic with real message
-        const current = useChatStore.getState().messageCache[activeId] ?? [];
-        const withoutTemp = current.filter((m) => m.id !== optimisticId);
-        storeMergeMessages(activeId, [...withoutTemp, realMsg]);
-        seenMsgIds.current.add(realMsg.id);
+  // Atomically replace the optimistic message with the confirmed one
+  const current = useChatStore.getState().messageCache[activeId] ?? [];
+  const replaced = current
+    .filter((m) => m.id !== optimisticId)  // remove temp
+    .concat(realMsg);                       // add real
+  // Write directly to store (bypass mergeMessages to avoid partial state)
+  useChatStore.setState((s) => ({
+    messageCache: {
+      ...s.messageCache,
+      [activeId]: replaced.sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      ),
+    },
+  }));
 
-        // Broadcast to receiver's chat-room channel (fast path for them)
-        if (realtimeChannelRef.current) {
-          await realtimeChannelRef.current.send({
-            type: "broadcast",
-            event: "new-message",
-            payload: { channelId: activeId, message: realMsg },
-          });
-        }
+  seenMsgIds.current.add(realMsg.id);
 
-        // Also broadcast to receiver's personal inbox channel so
-        // ChatUnreadListener updates their header badge even if they're
-        // not on /messaging
-        const receiverConv = conversations.find((c) => c.id === activeId);
-        const receiverId = receiverConv?.otherUserId;
-        if (receiverId && supabaseBrowser) {
-          const inboxChannel = supabaseBrowser.channel(`user-inbox-${receiverId}`);
-          await inboxChannel.send({
-            type: "broadcast",
-            event: "new-message",
-            payload: { channelId: activeId, senderId: meId, message: realMsg },
-          });
-          supabaseBrowser.removeChannel(inboxChannel);
-        }
+  // Broadcast to receiver only (self:false means we won't get this back)
+  if (realtimeChannelRef.current) {
+    await realtimeChannelRef.current.send({
+      type: "broadcast",
+      event: "new-message",
+      payload: { channelId: activeId, message: realMsg },
+    });
+  }
 
-        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
-      }
+  // Notify receiver's inbox channel for header badge
+  const receiverConv = conversations.find((c) => c.id === activeId);
+  const receiverId = receiverConv?.otherUserId;
+  if (receiverId) {
+    const inboxChannel = supabaseBrowser.channel(`user-inbox-${receiverId}`);
+    await inboxChannel.send({
+      type: "broadcast",
+      event: "new-message",
+      payload: { channelId: activeId, senderId: meId, message: realMsg },
+    });
+    supabaseBrowser.removeChannel(inboxChannel);
+  }
+
+  setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
+}
 
       setPickedFiles([]);
       await markChatRead(activeId);
