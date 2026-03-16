@@ -4,39 +4,8 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import Image from "next/image";
-
-type Conv = {
-  id: string;
-  sessionId: string;
-  name: string;
-  subjectName: string;
-  lastMessage: string;
-  lastAt: string;
-  unread: number;
-  viewerIsStudent: boolean;
-  tutorId?: string | null;
-  otherUserId?: string | null;
-  otherRoleLabel?: "Student" | "Tutor" | null;
-};
-
-type Attachment = {
-  id: string;
-  fileName: string;
-  contentType: string;
-  sizeBytes: number;
-  url: string | null;
-  createdAt: string;
-};
-
-type Msg = {
-  id: string;
-  senderId: string;
-  text: string;
-  createdAt: string;
-  isDeleted?: boolean;
-  deletedAt?: string | null;
-  attachments?: Attachment[];
-};
+import { useChatStore } from "@/store/chatStore";
+import type { Conv, Msg } from "@/store/chatStore";
 
 type RoleFilter = "ALL" | "STUDENT" | "TUTOR";
 
@@ -46,6 +15,15 @@ type UploadPayload = {
   fileName: string;
   contentType: string;
   sizeBytes: number;
+};
+
+type Attachment = {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  url: string | null;
+  createdAt: string;
 };
 
 function timeAgo(iso: string) {
@@ -62,27 +40,39 @@ function timeAgo(iso: string) {
 
 export default function MessagingClient() {
   const [meId, setMeId] = useState<string | null>(null);
-  const [conversations, setConversations] = useState<Conv[]>([]);
+
+  // ── Zustand store (replaces local conversations + message state) ──────────
+  const storeConversations = useChatStore((s) => s.conversations);
+  const storeSetConversations = useChatStore((s) => s.setConversations);
+  const storeMergeMessages = useChatStore((s) => s.mergeMessages);
+  const storeMessageCache = useChatStore((s) => s.messageCache);
+  const storeCursorCache = useChatStore((s) => s.cursorCache);
+  const storeSetCursor = useChatStore((s) => s.setCursor);
+  const storeMarkRead = useChatStore((s) => s.markRead);
+  const storeClearChannel = useChatStore((s) => s.clearChannelMessages);
+  const convLoaded = useChatStore((s) => s.convLoaded);
+  const prefetch = useChatStore((s) => s.prefetch);
+
   const [activeId, setActiveId] = useState<string | null>(null);
-
-  // Ref so realtime closures always read the latest activeId without needing
-  // to re-subscribe the whole channel on every conversation switch.
   const activeIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    activeIdRef.current = activeId;
-  }, [activeId]);
+  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
 
-  // Track processed message IDs to deduplicate broadcast vs CDC delivery.
   const seenMsgIds = useRef<Set<string>>(new Set());
+
+  const conversations = storeConversations;
 
   const active = useMemo(
     () => conversations.find((c) => c.id === activeId) ?? null,
     [conversations, activeId]
   );
 
-  const [messages, setMessages] = useState<Msg[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  // Messages come straight from the store cache
+  const messages = storeMessageCache[activeId ?? ""] ?? [];
+  const nextCursor = storeCursorCache[activeId ?? ""] ?? null;
+
   const [loadingMsgs, setLoadingMsgs] = useState(false);
+  // Only show loading skeleton when we have no cached messages yet
+  const showSkeleton = loadingMsgs && messages.length === 0;
 
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -147,7 +137,7 @@ export default function MessagingClient() {
   const allImageUrls = useMemo(() => {
     const urls: string[] = [];
     for (const m of messages) {
-      for (const a of m.attachments ?? []) {
+      for (const a of (m.attachments ?? []) as Attachment[]) {
         if (a?.url && (a.contentType ?? "").startsWith("image/")) urls.push(a.url);
       }
     }
@@ -170,9 +160,9 @@ export default function MessagingClient() {
     setImgViewer({ open: true, urls, idx: idx >= 0 ? idx : 0 });
   }
 
-  function closeImageViewer() {
-    setImgViewer((p) => ({ ...p, open: false }));
-  }
+  function closeImageViewer() { setImgViewer((p) => ({ ...p, open: false })); }
+  function nextImage() { setImgViewer((p) => !p.urls.length ? p : { ...p, idx: (p.idx + 1) % p.urls.length }); }
+  function prevImage() { setImgViewer((p) => !p.urls.length ? p : { ...p, idx: (p.idx - 1 + p.urls.length) % p.urls.length }); }
 
   function formatLastSeen(iso: string | null) {
     if (!iso) return "Offline";
@@ -182,22 +172,7 @@ export default function MessagingClient() {
     if (mins < 60) return `${mins}m ago`;
     const hrs = Math.floor(mins / 60);
     if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    return `${days}d ago`;
-  }
-
-  function nextImage() {
-    setImgViewer((p) => {
-      if (!p.urls.length) return p;
-      return { ...p, idx: (p.idx + 1) % p.urls.length };
-    });
-  }
-
-  function prevImage() {
-    setImgViewer((p) => {
-      if (!p.urls.length) return p;
-      return { ...p, idx: (p.idx - 1 + p.urls.length) % p.urls.length };
-    });
+    return `${Math.floor(hrs / 24)}d ago`;
   }
 
   useEffect(() => {
@@ -208,37 +183,25 @@ export default function MessagingClient() {
       if (e.key === "ArrowLeft") prevImage();
     };
     window.addEventListener("keydown", onKeyDown);
-    const prevOverflow = document.body.style.overflow;
+    const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = prevOverflow;
-    };
+    return () => { window.removeEventListener("keydown", onKeyDown); document.body.style.overflow = prev; };
   }, [imgViewer.open]);
 
+  useEffect(() => { setZoom(1); setOffset({ x: 0, y: 0 }); }, [imgViewer.idx]);
+
   useEffect(() => {
-    if (!active?.otherUserId) {
-      setUserPresence(null);
-      return;
-    }
+    if (!active?.otherUserId) { setUserPresence(null); return; }
     const otherUserId = active.otherUserId;
     let stop = false;
     async function loadPresence() {
-      const j = await fetch(`/api/presence/${otherUserId}`, { cache: "no-store" })
-        .then((r) => r.json())
-        .catch(() => null);
+      const j = await fetch(`/api/presence/${otherUserId}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
       if (stop || !j?.ok) return;
-      setUserPresence({
-        isOnline: !!j.presence?.isOnline,
-        lastSeenAt: j.presence?.lastSeenAt ?? null,
-      });
+      setUserPresence({ isOnline: !!j.presence?.isOnline, lastSeenAt: j.presence?.lastSeenAt ?? null });
     }
     loadPresence();
     const t = setInterval(loadPresence, 30_000);
-    return () => {
-      stop = true;
-      clearInterval(t);
-    };
+    return () => { stop = true; clearInterval(t); };
   }, [active?.otherUserId]);
 
   async function pingTyping(isTyping: boolean) {
@@ -251,8 +214,7 @@ export default function MessagingClient() {
   }
 
   function validateFile(file: File) {
-    const okType = file.type.startsWith("image/") || file.type === "application/pdf";
-    if (!okType) return "Only images or PDFs allowed";
+    if (!file.type.startsWith("image/") && file.type !== "application/pdf") return "Only images or PDFs allowed";
     if (file.size > 10 * 1024 * 1024) return "File too large (max 10MB)";
     return null;
   }
@@ -262,19 +224,13 @@ export default function MessagingClient() {
     if (!files.length) return;
     for (const f of files) {
       const err = validateFile(f);
-      if (err) {
-        alert(err);
-        e.target.value = "";
-        return;
-      }
+      if (err) { alert(err); e.target.value = ""; return; }
     }
     setPickedFiles((prev) => [...prev, ...files]);
     e.target.value = "";
   }
 
-  function removePickedFile(idx: number) {
-    setPickedFiles((prev) => prev.filter((_, i) => i !== idx));
-  }
+  function removePickedFile(idx: number) { setPickedFiles((prev) => prev.filter((_, i) => i !== idx)); }
 
   async function forceDownload(url: string, filename: string) {
     const res = await fetch(url);
@@ -282,11 +238,8 @@ export default function MessagingClient() {
     const blob = await res.blob();
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = filename || "download";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    a.href = blobUrl; a.download = filename || "download";
+    document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(blobUrl);
   }
 
@@ -297,46 +250,29 @@ export default function MessagingClient() {
       body: JSON.stringify({ channelId, fileName: file.name, contentType: file.type }),
     }).then((r) => r.json());
     if (!sign?.ok) throw new Error(sign?.message ?? "Sign upload failed");
-
     const put = await fetch(sign.signedUrl as string, {
       method: "PUT",
       headers: { "Content-Type": file.type, "x-upsert": "false" },
       body: file,
     });
     if (!put.ok) throw new Error("Upload failed");
-
-    return {
-      bucket: sign.bucket as string,
-      objectPath: sign.objectPath as string,
-      fileName: file.name,
-      contentType: file.type,
-      sizeBytes: file.size,
-    };
+    return { bucket: sign.bucket, objectPath: sign.objectPath, fileName: file.name, contentType: file.type, sizeBytes: file.size };
   }
 
   async function deleteMessage(messageId: string) {
     const r = await fetch(`/api/chat/messages/${messageId}`, { method: "DELETE" });
     const j = await r.json().catch(() => null);
-    if (j?.ok) {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === messageId
-            ? { ...m, isDeleted: true, text: "", deletedAt: j.message?.deletedAt ?? null }
-            : m
-        )
-      );
+    if (j?.ok && activeId) {
+      storeMergeMessages(activeId, [{
+        id: messageId,
+        senderId: "",
+        text: "",
+        createdAt: new Date().toISOString(),
+        isDeleted: true,
+        deletedAt: j.message?.deletedAt ?? null,
+      }]);
     }
   }
-
-  const mergeMessages = useCallback((incoming: Msg[]) => {
-    setMessages((prev) => {
-      const map = new Map(prev.map((m) => [m.id, m]));
-      for (const m of incoming) map.set(m.id, { ...(map.get(m.id) ?? {}), ...m });
-      const arr = Array.from(map.values());
-      arr.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      return arr;
-    });
-  }, []);
 
   async function markChatRead(channelId: string) {
     await fetch("/api/chat/read", {
@@ -344,116 +280,367 @@ export default function MessagingClient() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ channelId }),
     }).catch(() => {});
-    setConversations((prev) =>
-      prev.map((c) => (c.id === channelId ? { ...c, unread: 0 } : c))
-    );
+    storeMarkRead(channelId);
     window.dispatchEvent(new Event("chat:unread-refresh"));
   }
 
-  // Shared handler called by both the broadcast and CDC paths.
-  // Deduplicates so the same message is never rendered twice.
-  const handleIncomingRow = useCallback(
-    (
-      channelId: string,
-      msg: Msg,
-      meIdSnap: string
-    ) => {
-      if (seenMsgIds.current.has(msg.id)) return;
-      seenMsgIds.current.add(msg.id);
+  const refreshConversations = useCallback(async (openChannelId?: string | null) => {
+    const r = await fetch("/api/chat/channels", { cache: "no-store" });
+    const j = await r.json().catch(() => null);
+    if (!j?.ok) return;
+    const sorted: Conv[] = [...j.items].sort(
+      (a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()
+    ).map((c) => (openChannelId && c.id === openChannelId ? { ...c, unread: 0 } : c));
+    storeSetConversations(sorted);
+  }, [storeSetConversations]);
 
-      mergeMessages([msg]);
-
-      requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-      });
-
-      if (msg.senderId !== meIdSnap && channelId === activeIdRef.current) {
-        void markChatRead(channelId);
-      }
-
-      setConversations((prev) => {
-        const found = prev.some((c) => c.id === channelId);
-        if (!found) return prev;
-
-        const updated = prev.map((c) =>
-          c.id === channelId
-            ? {
-                ...c,
-                lastMessage: msg.text?.trim() || "📎 Attachment",
-                lastAt: msg.createdAt,
-                unread:
-                  msg.senderId === meIdSnap || c.id === activeIdRef.current
-                    ? 0
-                    : c.unread + 1,
-              }
-            : c
-        );
-        updated.sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
-        return updated;
-      });
-    },
-    [mergeMessages]
-  );
-
-  const convRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const refreshConversations = useCallback((openChannelId?: string | null) => {
-    if (convRefreshTimer.current) clearTimeout(convRefreshTimer.current);
-    convRefreshTimer.current = setTimeout(async () => {
-      const r = await fetch("/api/chat/channels", { cache: "no-store" });
-      const j = await r.json().catch(() => null);
-      if (!j?.ok) return;
-      const sorted = [...j.items]
-        .sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
-        .map((c) => (openChannelId && c.id === openChannelId ? { ...c, unread: 0 } : c));
-      setConversations(sorted);
-    }, 300);
-  }, []);
-
+  // ── Boot: get meId; conversations already in store from prefetch ──────────
   useEffect(() => {
     (async () => {
       const r = await fetch("/api/me", { cache: "no-store" });
       const j = await r.json().catch(() => null);
       if (j?.ok) setMeId(j.id);
     })();
-  }, []);
+    // If store hasn't loaded yet (user navigated directly to /messaging),
+    // trigger a fresh prefetch now so we don't show an empty state.
+    if (!convLoaded) void prefetch();
+  }, [convLoaded, prefetch]);
 
-  useEffect(() => {
-    setZoom(1);
-    setOffset({ x: 0, y: 0 });
-  }, [imgViewer.idx]);
-
-  useEffect(() => {
-    void refreshConversations();
-  }, [refreshConversations]);
-
+  // ── Auto-select first conversation ────────────────────────────────────────
   useEffect(() => {
     if (activeId) return;
     if (qsChannelId && conversations.some((c) => c.id === qsChannelId)) {
-      setActiveId(qsChannelId);
-      return;
+      setActiveId(qsChannelId); return;
     }
     if (conversations[0]?.id) setActiveId(conversations[0].id);
   }, [conversations, qsChannelId, activeId]);
 
+  // ── If active conversation got removed ────────────────────────────────────
   useEffect(() => {
     if (!activeId) return;
-    const stillExists = conversations.some((c) => c.id === activeId);
-    if (stillExists) return;
+    if (conversations.some((c) => c.id === activeId)) return;
     setActiveId(conversations[0]?.id ?? null);
-    setMessages([]);
-    setNextCursor(null);
     setReadInfo(null);
     setChatMeta({ isChatClosed: true, chatCloseAt: null });
     setSendErr("This chat is no longer available.");
   }, [conversations, activeId]);
+
+  // ── Load messages for active channel ─────────────────────────────────────
+  // If messages are already in the store cache (pre-fetched), skip the fetch
+  // and just mark read. Only fetch if cache is empty.
+  useEffect(() => {
+    if (!activeId || !meId) return;
+    const channelId = activeId;
+    let cancelled = false;
+
+    seenMsgIds.current.clear();
+    setReadInfo(null);
+
+    const cached = useChatStore.getState().messageCache[channelId];
+    const hasCached = cached && cached.length > 0;
+
+    async function loadMessages() {
+      if (!hasCached) {
+        setLoadingMsgs(true);
+        const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, { cache: "no-store" })
+          .then((r) => r.json()).catch(() => null);
+        if (cancelled) { setLoadingMsgs(false); return; }
+        if (j?.ok) {
+          storeMergeMessages(channelId, (j.items as Msg[]).slice().reverse());
+          storeSetCursor(channelId, j.nextCursor ?? null);
+          if (j.read) setReadInfo(j.read);
+          if (typeof j.isChatClosed === "boolean") {
+            setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
+          }
+        }
+        setLoadingMsgs(false);
+      } else {
+        // Cached — fetch metadata (read receipts, chat status) in background
+        // without blocking render
+        fetch(`/api/chat/messages?channelId=${channelId}&take=1`, { cache: "no-store" })
+          .then((r) => r.json()).then((j) => {
+            if (cancelled || !j?.ok) return;
+            if (j.read) setReadInfo(j.read);
+            if (typeof j.isChatClosed === "boolean") {
+              setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
+            }
+          }).catch(() => {});
+      }
+
+      if (!cancelled) {
+        await markChatRead(channelId);
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "auto" }), 30);
+      }
+    }
+
+    loadMessages();
+    return () => { cancelled = true; };
+  }, [activeId, meId]);
+
+  // ── Realtime subscription for active channel ──────────────────────────────
+  useEffect(() => {
+    if (!activeId || !meId) return;
+
+    const channelId = activeId;
+    const meIdSnap = meId;
+    const supabase = supabaseBrowser;
+    let mounted = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    async function start() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!mounted || !session?.access_token) return;
+      await supabase.realtime.setAuth(session.access_token);
+
+      channel = supabase
+        .channel(`chat-room-${channelId}`, {
+          config: { broadcast: { self: true } },
+        })
+
+        // ── broadcast: new message (fast path) ───────────────────────────────
+        .on("broadcast", { event: "new-message" }, ({ payload }) => {
+          const data = payload as { channelId: string; message: Msg };
+          if (data.channelId !== channelId) return;
+          const msg = data.message;
+
+          // Remove optimistic temp message then merge real one
+          const withoutTemp = (useChatStore.getState().messageCache[channelId] ?? [])
+            .filter((m) => !(m.id.startsWith("temp-") && m.senderId === msg.senderId));
+          storeMergeMessages(channelId, [...withoutTemp, msg]);
+          seenMsgIds.current.add(msg.id);
+
+          requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
+
+          if (msg.senderId !== meIdSnap && channelId === activeIdRef.current) {
+            void markChatRead(channelId);
+          }
+          if (msg.senderId !== meIdSnap && channelId !== activeIdRef.current) {
+            window.dispatchEvent(new Event("chat:unread-refresh"));
+          }
+
+          storeSetConversations(
+            useChatStore.getState().conversations.map((c) =>
+              c.id === channelId
+                ? {
+                    ...c,
+                    lastMessage: msg.text?.trim() || "📎 Attachment",
+                    lastAt: msg.createdAt,
+                    unread: msg.senderId === meIdSnap || c.id === activeIdRef.current ? 0 : c.unread + 1,
+                  }
+                : c
+            ).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
+          );
+        })
+
+        // ── postgres CDC INSERT (fallback) ────────────────────────────────────
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "ChatMessage", filter: `channelId=eq.${channelId}` }, (payload) => {
+          const row = payload.new as { id: string; channelId: string; senderId: string; text: string; createdAt: string; isDeleted?: boolean; deletedAt?: string | null };
+          if (row.channelId !== channelId) return;
+          if (seenMsgIds.current.has(row.id)) return;
+          seenMsgIds.current.add(row.id);
+
+          const incoming: Msg = { id: row.id, senderId: row.senderId, text: row.text ?? "", createdAt: row.createdAt, isDeleted: row.isDeleted, deletedAt: row.deletedAt ?? null };
+          storeMergeMessages(channelId, [incoming]);
+          requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
+
+          if (row.senderId !== meIdSnap && channelId === activeIdRef.current) void markChatRead(channelId);
+          if (row.senderId !== meIdSnap && channelId !== activeIdRef.current) window.dispatchEvent(new Event("chat:unread-refresh"));
+
+          storeSetConversations(
+            useChatStore.getState().conversations.map((c) =>
+              c.id === channelId
+                ? { ...c, lastMessage: row.text?.trim() || "📎 Attachment", lastAt: row.createdAt, unread: row.senderId === meIdSnap || c.id === activeIdRef.current ? 0 : c.unread + 1 }
+                : c
+            ).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
+          );
+        })
+
+        // ── typing ────────────────────────────────────────────────────────────
+        .on("broadcast", { event: "typing" }, ({ payload }) => {
+          const data = payload as { channelId: string; userId: string; isTyping: boolean };
+          if (data.channelId !== channelId || data.userId === meIdSnap) return;
+          if (data.isTyping) {
+            setOtherTyping(true);
+            if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
+            otherTypingExpiry.current = setTimeout(() => setOtherTyping(false), 2500);
+          } else {
+            setOtherTyping(false);
+            if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
+          }
+        });
+
+      realtimeChannelRef.current = channel;
+      channel.subscribe();
+    }
+
+    void start();
+    return () => {
+      mounted = false;
+      realtimeChannelRef.current = null;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [activeId, meId]);
+
+  // ── Periodic conversation refresh ─────────────────────────────────────────
+  useEffect(() => {
+    if (!activeId) return;
+    const channelId = activeId;
+    let stop = false;
+    const t = setInterval(() => {
+      if (!stop && document.visibilityState === "visible") refreshConversations(channelId);
+    }, 30_000);
+    return () => { stop = true; clearInterval(t); };
+  }, [activeId, refreshConversations]);
+
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+      if (e.persisted || nav?.type === "back_forward") window.location.reload();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
+  async function loadOlder() {
+    if (!activeId || !nextCursor) return;
+    setLoadingMsgs(true);
+    const r = await fetch(`/api/chat/messages?channelId=${activeId}&take=30&cursor=${nextCursor}`, { cache: "no-store" });
+    const j = await r.json().catch(() => null);
+    if (j?.ok) {
+      storeMergeMessages(activeId, (j.items as Msg[]).slice().reverse());
+      storeSetCursor(activeId, j.nextCursor ?? null);
+      if (j.read) setReadInfo(j.read);
+      if (typeof j.isChatClosed === "boolean") setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
+    }
+    setLoadingMsgs(false);
+  }
+
+  async function send() {
+    if (!activeId) return;
+    if (chatMeta.isChatClosed) { setSendErr("Chat is closed."); return; }
+    const t = text.trim();
+    if (!t && pickedFiles.length === 0) return;
+
+    if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
+    void pingTyping(false);
+    setText("");
+    setSendErr(null);
+    setUploading(true);
+
+    const optimisticId = `temp-${Date.now()}`;
+    storeMergeMessages(activeId, [{
+      id: optimisticId, senderId: meId ?? "", text: t,
+      createdAt: new Date().toISOString(), attachments: [],
+    }]);
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
+
+    try {
+      const uploaded = await Promise.all(pickedFiles.map((f) => uploadAttachment(activeId, f)));
+      const r = await fetch("/api/chat/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channelId: activeId, text: t, attachments: uploaded }),
+      });
+      const j = await r.json().catch(() => null);
+
+      if (!r.ok) {
+        // Roll back optimistic
+        storeSetConversations(
+          useChatStore.getState().messageCache[activeId]
+            ? useChatStore.getState().conversations // leave convs alone
+            : useChatStore.getState().conversations
+        );
+        storeMergeMessages(activeId, []); // can't easily remove — re-fetch
+        storeClearChannel(activeId);
+        setSendErr(j?.message ?? "Failed to send");
+        if (r.status === 403 && (j?.message?.toLowerCase?.() ?? "").includes("closed")) {
+          setChatMeta((p) => ({ ...p, isChatClosed: true }));
+        }
+        setText(t);
+        return;
+      }
+
+      if (j?.ok && j.message) {
+        const realMsg = j.message as Msg;
+
+        // Replace optimistic with real message
+        const current = useChatStore.getState().messageCache[activeId] ?? [];
+        const withoutTemp = current.filter((m) => m.id !== optimisticId);
+        storeMergeMessages(activeId, [...withoutTemp, realMsg]);
+        seenMsgIds.current.add(realMsg.id);
+
+        // Broadcast to receiver's chat-room channel (fast path for them)
+        if (realtimeChannelRef.current) {
+          await realtimeChannelRef.current.send({
+            type: "broadcast",
+            event: "new-message",
+            payload: { channelId: activeId, message: realMsg },
+          });
+        }
+
+        // Also broadcast to receiver's personal inbox channel so
+        // ChatUnreadListener updates their header badge even if they're
+        // not on /messaging
+        const receiverConv = conversations.find((c) => c.id === activeId);
+        const receiverId = receiverConv?.otherUserId;
+        if (receiverId && supabaseBrowser) {
+          const inboxChannel = supabaseBrowser.channel(`user-inbox-${receiverId}`);
+          await inboxChannel.send({
+            type: "broadcast",
+            event: "new-message",
+            payload: { channelId: activeId, senderId: meId, message: realMsg },
+          });
+          supabaseBrowser.removeChannel(inboxChannel);
+        }
+
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
+      }
+
+      setPickedFiles([]);
+      await markChatRead(activeId);
+
+      storeSetConversations(
+        useChatStore.getState().conversations.map((c) =>
+          c.id === activeId
+            ? { ...c, unread: 0, lastMessage: t || (pickedFiles.length ? "📎 Attachment" : ""), lastAt: new Date().toISOString() }
+            : c
+        ).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
+      );
+    } catch (e: unknown) {
+      storeClearChannel(activeId);
+      setSendErr(e instanceof Error ? e.message : "Failed to send");
+      setText(t);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const [ctx, setCtx] = useState<{ open: boolean; x: number; y: number; messageId: string | null }>({ open: false, x: 0, y: 0, messageId: null });
+
+  useEffect(() => {
+    const close = () => setCtx((p) => ({ ...p, open: false, messageId: null }));
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => { window.removeEventListener("click", close); window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
+  }, []);
+
+  const otherReadAtMs = readInfo ? new Date(readInfo.otherLastReadAt).getTime() : 0;
+  const lastMyMsgId = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].senderId === meId && !messages[i].id.startsWith("temp-")) return messages[i].id;
+    }
+    return null;
+  })();
+
+  const inputDisabled = !active || chatMeta.isChatClosed || uploading;
 
   function timeLeft(iso: string) {
     const ms = new Date(iso).getTime() - Date.now();
     if (ms <= 0) return "Closed";
     const mins = Math.ceil(ms / 60000);
     if (mins < 60) return `${mins}m left`;
-    const hrs = Math.floor(mins / 60);
-    const rem = mins % 60;
+    const hrs = Math.floor(mins / 60), rem = mins % 60;
     return rem ? `${hrs}h ${rem}m` : `${hrs}h left`;
   }
 
@@ -466,435 +653,6 @@ export default function MessagingClient() {
     return "ok";
   }
 
-  useEffect(() => {
-    const onPageShow = (e: PageTransitionEvent) => {
-      const nav = performance.getEntriesByType("navigation")[0] as
-        | PerformanceNavigationTiming
-        | undefined;
-      if (e.persisted || nav?.type === "back_forward") window.location.reload();
-    };
-    window.addEventListener("pageshow", onPageShow);
-    return () => window.removeEventListener("pageshow", onPageShow);
-  }, []);
-
-  const applyMessagesResponse = useCallback(
-    (j: any, _channelId: string, scroll: "auto" | "smooth" | null = null) => {
-      if (!j?.ok) return;
-      mergeMessages((j.items as Msg[]).slice().reverse());
-      setNextCursor(j.nextCursor ?? null);
-      if (j.read) setReadInfo(j.read);
-      if (typeof j.isChatClosed === "boolean") {
-        setChatMeta({
-          isChatClosed: !!j.isChatClosed,
-          chatCloseAt: j.chatCloseAt ?? null,
-        });
-      }
-      if (scroll) {
-        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: scroll }), 30);
-      }
-    },
-    [mergeMessages]
-  );
-
-  useEffect(() => {
-    if (!activeId || !meId) return;
-    const channelId = activeId;
-    let cancelled = false;
-
-    // Clear dedup set when switching conversations
-    seenMsgIds.current.clear();
-
-    async function loadInitialMessages() {
-      setLoadingMsgs(true);
-      const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
-        cache: "no-store",
-      })
-        .then((r) => r.json())
-        .catch(() => null);
-
-      if (cancelled) {
-        setLoadingMsgs(false);
-        return;
-      }
-
-      applyMessagesResponse(j, channelId, "auto");
-      setLoadingMsgs(false);
-      await markChatRead(channelId);
-      refreshConversations(channelId);
-    }
-
-    setMessages([]);
-    setNextCursor(null);
-    setReadInfo(null);
-    loadInitialMessages();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeId, meId, applyMessagesResponse, refreshConversations]);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Realtime subscription
-  //
-  // Two delivery paths, same dedup set:
-  //
-  //  1. broadcast "new-message"  — sender fires this right after the HTTP POST
-  //     succeeds, carrying the full saved message (with real id & attachments).
-  //     Arrives in ~50–200 ms for both participants. Does NOT require RLS.
-  //     This is the primary path that makes messages pop up for the receiver.
-  //
-  //  2. postgres_changes INSERT  — arrives ~200–800 ms later as a CDC event.
-  //     Acts as a fallback / source of truth (e.g. if broadcast was missed
-  //     because the receiver was briefly offline).  seenMsgIds deduplicates.
-  //
-  //  broadcast: { self: true } means the sender's own tab also receives the
-  //  broadcast — this lets us replace the temp optimistic message with the
-  //  server-confirmed one (real id, real attachments) consistently.
-  // ─────────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!activeId || !meId) return;
-
-    const channelId = activeId;
-    const meIdSnap = meId;
-    const supabase = supabaseBrowser;
-
-    let mounted = true;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-
-    async function start() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!mounted || !session?.access_token) return;
-
-      await supabase.realtime.setAuth(session.access_token);
-
-      channel = supabase
-        .channel(`chat-room-${channelId}`, {
-          config: {
-            broadcast: { self: true }, // sender receives their own broadcast too
-          },
-        })
-
-        // ── Path 1: broadcast "new-message" (fast, no RLS dependency) ───────
-        .on("broadcast", { event: "new-message" }, ({ payload }) => {
-          const data = payload as { channelId: string; message: Msg };
-          if (data.channelId !== channelId) return;
-
-          const msg = data.message;
-
-          // Remove any temp optimistic message from the sender before merging
-          setMessages((prev) => {
-            const withoutTemp = prev.filter(
-              (m) => !(m.id.startsWith("temp-") && m.senderId === msg.senderId)
-            );
-            const map = new Map(withoutTemp.map((m) => [m.id, m]));
-            map.set(msg.id, { ...(map.get(msg.id) ?? {}), ...msg });
-            return Array.from(map.values()).sort(
-              (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-            );
-          });
-
-          seenMsgIds.current.add(msg.id);
-
-          requestAnimationFrame(() => {
-            bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-          });
-
-          if (msg.senderId !== meIdSnap && channelId === activeIdRef.current) {
-            void markChatRead(channelId);
-          }
-
-          setConversations((prev) => {
-            const found = prev.some((c) => c.id === channelId);
-            if (!found) {
-              void refreshConversations(channelId);
-              return prev;
-            }
-            const updated = prev.map((c) =>
-              c.id === channelId
-                ? {
-                    ...c,
-                    lastMessage: msg.text?.trim() || "📎 Attachment",
-                    lastAt: msg.createdAt,
-                    unread:
-                      msg.senderId === meIdSnap || c.id === activeIdRef.current
-                        ? 0
-                        : c.unread + 1,
-                  }
-                : c
-            );
-            updated.sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
-            return updated;
-          });
-        })
-
-        // ── Path 2: postgres CDC INSERT (fallback / source of truth) ─────────
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "ChatMessage",
-            filter: `channelId=eq.${channelId}`,
-          },
-          (payload) => {
-            const row = payload.new as {
-              id: string;
-              channelId: string;
-              senderId: string;
-              text: string;
-              createdAt: string;
-              isDeleted?: boolean;
-              deletedAt?: string | null;
-            };
-
-            if (row.channelId !== channelId) return;
-            // Skip if broadcast already handled this message
-            if (seenMsgIds.current.has(row.id)) return;
-
-            const incoming: Msg = {
-              id: row.id,
-              senderId: row.senderId,
-              text: row.text ?? "",
-              createdAt: row.createdAt,
-              isDeleted: row.isDeleted,
-              deletedAt: row.deletedAt ?? null,
-            };
-
-            handleIncomingRow(channelId, incoming, meIdSnap);
-          }
-        )
-
-        // ── Typing indicator ────────────────────────────────────────────────
-        .on("broadcast", { event: "typing" }, ({ payload }) => {
-          const data = payload as {
-            channelId: string;
-            userId: string;
-            isTyping: boolean;
-          };
-
-          if (data.channelId !== channelId) return;
-          if (data.userId === meIdSnap) return;
-
-          if (data.isTyping) {
-            setOtherTyping(true);
-            if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
-            otherTypingExpiry.current = setTimeout(() => setOtherTyping(false), 2500);
-          } else {
-            setOtherTyping(false);
-            if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
-          }
-        });
-
-      realtimeChannelRef.current = channel;
-      channel.subscribe((status) => {
-        console.log("chat room status", channelId, status);
-      });
-    }
-
-    void start();
-
-    return () => {
-      mounted = false;
-      realtimeChannelRef.current = null;
-      if (channel) supabase.removeChannel(channel);
-    };
-  }, [activeId, meId, mergeMessages, handleIncomingRow, refreshConversations]);
-
-  useEffect(() => {
-    if (!activeId) return;
-    const channelId = activeId;
-    let stop = false;
-
-    const convT = setInterval(() => {
-      if (!stop && document.visibilityState === "visible") {
-        refreshConversations(channelId);
-      }
-    }, 30_000);
-
-    return () => {
-      stop = true;
-      clearInterval(convT);
-    };
-  }, [activeId, refreshConversations]);
-
-  const [ctx, setCtx] = useState<{
-    open: boolean;
-    x: number;
-    y: number;
-    messageId: string | null;
-  }>({ open: false, x: 0, y: 0, messageId: null });
-
-  useEffect(() => {
-    const close = () => setCtx((p) => ({ ...p, open: false, messageId: null }));
-    window.addEventListener("click", close);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
-    };
-  }, []);
-
-  async function loadOlder() {
-    if (!activeId || !nextCursor) return;
-    setLoadingMsgs(true);
-
-    const r = await fetch(`/api/chat/messages?channelId=${activeId}&take=30&cursor=${nextCursor}`, {
-      cache: "no-store",
-    });
-    const j = await r.json().catch(() => null);
-
-    if (j?.ok) {
-      const older = (j.items as Msg[]).slice().reverse();
-      setMessages((prev) => {
-        const map = new Map(prev.map((m) => [m.id, m]));
-        for (const m of older) map.set(m.id, { ...(map.get(m.id) ?? {}), ...m });
-        return Array.from(map.values()).sort(
-          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        );
-      });
-      setNextCursor(j.nextCursor ?? null);
-      if (j.read) setReadInfo(j.read);
-      if (typeof j.isChatClosed === "boolean") {
-        setChatMeta({
-          isChatClosed: !!j.isChatClosed,
-          chatCloseAt: j.chatCloseAt ?? null,
-        });
-      }
-    }
-
-    setLoadingMsgs(false);
-  }
-
-  async function send() {
-    if (!activeId) return;
-    if (chatMeta.isChatClosed) {
-      setSendErr("Chat is closed.");
-      return;
-    }
-
-    const t = text.trim();
-    if (!t && pickedFiles.length === 0) return;
-
-    if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
-    void pingTyping(false);
-
-    setText("");
-    setSendErr(null);
-    setUploading(true);
-
-    // Show optimistic message immediately for the sender
-    const optimisticId = `temp-${Date.now()}`;
-    const optimisticMsg: Msg = {
-      id: optimisticId,
-      senderId: meId ?? "",
-      text: t,
-      createdAt: new Date().toISOString(),
-      attachments: [],
-    };
-    mergeMessages([optimisticMsg]);
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
-
-    try {
-      const uploaded = await Promise.all(pickedFiles.map((f) => uploadAttachment(activeId, f)));
-
-      const r = await fetch("/api/chat/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channelId: activeId, text: t, attachments: uploaded }),
-      });
-
-      const j = await r.json().catch(() => null);
-
-      if (!r.ok) {
-        // Roll back optimistic message on failure
-        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
-        setSendErr(j?.message ?? "Failed to send");
-        if (r.status === 403 && (j?.message?.toLowerCase?.() ?? "").includes("closed")) {
-          setChatMeta((p) => ({ ...p, isChatClosed: true }));
-        }
-        setText(t);
-        return;
-      }
-
-      if (j?.ok && j.message) {
-        const realMsg = j.message as Msg;
-
-        // Replace optimistic with confirmed message
-        setMessages((prev) => {
-          const without = prev.filter((m) => m.id !== optimisticId);
-          const map = new Map(without.map((m) => [m.id, m]));
-          map.set(realMsg.id, realMsg);
-          return Array.from(map.values()).sort(
-            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          );
-        });
-
-        // Mark seen so CDC path doesn't double-render it
-        seenMsgIds.current.add(realMsg.id);
-
-        // ── Broadcast to the other participant (and self, via self:true) ──────
-        // This is what makes the message appear instantly on the receiver's screen.
-        if (realtimeChannelRef.current) {
-          await realtimeChannelRef.current.send({
-            type: "broadcast",
-            event: "new-message",
-            payload: {
-              channelId: activeId,
-              message: realMsg,
-            },
-          });
-        }
-
-        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
-      }
-
-      setPickedFiles([]);
-      await markChatRead(activeId);
-
-      setConversations((prev) => {
-        const found = prev.some((c) => c.id === activeId);
-        if (!found) {
-          void refreshConversations(activeId);
-          return prev;
-        }
-        const updated = prev.map((c) =>
-          c.id === activeId
-            ? {
-                ...c,
-                unread: 0,
-                lastMessage: t || (pickedFiles.length ? "📎 Attachment" : ""),
-                lastAt: new Date().toISOString(),
-              }
-            : c
-        );
-        updated.sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
-        return updated;
-      });
-    } catch (e: unknown) {
-      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
-      setSendErr(e instanceof Error ? e.message : "Failed to send");
-      setText(t);
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  const otherReadAtMs = readInfo ? new Date(readInfo.otherLastReadAt).getTime() : 0;
-  const lastMyMsgId = (() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].senderId === meId && !messages[i].id.startsWith("temp-"))
-        return messages[i].id;
-    }
-    return null;
-  })();
-
-  const inputDisabled = !active || chatMeta.isChatClosed || uploading;
-
   const IconOpen = ({ className = "" }: { className?: string }) => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className={className}>
       <path d="M14 5h5v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -902,7 +660,6 @@ export default function MessagingClient() {
       <path d="M19 14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
-
   const IconDownload = ({ className = "" }: { className?: string }) => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className={className}>
       <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -910,28 +667,24 @@ export default function MessagingClient() {
       <path d="M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
-
   const IconPdf = ({ className = "" }: { className?: string }) => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className={className}>
       <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
       <path d="M14 2v5h5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
     </svg>
   );
-
   const IconSearch = () => (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" className="shrink-0 opacity-50">
       <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
       <path d="M16.5 16.5l4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
-
   const IconSend = () => (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
       <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M22 2L15 22 11 13 2 9l20-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
-
   const IconAttach = () => (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
       <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.48" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -950,31 +703,33 @@ export default function MessagingClient() {
         .typing-dot { animation: typingPulse 1.2s infinite ease-in-out; }
         .typing-dot:nth-child(2) { animation-delay:0.2s; }
         .typing-dot:nth-child(3) { animation-delay:0.4s; }
-        @keyframes typingPulse { 0%,80%,100% { transform:scale(0.7); opacity:0.4; } 40% { transform:scale(1); opacity:1; } }
+        @keyframes typingPulse { 0%,80%,100%{transform:scale(0.7);opacity:0.4;}40%{transform:scale(1);opacity:1;} }
         .send-btn { transition: box-shadow 0.15s, transform 0.1s, opacity 0.15s; }
-        .send-btn:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(124,58,237,0.45); }
-        .send-btn:not(:disabled):active { transform: translateY(0); }
+        .send-btn:not(:disabled):hover { transform:translateY(-1px);box-shadow:0 6px 20px rgba(124,58,237,0.45); }
+        .send-btn:not(:disabled):active { transform:translateY(0); }
         .pill-filter { transition: all 0.15s; }
         .online-pulse { animation: pulse 2s infinite; }
-        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+        @keyframes pulse { 0%,100%{opacity:1;}50%{opacity:0.5;} }
         .img-thumb { transition: transform 0.15s, border-color 0.15s; }
         .img-thumb:hover { transform: scale(1.05); }
         .load-older-btn { transition: background 0.15s, box-shadow 0.15s; }
         .load-older-btn:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
         .attach-chip { animation: chipIn 0.18s ease both; }
-        @keyframes chipIn { from { opacity:0; transform:scale(0.85); } to { opacity:1; transform:scale(1); } }
+        @keyframes chipIn { from{opacity:0;transform:scale(0.85);}to{opacity:1;transform:scale(1);} }
         .ctx-menu { animation: ctxIn 0.12s ease both; }
-        @keyframes ctxIn { from { opacity:0; transform:scale(0.92) translateY(-4px); } to { opacity:1; transform:scale(1) translateY(0); } }
+        @keyframes ctxIn { from{opacity:0;transform:scale(0.92) translateY(-4px);}to{opacity:1;transform:scale(1) translateY(0);} }
         .viewer-fade { animation: viewerIn 0.2s ease both; }
-        @keyframes viewerIn { from { opacity:0; } to { opacity:1; } }
+        @keyframes viewerIn { from{opacity:0;}to{opacity:1;} }
         .viewer-img { animation: viewerImgIn 0.22s cubic-bezier(.34,1.36,.64,1) both; }
-        @keyframes viewerImgIn { from { opacity:0; transform:scale(0.93); } to { opacity:1; transform:scale(1); } }
-        .sidebar-scroll::-webkit-scrollbar { width: 3px; }
-        .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
-        .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.25); border-radius: 2px; }
-        .msg-scroll::-webkit-scrollbar { width: 4px; }
-        .msg-scroll::-webkit-scrollbar-track { background: transparent; }
-        .msg-scroll::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.2); border-radius: 2px; }
+        @keyframes viewerImgIn { from{opacity:0;transform:scale(0.93);}to{opacity:1;transform:scale(1);} }
+        .sidebar-scroll::-webkit-scrollbar{width:3px;}
+        .sidebar-scroll::-webkit-scrollbar-track{background:transparent;}
+        .sidebar-scroll::-webkit-scrollbar-thumb{background:rgba(128,128,128,0.25);border-radius:2px;}
+        .msg-scroll::-webkit-scrollbar{width:4px;}
+        .msg-scroll::-webkit-scrollbar-track{background:transparent;}
+        .msg-scroll::-webkit-scrollbar-thumb{background:rgba(128,128,128,0.2);border-radius:2px;}
+        .skeleton { animation: shimmer 1.4s infinite; background: linear-gradient(90deg, rgb(var(--card2)) 25%, rgb(var(--card)) 50%, rgb(var(--card2)) 75%); background-size: 200% 100%; }
+        @keyframes shimmer { 0%{background-position:200% 0;}100%{background-position:-200% 0;} }
       `}</style>
 
       <div className="pt-12 pb-10">
@@ -995,6 +750,7 @@ export default function MessagingClient() {
           </header>
 
           <section className="grid h-[calc(100vh-250px)] min-h-[520px] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_20px_60px_rgba(0,0,0,0.10)] lg:grid-cols-[300px_1fr]">
+
             {/* ── Sidebar ── */}
             <div className="flex min-h-0 flex-col border-b border-[rgb(var(--border))] bg-[rgb(var(--card2))]/60 lg:border-b-0 lg:border-r">
               <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] px-4 py-3.5">
@@ -1007,15 +763,8 @@ export default function MessagingClient() {
               <div className="px-3 pt-3 pb-2">
                 <div className="flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 focus-within:border-[rgb(var(--primary))/0.6] focus-within:ring-1 focus-within:ring-[rgb(var(--primary))/0.2] transition">
                   <IconSearch />
-                  <input
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    className="min-w-0 flex-1 bg-transparent text-[0.75rem] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] focus:outline-none"
-                    placeholder="Search…"
-                  />
-                  {q && (
-                    <button type="button" onClick={() => setQ("")} className="opacity-40 hover:opacity-80 text-[rgb(var(--fg))] transition text-xs">✕</button>
-                  )}
+                  <input value={q} onChange={(e) => setQ(e.target.value)} className="min-w-0 flex-1 bg-transparent text-[0.75rem] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] focus:outline-none" placeholder="Search…" />
+                  {q && <button type="button" onClick={() => setQ("")} className="opacity-40 hover:opacity-80 text-[rgb(var(--fg))] transition text-xs">✕</button>}
                 </div>
               </div>
 
@@ -1024,16 +773,8 @@ export default function MessagingClient() {
                   const labels = { ALL: "All", STUDENT: "Student", TUTOR: "Tutor" };
                   const isActive = roleFilter === key;
                   return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setRoleFilter(key)}
-                      className={`pill-filter flex-1 rounded-lg py-1.5 text-[0.68rem] font-semibold transition ${
-                        isActive
-                          ? "bg-[rgb(var(--primary))] text-white shadow-[0_2px_10px_rgba(124,58,237,0.30)]"
-                          : "bg-[rgb(var(--card))] border border-[rgb(var(--border))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))]"
-                      }`}
-                    >
+                    <button key={key} type="button" onClick={() => setRoleFilter(key)}
+                      className={`pill-filter flex-1 rounded-lg py-1.5 text-[0.68rem] font-semibold transition ${isActive ? "bg-[rgb(var(--primary))] text-white shadow-[0_2px_10px_rgba(124,58,237,0.30)]" : "bg-[rgb(var(--card))] border border-[rgb(var(--border))] text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))]"}`}>
                       {labels[key]}
                     </button>
                   );
@@ -1041,19 +782,20 @@ export default function MessagingClient() {
               </div>
 
               <div className="sidebar-scroll flex-1 space-y-1.5 overflow-y-auto px-3 pb-3">
+                {/* Skeleton while first load */}
+                {!convLoaded && [1, 2, 3].map((i) => (
+                  <div key={i} className="rounded-xl border border-[rgb(var(--border))] px-3 py-3">
+                    <div className="skeleton h-3 w-3/4 rounded mb-2" />
+                    <div className="skeleton h-2 w-1/2 rounded" />
+                  </div>
+                ))}
+
                 {filteredConversations.map((conv) => {
                   const isActive = conv.id === activeId;
                   const isStudent = conv.viewerIsStudent;
                   return (
-                    <div
-                      key={conv.id}
-                      onClick={() => setActiveId(conv.id)}
-                      className={`conv-item relative cursor-pointer rounded-xl border px-3 py-3 ${
-                        isActive
-                          ? "border-[rgb(var(--primary))/0.5] bg-[rgb(var(--primary))/0.07] shadow-[0_2px_14px_rgba(124,58,237,0.12)]"
-                          : "border-[rgb(var(--border))] bg-[rgb(var(--card))] hover:border-[rgb(var(--primary))/0.25]"
-                      }`}
-                    >
+                    <div key={conv.id} onClick={() => setActiveId(conv.id)}
+                      className={`conv-item relative cursor-pointer rounded-xl border px-3 py-3 ${isActive ? "border-[rgb(var(--primary))/0.5] bg-[rgb(var(--primary))/0.07] shadow-[0_2px_14px_rgba(124,58,237,0.12)]" : "border-[rgb(var(--border))] bg-[rgb(var(--card))] hover:border-[rgb(var(--primary))/0.25]"}`}>
                       <div className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full ${isStudent ? "bg-violet-500" : "bg-fuchsia-500"}`} />
                       <div className="flex items-start justify-between gap-2 pl-2">
                         <div className="min-w-0 flex-1">
@@ -1076,7 +818,8 @@ export default function MessagingClient() {
                     </div>
                   );
                 })}
-                {filteredConversations.length === 0 && (
+
+                {convLoaded && filteredConversations.length === 0 && (
                   <div className="mt-4 rounded-xl border border-dashed border-[rgb(var(--border))] p-4 text-center">
                     <p className="text-[0.72rem] text-[rgb(var(--muted))]">No conversations found</p>
                   </div>
@@ -1129,9 +872,7 @@ export default function MessagingClient() {
               {active && chatMeta.isChatClosed && (
                 <div className="mx-4 mt-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-[0.72rem] text-[rgb(var(--muted))]">
                   💬 Chat closed
-                  {chatMeta.chatCloseAt && (
-                    <> · {new Date(chatMeta.chatCloseAt).toLocaleString([], { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</>
-                  )}
+                  {chatMeta.chatCloseAt && <> · {new Date(chatMeta.chatCloseAt).toLocaleString([], { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</>}
                 </div>
               )}
 
@@ -1144,14 +885,20 @@ export default function MessagingClient() {
                   </div>
                 )}
 
+                {/* Message skeletons only shown when nothing cached yet */}
+                {showSkeleton && [1, 2, 3, 4].map((i) => (
+                  <div key={i} className={`flex ${i % 2 === 0 ? "justify-end" : "justify-start"} mb-2`}>
+                    <div className={`skeleton rounded-2xl ${i % 2 === 0 ? "rounded-br-sm" : "rounded-bl-sm"}`}
+                      style={{ width: `${120 + i * 30}px`, height: "36px" }} />
+                  </div>
+                ))}
+
                 {messages.map((msg, i) => {
                   const isMe = msg.senderId === meId;
                   const isTemp = msg.id.startsWith("temp-");
                   const isLastMine = isMe && msg.id === lastMyMsgId;
                   const isSeen = isLastMine && new Date(msg.createdAt).getTime() <= otherReadAtMs;
-                  const showTime =
-                    i === 0 ||
-                    new Date(msg.createdAt).getTime() - new Date(messages[i - 1].createdAt).getTime() > 5 * 60 * 1000;
+                  const showTime = i === 0 || new Date(msg.createdAt).getTime() - new Date(messages[i - 1].createdAt).getTime() > 5 * 60 * 1000;
 
                   return (
                     <React.Fragment key={msg.id}>
@@ -1177,7 +924,7 @@ export default function MessagingClient() {
                             ) : (
                               <>
                                 {msg.text && <p className="whitespace-pre-wrap break-words">{msg.text}</p>}
-                                {msg.attachments?.map((a) => {
+                                {(msg.attachments as Attachment[] | undefined)?.map((a) => {
                                   const isImg = a.contentType?.startsWith("image/");
                                   const isPdf = a.contentType === "application/pdf";
                                   const kb = Math.max(1, Math.round((a.sizeBytes ?? 0) / 1024));
@@ -1186,53 +933,43 @@ export default function MessagingClient() {
                                   const btnBase = isMe ? "border-white/20 bg-white/15 text-white hover:bg-white/25" : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]";
                                   const dlBtn = isMe ? "border-white/30 bg-white text-gray-900 hover:bg-white/90" : "border-transparent bg-[rgb(var(--primary))] text-white hover:opacity-90";
 
-                                  if (isImg && a.url) {
-                                    return (
-                                      <div key={a.id} className="mt-2 overflow-hidden rounded-xl border border-white/10 shadow-lg">
-                                        <button type="button" onClick={() => openImageInChat(a.url!)} className="block w-full">
-                                          <Image src={a.url} alt={a.fileName} width={300} height={220} unoptimized className="block h-auto w-full max-w-[300px] hover:opacity-95 transition" />
-                                        </button>
-                                        <div className={`flex items-center justify-between gap-2 border-t px-2.5 py-1.5 ${isMe ? "border-white/10" : "border-[rgb(var(--border))]"}`}>
-                                          <span className={`truncate text-[0.62rem] ${isMe ? "text-white/60" : "text-[rgb(var(--muted2))]"}`}>{a.fileName}</span>
-                                          <div className="flex items-center gap-1">
-                                            <button type="button" onClick={() => openImageInChat(a.url!)} className={`rounded-full border p-1.5 transition ${btnBase}`}><IconOpen /></button>
-                                            <button type="button" onClick={() => forceDownload(a.url!, a.fileName)} className={`rounded-full border p-1.5 transition ${dlBtn}`}><IconDownload /></button>
-                                          </div>
+                                  if (isImg && a.url) return (
+                                    <div key={a.id} className="mt-2 overflow-hidden rounded-xl border border-white/10 shadow-lg">
+                                      <button type="button" onClick={() => openImageInChat(a.url!)} className="block w-full">
+                                        <Image src={a.url} alt={a.fileName} width={300} height={220} unoptimized className="block h-auto w-full max-w-[300px] hover:opacity-95 transition" />
+                                      </button>
+                                      <div className={`flex items-center justify-between gap-2 border-t px-2.5 py-1.5 ${isMe ? "border-white/10" : "border-[rgb(var(--border))]"}`}>
+                                        <span className={`truncate text-[0.62rem] ${isMe ? "text-white/60" : "text-[rgb(var(--muted2))]"}`}>{a.fileName}</span>
+                                        <div className="flex items-center gap-1">
+                                          <button type="button" onClick={() => openImageInChat(a.url!)} className={`rounded-full border p-1.5 transition ${btnBase}`}><IconOpen /></button>
+                                          <button type="button" onClick={() => forceDownload(a.url!, a.fileName)} className={`rounded-full border p-1.5 transition ${dlBtn}`}><IconDownload /></button>
                                         </div>
                                       </div>
-                                    );
-                                  }
+                                    </div>
+                                  );
 
-                                  if (isPdf) {
-                                    return (
-                                      <div key={a.id} className={`mt-2 overflow-hidden rounded-xl border ${cardBase}`}>
-                                        <div className="flex items-center gap-3 px-3 py-2.5">
-                                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${isMe ? "border-white/20 bg-white/10 text-white" : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]"}`}>
-                                            <IconPdf />
-                                          </div>
-                                          <div className="min-w-0 flex-1">
-                                            <p className={`truncate text-[0.72rem] font-semibold ${isMe ? "text-white" : "text-[rgb(var(--fg))]"}`}>{a.fileName}</p>
-                                            <p className={`text-[0.6rem] ${isMe ? "text-white/55" : "text-[rgb(var(--muted2))]"}`}>PDF · {sizeLabel}</p>
-                                          </div>
-                                          <div className="flex shrink-0 items-center gap-1">
-                                            <button type="button" onClick={() => a.url && window.open(a.url, "_blank")} disabled={!a.url} className={`rounded-full border p-1.5 transition ${btnBase} disabled:opacity-40`}><IconOpen /></button>
-                                            <button type="button" onClick={() => a.url && forceDownload(a.url, a.fileName)} disabled={!a.url} className={`rounded-full border p-1.5 transition ${dlBtn} disabled:opacity-40`}><IconDownload /></button>
-                                          </div>
+                                  if (isPdf) return (
+                                    <div key={a.id} className={`mt-2 overflow-hidden rounded-xl border ${cardBase}`}>
+                                      <div className="flex items-center gap-3 px-3 py-2.5">
+                                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${isMe ? "border-white/20 bg-white/10 text-white" : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]"}`}><IconPdf /></div>
+                                        <div className="min-w-0 flex-1">
+                                          <p className={`truncate text-[0.72rem] font-semibold ${isMe ? "text-white" : "text-[rgb(var(--fg))]"}`}>{a.fileName}</p>
+                                          <p className={`text-[0.6rem] ${isMe ? "text-white/55" : "text-[rgb(var(--muted2))]"}`}>PDF · {sizeLabel}</p>
+                                        </div>
+                                        <div className="flex shrink-0 items-center gap-1">
+                                          <button type="button" onClick={() => a.url && window.open(a.url, "_blank")} disabled={!a.url} className={`rounded-full border p-1.5 transition ${btnBase} disabled:opacity-40`}><IconOpen /></button>
+                                          <button type="button" onClick={() => a.url && forceDownload(a.url, a.fileName)} disabled={!a.url} className={`rounded-full border p-1.5 transition ${dlBtn} disabled:opacity-40`}><IconDownload /></button>
                                         </div>
                                       </div>
-                                    );
-                                  }
+                                    </div>
+                                  );
                                   return null;
                                 })}
                               </>
                             )}
                           </div>
                           <div className={`mt-1 flex items-center gap-1.5 px-0.5 text-[0.6rem] ${isMe ? "justify-end text-[rgb(var(--muted2))]" : "text-[rgb(var(--muted2))]"}`}>
-                            <span>
-                              {isTemp
-                                ? "Sending…"
-                                : new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                            </span>
+                            <span>{isTemp ? "Sending…" : new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                             {isLastMine && !isTemp && (
                               <span className={`text-[0.58rem] font-medium ${isSeen ? "text-[rgb(var(--primary))]" : "text-[rgb(var(--muted2))]"}`}>
                                 {isSeen ? "Seen" : "Sent"}
@@ -1249,9 +986,7 @@ export default function MessagingClient() {
                   <div className="flex justify-start">
                     <div className="rounded-2xl rounded-bl-sm border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3">
                       <div className="flex items-center gap-1">
-                        {[0, 1, 2].map((i) => (
-                          <span key={i} className="typing-dot h-1.5 w-1.5 rounded-full bg-[rgb(var(--muted))]" />
-                        ))}
+                        {[0, 1, 2].map((i) => <span key={i} className="typing-dot h-1.5 w-1.5 rounded-full bg-[rgb(var(--muted))]" />)}
                       </div>
                     </div>
                   </div>
@@ -1269,8 +1004,7 @@ export default function MessagingClient() {
 
               {active && sendErr && (
                 <div className="mx-4 mb-2 flex items-center gap-2 rounded-xl border border-red-400/30 bg-red-500/8 px-3 py-2 text-[0.72rem] text-red-600 dark:text-red-400">
-                  <span>⚠</span>
-                  <span>{sendErr}</span>
+                  <span>⚠</span><span>{sendErr}</span>
                   <button type="button" onClick={() => setSendErr(null)} className="ml-auto opacity-60 hover:opacity-100">✕</button>
                 </div>
               )}
@@ -1289,46 +1023,26 @@ export default function MessagingClient() {
 
               <div className="border-t border-[rgb(var(--border))] bg-[rgb(var(--card))]/80 px-4 py-3 backdrop-blur-sm">
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={inputDisabled}
-                    onClick={() => fileInputRef.current?.click()}
-                    title="Attach file"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))] transition hover:border-[rgb(var(--primary))/0.4] hover:text-[rgb(var(--primary))] disabled:opacity-40"
-                  >
+                  <button type="button" disabled={inputDisabled} onClick={() => fileInputRef.current?.click()} title="Attach file"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))] transition hover:border-[rgb(var(--primary))/0.4] hover:text-[rgb(var(--primary))] disabled:opacity-40">
                     <IconAttach />
                   </button>
-
                   <div className="relative flex-1">
-                    <input
-                      value={text}
+                    <input value={text}
                       onChange={(e) => {
                         setText(e.target.value);
                         const now = Date.now();
-                        if (now - lastTypingSentAt.current > 800) {
-                          lastTypingSentAt.current = now;
-                          void pingTyping(true);
-                        }
+                        if (now - lastTypingSentAt.current > 800) { lastTypingSentAt.current = now; void pingTyping(true); }
                         if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
                         typingStopTimer.current = setTimeout(() => void pingTyping(false), 1200);
                       }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          void send();
-                        }
-                      }}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
                       className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-2.5 text-[0.8rem] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] focus:border-[rgb(var(--primary))/0.5] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] transition"
                       placeholder={!active ? "Select a conversation…" : chatMeta.isChatClosed ? "Chat is closed" : uploading ? "Sending…" : "Type a message…"}
-                      disabled={inputDisabled}
-                    />
+                      disabled={inputDisabled} />
                   </div>
-
-                  <button
-                    onClick={send}
-                    disabled={inputDisabled || (!text.trim() && pickedFiles.length === 0)}
-                    className="send-btn flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-[0_4px_14px_rgba(124,58,237,0.35)] disabled:opacity-40 disabled:shadow-none"
-                  >
+                  <button onClick={send} disabled={inputDisabled || (!text.trim() && pickedFiles.length === 0)}
+                    className="send-btn flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-[0_4px_14px_rgba(124,58,237,0.35)] disabled:opacity-40 disabled:shadow-none">
                     <IconSend />
                   </button>
                 </div>
@@ -1339,88 +1053,47 @@ export default function MessagingClient() {
       </div>
 
       {ctx.open && ctx.messageId && (
-        <div
-          style={{ left: ctx.x, top: ctx.y }}
-          className="ctx-menu fixed z-50 min-w-[140px] overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_12px_40px_rgba(0,0,0,0.18)]"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            className="w-full px-3 py-2.5 text-left text-[0.75rem] text-red-600 dark:text-red-400 hover:bg-red-500/8 transition"
-            onClick={() => {
-              deleteMessage(ctx.messageId!);
-              setCtx((p) => ({ ...p, open: false, messageId: null }));
-            }}
-          >
+        <div style={{ left: ctx.x, top: ctx.y }} className="ctx-menu fixed z-50 min-w-[140px] overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_12px_40px_rgba(0,0,0,0.18)]" onClick={(e) => e.stopPropagation()}>
+          <button className="w-full px-3 py-2.5 text-left text-[0.75rem] text-red-600 dark:text-red-400 hover:bg-red-500/8 transition"
+            onClick={() => { deleteMessage(ctx.messageId!); setCtx((p) => ({ ...p, open: false, messageId: null })); }}>
             🗑 Delete message
           </button>
         </div>
       )}
 
       {imgViewer.open && (
-        <div
-          className="viewer-fade fixed inset-0 z-[60] bg-black/92 backdrop-blur-sm"
-          onClick={(e) => { if (e.target === e.currentTarget) closeImageViewer(); }}
-        >
+        <div className="viewer-fade fixed inset-0 z-[60] bg-black/92 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) closeImageViewer(); }}>
           <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between px-5 py-4">
-            <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70">
-              {imgViewer.idx + 1} / {imgViewer.urls.length}
-            </span>
+            <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70">{imgViewer.idx + 1} / {imgViewer.urls.length}</span>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); const url = imgViewer.urls[imgViewer.idx]; if (url) forceDownload(url, prettyNameFromUrl(url)); }}
-                className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white transition hover:bg-white/20"
-              >
-                ↓ Download
-              </button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); const url = imgViewer.urls[imgViewer.idx]; if (url) forceDownload(url, prettyNameFromUrl(url)); }} className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white transition hover:bg-white/20">↓ Download</button>
               <button type="button" onClick={(e) => { e.stopPropagation(); closeImageViewer(); }} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/25 text-sm">✕</button>
             </div>
           </div>
-
           {imgViewer.urls.length > 1 && (
             <>
               <button type="button" onClick={(e) => { e.stopPropagation(); prevImage(); }} className="absolute left-4 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white text-xl transition hover:bg-white/25">‹</button>
               <button type="button" onClick={(e) => { e.stopPropagation(); nextImage(); }} className="absolute right-4 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white text-xl transition hover:bg-white/25">›</button>
             </>
           )}
-
           <div className="absolute inset-0 z-10 flex items-center justify-center p-8 pb-28">
-            <Image
-              src={imgViewer.urls[imgViewer.idx] ?? ""}
-              alt="Preview"
-              width={1600}
-              height={1200}
-              unoptimized
-              draggable={false}
+            <Image src={imgViewer.urls[imgViewer.idx] ?? ""} alt="Preview" width={1600} height={1200} unoptimized draggable={false}
               onClick={(e) => e.stopPropagation()}
-              onDoubleClick={(e) => { e.stopPropagation(); if (zoom > 1) { setZoom(1); setOffset({ x: 0, y: 0 }); } else { setZoom(2); } }}
+              onDoubleClick={(e) => { e.stopPropagation(); if (zoom > 1) { setZoom(1); setOffset({ x: 0, y: 0 }); } else setZoom(2); }}
               onWheel={(e) => { e.preventDefault(); setZoom((z) => Math.min(Math.max(1, z + (e.deltaY > 0 ? -0.2 : 0.2)), 4)); }}
               onMouseDown={(e) => { if (zoom <= 1) return; setDragging(true); dragStart.current = { x: e.clientX - offset.x, y: e.clientY - offset.y }; }}
               onMouseMove={(e) => { if (!dragging) return; setOffset({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y }); }}
-              onMouseUp={() => setDragging(false)}
-              onMouseLeave={() => setDragging(false)}
+              onMouseUp={() => setDragging(false)} onMouseLeave={() => setDragging(false)}
               className="viewer-img max-h-[80vh] max-w-[90vw] select-none rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
-              style={{
-                transform: `scale(${zoom}) translate(${offset.x / zoom}px, ${offset.y / zoom}px)`,
-                cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "zoom-in",
-                transition: dragging ? "none" : "transform 0.1s ease",
-                width: "auto",
-                height: "auto",
-              }}
-            />
+              style={{ transform: `scale(${zoom}) translate(${offset.x / zoom}px, ${offset.y / zoom}px)`, cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "zoom-in", transition: dragging ? "none" : "transform 0.1s ease", width: "auto", height: "auto" }} />
           </div>
-
           {imgViewer.urls.length > 1 && (
             <div className="absolute inset-x-0 bottom-0 z-30 px-4 py-3" onClick={(e) => e.stopPropagation()}>
               <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-black/60 px-3 py-2.5 backdrop-blur-md">
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {imgViewer.urls.map((u, i) => (
-                    <button
-                      key={`${u}-${i}`}
-                      type="button"
-                      onClick={() => setImgViewer((p) => ({ ...p, idx: i }))}
-                      className={`img-thumb relative shrink-0 overflow-hidden rounded-lg border ${i === imgViewer.idx ? "border-white ring-2 ring-white/40" : "border-white/20 opacity-60 hover:opacity-90"}`}
-                    >
+                    <button key={`${u}-${i}`} type="button" onClick={() => setImgViewer((p) => ({ ...p, idx: i }))}
+                      className={`img-thumb relative shrink-0 overflow-hidden rounded-lg border ${i === imgViewer.idx ? "border-white ring-2 ring-white/40" : "border-white/20 opacity-60 hover:opacity-90"}`}>
                       <Image src={u} alt={`thumb-${i}`} width={64} height={48} unoptimized draggable={false} className="h-12 w-16 object-cover" />
                     </button>
                   ))}
