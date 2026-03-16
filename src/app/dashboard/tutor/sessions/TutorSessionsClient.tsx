@@ -713,7 +713,7 @@ export default function TutorSessionsClient() {
         const qs = next.toString();
 
         router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-      }, 3000);
+      }, 15000);
     } else {
       tries++;
       if (tries < 40) window.setTimeout(findAndScroll, 120);

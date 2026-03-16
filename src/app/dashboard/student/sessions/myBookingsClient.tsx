@@ -707,7 +707,7 @@ export default function MyBookingsClient() {
           next.delete("focus");
           const qs = next.toString();
           router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-        }, 3000);
+        }, 15000);
         return () => window.clearTimeout(t);
       }
       tries++;
