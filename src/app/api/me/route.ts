@@ -1,19 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { supabaseServerAnon } from "@/lib/supabaseServerAnon";
 
 export async function GET() {
-  const supabase = await supabaseServerComponent();
+  const supabase = await supabaseServerAnon();
   const { data, error } = await supabase.auth.getUser();
 
   if (error || !data?.user?.email) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
-  const email = data.user.email.toLowerCase();
-
   const dbUser = await prisma.user.findUnique({
-    where: { email },
+    where: { email: data.user.email.toLowerCase() },
     select: { id: true },
   });
 

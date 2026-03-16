@@ -28,7 +28,7 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // ✅ Use getUser() instead of getSession() for secure server-side check
+  // ✅ Always call getUser() on every request — this refreshes the session cookie
   const { data: { user } } = await supabase.auth.getUser();
 
   const needsDashboard = pathname.startsWith("/dashboard");
@@ -51,30 +51,18 @@ export async function middleware(request: NextRequest) {
     pathname === "/account-locked/appeal" ||
     pathname.startsWith("/api/account-lock-appeal");
 
-  // ✅ Check user instead of session
   if (!user && (needsProtectedArea || allowedWhenLocked)) {
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
+  // ✅ Always return response so refreshed cookies are forwarded
   return response;
 }
 
 export const config = {
   matcher: [
-    "/dashboard/:path*",
-    "/admin/:path*",
-    "/messaging",
-    "/messaging/:path*",
-    "/study",
-    "/study/:path*",
-    "/sos",
-    "/sos/:path*",
-    "/find-tutor",
-    "/find-tutor/:path*",
-    "/account-locked",
-    "/account-locked/appeal",
-    "/api/account-lock-appeal",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
