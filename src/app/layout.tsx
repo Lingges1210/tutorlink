@@ -65,6 +65,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
                       <Link
                         href="/find-tutor"
+                        prefetch={true}
                         className="nav-link relative rounded-xl px-3 py-2 text-sm font-medium text-[rgb(var(--muted2))] transition-colors hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card))]"
                       >
                         Find Tutor
@@ -87,6 +88,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                       {/* SOS Help — vivid gradient pill */}
                       <Link
                         href="/sos"
+                        prefetch={true}
                         className="
                           relative ml-1 overflow-hidden rounded-xl px-4 py-2
                           text-sm font-semibold text-white

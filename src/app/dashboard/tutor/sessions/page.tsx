@@ -1,24 +1,9 @@
 import { redirect } from "next/navigation";
-import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
-import { prisma } from "@/lib/prisma";
+import { getSessionUser } from "@/lib/getSessionUser";
 import TutorSessionsClient from "./TutorSessionsClient";
 
 export default async function TutorSessionsPage() {
-  const supabase = await supabaseServerComponent();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user?.email) redirect("/auth/login");
-
-  const dbUser = await prisma.user.findUnique({
-    where: { email: user.email.toLowerCase() },
-    select: {
-      isDeactivated: true,
-      verificationStatus: true,
-      isTutorApproved: true,
-      role: true,
-      roleAssignments: { select: { role: true } },
-    },
-  });
-
+  const dbUser = await getSessionUser(); // ✅ cached
   if (!dbUser) redirect("/auth/login");
   if (dbUser.isDeactivated) redirect("/auth/deactivated");
 

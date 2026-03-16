@@ -1,29 +1,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { getSessionUser } from "@/lib/getSessionUser";
 
 export default async function StudentProfilePage() {
-  const supabase = await supabaseServerComponent();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user?.email) redirect("/auth/login");
-
-  const dbUser = await prisma.user.findUnique({
-    where: { email: user.email.toLowerCase() },
-    select: {
-      email: true,
-      name: true,
-      programme: true,
-      matricNo: true,
-      verificationStatus: true,
-      role: true,
-      createdAt: true,
-      avatarUrl: true,
-    },
-  });
+  const dbUser = await getSessionUser(); // ✅ cached, no extra DB call
   if (!dbUser) redirect("/auth/login");
 
   const initials =

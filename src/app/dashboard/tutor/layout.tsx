@@ -1,37 +1,11 @@
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { getSessionUser } from "@/lib/getSessionUser";
 import StudentSidebarNav, { SidebarItem } from "@/components/StudentSidebarNav";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import { Star } from "lucide-react";
 
-export default async function TutorLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const supabase = await supabaseServerComponent();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user?.email) redirect("/auth/login");
-
-  const dbUser = await prisma.user.findUnique({
-    where: { email: user.email.toLowerCase() },
-    select: {
-      name: true,
-      email: true,
-      role: true,
-      verificationStatus: true,
-      isDeactivated: true,
-      isTutorApproved: true,
-      roleAssignments: { select: { role: true } },
-      avgRating: true,
-      ratingCount: true,
-    },
-  });
-
+export default async function TutorLayout({ children }: { children: React.ReactNode }) {
+  const dbUser = await getSessionUser(); // ✅ cached
   if (!dbUser) redirect("/auth/login");
   if (dbUser.isDeactivated) redirect("/auth/deactivated");
 

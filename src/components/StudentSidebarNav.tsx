@@ -115,7 +115,7 @@ export default function StudentSidebarNav({
           <Link
             key={`lnk-${idx}`}
             href={it.href}
-            prefetch={false}
+            prefetch={true}
             className={[
               "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition",
               active

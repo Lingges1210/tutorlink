@@ -23,6 +23,11 @@ export const getSessionUser = cache(async () => {
       verificationStatus: true,
       isDeactivated: true,
       isTutorApproved: true,
+      createdAt: true,      
+      avgRating: true,      // ✅ add
+  ratingCount: true,   
+      programme: true,        
+      matricNo: true,   
       roleAssignments: { select: { role: true } },
     },
   });
