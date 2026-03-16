@@ -438,69 +438,94 @@ export default function MessagingClient() {
     return () => { cancelled = true; };
   }, [activeId, meId, applyMessagesResponse, refreshConversations]);
 
-  useEffect(() => {
+useEffect(() => {
   if (!activeId || !meId) return;
   const channelId = activeId;
   const supabase = supabaseBrowser;
 
-  const channel = supabase
-    .channel(`chat-messages-${channelId}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "ChatMessage",
-        filter: `channelId=eq.${channelId}`,
-      },
-      async (payload: { new: Record<string, unknown> }) => {
-        const row = payload.new as {
-          id: string;
-          channelId: string;
-          senderId: string;
-          text: string;
-          createdAt: string;
-          isDeleted?: boolean;
-          deletedAt?: string | null;
-        };
+  let mounted = true;
+  let channel: ReturnType<typeof supabase.channel> | null = null;
 
-        const incoming: Msg = {
-          id: row.id,
-          senderId: row.senderId,
-          text: row.text ?? "",
-          createdAt: row.createdAt,
-          isDeleted: row.isDeleted,
-          deletedAt: row.deletedAt ?? null,
-        };
+  async function start() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-        mergeMessages([incoming]);
+    console.log("realtime session user", session?.user?.email);
+    console.log("realtime has access token", !!session?.access_token);
 
-        setTimeout(() => {
-          bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-        }, 20);
+    if (!mounted || !session?.access_token) return;
 
-        if (row.senderId !== meId) {
-          await markChatRead(channelId);
+    await supabase.realtime.setAuth(session.access_token);
 
-          setTimeout(async () => {
-            const j = await fetch(
-              `/api/chat/messages?channelId=${channelId}&take=30`,
-              { cache: "no-store" }
-            )
-              .then((r) => r.json())
-              .catch(() => null);
+    channel = supabase
+      .channel(`chat-messages-${channelId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "ChatMessage",
+          filter: `channelId=eq.${channelId}`,
+        },
+        async (payload: { new: Record<string, unknown> }) => {
+          console.log("realtime payload", payload);
 
-            applyMessagesResponse(j, channelId, null);
-          }, 400);
+          const row = payload.new as {
+            id: string;
+            channelId: string;
+            senderId: string;
+            text: string;
+            createdAt: string;
+            isDeleted?: boolean;
+            deletedAt?: string | null;
+          };
+
+          if (row.channelId !== channelId) return;
+
+          const incoming: Msg = {
+            id: row.id,
+            senderId: row.senderId,
+            text: row.text ?? "",
+            createdAt: row.createdAt,
+            isDeleted: row.isDeleted,
+            deletedAt: row.deletedAt ?? null,
+          };
+
+          mergeMessages([incoming]);
+
+          setTimeout(() => {
+            bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+          }, 20);
+
+          if (row.senderId !== meId) {
+            await markChatRead(channelId);
+
+            setTimeout(async () => {
+              const j = await fetch(
+                `/api/chat/messages?channelId=${channelId}&take=30`,
+                { cache: "no-store" }
+              )
+                .then((r) => r.json())
+                .catch(() => null);
+
+              applyMessagesResponse(j, channelId, null);
+            }, 400);
+          }
+
+          refreshConversations(channelId);
         }
+      )
+      .subscribe((status) => {
+        console.log("chat realtime status", channelId, status);
+      });
+  }
 
-        refreshConversations(channelId);
-      }
-    )
-    .subscribe();
+  void start();
 
   return () => {
-    supabase.removeChannel(channel);
+    mounted = false;
+    if (channel) supabase.removeChannel(channel);
   };
 }, [activeId, meId, mergeMessages, refreshConversations, applyMessagesResponse]);
 
@@ -1149,7 +1174,12 @@ export default function MessagingClient() {
                         if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
                         typingStopTimer.current = setTimeout(() => void pingTyping(false), 1200);
                       }}
-                      onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          void send();
+                        }
+                      }}
                       className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-2.5 text-[0.8rem] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] focus:border-[rgb(var(--primary))/0.5] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] transition"
                       placeholder={
                         !active ? "Select a conversation…" :

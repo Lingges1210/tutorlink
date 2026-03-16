@@ -199,7 +199,6 @@ export async function POST(req: Request) {
 
   const text = (textRaw ?? "").trim();
 
-  //  allow: text-only OR attachment-only OR both
   if (!channelId || (!text && attachments.length === 0)) {
     return NextResponse.json(
       { ok: false, message: "Missing channelId or content" },
@@ -219,7 +218,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // Ensure user belongs to channel + close window
   const ch = await prisma.chatChannel.findUnique({
     where: { id: channelId },
     select: {
@@ -238,7 +236,6 @@ export async function POST(req: Request) {
     );
   }
 
-  //  NEW: block sending if chat is closed / expired
   const now = new Date();
   const isClosed =
     !!ch.closedAt || (ch.closeAt ? ch.closeAt.getTime() <= now.getTime() : false);
@@ -250,7 +247,6 @@ export async function POST(req: Request) {
     );
   }
 
-  //  basic server-side attachment validation (don’t trust client)
   for (const a of attachments) {
     if (!a?.bucket || !a?.objectPath || !a?.fileName || !a?.contentType) {
       return NextResponse.json(
@@ -305,8 +301,6 @@ export async function POST(req: Request) {
       attachments: {
         select: {
           id: true,
-          bucket: true,
-          objectPath: true,
           fileName: true,
           contentType: true,
           sizeBytes: true,
@@ -316,38 +310,17 @@ export async function POST(req: Request) {
     },
   });
 
-  //  keep channel ordering correct (lastMessageAt drives channel list)
-  await prisma.chatChannel.update({
-    where: { id: channelId },
-    data: { lastMessageAt: msg.createdAt },
-  });
-
-  //  sender has read up to now (including this sent message)
-  await prisma.chatRead.upsert({
-    where: { channelId_userId: { channelId, userId: me.id } },
-    update: { lastReadAt: new Date() },
-    create: { channelId, userId: me.id, lastReadAt: new Date() },
-  });
-
-  // Return signed URLs for attachments on the newly created message
-  const admin = supabaseAdmin();
-
-  const atts = await Promise.all(
-    (msg.attachments ?? []).map(async (a) => {
-      const { data: signed } = await admin.storage
-        .from(a.bucket)
-        .createSignedUrl(a.objectPath, 60 * 60);
-
-      return {
-        id: a.id,
-        fileName: a.fileName,
-        contentType: a.contentType,
-        sizeBytes: a.sizeBytes,
-        url: signed?.signedUrl ?? null,
-        createdAt: a.createdAt.toISOString(),
-      };
-    })
-  );
+  await Promise.all([
+    prisma.chatChannel.update({
+      where: { id: channelId },
+      data: { lastMessageAt: msg.createdAt },
+    }),
+    prisma.chatRead.upsert({
+      where: { channelId_userId: { channelId, userId: me.id } },
+      update: { lastReadAt: msg.createdAt },
+      create: { channelId, userId: me.id, lastReadAt: msg.createdAt },
+    }),
+  ]);
 
   return NextResponse.json({
     ok: true,
@@ -358,7 +331,14 @@ export async function POST(req: Request) {
       createdAt: msg.createdAt.toISOString(),
       isDeleted: msg.isDeleted,
       deletedAt: msg.deletedAt ? msg.deletedAt.toISOString() : null,
-      attachments: atts,
+      attachments: (msg.attachments ?? []).map((a) => ({
+        id: a.id,
+        fileName: a.fileName,
+        contentType: a.contentType,
+        sizeBytes: a.sizeBytes,
+        url: null,
+        createdAt: a.createdAt.toISOString(),
+      })),
     },
     chatCloseAt: ch.closeAt ? ch.closeAt.toISOString() : null,
     isChatClosed: false,
