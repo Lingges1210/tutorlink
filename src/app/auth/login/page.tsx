@@ -67,22 +67,21 @@ export default function LoginPage() {
       }
 
       const redirectTo =
-  typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("redirect")
-    : null;
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("redirect")
+          : null;
 
-const fallbackPath =
-  data?.user?.role === "ADMIN" ? "/admin" : "/dashboard/student";
+      const fallbackPath =
+        data?.user?.role === "ADMIN" ? "/admin" : "/dashboard/student";
 
-const targetPath =
-  redirectTo && redirectTo.startsWith("/") ? redirectTo : fallbackPath;
+      const targetPath =
+        redirectTo && redirectTo.startsWith("/") ? redirectTo : fallbackPath;
 
       setStatus("Login successful. Redirecting...");
       animation?.success();
-      router.refresh();
-      setTimeout(() => {
-        router.replace(targetPath);
-      }, 100);
+
+      // ✅ Just replace — no refresh(), no setTimeout()
+      router.replace(targetPath);
       return;
     } catch (err: unknown) {
       setStatus(err instanceof Error ? err.message : "Unexpected error");
