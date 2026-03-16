@@ -81,7 +81,6 @@ const targetPath =
       animation?.success();
 
       router.replace(targetPath);
-      router.refresh();
       return;
     } catch (err: unknown) {
       setStatus(err instanceof Error ? err.message : "Unexpected error");
