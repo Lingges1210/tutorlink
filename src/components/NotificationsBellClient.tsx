@@ -11,6 +11,7 @@ import {
   animate,
 } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 type ViewerHint = "STUDENT" | "TUTOR";
 
@@ -302,6 +303,16 @@ export default function NotificationsBellClient({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
 
+  const pathname = usePathname();
+
+const isPublicAuthPage =
+  pathname?.startsWith("/auth/") ||
+  pathname === "/" ||
+  pathname === "/auth/login" ||
+  pathname === "/auth/register" ||
+  pathname === "/auth/forgot-password" ||
+  pathname === "/auth/reset-password";
+
   const rootRef = useRef<HTMLDivElement | null>(null);
   const shown = showAll ? items : items.slice(0, 3);
   const hasItems = items.length > 0;
@@ -318,25 +329,39 @@ export default function NotificationsBellClient({
     if (!open) setShowAll(false);
   }, [open]);
 
-  useEffect(() => {
+    useEffect(() => {
+    if (isPublicAuthPage) return;
+
     let alive = true;
 
     async function tick() {
       try {
         const res = await fetch("/api/notifications/unread", { cache: "no-store" });
+        if (!res.ok) return;
+
         const data = await res.json().catch(() => ({}));
         if (!alive) return;
-        if (res.ok && data?.success) setUnread(Number(data.unread ?? 0));
+        if (data?.success) setUnread(Number(data.unread ?? 0));
       } catch {}
     }
 
     tick();
-    const t = setInterval(tick, 12_000);
+
+    const onVis = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+
+    document.addEventListener("visibilitychange", onVis);
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") tick();
+    }, 20000);
+
     return () => {
       alive = false;
       clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
     };
-  }, []);
+  }, [isPublicAuthPage]);
 
   useEffect(() => {
     if (!open) return;

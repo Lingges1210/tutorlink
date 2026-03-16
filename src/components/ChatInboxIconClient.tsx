@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { MessageSquare } from "lucide-react";
 
 export default function ChatInboxIconClient({
@@ -10,8 +11,19 @@ export default function ChatInboxIconClient({
   initialUnread?: number;
 }) {
   const [total, setTotal] = useState<number>(initialUnread);
+  const pathname = usePathname();
+
+  const isPublicAuthPage =
+    pathname?.startsWith("/auth/") ||
+    pathname === "/" ||
+    pathname === "/auth/login" ||
+    pathname === "/auth/register" ||
+    pathname === "/auth/forgot-password" ||
+    pathname === "/auth/reset-password";
 
   useEffect(() => {
+    if (isPublicAuthPage) return;
+
     let refreshing = false;
     let pending = false;
     let stop = false;
@@ -27,6 +39,8 @@ export default function ChatInboxIconClient({
       refreshing = true;
       try {
         const r = await fetch("/api/chat/unread-total", { cache: "no-store" });
+        if (!r.ok) return;
+
         const j = await r.json().catch(() => null);
         if (!stop && j?.ok) setTotal(j.total);
       } finally {
@@ -38,17 +52,15 @@ export default function ChatInboxIconClient({
       }
     }
 
-    // initial load
     safeRefresh();
 
-    // 🔁 listen for manual refresh (chat page marks read)
     const onRead = () => safeRefresh();
     window.addEventListener("chat:unread-refresh", onRead);
 
-    //  polling (light)
-    const t = setInterval(safeRefresh, 8000);
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") safeRefresh();
+    }, 15000);
 
-    // optional: refresh when tab becomes active
     const onVis = () => {
       if (document.visibilityState === "visible") safeRefresh();
     };
@@ -60,7 +72,7 @@ export default function ChatInboxIconClient({
       document.removeEventListener("visibilitychange", onVis);
       clearInterval(t);
     };
-  }, []);
+  }, [isPublicAuthPage]);
 
   return (
     <div className="relative">
