@@ -13,11 +13,11 @@ export async function POST(request: Request) {
       );
     }
 
-    //  Supabase client with cookies support
-    const supabase = supabaseServerAnon();
+    // ✅ Resolve ONCE — reuse the same client throughout
+    const supabase = await supabaseServerAnon();
 
     // 1) Supabase Auth (sets cookies!)
-    const { data, error } = await (await supabase).auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
     });
@@ -42,9 +42,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Extra safety
+    // Extra safety — email not confirmed at Supabase level
     if (!data.user?.email_confirmed_at) {
-      await (await supabase).auth.signOut();
+      await supabase.auth.signOut(); // ✅ reuse same instance
       return NextResponse.json(
         {
           success: false,
@@ -56,18 +56,16 @@ export async function POST(request: Request) {
 
     // 2) Load Prisma user
     const user = await prisma.user.findUnique({
-  where: { email: data.user.email!.toLowerCase() },
-  select: {
-    id: true,
-    email: true,
-    role: true,
-    isTutorApproved: true,
-    verificationStatus: true,
-    isDeactivated: true,
-  },
-});
-
-    
+      where: { email: data.user.email!.toLowerCase() },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        isTutorApproved: true,
+        verificationStatus: true,
+        isDeactivated: true,
+      },
+    });
 
     if (!user) {
       return NextResponse.json(
@@ -81,20 +79,18 @@ export async function POST(request: Request) {
     }
 
     if (user.isDeactivated) {
-  await (await supabase).auth.signOut(); // clears cookies
+      await supabase.auth.signOut(); // ✅ reuse same instance
+      return NextResponse.json(
+        {
+          success: false,
+          code: "ACCOUNT_DEACTIVATED",
+          message: "Your account has been deactivated. Please contact support.",
+        },
+        { status: 403 }
+      );
+    }
 
-  return NextResponse.json(
-    {
-      success: false,
-      code: "ACCOUNT_DEACTIVATED",
-      message: "Your account has been deactivated. Please contact support.",
-    },
-    { status: 403 }
-  );
-}
-
-
-    //  Cookies are already written by Supabase
+    // Cookies are already written by Supabase
     return NextResponse.json({
       success: true,
       message: "Login successful",
