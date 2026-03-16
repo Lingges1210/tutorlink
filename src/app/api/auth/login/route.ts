@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { supabaseServerAnon } from "@/lib/supabaseServerAnon";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
 export async function POST(request: Request) {
   try {
@@ -13,10 +14,29 @@ export async function POST(request: Request) {
       );
     }
 
-    // ✅ Resolve ONCE — reuse the same client throughout
-    const supabase = await supabaseServerAnon();
+    const cookieStore = await cookies();
 
-    // 1) Supabase Auth (sets cookies!)
+    // ✅ Collect cookies Supabase wants to set
+    const cookiesToWrite: { name: string; value: string; options: object }[] = [];
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookiesToSet) {
+            // ✅ Save them to write onto the response later
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookiesToWrite.push({ name, value, options });
+            });
+          },
+        },
+      }
+    );
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
@@ -24,7 +44,6 @@ export async function POST(request: Request) {
 
     if (error || !data.session) {
       const msg = (error?.message || "").toLowerCase();
-
       if (msg.includes("email not confirmed")) {
         return NextResponse.json(
           {
@@ -35,26 +54,20 @@ export async function POST(request: Request) {
           { status: 403 }
         );
       }
-
       return NextResponse.json(
         { success: false, message: "Invalid email or password" },
         { status: 401 }
       );
     }
 
-    // Extra safety — email not confirmed at Supabase level
     if (!data.user?.email_confirmed_at) {
-      await supabase.auth.signOut(); // ✅ reuse same instance
+      await supabase.auth.signOut();
       return NextResponse.json(
-        {
-          success: false,
-          message: "Please verify your email first.",
-        },
+        { success: false, message: "Please verify your email first." },
         { status: 403 }
       );
     }
 
-    // 2) Load Prisma user
     const user = await prisma.user.findUnique({
       where: { email: data.user.email!.toLowerCase() },
       select: {
@@ -71,15 +84,14 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Account exists but profile is missing. Please contact support.",
+          message: "Account exists but profile is missing. Please contact support.",
         },
         { status: 409 }
       );
     }
 
     if (user.isDeactivated) {
-      await supabase.auth.signOut(); // ✅ reuse same instance
+      await supabase.auth.signOut();
       return NextResponse.json(
         {
           success: false,
@@ -90,8 +102,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Cookies are already written by Supabase
-    return NextResponse.json({
+    // ✅ Build final response and attach all Supabase cookies onto it
+    const response = NextResponse.json({
       success: true,
       message: "Login successful",
       user: {
@@ -102,6 +114,14 @@ export async function POST(request: Request) {
         verificationStatus: user.verificationStatus,
       },
     });
+
+    // ✅ This is the key fix — write cookies onto the HTTP response
+    cookiesToWrite.forEach(({ name, value, options }) => {
+      response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
+    });
+
+    return response;
+
   } catch (err) {
     console.error("Login error:", err);
     return NextResponse.json(
