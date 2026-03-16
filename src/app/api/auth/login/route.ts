@@ -57,6 +57,14 @@ export async function POST(request: Request) {
     // 2) Load Prisma user
     const user = await prisma.user.findUnique({
   where: { email: data.user.email!.toLowerCase() },
+  select: {
+    id: true,
+    email: true,
+    role: true,
+    isTutorApproved: true,
+    verificationStatus: true,
+    isDeactivated: true,
+  },
 });
 
     

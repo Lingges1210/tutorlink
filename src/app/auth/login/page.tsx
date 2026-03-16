@@ -2,10 +2,12 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import AuthSplitLayout from "@/components/AuthSplitLayout";
 import { LoginAnimationHandle } from "@/components/LoginAnimation";
 
 export default function LoginPage() {
+  const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -41,7 +43,16 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      let data: any = null;
+      let data:
+        | {
+            success?: boolean;
+            message?: string;
+            user?: {
+              role?: string;
+            };
+          }
+        | null = null;
+
       try {
         data = await res.json();
       } catch {}
@@ -55,28 +66,17 @@ export default function LoginPage() {
         return;
       }
 
-      let targetPath = "/dashboard/student";
-
-      try {
-        const rolesRes = await fetch("/api/me/roles", { cache: "no-store" });
-        const rolesData = await rolesRes.json().catch(() => null);
-        const roles: string[] = rolesData?.roles ?? [];
-
-        if (roles.includes("ADMIN")) {
-          targetPath = "/admin";
-        } else {
-          targetPath = "/dashboard/student";
-        }
-      } catch {}
+      const targetPath =
+        data?.user?.role === "ADMIN" ? "/admin" : "/dashboard/student";
 
       setStatus("Login successful. Redirecting...");
       animation?.success();
 
-      setTimeout(() => {
-        window.location.href = targetPath;
-      }, 800);
-    } catch (err: any) {
-      setStatus(err?.message ?? "Unexpected error");
+      router.replace(targetPath);
+      router.refresh();
+      return;
+    } catch (err: unknown) {
+      setStatus(err instanceof Error ? err.message : "Unexpected error");
       setShake(true);
       setTimeout(() => setShake(false), 600);
       animation?.fail();
@@ -89,8 +89,6 @@ export default function LoginPage() {
 
   return (
     <>
-      
-
       <style>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
@@ -420,137 +418,151 @@ export default function LoginPage() {
       >
         {(animation) => (
           <form onSubmit={(e) => handleSubmit(e, animation)}>
-          <div className={shake ? "form-shake" : ""}>
-            <div className="form-section">
-              {/* Email */}
-              <div
-                className={[
-                  "input-wrapper",
-                  emailFocused ? "focused" : "",
-                  email ? "input-has-value" : "",
-                ].join(" ")}
-              >
-                <label className="input-label">
-                  <span className="label-dot" />
-                  Email address
-                </label>
-                <input
-                  type="email"
-                  autoComplete="email"
-                  className="input-field"
-                  placeholder="yourid@student.usm.my"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onFocus={() => {
-                    setEmailFocused(true);
-                    animation?.setChecking(true);
-                  }}
-                  onBlur={() => {
-                    setEmailFocused(false);
-                    animation?.setChecking(false);
-                  }}
-                  required
-                />
-              </div>
-
-              {/* Password */}
-              <div
-                className={[
-                  "input-wrapper",
-                  passwordFocused ? "focused" : "",
-                  password ? "input-has-value" : "",
-                ].join(" ")}
-              >
-                <label className="input-label">
-                  <span className="label-dot" />
-                  Password
-                </label>
-                <div style={{ position: "relative" }}>
+            <div className={shake ? "form-shake" : ""}>
+              <div className="form-section">
+                <div
+                  className={[
+                    "input-wrapper",
+                    emailFocused ? "focused" : "",
+                    email ? "input-has-value" : "",
+                  ].join(" ")}
+                >
+                  <label className="input-label">
+                    <span className="label-dot" />
+                    Email address
+                  </label>
                   <input
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="current-password"
+                    type="email"
+                    autoComplete="email"
                     className="input-field"
-                    style={{ paddingRight: "52px" }}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="yourid@student.usm.my"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     onFocus={() => {
-                      setPasswordFocused(true);
-                      animation?.setHandsUp(true);
+                      setEmailFocused(true);
+                      animation?.setChecking(true);
                     }}
                     onBlur={() => {
-                      setPasswordFocused(false);
-                      animation?.setHandsUp(false);
+                      setEmailFocused(false);
+                      animation?.setChecking(false);
                     }}
-                    onKeyDown={(e) => setCapsLockOn(e.getModifierState("CapsLock"))}
-                    onKeyUp={(e) => setCapsLockOn(e.getModifierState("CapsLock"))}
                     required
                   />
-                  <button
-                    type="button"
-                    className="password-toggle"
-                    onClick={() => setShowPassword((v) => !v)}
-                    aria-label="Toggle password visibility"
-                  >
-                    {showPassword ? "Hide" : "Show"}
-                  </button>
                 </div>
 
-                {capsLockOn && (
-                  <span className="caps-badge">
-                    ⇪ Caps Lock is ON
-                  </span>
-                )}
-              </div>
-
-              {/* Forgot password */}
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "-4px" }}>
-                <Link href="/auth/forgot-password" className="forgot-link">
-                  Forgot password?
-                </Link>
-              </div>
-
-              {/* Submit */}
-              <button
-                type="submit"
-                className="submit-btn"
-                disabled={loading || !email || !password}
-              >
-                <span className="btn-inner">
-                  {loading && <span className="spinner" />}
-                  {loading ? (
-                    <>
-                      Signing in
-                      <span className="loading-dots">
-                        <span /><span /><span />
-                      </span>
-                    </>
-                  ) : (
-                    "Continue →"
-                  )}
-                </span>
-              </button>
-
-              {/* Status */}
-              {status && (
                 <div
-                  className={["status-box", isSuccess ? "success" : "error"].join(" ")}
-                  role="alert"
-                  aria-live="polite"
+                  className={[
+                    "input-wrapper",
+                    passwordFocused ? "focused" : "",
+                    password ? "input-has-value" : "",
+                  ].join(" ")}
                 >
-                  <span className="status-icon">{isSuccess ? "✓" : "✕"}</span>
-                  <span>{status}</span>
-                </div>
-              )}
+                  <label className="input-label">
+                    <span className="label-dot" />
+                    Password
+                  </label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      className="input-field"
+                      style={{ paddingRight: "52px" }}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onFocus={() => {
+                        setPasswordFocused(true);
+                        animation?.setHandsUp(true);
+                      }}
+                      onBlur={() => {
+                        setPasswordFocused(false);
+                        animation?.setHandsUp(false);
+                      }}
+                      onKeyDown={(e) =>
+                        setCapsLockOn(e.getModifierState("CapsLock"))
+                      }
+                      onKeyUp={(e) =>
+                        setCapsLockOn(e.getModifierState("CapsLock"))
+                      }
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label="Toggle password visibility"
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
 
-              {/* Register */}
-              <p style={{ fontSize: "0.75rem", color: "rgb(var(--muted2))", paddingTop: "4px", textAlign: "center" }}>
-                Don&apos;t have an account?{" "}
-                <Link href="/auth/register" className="register-link">
-                  Register here
-                </Link>
-              </p>
+                  {capsLockOn && (
+                    <span className="caps-badge">⇪ Caps Lock is ON</span>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    marginTop: "-4px",
+                  }}
+                >
+                  <Link href="/auth/forgot-password" className="forgot-link">
+                    Forgot password?
+                  </Link>
+                </div>
+
+                <button
+                  type="submit"
+                  className="submit-btn"
+                  disabled={loading || !email || !password}
+                >
+                  <span className="btn-inner">
+                    {loading && <span className="spinner" />}
+                    {loading ? (
+                      <>
+                        Signing in
+                        <span className="loading-dots">
+                          <span />
+                          <span />
+                          <span />
+                        </span>
+                      </>
+                    ) : (
+                      "Continue →"
+                    )}
+                  </span>
+                </button>
+
+                {status && (
+                  <div
+                    className={[
+                      "status-box",
+                      isSuccess ? "success" : "error",
+                    ].join(" ")}
+                    role="alert"
+                    aria-live="polite"
+                  >
+                    <span className="status-icon">{isSuccess ? "✓" : "✕"}</span>
+                    <span>{status}</span>
+                  </div>
+                )}
+
+                <p
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "rgb(var(--muted2))",
+                    paddingTop: "4px",
+                    textAlign: "center",
+                  }}
+                >
+                  Don&apos;t have an account?{" "}
+                  <Link href="/auth/register" className="register-link">
+                    Register here
+                  </Link>
+                </p>
+              </div>
             </div>
-          </div>
           </form>
         )}
       </AuthSplitLayout>
