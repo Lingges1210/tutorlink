@@ -234,18 +234,18 @@ export default function MessagingClient() {
   }, [active?.otherUserId]);
 
   async function pingTyping(isTyping: boolean) {
-    if (!activeId || !meId || !realtimeChannelRef.current) return;
+  if (!activeId || !meId || !realtimeChannelRef.current) return;
 
-    await realtimeChannelRef.current.send({
-      type: "broadcast",
-      event: "typing",
-      payload: {
-        channelId: activeId,
-        userId: meId,
-        isTyping,
-      },
-    });
-  }
+  await realtimeChannelRef.current.send({
+    type: "broadcast",
+    event: "typing",
+    payload: {
+      channelId: activeId,
+      userId: meId,
+      isTyping,
+    },
+  });
+}
 
   function validateFile(file: File) {
     const okType = file.type.startsWith("image/") || file.type === "application/pdf";
@@ -483,118 +483,118 @@ export default function MessagingClient() {
   }, [activeId, meId, applyMessagesResponse, refreshConversations]);
 
   useEffect(() => {
-    if (!activeId || !meId) return;
-    const channelId = activeId;
-    const supabase = supabaseBrowser;
+  if (!activeId || !meId) return;
+  const channelId = activeId;
+  const supabase = supabaseBrowser;
 
-    let mounted = true;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+  let mounted = true;
+  let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    async function start() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+  async function start() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-      if (!mounted || !session?.access_token) return;
+    if (!mounted || !session?.access_token) return;
 
-      await supabase.realtime.setAuth(session.access_token);
+    await supabase.realtime.setAuth(session.access_token);
 
-      channel = supabase
-        .channel(`chat-room-${channelId}`, {
-          config: {
-            broadcast: { self: false },
-          },
-        })
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "ChatMessage",
-            filter: `channelId=eq.${channelId}`,
-          },
-          async (payload) => {
-            const row = payload.new as {
-              id: string;
-              channelId: string;
-              senderId: string;
-              text: string;
-              createdAt: string;
-              isDeleted?: boolean;
-              deletedAt?: string | null;
-            };
-
-            if (row.channelId !== channelId) return;
-
-            const incoming: Msg = {
-              id: row.id,
-              senderId: row.senderId,
-              text: row.text ?? "",
-              createdAt: row.createdAt,
-              isDeleted: row.isDeleted,
-              deletedAt: row.deletedAt ?? null,
-            };
-
-            mergeMessages([incoming]);
-
-            setTimeout(() => {
-              bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-            }, 20);
-
-            if (row.senderId !== meId) {
-              await markChatRead(channelId);
-
-              setTimeout(async () => {
-                const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
-                  cache: "no-store",
-                })
-                  .then((r) => r.json())
-                  .catch(() => null);
-
-                applyMessagesResponse(j, channelId, null);
-              }, 400);
-            }
-
-            refreshConversations(channelId);
-          }
-        )
-        .on("broadcast", { event: "typing" }, ({ payload }) => {
-          const data = payload as {
+    channel = supabase
+      .channel(`chat-room-${channelId}`, {
+        config: {
+          broadcast: { self: false },
+        },
+      })
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "ChatMessage",
+          filter: `channelId=eq.${channelId}`,
+        },
+        async (payload) => {
+          const row = payload.new as {
+            id: string;
             channelId: string;
-            userId: string;
-            isTyping: boolean;
+            senderId: string;
+            text: string;
+            createdAt: string;
+            isDeleted?: boolean;
+            deletedAt?: string | null;
           };
 
-          if (data.channelId !== channelId) return;
-          if (data.userId === meId) return;
+          if (row.channelId !== channelId) return;
 
-          if (data.isTyping) {
-            setOtherTyping(true);
-            if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
-            otherTypingExpiry.current = setTimeout(() => {
-              setOtherTyping(false);
-            }, 2500);
-          } else {
-            setOtherTyping(false);
-            if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
+          const incoming: Msg = {
+            id: row.id,
+            senderId: row.senderId,
+            text: row.text ?? "",
+            createdAt: row.createdAt,
+            isDeleted: row.isDeleted,
+            deletedAt: row.deletedAt ?? null,
+          };
+
+          mergeMessages([incoming]);
+
+          setTimeout(() => {
+            bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+          }, 20);
+
+          if (row.senderId !== meId) {
+            await markChatRead(channelId);
+
+            setTimeout(async () => {
+              const j = await fetch(
+                `/api/chat/messages?channelId=${channelId}&take=30`,
+                { cache: "no-store" }
+              )
+                .then((r) => r.json())
+                .catch(() => null);
+
+              applyMessagesResponse(j, channelId, null);
+            }, 400);
           }
-        })
-        .subscribe((status) => {
-          console.log("chat room status", channelId, status);
-        });
 
-      realtimeChannelRef.current = channel;
-    }
+          refreshConversations(channelId);
+        }
+      )
+      .on("broadcast", { event: "typing" }, ({ payload }) => {
+        const data = payload as {
+          channelId: string;
+          userId: string;
+          isTyping: boolean;
+        };
 
-    void start();
+        if (data.channelId !== channelId) return;
+        if (data.userId === meId) return;
 
-    return () => {
-      mounted = false;
-      realtimeChannelRef.current = null;
-      if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
-      if (channel) supabase.removeChannel(channel);
-    };
-  }, [activeId, meId, mergeMessages, refreshConversations, applyMessagesResponse]);
+        if (data.isTyping) {
+          setOtherTyping(true);
+          if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
+          otherTypingExpiry.current = setTimeout(() => {
+            setOtherTyping(false);
+          }, 2500);
+        } else {
+          setOtherTyping(false);
+          if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
+        }
+      })
+      .subscribe((status) => {
+        console.log("chat room status", channelId, status);
+      });
+
+    realtimeChannelRef.current = channel;
+  }
+
+  void start();
+
+  return () => {
+    mounted = false;
+    realtimeChannelRef.current = null;
+    if (channel) supabase.removeChannel(channel);
+  };
+}, [activeId, meId, mergeMessages, refreshConversations, applyMessagesResponse]);
 
   useEffect(() => {
     if (!activeId) return;
