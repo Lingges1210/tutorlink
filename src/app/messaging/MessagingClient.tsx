@@ -262,24 +262,6 @@ export default function MessagingClient() {
     [storeMarkRead]
   );
 
-  const fetchLatestMessage = useCallback(async (channelId: string, expectedId?: string) => {
-    const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=1`, {
-      cache: "no-store",
-    })
-      .then((r) => r.json())
-      .catch(() => null);
-
-    if (!j?.ok || !Array.isArray(j.items) || !j.items.length) return null;
-
-    const latest = j.items[0] as Msg;
-    if (!expectedId) return latest;
-    if (latest.id === expectedId) return latest;
-
-    const found = (j.items as Msg[]).find((m) => m.id === expectedId);
-    return found ?? null;
-  }, []);
-
-  
 
   function prettyNameFromUrl(u: string) {
     try {
@@ -563,74 +545,76 @@ export default function MessagingClient() {
   }, [conversations, activeId]);
 
   useEffect(() => {
-    if (!activeId || !meId) return;
+  if (!activeId || !meId) return;
 
-    const channelId = activeId;
-    let cancelled = false;
+  const channelId = activeId;
+  let cancelled = false;
 
-    setReadInfo(null);
+  setReadInfo(null);
 
-    const cached = useChatStore.getState().messageCache[channelId];
-    const hasCached = !!cached?.length;
+  const cached = useChatStore.getState().messageCache[channelId];
+  const hasCached = !!cached?.length;
 
-    async function loadMessages() {
-  if (hasCached) {
+  async function loadMessages() {
+    if (hasCached) {
+      setLoadingMsgs(false);
+
+      if (!cancelled) {
+        scrollToBottom("auto");
+        await markChatRead(channelId);
+      }
+      return;
+    }
+
+    setLoadingMsgs(true);
+
+    const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
+      cache: "no-store",
+    })
+      .then((r) => r.json())
+      .catch(() => null);
+
+    if (cancelled) {
+      setLoadingMsgs(false);
+      return;
+    }
+
+    if (j?.ok) {
+      const msgs = sortMsgs((j.items as Msg[]).slice().reverse());
+      storeSetMessages(channelId, msgs);
+      storeSetCursor(channelId, j.nextCursor ?? null);
+
+      if (j.read) setReadInfo(j.read);
+
+      if (typeof j.isChatClosed === "boolean") {
+        setChatMeta({
+          isChatClosed: !!j.isChatClosed,
+          chatCloseAt: j.chatCloseAt ?? null,
+        });
+      }
+    }
+
     setLoadingMsgs(false);
-    scrollToBottom("auto");
-    await markChatRead(channelId);
-    return;
-  }
 
-  setLoadingMsgs(true);
-
-  const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
-    cache: "no-store",
-  })
-    .then((r) => r.json())
-    .catch(() => null);
-
-  if (cancelled) {
-    setLoadingMsgs(false);
-    return;
-  }
-
-  if (j?.ok) {
-    const msgs = sortMsgs((j.items as Msg[]).slice().reverse());
-    storeSetMessages(channelId, msgs);
-    storeSetCursor(channelId, j.nextCursor ?? null);
-
-    if (j.read) setReadInfo(j.read);
-
-    if (typeof j.isChatClosed === "boolean") {
-      setChatMeta({
-        isChatClosed: !!j.isChatClosed,
-        chatCloseAt: j.chatCloseAt ?? null,
-      });
+    if (!cancelled) {
+      scrollToBottom("auto");
+      await markChatRead(channelId);
     }
   }
 
-  setLoadingMsgs(false);
+  void loadMessages();
 
-  if (!cancelled) {
-    scrollToBottom("auto");
-    await markChatRead(channelId);
-  }
-}
-
-    void loadMessages();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    activeId,
-    meId,
-    scrollToBottom,
-    storeSetMessages,
-    storeSetCursor,
-    storeMergeMessages,
-    markChatRead,
-  ]);
+  return () => {
+    cancelled = true;
+  };
+}, [
+  activeId,
+  meId,
+  scrollToBottom,
+  storeSetMessages,
+  storeSetCursor,
+  markChatRead,
+]);
 
   const prevMsgCount = useRef(0);
 
@@ -757,14 +741,13 @@ export default function MessagingClient() {
       if (localChannel) supabase.removeChannel(localChannel);
     };
   }, [
-    activeId,
-    meId,
-    patchConversationPreview,
-    storeMergeMessages,
-    storePatchMessage,
-    fetchLatestMessage,
-    markChatRead,
-  ]);
+  activeId,
+  meId,
+  patchConversationPreview,
+  storeMergeMessages,
+  storePatchMessage,
+  markChatRead,
+]);
 
   useEffect(() => {
   function onIncoming(ev: Event) {
@@ -805,7 +788,6 @@ export default function MessagingClient() {
   patchConversationPreview,
   scrollToBottom,
   storeMergeMessages,
-  fetchLatestMessage,
 ]);
 
   useEffect(() => {
