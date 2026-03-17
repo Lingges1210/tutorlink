@@ -147,6 +147,40 @@ export default function MessagingClient() {
     return Array.from(new Set(urls));
   }, [messages]);
 
+  const refreshActiveChannelMessages = useCallback(async (channelId: string) => {
+  const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
+    cache: "no-store",
+  })
+    .then((r) => r.json())
+    .catch(() => null);
+
+  if (!j?.ok) return;
+
+  const msgs = (j.items as Msg[]).slice().reverse();
+
+  useChatStore.setState((s) => ({
+    messageCache: {
+      ...s.messageCache,
+      [channelId]: msgs.sort(
+        (a: Msg, b: Msg) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      ),
+    },
+    cursorCache: {
+      ...s.cursorCache,
+      [channelId]: j.nextCursor ?? null,
+    },
+  }));
+
+  if (j.read) setReadInfo(j.read);
+  if (typeof j.isChatClosed === "boolean") {
+    setChatMeta({
+      isChatClosed: !!j.isChatClosed,
+      chatCloseAt: j.chatCloseAt ?? null,
+    });
+  }
+}, []);
+
   function prettyNameFromUrl(u: string) {
     try   { return decodeURIComponent(new URL(u).pathname.split("/").pop() || "image"); }
     catch { return decodeURIComponent((u.split("/").pop() || "image").split("?")[0]); }
@@ -436,8 +470,9 @@ export default function MessagingClient() {
             return { messageCache: { ...s.messageCache, [channelId]: updated } };
           });
 
-          if (msg.senderId !== meIdSnap && channelId === activeIdRef.current) {
-            void markChatRead(channelId);
+         if (channelId === activeIdRef.current) {
+            void refreshActiveChannelMessages(channelId);
+            if (msg.senderId !== meIdSnap) void markChatRead(channelId);
           }
           if (msg.senderId !== meIdSnap && channelId !== activeIdRef.current) {
             window.dispatchEvent(new Event("chat:unread-refresh"));
@@ -475,7 +510,10 @@ export default function MessagingClient() {
               return { messageCache: { ...s.messageCache, [channelId]: updated } };
             });
 
-            if (row.senderId !== meIdSnap && channelId === activeIdRef.current) void markChatRead(channelId);
+            if (channelId === activeIdRef.current) {
+              void refreshActiveChannelMessages(channelId);
+              if (row.senderId !== meIdSnap) void markChatRead(channelId);
+            }
             if (row.senderId !== meIdSnap && channelId !== activeIdRef.current) window.dispatchEvent(new Event("chat:unread-refresh"));
 
             storeSetConversations(
