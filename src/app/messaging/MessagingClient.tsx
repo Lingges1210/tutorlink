@@ -393,14 +393,20 @@ export default function MessagingClient() {
     const meIdSnap  = meId;
     const supabase  = supabaseBrowser;
     let mounted = true;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    // Local ref for this effect instance — guarantees cleanup always
+    // removes exactly the channel this render created, even if start()
+    // resolves after a re-render has already updated chatRoomRef.current
+    let localChannel: ReturnType<typeof supabase.channel> | null = null;
 
     async function start() {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!mounted || !session?.access_token) return;
+      if (!mounted) return;
+      if (!session?.access_token) return;
       await supabase.realtime.setAuth(session.access_token);
+      if (!mounted) return;
 
-      channel = supabase
+      const channel = supabase
         .channel(`chat-room-${channelId}`, {
           config: { broadcast: { self: false } },
         })
@@ -411,9 +417,24 @@ export default function MessagingClient() {
           if (data.channelId !== channelId) return;
 
           const msg = data.message;
-          // storeMergeMessages checks processedMsgIds internally — returns false if already seen
-          const isNew = storeMergeMessages(channelId, [msg]);
-          if (!isNew) return;
+
+          // Bypass processedMsgIds check — write directly into the cache.
+          // ChatMessageListener (global) may have already added this ID to
+          // processedMsgIds, so using storeMergeMessages would silently skip
+          // the message and it would never appear in the open chat panel.
+          useChatStore.setState((s) => {
+            const existing = s.messageCache[channelId] ?? [];
+            // Skip if already in the visible message list (true duplicate)
+            if (existing.some((m) => m.id === msg.id)) return s;
+            // Remove any matching temp optimistic message
+            const filtered = existing.filter(
+              (m) => !(m.id.startsWith("temp-") && m.senderId === msg.senderId && m.text === msg.text)
+            );
+            const updated = [...filtered, msg].sort(
+              (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            );
+            return { messageCache: { ...s.messageCache, [channelId]: updated } };
+          });
 
           if (msg.senderId !== meIdSnap && channelId === activeIdRef.current) {
             void markChatRead(channelId);
@@ -440,9 +461,19 @@ export default function MessagingClient() {
             if (row.channelId !== channelId) return;
 
             const incoming: Msg = { id: row.id, senderId: row.senderId, text: row.text ?? "", createdAt: row.createdAt, isDeleted: row.isDeleted, deletedAt: row.deletedAt ?? null };
-            // storeMergeMessages checks processedMsgIds — skips if already handled
-            const isNew = storeMergeMessages(channelId, [incoming]);
-            if (!isNew) return;
+
+            // Same pattern — bypass processedMsgIds, write directly to cache
+            useChatStore.setState((s) => {
+              const existing = s.messageCache[channelId] ?? [];
+              if (existing.some((m) => m.id === incoming.id)) return s;
+              const filtered = existing.filter(
+                (m) => !(m.id.startsWith("temp-") && m.senderId === incoming.senderId && m.text === incoming.text)
+              );
+              const updated = [...filtered, incoming].sort(
+                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+              );
+              return { messageCache: { ...s.messageCache, [channelId]: updated } };
+            });
 
             if (row.senderId !== meIdSnap && channelId === activeIdRef.current) void markChatRead(channelId);
             if (row.senderId !== meIdSnap && channelId !== activeIdRef.current) window.dispatchEvent(new Event("chat:unread-refresh"));
@@ -472,15 +503,18 @@ export default function MessagingClient() {
           }
         });
 
+      localChannel = channel;
       chatRoomRef.current = channel;
-      channel.subscribe();
+      channel.subscribe((status) => {
+        console.log(`[MessagingClient] chat-room-${channelId}`, status);
+      });
     }
 
     void start();
     return () => {
       mounted = false;
       chatRoomRef.current = null;
-      if (channel) supabase.removeChannel(channel);
+      if (localChannel) supabase.removeChannel(localChannel);
     };
   }, [activeId, meId]);
 
