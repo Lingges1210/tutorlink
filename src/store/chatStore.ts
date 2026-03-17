@@ -1,12 +1,4 @@
 // src/store/chatStore.ts
-//
-// Global Zustand store for chat state.
-// - Conversations are fetched in the background as soon as the user is known.
-// - Messages for the most-recent conversation are pre-fetched too.
-// - MessagingClient reads from this store on mount so the page is instant.
-// - The store is the single source of truth; MessagingClient writes back into
-//   it via the same actions (mergeMessages, setConversations, etc.)
-
 import { create } from "zustand";
 
 export type Attachment = {
@@ -42,34 +34,36 @@ export type Conv = {
   otherRoleLabel?: "Student" | "Tutor" | null;
 };
 
-type MessageCache = {
-  // channelId → sorted message array
-  [channelId: string]: Msg[];
-};
-
-type CursorCache = {
-  // channelId → nextCursor (null means no more pages)
-  [channelId: string]: string | null;
-};
+type MessageCache = { [channelId: string]: Msg[] };
+type CursorCache  = { [channelId: string]: string | null };
 
 type ChatState = {
-  // ── data ──────────────────────────────────────────────────────────────────
   conversations: Conv[];
   messageCache: MessageCache;
   cursorCache: CursorCache;
+  convLoaded: boolean;
+  prefetchedChannelId: string | null;
 
-  // ── loading flags ─────────────────────────────────────────────────────────
-  convLoaded: boolean;         // true once first conversations fetch completes
-  prefetchedChannelId: string | null; // which channel's messages are pre-cached
+  // Global dedup set — shared by MessagingClient, ChatUnreadListener, CDC handlers.
+  // Any component that processes a message ID should add it here first.
+  // mergeMessages checks this before adding to the cache.
+  processedMsgIds: Set<string>;
 
-  // ── actions ───────────────────────────────────────────────────────────────
   setConversations: (convs: Conv[]) => void;
-  mergeMessages: (channelId: string, msgs: Msg[]) => void;
+
+  // Returns true if the message was new (not already processed).
+  // Automatically adds to processedMsgIds.
+  mergeMessages: (channelId: string, msgs: Msg[]) => boolean;
+
+  // Mark IDs as processed without merging (e.g. for optimistic temp messages)
+  markProcessed: (ids: string[]) => void;
+
+  // Remove IDs from processed set (e.g. when rolling back a failed send)
+  unmarkProcessed: (ids: string[]) => void;
+
   setCursor: (channelId: string, cursor: string | null) => void;
   markRead: (channelId: string) => void;
   clearChannelMessages: (channelId: string) => void;
-
-  // ── background fetch ──────────────────────────────────────────────────────
   prefetch: () => Promise<void>;
 };
 
@@ -91,22 +85,73 @@ export const useChatStore = create<ChatState>((set, get) => ({
   cursorCache: {},
   convLoaded: false,
   prefetchedChannelId: null,
+  processedMsgIds: new Set<string>(),
 
   setConversations: (convs) =>
     set({ conversations: sortedConvs(convs), convLoaded: true }),
 
-  mergeMessages: (channelId, incoming) =>
-    set((state) => {
-      const existing = state.messageCache[channelId] ?? [];
-      const map = new Map(existing.map((m) => [m.id, m]));
-      for (const m of incoming) map.set(m.id, { ...(map.get(m.id) ?? {}), ...m });
-      return {
-        messageCache: {
-          ...state.messageCache,
-          [channelId]: sortedMsgs(Array.from(map.values())),
-        },
-      };
-    }),
+  mergeMessages: (channelId, incoming) => {
+    const state = get();
+    let hasNew = false;
+
+    // Filter to only messages we haven't processed yet
+    const newMsgs = incoming.filter((m) => {
+      if (state.processedMsgIds.has(m.id)) return false;
+      hasNew = true;
+      return true;
+    });
+
+    if (!hasNew) return false;
+
+    // Add all incoming IDs to processedMsgIds (including already-processed ones
+    // passed in, to ensure the set stays complete)
+    const updatedProcessed = new Set(state.processedMsgIds);
+    for (const m of incoming) updatedProcessed.add(m.id);
+
+    const existing = state.messageCache[channelId] ?? [];
+
+    // Strip matching temp messages when real ones arrive
+    const tempsToRemove = new Set<string>();
+    for (const m of newMsgs) {
+      if (!m.id.startsWith("temp-")) {
+        for (const ex of existing) {
+          if (
+            ex.id.startsWith("temp-") &&
+            ex.senderId === m.senderId &&
+            ex.text === m.text
+          ) {
+            tempsToRemove.add(ex.id);
+          }
+        }
+      }
+    }
+
+    const filtered = existing.filter((m) => !tempsToRemove.has(m.id));
+    const map = new Map(filtered.map((m) => [m.id, m]));
+    for (const m of newMsgs) map.set(m.id, { ...(map.get(m.id) ?? {}), ...m });
+
+    set({
+      processedMsgIds: updatedProcessed,
+      messageCache: {
+        ...state.messageCache,
+        [channelId]: sortedMsgs(Array.from(map.values())),
+      },
+    });
+
+    return true;
+  },
+
+  markProcessed: (ids) => {
+    const updated = new Set(get().processedMsgIds);
+    for (const id of ids) updated.add(id);
+    set({ processedMsgIds: updated });
+  },
+
+  unmarkProcessed: (ids) => {
+    const updated = new Set(get().processedMsgIds);
+    for (const id of ids) updated.delete(id);
+    set({ processedMsgIds: updated });
+  },
 
   setCursor: (channelId, cursor) =>
     set((state) => ({
@@ -128,7 +173,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }),
 
   prefetch: async () => {
-    // 1. Fetch conversations
     const convRes = await fetch("/api/chat/channels", { cache: "no-store" })
       .then((r) => r.json())
       .catch(() => null);
@@ -138,11 +182,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const convs: Conv[] = sortedConvs(convRes.items ?? []);
     set({ conversations: convs, convLoaded: true });
 
-    // 2. Pre-fetch messages for the most recent conversation only
     const topConv = convs[0];
     if (!topConv) return;
 
-    // Skip if we already have messages cached for this channel
     const already = get().messageCache[topConv.id];
     if (already && already.length > 0) return;
 
@@ -156,7 +198,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!msgRes?.ok) return;
 
     const msgs: Msg[] = (msgRes.items as Msg[]).slice().reverse();
+
+    // Mark prefetched messages as processed
+    const updatedProcessed = new Set(get().processedMsgIds);
+    for (const m of msgs) updatedProcessed.add(m.id);
+
     set((state) => ({
+      processedMsgIds: updatedProcessed,
       messageCache: {
         ...state.messageCache,
         [topConv.id]: sortedMsgs(msgs),

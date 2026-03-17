@@ -1,17 +1,30 @@
 "use client";
 
+// src/components/ChatInboxIconClient.tsx
+//
+// Badge is now driven by two sources:
+//   1. `unreadCount` prop — controlled by ChatMessageListener (realtime push)
+//   2. poll every 5s + chat:unread-refresh event — for accuracy after reads
+
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { MessageSquare } from "lucide-react";
 
 export default function ChatInboxIconClient({
   initialUnread = 0,
+  unreadCount,
 }: {
   initialUnread?: number;
+  unreadCount?: number; // controlled externally by ChatMessageListener
 }) {
   const [total, setTotal] = useState<number>(initialUnread);
   const pathname = usePathname();
+
+  // Sync when parent updates count (realtime push from ChatMessageListener)
+  useEffect(() => {
+    if (unreadCount !== undefined) setTotal(unreadCount);
+  }, [unreadCount]);
 
   const isPublicAuthPage =
     pathname?.startsWith("/auth/") ||
@@ -21,57 +34,53 @@ export default function ChatInboxIconClient({
     pathname === "/auth/forgot-password" ||
     pathname === "/auth/reset-password";
 
-  useEffect(() => {
-    if (isPublicAuthPage) return;
+  const refreshing = useRef(false);
+  const pending    = useRef(false);
+  const stopped    = useRef(false);
 
-    let refreshing = false;
-    let pending = false;
-    let stop = false;
-
-    async function safeRefresh() {
-      if (stop) return;
-
-      if (refreshing) {
-        pending = true;
-        return;
-      }
-
-      refreshing = true;
-      try {
-        const r = await fetch("/api/chat/unread-total", { cache: "no-store" });
-        if (!r.ok) return;
-
-        const j = await r.json().catch(() => null);
-        if (!stop && j?.ok) setTotal(j.total);
-      } finally {
-        refreshing = false;
-        if (pending && !stop) {
-          pending = false;
-          safeRefresh();
-        }
+  async function safeRefresh() {
+    if (stopped.current) return;
+    if (refreshing.current) { pending.current = true; return; }
+    refreshing.current = true;
+    try {
+      const r = await fetch("/api/chat/unread-total", { cache: "no-store" });
+      if (!r.ok) return;
+      const j = await r.json().catch(() => null);
+      if (!stopped.current && j?.ok) setTotal(j.total ?? 0);
+    } finally {
+      refreshing.current = false;
+      if (pending.current && !stopped.current) {
+        pending.current = false;
+        void safeRefresh();
       }
     }
+  }
 
-    safeRefresh();
+  useEffect(() => {
+    if (isPublicAuthPage) return;
+    stopped.current = false;
 
-    const onRead = () => safeRefresh();
-    window.addEventListener("chat:unread-refresh", onRead);
+    void safeRefresh();
 
     const t = setInterval(() => {
-      if (document.visibilityState === "visible") safeRefresh();
-    }, 15000);
+      if (document.visibilityState === "visible") void safeRefresh();
+    }, 5_000);
+
+    const onRefresh = () => void safeRefresh();
+    window.addEventListener("chat:unread-refresh", onRefresh);
 
     const onVis = () => {
-      if (document.visibilityState === "visible") safeRefresh();
+      if (document.visibilityState === "visible") void safeRefresh();
     };
     document.addEventListener("visibilitychange", onVis);
 
     return () => {
-      stop = true;
-      window.removeEventListener("chat:unread-refresh", onRead);
-      document.removeEventListener("visibilitychange", onVis);
+      stopped.current = true;
       clearInterval(t);
+      window.removeEventListener("chat:unread-refresh", onRefresh);
+      document.removeEventListener("visibilitychange", onVis);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPublicAuthPage]);
 
   return (

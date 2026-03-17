@@ -41,23 +41,24 @@ function timeAgo(iso: string) {
 export default function MessagingClient() {
   const [meId, setMeId] = useState<string | null>(null);
 
-  // ── Zustand store (replaces local conversations + message state) ──────────
-  const storeConversations = useChatStore((s) => s.conversations);
+  // ── Zustand store ─────────────────────────────────────────────────────────
+  const storeConversations    = useChatStore((s) => s.conversations);
   const storeSetConversations = useChatStore((s) => s.setConversations);
-  const storeMergeMessages = useChatStore((s) => s.mergeMessages);
-  const storeMessageCache = useChatStore((s) => s.messageCache);
-  const storeCursorCache = useChatStore((s) => s.cursorCache);
-  const storeSetCursor = useChatStore((s) => s.setCursor);
-  const storeMarkRead = useChatStore((s) => s.markRead);
-  const storeClearChannel = useChatStore((s) => s.clearChannelMessages);
-  const convLoaded = useChatStore((s) => s.convLoaded);
-  const prefetch = useChatStore((s) => s.prefetch);
+  const storeMergeMessages    = useChatStore((s) => s.mergeMessages);
+  const storeMessageCache     = useChatStore((s) => s.messageCache);
+  const storeCursorCache      = useChatStore((s) => s.cursorCache);
+  const storeSetCursor        = useChatStore((s) => s.setCursor);
+  const storeMarkRead         = useChatStore((s) => s.markRead);
+  const storeClearChannel     = useChatStore((s) => s.clearChannelMessages);
+  const convLoaded            = useChatStore((s) => s.convLoaded);
+  const prefetch              = useChatStore((s) => s.prefetch);
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIdRef = useRef<string | null>(null);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
 
-  const seenMsgIds = useRef<Set<string>>(new Set());
+  // NO local seenMsgIds ref — dedup is handled entirely by
+  // useChatStore processedMsgIds which is shared across all components.
 
   const conversations = storeConversations;
 
@@ -66,73 +67,75 @@ export default function MessagingClient() {
     [conversations, activeId]
   );
 
-  // Messages come straight from the store cache
-  const messages = storeMessageCache[activeId ?? ""] ?? [];
+  const messages   = storeMessageCache[activeId ?? ""] ?? [];
   const nextCursor = storeCursorCache[activeId ?? ""] ?? null;
 
   const [loadingMsgs, setLoadingMsgs] = useState(false);
-  // Only show loading skeleton when we have no cached messages yet
   const showSkeleton = loadingMsgs && messages.length === 0;
 
   const [text, setText] = useState("");
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const bottomRef    = useRef<HTMLDivElement | null>(null);
+  const msgScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const doScroll = () => {
+      if (bottomRef.current) {
+        bottomRef.current.scrollIntoView({ behavior, block: "end" });
+      } else if (msgScrollRef.current) {
+        msgScrollRef.current.scrollTop = msgScrollRef.current.scrollHeight;
+      }
+    };
+    requestAnimationFrame(() => {
+      doScroll();
+      requestAnimationFrame(doScroll);
+    });
+  }, []);
 
   const sp = useSearchParams();
   const qsChannelId = sp.get("channelId");
 
-  const [q, setQ] = useState("");
+  const [q, setQ]                   = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("ALL");
 
   const filteredConversations = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return conversations.filter((c) => {
       if (roleFilter === "STUDENT" && !c.viewerIsStudent) return false;
-      if (roleFilter === "TUTOR" && c.viewerIsStudent) return false;
+      if (roleFilter === "TUTOR"   && c.viewerIsStudent)  return false;
       if (!needle) return true;
-      const hay = [c.subjectName ?? "", c.name ?? "", c.lastMessage ?? ""]
-        .join(" ")
-        .toLowerCase();
+      const hay = [c.subjectName ?? "", c.name ?? "", c.lastMessage ?? ""].join(" ").toLowerCase();
       return hay.includes(needle);
     });
   }, [conversations, q, roleFilter]);
 
-  const [readInfo, setReadInfo] = useState<{
-    meLastReadAt: string;
-    otherLastReadAt: string;
-  } | null>(null);
+  const [readInfo, setReadInfo] = useState<{ meLastReadAt: string; otherLastReadAt: string } | null>(null);
 
-  const [otherTyping, setOtherTyping] = useState(false);
-  const typingStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastTypingSentAt = useRef(0);
+  const [otherTyping, setOtherTyping]   = useState(false);
+  const typingStopTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingSentAt  = useRef(0);
   const otherTypingExpiry = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [chatMeta, setChatMeta] = useState<{
-    isChatClosed: boolean;
-    chatCloseAt: string | null;
-  }>({ isChatClosed: false, chatCloseAt: null });
+  const [chatMeta, setChatMeta] = useState<{ isChatClosed: boolean; chatCloseAt: string | null }>({
+    isChatClosed: false, chatCloseAt: null,
+  });
 
-  const [userPresence, setUserPresence] = useState<{
-    isOnline: boolean;
-    lastSeenAt: string | null;
-  } | null>(null);
+  const [userPresence, setUserPresence] = useState<{ isOnline: boolean; lastSeenAt: string | null } | null>(null);
 
-  const [sendErr, setSendErr] = useState<string | null>(null);
+  const [sendErr, setSendErr]         = useState<string | null>(null);
   const [pickedFiles, setPickedFiles] = useState<File[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploading]     = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [zoom, setZoom] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom]         = useState(1);
+  const [offset, setOffset]     = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
 
-  const [imgViewer, setImgViewer] = useState<{
-    open: boolean;
-    urls: string[];
-    idx: number;
-  }>({ open: false, urls: [], idx: 0 });
+  const [imgViewer, setImgViewer] = useState<{ open: boolean; urls: string[]; idx: number }>({
+    open: false, urls: [], idx: 0,
+  });
 
-  const realtimeChannelRef = useRef<ReturnType<typeof supabaseBrowser.channel> | null>(null);
+  const chatRoomRef = useRef<ReturnType<typeof supabaseBrowser.channel> | null>(null);
 
   const allImageUrls = useMemo(() => {
     const urls: string[] = [];
@@ -145,19 +148,13 @@ export default function MessagingClient() {
   }, [messages]);
 
   function prettyNameFromUrl(u: string) {
-    try {
-      const p = new URL(u).pathname.split("/").pop() || "image";
-      return decodeURIComponent(p);
-    } catch {
-      const parts = u.split("/").pop() || "image";
-      return decodeURIComponent(parts.split("?")[0]);
-    }
+    try   { return decodeURIComponent(new URL(u).pathname.split("/").pop() || "image"); }
+    catch { return decodeURIComponent((u.split("/").pop() || "image").split("?")[0]); }
   }
 
   function openImageInChat(url: string) {
     const urls = allImageUrls.length ? allImageUrls : [url];
-    const idx = Math.max(0, urls.indexOf(url));
-    setImgViewer({ open: true, urls, idx: idx >= 0 ? idx : 0 });
+    setImgViewer({ open: true, urls, idx: Math.max(0, urls.indexOf(url)) });
   }
 
   function closeImageViewer() { setImgViewer((p) => ({ ...p, open: false })); }
@@ -168,19 +165,19 @@ export default function MessagingClient() {
     if (!iso) return "Offline";
     const diff = Date.now() - new Date(iso).getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "Just now";
+    if (mins < 1)  return "Just now";
     if (mins < 60) return `${mins}m ago`;
     const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
+    if (hrs < 24)  return `${hrs}h ago`;
     return `${Math.floor(hrs / 24)}d ago`;
   }
 
   useEffect(() => {
     if (!imgViewer.open) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeImageViewer();
+      if (e.key === "Escape")     closeImageViewer();
       if (e.key === "ArrowRight") nextImage();
-      if (e.key === "ArrowLeft") prevImage();
+      if (e.key === "ArrowLeft")  prevImage();
     };
     window.addEventListener("keydown", onKeyDown);
     const prev = document.body.style.overflow;
@@ -205,8 +202,8 @@ export default function MessagingClient() {
   }, [active?.otherUserId]);
 
   async function pingTyping(isTyping: boolean) {
-    if (!activeId || !meId || !realtimeChannelRef.current) return;
-    await realtimeChannelRef.current.send({
+    if (!activeId || !meId || !chatRoomRef.current) return;
+    await chatRoomRef.current.send({
       type: "broadcast",
       event: "typing",
       payload: { channelId: activeId, userId: meId, isTyping },
@@ -264,12 +261,9 @@ export default function MessagingClient() {
     const j = await r.json().catch(() => null);
     if (j?.ok && activeId) {
       storeMergeMessages(activeId, [{
-        id: messageId,
-        senderId: "",
-        text: "",
+        id: messageId, senderId: "", text: "",
         createdAt: new Date().toISOString(),
-        isDeleted: true,
-        deletedAt: j.message?.deletedAt ?? null,
+        isDeleted: true, deletedAt: j.message?.deletedAt ?? null,
       }]);
     }
   }
@@ -288,34 +282,30 @@ export default function MessagingClient() {
     const r = await fetch("/api/chat/channels", { cache: "no-store" });
     const j = await r.json().catch(() => null);
     if (!j?.ok) return;
-    const sorted: Conv[] = [...j.items].sort(
-      (a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()
-    ).map((c) => (openChannelId && c.id === openChannelId ? { ...c, unread: 0 } : c));
+    const sorted: Conv[] = [...j.items]
+      .sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
+      .map((c) => (openChannelId && c.id === openChannelId ? { ...c, unread: 0 } : c));
     storeSetConversations(sorted);
   }, [storeSetConversations]);
 
-  // ── Boot: get meId; conversations already in store from prefetch ──────────
+  // ── Boot ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       const r = await fetch("/api/me", { cache: "no-store" });
       const j = await r.json().catch(() => null);
       if (j?.ok) setMeId(j.id);
     })();
-    // If store hasn't loaded yet (user navigated directly to /messaging),
-    // trigger a fresh prefetch now so we don't show an empty state.
     if (!convLoaded) void prefetch();
   }, [convLoaded, prefetch]);
 
   // ── Auto-select first conversation ────────────────────────────────────────
   useEffect(() => {
     if (activeId) return;
-    if (qsChannelId && conversations.some((c) => c.id === qsChannelId)) {
-      setActiveId(qsChannelId); return;
-    }
+    if (qsChannelId && conversations.some((c) => c.id === qsChannelId)) { setActiveId(qsChannelId); return; }
     if (conversations[0]?.id) setActiveId(conversations[0].id);
   }, [conversations, qsChannelId, activeId]);
 
-  // ── If active conversation got removed ────────────────────────────────────
+  // ── Guard removed conversation ────────────────────────────────────────────
   useEffect(() => {
     if (!activeId) return;
     if (conversations.some((c) => c.id === activeId)) return;
@@ -326,17 +316,14 @@ export default function MessagingClient() {
   }, [conversations, activeId]);
 
   // ── Load messages for active channel ─────────────────────────────────────
-  // If messages are already in the store cache (pre-fetched), skip the fetch
-  // and just mark read. Only fetch if cache is empty.
   useEffect(() => {
     if (!activeId || !meId) return;
     const channelId = activeId;
     let cancelled = false;
 
-    seenMsgIds.current.clear();
     setReadInfo(null);
 
-    const cached = useChatStore.getState().messageCache[channelId];
+    const cached    = useChatStore.getState().messageCache[channelId];
     const hasCached = cached && cached.length > 0;
 
     async function loadMessages() {
@@ -346,44 +333,57 @@ export default function MessagingClient() {
           .then((r) => r.json()).catch(() => null);
         if (cancelled) { setLoadingMsgs(false); return; }
         if (j?.ok) {
-          storeMergeMessages(channelId, (j.items as Msg[]).slice().reverse());
+          const msgs = (j.items as Msg[]).slice().reverse();
+          // markProcessed first so CDC/broadcast can't race and double-add
+          useChatStore.getState().markProcessed(msgs.map((m) => m.id));
+          storeMergeMessages(channelId, msgs);
           storeSetCursor(channelId, j.nextCursor ?? null);
           if (j.read) setReadInfo(j.read);
-          if (typeof j.isChatClosed === "boolean") {
+          if (typeof j.isChatClosed === "boolean")
             setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
-          }
         }
         setLoadingMsgs(false);
       } else {
-        // Cached — fetch metadata (read receipts, chat status) in background
-        // without blocking render
+        // Cache hit — silently refresh metadata
         fetch(`/api/chat/messages?channelId=${channelId}&take=1`, { cache: "no-store" })
           .then((r) => r.json()).then((j) => {
             if (cancelled || !j?.ok) return;
             if (j.read) setReadInfo(j.read);
-            if (typeof j.isChatClosed === "boolean") {
+            if (typeof j.isChatClosed === "boolean")
               setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
-            }
           }).catch(() => {});
       }
 
       if (!cancelled) {
+        scrollToBottom("auto");
         await markChatRead(channelId);
-        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "auto" }), 30);
       }
     }
 
     loadMessages();
     return () => { cancelled = true; };
-  }, [activeId, meId]);
+  }, [activeId, meId, scrollToBottom]);
 
-  // ── Realtime subscription for active channel ──────────────────────────────
+  // ── Auto-scroll when new messages arrive ─────────────────────────────────
+  const prevMsgCount = useRef(0);
+  useEffect(() => {
+    if (messages.length > prevMsgCount.current) {
+      const el = msgScrollRef.current;
+      const nearBottom = el
+        ? el.scrollHeight - el.scrollTop - el.clientHeight < 200
+        : true;
+      if (nearBottom) scrollToBottom("smooth");
+    }
+    prevMsgCount.current = messages.length;
+  }, [messages.length, scrollToBottom]);
+
+  // ── Realtime: chat-room channel ───────────────────────────────────────────
   useEffect(() => {
     if (!activeId || !meId) return;
 
     const channelId = activeId;
-    const meIdSnap = meId;
-    const supabase = supabaseBrowser;
+    const meIdSnap  = meId;
+    const supabase  = supabaseBrowser;
     let mounted = true;
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
@@ -394,64 +394,61 @@ export default function MessagingClient() {
 
       channel = supabase
         .channel(`chat-room-${channelId}`, {
-          config: { broadcast: { self: false } }, 
+          config: { broadcast: { self: false } },
         })
 
-        // ── broadcast: new message (fast path) ───────────────────────────────
+        // ── broadcast "new-message" — receiver's fast path ───────────────────
         .on("broadcast", { event: "new-message" }, ({ payload }) => {
-  const data = payload as { channelId: string; message: Msg };
-  if (data.channelId !== channelId) return;
-  const msg = data.message;
+          const data = payload as { channelId: string; message: Msg };
+          if (data.channelId !== channelId) return;
 
-  // Simple merge — no need to strip temp, sender doesn't receive this
-  storeMergeMessages(channelId, [msg]);
-  seenMsgIds.current.add(msg.id);
+          const msg = data.message;
+          // storeMergeMessages checks processedMsgIds internally — returns false if already seen
+          const isNew = storeMergeMessages(channelId, [msg]);
+          if (!isNew) return;
 
-  requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
-
-  if (msg.senderId !== meIdSnap && channelId === activeIdRef.current) {
-    void markChatRead(channelId);
-  }
-  if (msg.senderId !== meIdSnap && channelId !== activeIdRef.current) {
-    window.dispatchEvent(new Event("chat:unread-refresh"));
-  }
-
-  storeSetConversations(
-    useChatStore.getState().conversations.map((c) =>
-      c.id === channelId
-        ? {
-            ...c,
-            lastMessage: msg.text?.trim() || "📎 Attachment",
-            lastAt: msg.createdAt,
-            unread: msg.senderId === meIdSnap || c.id === activeIdRef.current ? 0 : c.unread + 1,
+          if (msg.senderId !== meIdSnap && channelId === activeIdRef.current) {
+            void markChatRead(channelId);
           }
-        : c
-    ).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
-  );
-})
-
-        // ── postgres CDC INSERT (fallback) ────────────────────────────────────
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "ChatMessage", filter: `channelId=eq.${channelId}` }, (payload) => {
-          const row = payload.new as { id: string; channelId: string; senderId: string; text: string; createdAt: string; isDeleted?: boolean; deletedAt?: string | null };
-          if (row.channelId !== channelId) return;
-          if (seenMsgIds.current.has(row.id)) return;
-          seenMsgIds.current.add(row.id);
-
-          const incoming: Msg = { id: row.id, senderId: row.senderId, text: row.text ?? "", createdAt: row.createdAt, isDeleted: row.isDeleted, deletedAt: row.deletedAt ?? null };
-          storeMergeMessages(channelId, [incoming]);
-          requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
-
-          if (row.senderId !== meIdSnap && channelId === activeIdRef.current) void markChatRead(channelId);
-          if (row.senderId !== meIdSnap && channelId !== activeIdRef.current) window.dispatchEvent(new Event("chat:unread-refresh"));
+          if (msg.senderId !== meIdSnap && channelId !== activeIdRef.current) {
+            window.dispatchEvent(new Event("chat:unread-refresh"));
+          }
 
           storeSetConversations(
-            useChatStore.getState().conversations.map((c) =>
-              c.id === channelId
-                ? { ...c, lastMessage: row.text?.trim() || "📎 Attachment", lastAt: row.createdAt, unread: row.senderId === meIdSnap || c.id === activeIdRef.current ? 0 : c.unread + 1 }
+            useChatStore.getState().conversations
+              .map((c) => c.id === channelId
+                ? { ...c, lastMessage: msg.text?.trim() || "📎 Attachment", lastAt: msg.createdAt, unread: msg.senderId === meIdSnap || c.id === activeIdRef.current ? 0 : c.unread + 1 }
                 : c
-            ).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
+              )
+              .sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
           );
         })
+
+        // ── postgres CDC INSERT — fallback / source of truth ─────────────────
+        .on("postgres_changes",
+          { event: "INSERT", schema: "public", table: "ChatMessage", filter: `channelId=eq.${channelId}` },
+          (payload) => {
+            const row = payload.new as { id: string; channelId: string; senderId: string; text: string; createdAt: string; isDeleted?: boolean; deletedAt?: string | null };
+            if (row.channelId !== channelId) return;
+
+            const incoming: Msg = { id: row.id, senderId: row.senderId, text: row.text ?? "", createdAt: row.createdAt, isDeleted: row.isDeleted, deletedAt: row.deletedAt ?? null };
+            // storeMergeMessages checks processedMsgIds — skips if already handled
+            const isNew = storeMergeMessages(channelId, [incoming]);
+            if (!isNew) return;
+
+            if (row.senderId !== meIdSnap && channelId === activeIdRef.current) void markChatRead(channelId);
+            if (row.senderId !== meIdSnap && channelId !== activeIdRef.current) window.dispatchEvent(new Event("chat:unread-refresh"));
+
+            storeSetConversations(
+              useChatStore.getState().conversations
+                .map((c) => c.id === channelId
+                  ? { ...c, lastMessage: row.text?.trim() || "📎 Attachment", lastAt: row.createdAt, unread: row.senderId === meIdSnap || c.id === activeIdRef.current ? 0 : c.unread + 1 }
+                  : c
+                )
+                .sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
+            );
+          }
+        )
 
         // ── typing ────────────────────────────────────────────────────────────
         .on("broadcast", { event: "typing" }, ({ payload }) => {
@@ -467,14 +464,14 @@ export default function MessagingClient() {
           }
         });
 
-      realtimeChannelRef.current = channel;
+      chatRoomRef.current = channel;
       channel.subscribe();
     }
 
     void start();
     return () => {
       mounted = false;
-      realtimeChannelRef.current = null;
+      chatRoomRef.current = null;
       if (channel) supabase.removeChannel(channel);
     };
   }, [activeId, meId]);
@@ -505,10 +502,13 @@ export default function MessagingClient() {
     const r = await fetch(`/api/chat/messages?channelId=${activeId}&take=30&cursor=${nextCursor}`, { cache: "no-store" });
     const j = await r.json().catch(() => null);
     if (j?.ok) {
-      storeMergeMessages(activeId, (j.items as Msg[]).slice().reverse());
+      const older = (j.items as Msg[]).slice().reverse();
+      useChatStore.getState().markProcessed(older.map((m) => m.id));
+      storeMergeMessages(activeId, older);
       storeSetCursor(activeId, j.nextCursor ?? null);
       if (j.read) setReadInfo(j.read);
-      if (typeof j.isChatClosed === "boolean") setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
+      if (typeof j.isChatClosed === "boolean")
+        setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
     }
     setLoadingMsgs(false);
   }
@@ -516,6 +516,7 @@ export default function MessagingClient() {
   async function send() {
     if (!activeId) return;
     if (chatMeta.isChatClosed) { setSendErr("Chat is closed."); return; }
+
     const t = text.trim();
     if (!t && pickedFiles.length === 0) return;
 
@@ -525,15 +526,18 @@ export default function MessagingClient() {
     setSendErr(null);
     setUploading(true);
 
+    // Create optimistic bubble — mark temp ID in store so nothing else adds it
     const optimisticId = `temp-${Date.now()}`;
+    useChatStore.getState().markProcessed([optimisticId]);
     storeMergeMessages(activeId, [{
       id: optimisticId, senderId: meId ?? "", text: t,
       createdAt: new Date().toISOString(), attachments: [],
     }]);
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
+    scrollToBottom("smooth");
 
     try {
       const uploaded = await Promise.all(pickedFiles.map((f) => uploadAttachment(activeId, f)));
+
       const r = await fetch("/api/chat/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -542,79 +546,59 @@ export default function MessagingClient() {
       const j = await r.json().catch(() => null);
 
       if (!r.ok) {
-        // Roll back optimistic
-        storeSetConversations(
-          useChatStore.getState().messageCache[activeId]
-            ? useChatStore.getState().conversations // leave convs alone
-            : useChatStore.getState().conversations
-        );
-        storeMergeMessages(activeId, []); // can't easily remove — re-fetch
         storeClearChannel(activeId);
+        useChatStore.getState().unmarkProcessed([optimisticId]);
         setSendErr(j?.message ?? "Failed to send");
-        if (r.status === 403 && (j?.message?.toLowerCase?.() ?? "").includes("closed")) {
+        if (r.status === 403 && (j?.message?.toLowerCase?.() ?? "").includes("closed"))
           setChatMeta((p) => ({ ...p, isChatClosed: true }));
-        }
         setText(t);
         return;
       }
 
       if (j?.ok && j.message) {
-  const realMsg = j.message as Msg;
+        const realMsg = j.message as Msg;
 
-  // Atomically replace the optimistic message with the confirmed one
-  const current = useChatStore.getState().messageCache[activeId] ?? [];
-  const replaced = current
-    .filter((m) => m.id !== optimisticId)  // remove temp
-    .concat(realMsg);                       // add real
-  // Write directly to store (bypass mergeMessages to avoid partial state)
-  useChatStore.setState((s) => ({
-    messageCache: {
-      ...s.messageCache,
-      [activeId]: replaced.sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      ),
-    },
-  }));
+        // Mark real ID FIRST — before any state update — so CDC/broadcast
+        // cannot race in and add it through a different path
+        useChatStore.getState().markProcessed([realMsg.id]);
 
-  seenMsgIds.current.add(realMsg.id);
+        // Atomically swap temp → confirmed
+        const current  = useChatStore.getState().messageCache[activeId] ?? [];
+        const replaced = current
+          .filter((m) => m.id !== optimisticId && m.id !== realMsg.id)
+          .concat(realMsg)
+          .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-  // Broadcast to receiver only (self:false means we won't get this back)
-  if (realtimeChannelRef.current) {
-    await realtimeChannelRef.current.send({
-      type: "broadcast",
-      event: "new-message",
-      payload: { channelId: activeId, message: realMsg },
-    });
-  }
+        useChatStore.setState((s) => ({
+          messageCache: { ...s.messageCache, [activeId]: replaced },
+        }));
 
-  // Notify receiver's inbox channel for header badge
-  const receiverConv = conversations.find((c) => c.id === activeId);
-  const receiverId = receiverConv?.otherUserId;
-  if (receiverId) {
-    const inboxChannel = supabaseBrowser.channel(`user-inbox-${receiverId}`);
-    await inboxChannel.send({
-      type: "broadcast",
-      event: "new-message",
-      payload: { channelId: activeId, senderId: meId, message: realMsg },
-    });
-    supabaseBrowser.removeChannel(inboxChannel);
-  }
+        // Broadcast to receiver on the chat-room channel
+        if (chatRoomRef.current) {
+          await chatRoomRef.current.send({
+            type: "broadcast",
+            event: "new-message",
+            payload: { channelId: activeId, message: realMsg },
+          });
+        }
 
-  setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 30);
-}
+        scrollToBottom("smooth");
+      }
 
       setPickedFiles([]);
       await markChatRead(activeId);
 
       storeSetConversations(
-        useChatStore.getState().conversations.map((c) =>
-          c.id === activeId
+        useChatStore.getState().conversations
+          .map((c) => c.id === activeId
             ? { ...c, unread: 0, lastMessage: t || (pickedFiles.length ? "📎 Attachment" : ""), lastAt: new Date().toISOString() }
             : c
-        ).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
+          )
+          .sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime())
       );
     } catch (e: unknown) {
       storeClearChannel(activeId);
+      useChatStore.getState().unmarkProcessed([optimisticId]);
       setSendErr(e instanceof Error ? e.message : "Failed to send");
       setText(t);
     } finally {
@@ -622,14 +606,20 @@ export default function MessagingClient() {
     }
   }
 
-  const [ctx, setCtx] = useState<{ open: boolean; x: number; y: number; messageId: string | null }>({ open: false, x: 0, y: 0, messageId: null });
+  const [ctx, setCtx] = useState<{ open: boolean; x: number; y: number; messageId: string | null }>({
+    open: false, x: 0, y: 0, messageId: null,
+  });
 
   useEffect(() => {
     const close = () => setCtx((p) => ({ ...p, open: false, messageId: null }));
     window.addEventListener("click", close);
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
-    return () => { window.removeEventListener("click", close); window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
   }, []);
 
   const otherReadAtMs = readInfo ? new Date(readInfo.otherLastReadAt).getTime() : 0;
@@ -654,89 +644,89 @@ export default function MessagingClient() {
   function closeUrgency(iso: string | null) {
     if (!iso) return "none";
     const ms = new Date(iso).getTime() - Date.now();
-    if (ms <= 0) return "closed";
-    if (ms <= 2 * 60 * 1000) return "danger";
-    if (ms <= 10 * 60 * 1000) return "warn";
+    if (ms <= 0)               return "closed";
+    if (ms <= 2 * 60 * 1000)   return "danger";
+    if (ms <= 10 * 60 * 1000)  return "warn";
     return "ok";
   }
 
   const IconOpen = ({ className = "" }: { className?: string }) => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className={className}>
-      <path d="M14 5h5v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M10 14L19 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M19 14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M14 5h5v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M10 14L19 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M19 14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
   const IconDownload = ({ className = "" }: { className?: string }) => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className={className}>
-      <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M7 10l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M7 10l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
     </svg>
   );
   const IconPdf = ({ className = "" }: { className?: string }) => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className={className}>
-      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M14 2v5h5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+      <path d="M14 2v5h5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
     </svg>
   );
   const IconSearch = () => (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" className="shrink-0 opacity-50">
-      <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-      <path d="M16.5 16.5l4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2"/>
+      <path d="M16.5 16.5l4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
     </svg>
   );
   const IconSend = () => (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-      <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M22 2L15 22 11 13 2 9l20-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M22 2L15 22 11 13 2 9l20-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
   const IconAttach = () => (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.48" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.48" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 
   return (
     <>
       <style>{`
-        .msg-panel { animation: fadeUp 0.22s ease both; }
-        @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-        .conv-item { transition: box-shadow 0.15s, border-color 0.15s, background 0.15s; }
-        .conv-item:hover { box-shadow: 0 4px 18px rgba(0,0,0,0.09); }
-        .bubble-enter { animation: bubbleIn 0.18s cubic-bezier(.34,1.56,.64,1) both; }
-        @keyframes bubbleIn { from { opacity:0; transform:scale(0.88); } to { opacity:1; transform:scale(1); } }
-        .typing-dot { animation: typingPulse 1.2s infinite ease-in-out; }
-        .typing-dot:nth-child(2) { animation-delay:0.2s; }
-        .typing-dot:nth-child(3) { animation-delay:0.4s; }
-        @keyframes typingPulse { 0%,80%,100%{transform:scale(0.7);opacity:0.4;}40%{transform:scale(1);opacity:1;} }
-        .send-btn { transition: box-shadow 0.15s, transform 0.1s, opacity 0.15s; }
-        .send-btn:not(:disabled):hover { transform:translateY(-1px);box-shadow:0 6px 20px rgba(124,58,237,0.45); }
-        .send-btn:not(:disabled):active { transform:translateY(0); }
-        .pill-filter { transition: all 0.15s; }
-        .online-pulse { animation: pulse 2s infinite; }
-        @keyframes pulse { 0%,100%{opacity:1;}50%{opacity:0.5;} }
-        .img-thumb { transition: transform 0.15s, border-color 0.15s; }
-        .img-thumb:hover { transform: scale(1.05); }
-        .load-older-btn { transition: background 0.15s, box-shadow 0.15s; }
-        .load-older-btn:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
-        .attach-chip { animation: chipIn 0.18s ease both; }
-        @keyframes chipIn { from{opacity:0;transform:scale(0.85);}to{opacity:1;transform:scale(1);} }
-        .ctx-menu { animation: ctxIn 0.12s ease both; }
-        @keyframes ctxIn { from{opacity:0;transform:scale(0.92) translateY(-4px);}to{opacity:1;transform:scale(1) translateY(0);} }
-        .viewer-fade { animation: viewerIn 0.2s ease both; }
-        @keyframes viewerIn { from{opacity:0;}to{opacity:1;} }
-        .viewer-img { animation: viewerImgIn 0.22s cubic-bezier(.34,1.36,.64,1) both; }
-        @keyframes viewerImgIn { from{opacity:0;transform:scale(0.93);}to{opacity:1;transform:scale(1);} }
+        .msg-panel{animation:fadeUp 0.22s ease both;}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+        .conv-item{transition:box-shadow 0.15s,border-color 0.15s,background 0.15s;}
+        .conv-item:hover{box-shadow:0 4px 18px rgba(0,0,0,0.09);}
+        .bubble-enter{animation:bubbleIn 0.18s cubic-bezier(.34,1.56,.64,1) both;}
+        @keyframes bubbleIn{from{opacity:0;transform:scale(0.88);}to{opacity:1;transform:scale(1);}}
+        .typing-dot{animation:typingPulse 1.2s infinite ease-in-out;}
+        .typing-dot:nth-child(2){animation-delay:0.2s;}
+        .typing-dot:nth-child(3){animation-delay:0.4s;}
+        @keyframes typingPulse{0%,80%,100%{transform:scale(0.7);opacity:0.4;}40%{transform:scale(1);opacity:1;}}
+        .send-btn{transition:box-shadow 0.15s,transform 0.1s,opacity 0.15s;}
+        .send-btn:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(124,58,237,0.45);}
+        .send-btn:not(:disabled):active{transform:translateY(0);}
+        .pill-filter{transition:all 0.15s;}
+        .online-pulse{animation:pulse 2s infinite;}
+        @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.5;}}
+        .img-thumb{transition:transform 0.15s,border-color 0.15s;}
+        .img-thumb:hover{transform:scale(1.05);}
+        .load-older-btn{transition:background 0.15s,box-shadow 0.15s;}
+        .load-older-btn:hover{box-shadow:0 2px 12px rgba(0,0,0,0.1);}
+        .attach-chip{animation:chipIn 0.18s ease both;}
+        @keyframes chipIn{from{opacity:0;transform:scale(0.85);}to{opacity:1;transform:scale(1);}}
+        .ctx-menu{animation:ctxIn 0.12s ease both;}
+        @keyframes ctxIn{from{opacity:0;transform:scale(0.92) translateY(-4px);}to{opacity:1;transform:scale(1) translateY(0);}}
+        .viewer-fade{animation:viewerIn 0.2s ease both;}
+        @keyframes viewerIn{from{opacity:0;}to{opacity:1;}}
+        .viewer-img{animation:viewerImgIn 0.22s cubic-bezier(.34,1.36,.64,1) both;}
+        @keyframes viewerImgIn{from{opacity:0;transform:scale(0.93);}to{opacity:1;transform:scale(1);}}
         .sidebar-scroll::-webkit-scrollbar{width:3px;}
         .sidebar-scroll::-webkit-scrollbar-track{background:transparent;}
         .sidebar-scroll::-webkit-scrollbar-thumb{background:rgba(128,128,128,0.25);border-radius:2px;}
         .msg-scroll::-webkit-scrollbar{width:4px;}
         .msg-scroll::-webkit-scrollbar-track{background:transparent;}
         .msg-scroll::-webkit-scrollbar-thumb{background:rgba(128,128,128,0.2);border-radius:2px;}
-        .skeleton { animation: shimmer 1.4s infinite; background: linear-gradient(90deg, rgb(var(--card2)) 25%, rgb(var(--card)) 50%, rgb(var(--card2)) 75%); background-size: 200% 100%; }
-        @keyframes shimmer { 0%{background-position:200% 0;}100%{background-position:-200% 0;} }
+        .skeleton{animation:shimmer 1.4s infinite;background:linear-gradient(90deg,rgb(var(--card2)) 25%,rgb(var(--card)) 50%,rgb(var(--card2)) 75%);background-size:200% 100%;}
+        @keyframes shimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
       `}</style>
 
       <div className="pt-12 pb-10">
@@ -748,7 +738,7 @@ export default function MessagingClient() {
             </div>
             {conversations.length > 0 && (
               <div className="flex items-center gap-1.5 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 online-pulse" />
+                <span className="h-2 w-2 rounded-full bg-emerald-500 online-pulse"/>
                 <span className="text-[0.7rem] font-medium text-[rgb(var(--muted))]">
                   {conversations.length} conversation{conversations.length !== 1 ? "s" : ""}
                 </span>
@@ -769,15 +759,17 @@ export default function MessagingClient() {
 
               <div className="px-3 pt-3 pb-2">
                 <div className="flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 focus-within:border-[rgb(var(--primary))/0.6] focus-within:ring-1 focus-within:ring-[rgb(var(--primary))/0.2] transition">
-                  <IconSearch />
-                  <input value={q} onChange={(e) => setQ(e.target.value)} className="min-w-0 flex-1 bg-transparent text-[0.75rem] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] focus:outline-none" placeholder="Search…" />
+                  <IconSearch/>
+                  <input value={q} onChange={(e) => setQ(e.target.value)}
+                    className="min-w-0 flex-1 bg-transparent text-[0.75rem] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] focus:outline-none"
+                    placeholder="Search…"/>
                   {q && <button type="button" onClick={() => setQ("")} className="opacity-40 hover:opacity-80 text-[rgb(var(--fg))] transition text-xs">✕</button>}
                 </div>
               </div>
 
               <div className="flex gap-1.5 px-3 pb-3">
-                {(["ALL", "STUDENT", "TUTOR"] as RoleFilter[]).map((key) => {
-                  const labels = { ALL: "All", STUDENT: "Student", TUTOR: "Tutor" };
+                {(["ALL","STUDENT","TUTOR"] as RoleFilter[]).map((key) => {
+                  const labels = { ALL:"All", STUDENT:"Student", TUTOR:"Tutor" };
                   const isActive = roleFilter === key;
                   return (
                     <button key={key} type="button" onClick={() => setRoleFilter(key)}
@@ -789,21 +781,20 @@ export default function MessagingClient() {
               </div>
 
               <div className="sidebar-scroll flex-1 space-y-1.5 overflow-y-auto px-3 pb-3">
-                {/* Skeleton while first load */}
-                {!convLoaded && [1, 2, 3].map((i) => (
+                {!convLoaded && [1,2,3].map((i) => (
                   <div key={i} className="rounded-xl border border-[rgb(var(--border))] px-3 py-3">
-                    <div className="skeleton h-3 w-3/4 rounded mb-2" />
-                    <div className="skeleton h-2 w-1/2 rounded" />
+                    <div className="skeleton h-3 w-3/4 rounded mb-2"/>
+                    <div className="skeleton h-2 w-1/2 rounded"/>
                   </div>
                 ))}
 
                 {filteredConversations.map((conv) => {
-                  const isActive = conv.id === activeId;
+                  const isActive  = conv.id === activeId;
                   const isStudent = conv.viewerIsStudent;
                   return (
                     <div key={conv.id} onClick={() => setActiveId(conv.id)}
                       className={`conv-item relative cursor-pointer rounded-xl border px-3 py-3 ${isActive ? "border-[rgb(var(--primary))/0.5] bg-[rgb(var(--primary))/0.07] shadow-[0_2px_14px_rgba(124,58,237,0.12)]" : "border-[rgb(var(--border))] bg-[rgb(var(--card))] hover:border-[rgb(var(--primary))/0.25]"}`}>
-                      <div className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full ${isStudent ? "bg-violet-500" : "bg-fuchsia-500"}`} />
+                      <div className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full ${isStudent ? "bg-violet-500" : "bg-fuchsia-500"}`}/>
                       <div className="flex items-start justify-between gap-2 pl-2">
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-[0.75rem] font-semibold text-[rgb(var(--fg))]">{conv.subjectName}</p>
@@ -848,7 +839,7 @@ export default function MessagingClient() {
                         <span className="text-[0.68rem] text-[rgb(var(--muted))]">{active.name}</span>
                         {active.otherUserId && userPresence && (
                           <>
-                            <span className={`h-1.5 w-1.5 rounded-full ${userPresence.isOnline ? "bg-emerald-500 online-pulse" : "bg-gray-400"}`} />
+                            <span className={`h-1.5 w-1.5 rounded-full ${userPresence.isOnline ? "bg-emerald-500 online-pulse" : "bg-gray-400"}`}/>
                             <span className={`text-[0.65rem] font-medium ${userPresence.isOnline ? "text-emerald-600 dark:text-emerald-400" : "text-[rgb(var(--muted2))]"}`}>
                               {userPresence.isOnline ? "Online" : formatLastSeen(userPresence.lastSeenAt)}
                             </span>
@@ -879,77 +870,77 @@ export default function MessagingClient() {
               {active && chatMeta.isChatClosed && (
                 <div className="mx-4 mt-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-[0.72rem] text-[rgb(var(--muted))]">
                   💬 Chat closed
-                  {chatMeta.chatCloseAt && <> · {new Date(chatMeta.chatCloseAt).toLocaleString([], { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</>}
+                  {chatMeta.chatCloseAt && <> · {new Date(chatMeta.chatCloseAt).toLocaleString([], { month:"short", day:"2-digit", hour:"2-digit", minute:"2-digit" })}</>}
                 </div>
               )}
 
-              <div className="msg-scroll msg-panel flex-1 overflow-y-auto px-4 py-4 space-y-1">
+              <div ref={msgScrollRef} className="msg-scroll msg-panel flex-1 overflow-y-auto px-4 py-4 space-y-1">
                 {nextCursor && (
                   <div className="flex justify-center mb-3">
-                    <button onClick={loadOlder} disabled={loadingMsgs} className="load-older-btn rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-1.5 text-[0.68rem] font-medium text-[rgb(var(--muted))] disabled:opacity-50 transition">
+                    <button onClick={loadOlder} disabled={loadingMsgs}
+                      className="load-older-btn rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-1.5 text-[0.68rem] font-medium text-[rgb(var(--muted))] disabled:opacity-50 transition">
                       {loadingMsgs ? "Loading…" : "↑ Load older"}
                     </button>
                   </div>
                 )}
 
-                {/* Message skeletons only shown when nothing cached yet */}
-                {showSkeleton && [1, 2, 3, 4].map((i) => (
-                  <div key={i} className={`flex ${i % 2 === 0 ? "justify-end" : "justify-start"} mb-2`}>
-                    <div className={`skeleton rounded-2xl ${i % 2 === 0 ? "rounded-br-sm" : "rounded-bl-sm"}`}
-                      style={{ width: `${120 + i * 30}px`, height: "36px" }} />
+                {showSkeleton && [1,2,3,4].map((i) => (
+                  <div key={i} className={`flex ${i%2===0?"justify-end":"justify-start"} mb-2`}>
+                    <div className={`skeleton rounded-2xl ${i%2===0?"rounded-br-sm":"rounded-bl-sm"}`}
+                      style={{ width:`${120+i*30}px`, height:"36px" }}/>
                   </div>
                 ))}
 
                 {messages.map((msg, i) => {
-                  const isMe = msg.senderId === meId;
-                  const isTemp = msg.id.startsWith("temp-");
+                  const isMe       = msg.senderId === meId;
+                  const isTemp     = msg.id.startsWith("temp-");
                   const isLastMine = isMe && msg.id === lastMyMsgId;
-                  const isSeen = isLastMine && new Date(msg.createdAt).getTime() <= otherReadAtMs;
-                  const showTime = i === 0 || new Date(msg.createdAt).getTime() - new Date(messages[i - 1].createdAt).getTime() > 5 * 60 * 1000;
+                  const isSeen     = isLastMine && new Date(msg.createdAt).getTime() <= otherReadAtMs;
+                  const showTime   = i === 0 || new Date(msg.createdAt).getTime() - new Date(messages[i-1].createdAt).getTime() > 5*60*1000;
 
                   return (
                     <React.Fragment key={msg.id}>
                       {showTime && (
                         <div className="flex justify-center py-2">
                           <span className="rounded-full bg-[rgb(var(--card2))] border border-[rgb(var(--border))] px-3 py-0.5 text-[0.6rem] text-[rgb(var(--muted2))]">
-                            {new Date(msg.createdAt).toLocaleString([], { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                            {new Date(msg.createdAt).toLocaleString([], { month:"short", day:"2-digit", hour:"2-digit", minute:"2-digit" })}
                           </span>
                         </div>
                       )}
                       <div
-                        className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+                        className={`flex ${isMe?"justify-end":"justify-start"}`}
                         onContextMenu={(e) => {
                           if (!isMe || msg.isDeleted || isTemp) return;
                           e.preventDefault();
-                          setCtx({ open: true, x: e.clientX, y: e.clientY, messageId: msg.id });
+                          setCtx({ open:true, x:e.clientX, y:e.clientY, messageId:msg.id });
                         }}
                       >
-                        <div className={`bubble-enter group relative max-w-[68%] ${isMe ? "items-end" : "items-start"} flex flex-col`}>
-                          <div className={`rounded-2xl px-3.5 py-2.5 text-[0.8rem] leading-relaxed shadow-sm ${isMe ? `rounded-br-sm bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-[0_4px_14px_rgba(124,58,237,0.3)] ${isTemp ? "opacity-60" : ""}` : "rounded-bl-sm border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]"}`}>
+                        <div className={`bubble-enter group relative max-w-[68%] ${isMe?"items-end":"items-start"} flex flex-col`}>
+                          <div className={`rounded-2xl px-3.5 py-2.5 text-[0.8rem] leading-relaxed shadow-sm ${isMe ? `rounded-br-sm bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-[0_4px_14px_rgba(124,58,237,0.3)] ${isTemp?"opacity-60":""}` : "rounded-bl-sm border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]"}`}>
                             {msg.isDeleted ? (
                               <p className="italic text-[0.75rem] opacity-70">Message deleted</p>
                             ) : (
                               <>
                                 {msg.text && <p className="whitespace-pre-wrap break-words">{msg.text}</p>}
-                                {(msg.attachments as Attachment[] | undefined)?.map((a) => {
+                                {(msg.attachments as Attachment[]|undefined)?.map((a) => {
                                   const isImg = a.contentType?.startsWith("image/");
                                   const isPdf = a.contentType === "application/pdf";
-                                  const kb = Math.max(1, Math.round((a.sizeBytes ?? 0) / 1024));
-                                  const sizeLabel = kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`;
-                                  const cardBase = isMe ? "border-white/20 bg-white/10" : "border-[rgb(var(--border))] bg-[rgb(var(--card2))]";
-                                  const btnBase = isMe ? "border-white/20 bg-white/15 text-white hover:bg-white/25" : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]";
-                                  const dlBtn = isMe ? "border-white/30 bg-white text-gray-900 hover:bg-white/90" : "border-transparent bg-[rgb(var(--primary))] text-white hover:opacity-90";
+                                  const kb    = Math.max(1, Math.round((a.sizeBytes??0)/1024));
+                                  const sizeLabel = kb>=1024?`${(kb/1024).toFixed(1)} MB`:`${kb} KB`;
+                                  const cardBase = isMe?"border-white/20 bg-white/10":"border-[rgb(var(--border))] bg-[rgb(var(--card2))]";
+                                  const btnBase  = isMe?"border-white/20 bg-white/15 text-white hover:bg-white/25":"border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))]";
+                                  const dlBtn    = isMe?"border-white/30 bg-white text-gray-900 hover:bg-white/90":"border-transparent bg-[rgb(var(--primary))] text-white hover:opacity-90";
 
                                   if (isImg && a.url) return (
                                     <div key={a.id} className="mt-2 overflow-hidden rounded-xl border border-white/10 shadow-lg">
                                       <button type="button" onClick={() => openImageInChat(a.url!)} className="block w-full">
-                                        <Image src={a.url} alt={a.fileName} width={300} height={220} unoptimized className="block h-auto w-full max-w-[300px] hover:opacity-95 transition" />
+                                        <Image src={a.url} alt={a.fileName} width={300} height={220} unoptimized className="block h-auto w-full max-w-[300px] hover:opacity-95 transition"/>
                                       </button>
-                                      <div className={`flex items-center justify-between gap-2 border-t px-2.5 py-1.5 ${isMe ? "border-white/10" : "border-[rgb(var(--border))]"}`}>
-                                        <span className={`truncate text-[0.62rem] ${isMe ? "text-white/60" : "text-[rgb(var(--muted2))]"}`}>{a.fileName}</span>
+                                      <div className={`flex items-center justify-between gap-2 border-t px-2.5 py-1.5 ${isMe?"border-white/10":"border-[rgb(var(--border))]"}`}>
+                                        <span className={`truncate text-[0.62rem] ${isMe?"text-white/60":"text-[rgb(var(--muted2))]"}`}>{a.fileName}</span>
                                         <div className="flex items-center gap-1">
-                                          <button type="button" onClick={() => openImageInChat(a.url!)} className={`rounded-full border p-1.5 transition ${btnBase}`}><IconOpen /></button>
-                                          <button type="button" onClick={() => forceDownload(a.url!, a.fileName)} className={`rounded-full border p-1.5 transition ${dlBtn}`}><IconDownload /></button>
+                                          <button type="button" onClick={() => openImageInChat(a.url!)} className={`rounded-full border p-1.5 transition ${btnBase}`}><IconOpen/></button>
+                                          <button type="button" onClick={() => forceDownload(a.url!,a.fileName)} className={`rounded-full border p-1.5 transition ${dlBtn}`}><IconDownload/></button>
                                         </div>
                                       </div>
                                     </div>
@@ -958,14 +949,14 @@ export default function MessagingClient() {
                                   if (isPdf) return (
                                     <div key={a.id} className={`mt-2 overflow-hidden rounded-xl border ${cardBase}`}>
                                       <div className="flex items-center gap-3 px-3 py-2.5">
-                                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${isMe ? "border-white/20 bg-white/10 text-white" : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]"}`}><IconPdf /></div>
+                                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${isMe?"border-white/20 bg-white/10 text-white":"border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]"}`}><IconPdf/></div>
                                         <div className="min-w-0 flex-1">
-                                          <p className={`truncate text-[0.72rem] font-semibold ${isMe ? "text-white" : "text-[rgb(var(--fg))]"}`}>{a.fileName}</p>
-                                          <p className={`text-[0.6rem] ${isMe ? "text-white/55" : "text-[rgb(var(--muted2))]"}`}>PDF · {sizeLabel}</p>
+                                          <p className={`truncate text-[0.72rem] font-semibold ${isMe?"text-white":"text-[rgb(var(--fg))]"}`}>{a.fileName}</p>
+                                          <p className={`text-[0.6rem] ${isMe?"text-white/55":"text-[rgb(var(--muted2))]"}`}>PDF · {sizeLabel}</p>
                                         </div>
                                         <div className="flex shrink-0 items-center gap-1">
-                                          <button type="button" onClick={() => a.url && window.open(a.url, "_blank")} disabled={!a.url} className={`rounded-full border p-1.5 transition ${btnBase} disabled:opacity-40`}><IconOpen /></button>
-                                          <button type="button" onClick={() => a.url && forceDownload(a.url, a.fileName)} disabled={!a.url} className={`rounded-full border p-1.5 transition ${dlBtn} disabled:opacity-40`}><IconDownload /></button>
+                                          <button type="button" onClick={() => a.url&&window.open(a.url,"_blank")} disabled={!a.url} className={`rounded-full border p-1.5 transition ${btnBase} disabled:opacity-40`}><IconOpen/></button>
+                                          <button type="button" onClick={() => a.url&&forceDownload(a.url,a.fileName)} disabled={!a.url} className={`rounded-full border p-1.5 transition ${dlBtn} disabled:opacity-40`}><IconDownload/></button>
                                         </div>
                                       </div>
                                     </div>
@@ -975,11 +966,11 @@ export default function MessagingClient() {
                               </>
                             )}
                           </div>
-                          <div className={`mt-1 flex items-center gap-1.5 px-0.5 text-[0.6rem] ${isMe ? "justify-end text-[rgb(var(--muted2))]" : "text-[rgb(var(--muted2))]"}`}>
-                            <span>{isTemp ? "Sending…" : new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                          <div className={`mt-1 flex items-center gap-1.5 px-0.5 text-[0.6rem] ${isMe?"justify-end text-[rgb(var(--muted2))]":"text-[rgb(var(--muted2))]"}`}>
+                            <span>{isTemp?"Sending…":new Date(msg.createdAt).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</span>
                             {isLastMine && !isTemp && (
-                              <span className={`text-[0.58rem] font-medium ${isSeen ? "text-[rgb(var(--primary))]" : "text-[rgb(var(--muted2))]"}`}>
-                                {isSeen ? "Seen" : "Sent"}
+                              <span className={`text-[0.58rem] font-medium ${isSeen?"text-[rgb(var(--primary))]":"text-[rgb(var(--muted2))]"}`}>
+                                {isSeen?"Seen":"Sent"}
                               </span>
                             )}
                           </div>
@@ -993,7 +984,7 @@ export default function MessagingClient() {
                   <div className="flex justify-start">
                     <div className="rounded-2xl rounded-bl-sm border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3">
                       <div className="flex items-center gap-1">
-                        {[0, 1, 2].map((i) => <span key={i} className="typing-dot h-1.5 w-1.5 rounded-full bg-[rgb(var(--muted))]" />)}
+                        {[0,1,2].map((i) => <span key={i} className="typing-dot h-1.5 w-1.5 rounded-full bg-[rgb(var(--muted))]"/>)}
                       </div>
                     </div>
                   </div>
@@ -1006,7 +997,7 @@ export default function MessagingClient() {
                   </div>
                 )}
 
-                <div ref={bottomRef} />
+                <div ref={bottomRef}/>
               </div>
 
               {active && sendErr && (
@@ -1018,7 +1009,7 @@ export default function MessagingClient() {
 
               {pickedFiles.length > 0 && (
                 <div className="mx-4 mb-1 flex flex-wrap gap-1.5">
-                  {pickedFiles.map((f, idx) => (
+                  {pickedFiles.map((f,idx) => (
                     <div key={`${f.name}-${idx}`} className="attach-chip flex items-center gap-1.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-1 text-[0.68rem] text-[rgb(var(--fg))]">
                       <span className="opacity-50">📎</span>
                       <span className="max-w-[180px] truncate">{f.name}</span>
@@ -1032,7 +1023,7 @@ export default function MessagingClient() {
                 <div className="flex items-center gap-2">
                   <button type="button" disabled={inputDisabled} onClick={() => fileInputRef.current?.click()} title="Attach file"
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))] transition hover:border-[rgb(var(--primary))/0.4] hover:text-[rgb(var(--primary))] disabled:opacity-40">
-                    <IconAttach />
+                    <IconAttach/>
                   </button>
                   <div className="relative flex-1">
                     <input value={text}
@@ -1043,14 +1034,14 @@ export default function MessagingClient() {
                         if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
                         typingStopTimer.current = setTimeout(() => void pingTyping(false), 1200);
                       }}
-                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
+                      onKeyDown={(e) => { if (e.key==="Enter"&&!e.shiftKey) { e.preventDefault(); void send(); } }}
                       className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-2.5 text-[0.8rem] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] focus:border-[rgb(var(--primary))/0.5] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] transition"
-                      placeholder={!active ? "Select a conversation…" : chatMeta.isChatClosed ? "Chat is closed" : uploading ? "Sending…" : "Type a message…"}
-                      disabled={inputDisabled} />
+                      placeholder={!active?"Select a conversation…":chatMeta.isChatClosed?"Chat is closed":uploading?"Sending…":"Type a message…"}
+                      disabled={inputDisabled}/>
                   </div>
-                  <button onClick={send} disabled={inputDisabled || (!text.trim() && pickedFiles.length === 0)}
+                  <button onClick={send} disabled={inputDisabled||(!text.trim()&&pickedFiles.length===0)}
                     className="send-btn flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-[0_4px_14px_rgba(124,58,237,0.35)] disabled:opacity-40 disabled:shadow-none">
-                    <IconSend />
+                    <IconSend/>
                   </button>
                 </div>
               </div>
@@ -1060,53 +1051,61 @@ export default function MessagingClient() {
       </div>
 
       {ctx.open && ctx.messageId && (
-        <div style={{ left: ctx.x, top: ctx.y }} className="ctx-menu fixed z-50 min-w-[140px] overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_12px_40px_rgba(0,0,0,0.18)]" onClick={(e) => e.stopPropagation()}>
+        <div style={{ left:ctx.x, top:ctx.y }}
+          className="ctx-menu fixed z-50 min-w-[140px] overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_12px_40px_rgba(0,0,0,0.18)]"
+          onClick={(e) => e.stopPropagation()}>
           <button className="w-full px-3 py-2.5 text-left text-[0.75rem] text-red-600 dark:text-red-400 hover:bg-red-500/8 transition"
-            onClick={() => { deleteMessage(ctx.messageId!); setCtx((p) => ({ ...p, open: false, messageId: null })); }}>
+            onClick={() => { deleteMessage(ctx.messageId!); setCtx((p) => ({...p,open:false,messageId:null})); }}>
             🗑 Delete message
           </button>
         </div>
       )}
 
       {imgViewer.open && (
-        <div className="viewer-fade fixed inset-0 z-[60] bg-black/92 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) closeImageViewer(); }}>
+        <div className="viewer-fade fixed inset-0 z-[60] bg-black/92 backdrop-blur-sm"
+          onClick={(e) => { if(e.target===e.currentTarget) closeImageViewer(); }}>
           <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between px-5 py-4">
-            <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70">{imgViewer.idx + 1} / {imgViewer.urls.length}</span>
+            <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70">{imgViewer.idx+1} / {imgViewer.urls.length}</span>
             <div className="flex items-center gap-2">
-              <button type="button" onClick={(e) => { e.stopPropagation(); const url = imgViewer.urls[imgViewer.idx]; if (url) forceDownload(url, prettyNameFromUrl(url)); }} className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white transition hover:bg-white/20">↓ Download</button>
-              <button type="button" onClick={(e) => { e.stopPropagation(); closeImageViewer(); }} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/25 text-sm">✕</button>
+              <button type="button"
+                onClick={(e) => { e.stopPropagation(); const url=imgViewer.urls[imgViewer.idx]; if(url) forceDownload(url,prettyNameFromUrl(url)); }}
+                className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white transition hover:bg-white/20">↓ Download</button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); closeImageViewer(); }}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/25 text-sm">✕</button>
             </div>
           </div>
           {imgViewer.urls.length > 1 && (
             <>
-              <button type="button" onClick={(e) => { e.stopPropagation(); prevImage(); }} className="absolute left-4 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white text-xl transition hover:bg-white/25">‹</button>
-              <button type="button" onClick={(e) => { e.stopPropagation(); nextImage(); }} className="absolute right-4 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white text-xl transition hover:bg-white/25">›</button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); prevImage(); }}
+                className="absolute left-4 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white text-xl transition hover:bg-white/25">‹</button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); nextImage(); }}
+                className="absolute right-4 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white text-xl transition hover:bg-white/25">›</button>
             </>
           )}
           <div className="absolute inset-0 z-10 flex items-center justify-center p-8 pb-28">
-            <Image src={imgViewer.urls[imgViewer.idx] ?? ""} alt="Preview" width={1600} height={1200} unoptimized draggable={false}
+            <Image src={imgViewer.urls[imgViewer.idx]??""} alt="Preview" width={1600} height={1200} unoptimized draggable={false}
               onClick={(e) => e.stopPropagation()}
-              onDoubleClick={(e) => { e.stopPropagation(); if (zoom > 1) { setZoom(1); setOffset({ x: 0, y: 0 }); } else setZoom(2); }}
-              onWheel={(e) => { e.preventDefault(); setZoom((z) => Math.min(Math.max(1, z + (e.deltaY > 0 ? -0.2 : 0.2)), 4)); }}
-              onMouseDown={(e) => { if (zoom <= 1) return; setDragging(true); dragStart.current = { x: e.clientX - offset.x, y: e.clientY - offset.y }; }}
-              onMouseMove={(e) => { if (!dragging) return; setOffset({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y }); }}
+              onDoubleClick={(e) => { e.stopPropagation(); if(zoom>1){setZoom(1);setOffset({x:0,y:0});}else setZoom(2); }}
+              onWheel={(e) => { e.preventDefault(); setZoom((z) => Math.min(Math.max(1,z+(e.deltaY>0?-0.2:0.2)),4)); }}
+              onMouseDown={(e) => { if(zoom<=1)return; setDragging(true); dragStart.current={x:e.clientX-offset.x,y:e.clientY-offset.y}; }}
+              onMouseMove={(e) => { if(!dragging)return; setOffset({x:e.clientX-dragStart.current.x,y:e.clientY-dragStart.current.y}); }}
               onMouseUp={() => setDragging(false)} onMouseLeave={() => setDragging(false)}
               className="viewer-img max-h-[80vh] max-w-[90vw] select-none rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
-              style={{ transform: `scale(${zoom}) translate(${offset.x / zoom}px, ${offset.y / zoom}px)`, cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "zoom-in", transition: dragging ? "none" : "transform 0.1s ease", width: "auto", height: "auto" }} />
+              style={{ transform:`scale(${zoom}) translate(${offset.x/zoom}px,${offset.y/zoom}px)`, cursor:zoom>1?(dragging?"grabbing":"grab"):"zoom-in", transition:dragging?"none":"transform 0.1s ease", width:"auto", height:"auto" }}/>
           </div>
           {imgViewer.urls.length > 1 && (
             <div className="absolute inset-x-0 bottom-0 z-30 px-4 py-3" onClick={(e) => e.stopPropagation()}>
               <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-black/60 px-3 py-2.5 backdrop-blur-md">
                 <div className="flex gap-2 overflow-x-auto pb-1">
-                  {imgViewer.urls.map((u, i) => (
-                    <button key={`${u}-${i}`} type="button" onClick={() => setImgViewer((p) => ({ ...p, idx: i }))}
-                      className={`img-thumb relative shrink-0 overflow-hidden rounded-lg border ${i === imgViewer.idx ? "border-white ring-2 ring-white/40" : "border-white/20 opacity-60 hover:opacity-90"}`}>
-                      <Image src={u} alt={`thumb-${i}`} width={64} height={48} unoptimized draggable={false} className="h-12 w-16 object-cover" />
+                  {imgViewer.urls.map((u,i) => (
+                    <button key={`${u}-${i}`} type="button" onClick={() => setImgViewer((p) => ({...p,idx:i}))}
+                      className={`img-thumb relative shrink-0 overflow-hidden rounded-lg border ${i===imgViewer.idx?"border-white ring-2 ring-white/40":"border-white/20 opacity-60 hover:opacity-90"}`}>
+                      <Image src={u} alt={`thumb-${i}`} width={64} height={48} unoptimized draggable={false} className="h-12 w-16 object-cover"/>
                     </button>
                   ))}
                 </div>
                 <div className="mt-1.5 flex justify-between text-[10px] text-white/50">
-                  <span className="truncate">{prettyNameFromUrl(imgViewer.urls[imgViewer.idx] ?? "")}</span>
+                  <span className="truncate">{prettyNameFromUrl(imgViewer.urls[imgViewer.idx]??"")}</span>
                   <span>← → · Esc</span>
                 </div>
               </div>
@@ -1115,7 +1114,7 @@ export default function MessagingClient() {
         </div>
       )}
 
-      <input ref={fileInputRef} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={onPickFiles} />
+      <input ref={fileInputRef} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={onPickFiles}/>
     </>
   );
 }
