@@ -62,6 +62,11 @@ export default function ChatMessageListener({
     }, 6000);
   }
 
+  function getOpenChannelId() {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("channelId");
+  }
+
   useEffect(() => {
     if (!userId) return;
 
@@ -69,7 +74,8 @@ export default function ChatMessageListener({
 
     const supabase = supabaseBrowser;
     let mounted = true;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let messageChannel: ReturnType<typeof supabase.channel> | null = null;
+    let presenceChannel: ReturnType<typeof supabase.channel> | null = null;
 
     async function start() {
       const {
@@ -82,91 +88,95 @@ export default function ChatMessageListener({
 
       if (!mounted) return;
 
-      channel = supabase
+      presenceChannel = supabase.channel("user-presence", {
+        config: {
+          presence: { key: userId },
+        },
+      });
+
+      presenceChannel.subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await presenceChannel?.track({
+            userId,
+            onlineAt: new Date().toISOString(),
+          });
+        }
+      });
+
+      messageChannel = supabase
         .channel(`chat-message-listener-${userId}`)
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "ChatMessage" },
           (payload) => {
-            const row = payload.new as ChatMessageRow;
+  const row = payload.new as ChatMessageRow;
 
-            if (!row) return;
-            if (row.senderId === userId) return;
-            if (row.isDeleted) return;
+  if (!row) return;
+  if (row.senderId === userId) return;
+  if (row.isDeleted) return;
+  if (seenIdsRef.current.has(row.id)) return;
 
-            if (seenIdsRef.current.has(row.id)) return;
-            seenIdsRef.current.add(row.id);
+  seenIdsRef.current.add(row.id);
 
-            const msg: Msg = {
-              id: row.id,
-              senderId: row.senderId,
-              text: row.text ?? "",
-              createdAt: row.createdAt,
-              isDeleted: row.isDeleted,
-              deletedAt: row.deletedAt ?? null,
-            };
+  const isOnMessagingPage = pathnameRef.current?.startsWith("/messaging");
+  const openChannelId = isOnMessagingPage ? getOpenChannelId() : null;
+  const isCurrentlyOpen = !!openChannelId && openChannelId === row.channelId;
 
-            const isOnMessagingPage = pathnameRef.current?.startsWith("/messaging");
+  const msg: Msg = {
+    id: row.id,
+    senderId: row.senderId,
+    text: row.text ?? "",
+    createdAt: row.createdAt,
+    isDeleted: row.isDeleted,
+    deletedAt: row.deletedAt ?? null,
+    attachments: [],
+  };
 
-            if (!isOnMessagingPage) {
-              useChatStore.getState().appendMessage(row.channelId, msg);
+  window.dispatchEvent(
+    new CustomEvent("chat:message-incoming", {
+      detail: {
+        channelId: row.channelId,
+        message: msg,
+      },
+    })
+  );
 
-              window.dispatchEvent(
-                new CustomEvent("chat:message-incoming", {
-                  detail: {
-                    channelId: row.channelId,
-                    message: msg,
-                  },
-                })
-              );
-            }
+  const targetConv = useChatStore
+    .getState()
+    .conversations.find((c) => c.id === row.channelId);
 
-            const convs = useChatStore.getState().conversations;
-            const targetConv = convs.find((c) => c.id === row.channelId);
+  if (targetConv) {
+    useChatStore.getState().patchConversation(row.channelId, {
+      lastMessage: row.text?.trim() || "📎 Attachment",
+      lastAt: row.createdAt,
+      unread: isCurrentlyOpen ? 0 : targetConv.unread + 1,
+    });
+  }
 
-            if (targetConv) {
-              const updated = convs
-                .map((c) =>
-                  c.id === row.channelId
-                    ? {
-                        ...c,
-                        lastMessage: row.text?.trim() || "📎 Attachment",
-                        lastAt: row.createdAt,
-                        unread: isOnMessagingPage ? c.unread : c.unread + 1,
-                      }
-                    : c
-                )
-                .sort(
-                  (a, b) =>
-                    new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()
-                );
+  if (!isCurrentlyOpen) {
+    globalUnreadCount += 1;
+    onUnreadChange?.(globalUnreadCount);
+  }
 
-              useChatStore.getState().setConversations(updated);
-            }
+  window.dispatchEvent(new Event("chat:unread-refresh"));
 
-            if (!isOnMessagingPage) {
-              globalUnreadCount += 1;
-              onUnreadChange?.(globalUnreadCount);
-            }
+  const shouldSuppressToast = isOnMessagingPage && isCurrentlyOpen;
+  if (shouldSuppressToast) return;
 
-            window.dispatchEvent(new Event("chat:unread-refresh"));
+  const conv = useChatStore
+    .getState()
+    .conversations.find((c) => c.id === row.channelId);
 
-            if (isOnMessagingPage) return;
+  const senderName = conv?.name ?? "New message";
 
-            const conv = useChatStore
-              .getState()
-              .conversations.find((c) => c.id === row.channelId);
-
-            const senderName = conv?.name ?? "New message";
-
-            pushToast({
-              id: row.id,
-              senderName,
-              text: row.text?.trim() || "📎 Attachment",
-              channelId: row.channelId,
-              createdAt: row.createdAt,
-            });
-          }
+  pushToast({
+    id: row.id,
+    senderName,
+    text: row.text?.trim() || "📎 Attachment",
+    channelId: row.channelId,
+    createdAt: row.createdAt,
+  });
+}
         )
         .subscribe((status) => {
           console.log(`[ChatMessageListener] ${userId}`, status);
@@ -177,7 +187,8 @@ export default function ChatMessageListener({
 
     return () => {
       mounted = false;
-      if (channel) supabase.removeChannel(channel);
+      if (messageChannel) supabase.removeChannel(messageChannel);
+      if (presenceChannel) supabase.removeChannel(presenceChannel);
     };
   }, [userId, initialUnread, onUnreadChange]);
 

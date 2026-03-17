@@ -1,3 +1,5 @@
+"use client";
+
 import { create } from "zustand";
 
 export type Attachment = {
@@ -195,32 +197,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }),
 
   patchMessage: (channelId, messageId, patch) =>
-  set((state) => ({
-    messageCache: {
-      ...state.messageCache,
-      [channelId]: sortMsgs(
-        (state.messageCache[channelId] ?? []).map((m) =>
-          m.id === messageId ? { ...m, ...patch } : m
-        )
-      ),
-    },
-  })),
-
-replaceMessage: (channelId, tempId, realMsg) =>
-  set((state) => {
-    const existing = state.messageCache[channelId] ?? [];
-
-    const filtered = existing.filter(
-      (m) => m.id !== tempId && m.id !== realMsg.id
-    );
-
-    return {
+    set((state) => ({
       messageCache: {
         ...state.messageCache,
-        [channelId]: sortMsgs([...filtered, { ...realMsg }]),
+        [channelId]: sortMsgs(
+          (state.messageCache[channelId] ?? []).map((m) =>
+            m.id === messageId ? { ...m, ...patch } : m
+          )
+        ),
       },
-    };
-  }),
+    })),
+
+  replaceMessage: (channelId, tempId, realMsg) =>
+    set((state) => {
+      const existing = state.messageCache[channelId] ?? [];
+
+      const filtered = existing.filter(
+        (m) => m.id !== tempId && m.id !== realMsg.id
+      );
+
+      return {
+        messageCache: {
+          ...state.messageCache,
+          [channelId]: sortMsgs([...filtered, { ...realMsg }]),
+        },
+      };
+    }),
 
   removeMessage: (channelId, messageId) =>
     set((state) => ({
@@ -242,8 +244,10 @@ replaceMessage: (channelId, tempId, realMsg) =>
 
   markRead: (channelId) =>
     set((state) => ({
-      conversations: state.conversations.map((c) =>
-        c.id === channelId ? { ...c, unread: 0 } : c
+      conversations: sortConvs(
+        state.conversations.map((c) =>
+          c.id === channelId ? { ...c, unread: 0 } : c
+        )
       ),
     })),
 

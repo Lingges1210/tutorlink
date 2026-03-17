@@ -7,8 +7,8 @@ import React, {
   useState,
   useCallback,
 } from "react";
-import { useSearchParams } from "next/navigation";
 import Image from "next/image";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useChatStore } from "@/store/chatStore";
 import type { Conv, Msg } from "@/store/chatStore";
@@ -30,6 +30,16 @@ type Attachment = {
   sizeBytes: number;
   url: string | null;
   createdAt: string;
+};
+
+type ChatMessageRow = {
+  id: string;
+  channelId: string;
+  senderId: string;
+  text: string;
+  createdAt: string;
+  isDeleted?: boolean;
+  deletedAt?: string | null;
 };
 
 function timeAgo(iso: string) {
@@ -54,11 +64,22 @@ function sortMsgs(list: Msg[]) {
   );
 }
 
+function mapRowToMsg(row: ChatMessageRow): Msg {
+  return {
+    id: row.id,
+    senderId: row.senderId,
+    text: row.text ?? "",
+    createdAt: row.createdAt,
+    isDeleted: row.isDeleted,
+    deletedAt: row.deletedAt ?? null,
+    attachments: [],
+  };
+}
+
 export default function MessagingClient() {
   const [meId, setMeId] = useState<string | null>(null);
 
   const storeConversations = useChatStore((s) => s.conversations);
-  const storeSetConversations = useChatStore((s) => s.setConversations);
   const storeSetMessages = useChatStore((s) => s.setMessages);
   const storeMergeMessages = useChatStore((s) => s.mergeMessages);
   const storeAppendMessage = useChatStore((s) => s.appendMessage);
@@ -69,6 +90,7 @@ export default function MessagingClient() {
   const storeCursorCache = useChatStore((s) => s.cursorCache);
   const storeSetCursor = useChatStore((s) => s.setCursor);
   const storeMarkRead = useChatStore((s) => s.markRead);
+  const storePatchConversation = useChatStore((s) => s.patchConversation);
   const convLoaded = useChatStore((s) => s.convLoaded);
   const prefetch = useChatStore((s) => s.prefetch);
 
@@ -95,6 +117,7 @@ export default function MessagingClient() {
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const msgScrollRef = useRef<HTMLDivElement | null>(null);
+  const router = useRouter();
 
   const scrollToBottom = useCallback(
     (behavior: ScrollBehavior = "smooth") => {
@@ -180,8 +203,8 @@ export default function MessagingClient() {
   });
 
   const chatRoomRef = useRef<ReturnType<typeof supabaseBrowser.channel> | null>(
-    null
-  );
+  null
+);
 
   const lastMarkedReadRef = useRef<Record<string, number>>({});
 
@@ -204,29 +227,19 @@ export default function MessagingClient() {
       channelId: string,
       payload: { text: string; createdAt: string; senderId: string }
     ) => {
-      storeSetConversations(
-        useChatStore
-          .getState()
-          .conversations.map((c) =>
-            c.id === channelId
-              ? {
-                  ...c,
-                  lastMessage: payload.text?.trim() || "📎 Attachment",
-                  lastAt: payload.createdAt,
-                  unread:
-                    payload.senderId === meId || c.id === activeIdRef.current
-                      ? 0
-                      : c.unread + 1,
-                }
-              : c
-          )
-          .sort(
-            (a, b) =>
-              new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()
-          )
-      );
+      const current = useChatStore.getState().conversations.find((c) => c.id === channelId);
+      if (!current) return;
+
+      storePatchConversation(channelId, {
+        lastMessage: payload.text?.trim() || "📎 Attachment",
+        lastAt: payload.createdAt,
+        unread:
+          payload.senderId === meId || channelId === activeIdRef.current
+            ? 0
+            : current.unread + 1,
+      });
     },
-    [meId, storeSetConversations]
+    [meId, storePatchConversation]
   );
 
   const markChatRead = useCallback(
@@ -234,7 +247,7 @@ export default function MessagingClient() {
       const now = Date.now();
       const last = lastMarkedReadRef.current[channelId] ?? 0;
 
-      if (now - last < 1500) return;
+      if (now - last < 1200) return;
       lastMarkedReadRef.current[channelId] = now;
 
       await fetch("/api/chat/read", {
@@ -249,35 +262,24 @@ export default function MessagingClient() {
     [storeMarkRead]
   );
 
-  const refreshActiveMessages = useCallback(
-    async (channelId: string, scroll = false) => {
-      const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
-        cache: "no-store",
-      })
-        .then((r) => r.json())
-        .catch(() => null);
+  const fetchLatestMessage = useCallback(async (channelId: string, expectedId?: string) => {
+    const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=1`, {
+      cache: "no-store",
+    })
+      .then((r) => r.json())
+      .catch(() => null);
 
-      if (!j?.ok) return;
+    if (!j?.ok || !Array.isArray(j.items) || !j.items.length) return null;
 
-      const msgs = sortMsgs((j.items as Msg[]).slice().reverse());
-      storeSetMessages(channelId, msgs);
-      storeSetCursor(channelId, j.nextCursor ?? null);
+    const latest = j.items[0] as Msg;
+    if (!expectedId) return latest;
+    if (latest.id === expectedId) return latest;
 
-      if (j.read) setReadInfo(j.read);
+    const found = (j.items as Msg[]).find((m) => m.id === expectedId);
+    return found ?? null;
+  }, []);
 
-      if (typeof j.isChatClosed === "boolean") {
-        setChatMeta({
-          isChatClosed: !!j.isChatClosed,
-          chatCloseAt: j.chatCloseAt ?? null,
-        });
-      }
-
-      if (scroll) {
-        scrollToBottom("smooth");
-      }
-    },
-    [scrollToBottom, storeSetCursor, storeSetMessages]
-  );
+  
 
   function prettyNameFromUrl(u: string) {
     try {
@@ -354,37 +356,55 @@ export default function MessagingClient() {
   }, [imgViewer.idx]);
 
   useEffect(() => {
-    if (!active?.otherUserId) {
+    if (!active?.otherUserId || !meId) {
       setUserPresence(null);
       return;
     }
 
+    const supabase = supabaseBrowser;
     const otherUserId = active.otherUserId;
-    let stop = false;
 
-    async function loadPresence() {
-      const j = await fetch(`/api/presence/${otherUserId}`, {
-        cache: "no-store",
-      })
-        .then((r) => r.json())
-        .catch(() => null);
+    const presenceChannel = supabase.channel("user-presence", {
+      config: {
+        presence: {
+          key: meId,
+        },
+      },
+    });
 
-      if (stop || !j?.ok) return;
+    const syncPresence = () => {
+      const state = presenceChannel.presenceState() as Record<
+        string,
+        Array<{ userId?: string; onlineAt?: string }>
+      >;
+
+      const entries = Object.values(state).flat();
+      const other = entries.find((p) => p.userId === otherUserId);
 
       setUserPresence({
-        isOnline: !!j.presence?.isOnline,
-        lastSeenAt: j.presence?.lastSeenAt ?? null,
+        isOnline: !!other,
+        lastSeenAt: other?.onlineAt ?? null,
       });
-    }
+    };
 
-    loadPresence();
-    const t = setInterval(loadPresence, 30000);
+    presenceChannel
+      .on("presence", { event: "sync" }, syncPresence)
+      .on("presence", { event: "join" }, syncPresence)
+      .on("presence", { event: "leave" }, syncPresence)
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await presenceChannel.track({
+            userId: meId,
+            onlineAt: new Date().toISOString(),
+          });
+          syncPresence();
+        }
+      });
 
     return () => {
-      stop = true;
-      clearInterval(t);
+      supabase.removeChannel(presenceChannel);
     };
-  }, [active?.otherUserId]);
+  }, [active?.otherUserId, meId]);
 
   async function pingTyping(isTyping: boolean) {
     if (!activeId || !meId || !chatRoomRef.current) return;
@@ -399,30 +419,6 @@ export default function MessagingClient() {
       },
     });
   }
-
-  useEffect(() => {
-    function onIncoming(ev: Event) {
-      const custom = ev as CustomEvent<{ channelId: string; message: Msg }>;
-      const data = custom.detail;
-      if (!data) return;
-      if (!activeIdRef.current) return;
-      if (data.channelId !== activeIdRef.current) return;
-
-      void refreshActiveMessages(data.channelId, true);
-
-      if (data.message.senderId !== meId) {
-        void markChatRead(data.channelId);
-      }
-    }
-
-    window.addEventListener("chat:message-incoming", onIncoming as EventListener);
-    return () => {
-      window.removeEventListener(
-        "chat:message-incoming",
-        onIncoming as EventListener
-      );
-    };
-  }, [meId, markChatRead, refreshActiveMessages]);
 
   function validateFile(file: File) {
     if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
@@ -530,26 +526,6 @@ export default function MessagingClient() {
     }
   }
 
-  const refreshConversations = useCallback(
-    async (openChannelId?: string | null) => {
-      const r = await fetch("/api/chat/channels", { cache: "no-store" });
-      const j = await r.json().catch(() => null);
-      if (!j?.ok) return;
-
-      const sorted: Conv[] = [...j.items]
-        .sort(
-          (a, b) =>
-            new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()
-        )
-        .map((c) =>
-          openChannelId && c.id === openChannelId ? { ...c, unread: 0 } : c
-        );
-
-      storeSetConversations(sorted);
-    },
-    [storeSetConversations]
-  );
-
   useEffect(() => {
     (async () => {
       const r = await fetch("/api/me", { cache: "no-store" });
@@ -561,15 +537,20 @@ export default function MessagingClient() {
   }, [convLoaded, prefetch]);
 
   useEffect(() => {
-    if (activeId) return;
-
-    if (qsChannelId && conversations.some((c) => c.id === qsChannelId)) {
+  if (qsChannelId && conversations.some((c) => c.id === qsChannelId)) {
+    if (activeId !== qsChannelId) {
       setActiveId(qsChannelId);
-      return;
     }
+    return;
+  }
 
-    if (conversations[0]?.id) setActiveId(conversations[0].id);
-  }, [conversations, qsChannelId, activeId]);
+  if (!activeId && conversations[0]?.id) {
+    setActiveId(conversations[0].id);
+    router.replace(`/messaging?channelId=${conversations[0].id}`, {
+      scroll: false,
+    });
+  }
+}, [conversations, qsChannelId, activeId, router]);
 
   useEffect(() => {
     if (!activeId) return;
@@ -636,7 +617,7 @@ export default function MessagingClient() {
       }
     }
 
-    loadMessages();
+    void loadMessages();
 
     return () => {
       cancelled = true;
@@ -676,29 +657,31 @@ export default function MessagingClient() {
     let mounted = true;
     let localChannel: ReturnType<typeof supabase.channel> | null = null;
 
-    function handleIncoming(msg: Msg) {
-      storeAppendMessage(channelId, msg);
+    async function handleIncomingRow(row: ChatMessageRow) {
+  const latest = await fetchLatestMessage(channelId, row.id);
+  const msg = latest ?? mapRowToMsg(row);
 
-      patchConversationPreview(channelId, {
-        text: msg.text ?? "",
-        createdAt: msg.createdAt,
-        senderId: msg.senderId,
-      });
+  storeMergeMessages(channelId, [msg]);
 
-      if (channelId === activeIdRef.current && msg.senderId !== meIdSnap) {
-        void markChatRead(channelId);
-      } else if (msg.senderId !== meIdSnap) {
-        window.dispatchEvent(new Event("chat:unread-refresh"));
-      }
-    }
+  patchConversationPreview(channelId, {
+    text: msg.text ?? "",
+    createdAt: msg.createdAt,
+    senderId: msg.senderId,
+  });
+
+  if (channelId === activeIdRef.current && msg.senderId !== meIdSnap) {
+    await markChatRead(channelId);
+  }
+
+  window.dispatchEvent(new Event("chat:unread-refresh"));
+}
 
     async function start() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (!mounted) return;
-      if (!session?.access_token) return;
+      if (!mounted || !session?.access_token) return;
 
       await supabase.realtime.setAuth(session.access_token);
       if (!mounted) return;
@@ -707,41 +690,19 @@ export default function MessagingClient() {
         .channel(`chat-room-${channelId}`, {
           config: { broadcast: { self: false } },
         })
-        .on("broadcast", { event: "new-message" }, ({ payload }) => {
-          const data = payload as { channelId: string; message: Msg };
-          if (data.channelId !== channelId) return;
-          if (data.message.senderId !== meIdSnap) return;
-          handleIncoming(data.message);
-        })
         .on(
           "postgres_changes",
           {
             event: "INSERT",
             schema: "public",
             table: "ChatMessage",
+            filter: `channelId=eq.${channelId}`,
           },
           (payload) => {
-            const row = payload.new as {
-              id: string;
-              channelId: string;
-              senderId: string;
-              text: string;
-              createdAt: string;
-              isDeleted?: boolean;
-              deletedAt?: string | null;
-            };
-
-            if (row.channelId !== channelId) return;
+            const row = payload.new as ChatMessageRow;
+            if (!row) return;
             if (row.senderId === meIdSnap) return;
-
-            patchConversationPreview(channelId, {
-              text: row.text ?? "",
-              createdAt: row.createdAt,
-              senderId: row.senderId,
-            });
-
-            void refreshActiveMessages(channelId, true);
-            void markChatRead(channelId);
+            void handleIncomingRow(row);
           }
         )
         .on(
@@ -750,19 +711,11 @@ export default function MessagingClient() {
             event: "UPDATE",
             schema: "public",
             table: "ChatMessage",
+            filter: `channelId=eq.${channelId}`,
           },
           (payload) => {
-            const row = payload.new as {
-              id: string;
-              channelId: string;
-              senderId: string;
-              text: string;
-              createdAt: string;
-              isDeleted?: boolean;
-              deletedAt?: string | null;
-            };
-
-            if (row.channelId !== channelId) return;
+            const row = payload.new as ChatMessageRow;
+            if (!row) return;
 
             storePatchMessage(channelId, row.id, {
               senderId: row.senderId,
@@ -819,29 +772,58 @@ export default function MessagingClient() {
     activeId,
     meId,
     patchConversationPreview,
-    storeAppendMessage,
+    storeMergeMessages,
     storePatchMessage,
-    refreshActiveMessages,
+    fetchLatestMessage,
     markChatRead,
   ]);
 
   useEffect(() => {
-    if (!activeId) return;
+  function onIncoming(ev: Event) {
+    const custom = ev as CustomEvent<{ channelId: string; message: Msg }>;
+    const data = custom.detail;
+    if (!data) return;
+    if (!activeIdRef.current) return;
+    if (data.channelId !== activeIdRef.current) return;
 
-    const channelId = activeId;
-    let stop = false;
+    storeMergeMessages(data.channelId, [data.message]);
 
-    const t = setInterval(() => {
-      if (!stop && document.visibilityState === "visible") {
-        refreshConversations(channelId);
+    void (async () => {
+      const full = await fetchLatestMessage(data.channelId, data.message.id);
+      if (full) {
+        storeMergeMessages(data.channelId, [full]);
       }
-    }, 30000);
+    })();
 
-    return () => {
-      stop = true;
-      clearInterval(t);
-    };
-  }, [activeId, refreshConversations]);
+    patchConversationPreview(data.channelId, {
+      text: data.message.text ?? "",
+      createdAt: data.message.createdAt,
+      senderId: data.message.senderId,
+    });
+
+    if (data.message.senderId !== meId) {
+      void markChatRead(data.channelId);
+    }
+
+    scrollToBottom("smooth");
+  }
+
+  window.addEventListener("chat:message-incoming", onIncoming as EventListener);
+
+  return () => {
+    window.removeEventListener(
+      "chat:message-incoming",
+      onIncoming as EventListener
+    );
+  };
+}, [
+  meId,
+  markChatRead,
+  patchConversationPreview,
+  scrollToBottom,
+  storeMergeMessages,
+  fetchLatestMessage,
+]);
 
   useEffect(() => {
     const onPageShow = (e: PageTransitionEvent) => {
@@ -957,46 +939,12 @@ export default function MessagingClient() {
 
       if (j?.ok && j.message) {
         const createdMsg = j.message as Msg;
-
         storeReplaceMessage(activeId, optimisticId, createdMsg);
 
-        const latestRes = await fetch(
-          `/api/chat/messages?channelId=${activeId}&take=1`,
-          { cache: "no-store" }
-        )
-          .then((r) => r.json())
-          .catch(() => null);
-
-        let finalMsg = createdMsg;
-
-        if (
-          latestRes?.ok &&
-          Array.isArray(latestRes.items) &&
-          latestRes.items.length > 0
-        ) {
-          const latest = latestRes.items[0] as Msg;
-
-          if (latest.id === createdMsg.id) {
-            finalMsg = latest;
-            storeReplaceMessage(activeId, createdMsg.id, finalMsg);
-          }
-        }
-
-        if (chatRoomRef.current) {
-          await chatRoomRef.current.send({
-            type: "broadcast",
-            event: "new-message",
-            payload: {
-              channelId: activeId,
-              message: finalMsg,
-            },
-          });
-        }
-
         patchConversationPreview(activeId, {
-          text: finalMsg.text?.trim() || "📎 Attachment",
-          createdAt: finalMsg.createdAt,
-          senderId: finalMsg.senderId,
+          text: createdMsg.text?.trim() || "📎 Attachment",
+          createdAt: createdMsg.createdAt,
+          senderId: createdMsg.senderId,
         });
 
         scrollToBottom("smooth");
@@ -1298,7 +1246,10 @@ export default function MessagingClient() {
                   return (
                     <div
                       key={conv.id}
-                      onClick={() => setActiveId(conv.id)}
+                      onClick={() => {
+                        setActiveId(conv.id);
+                        router.replace(`/messaging?channelId=${conv.id}`, { scroll: false });
+                      }}
                       className={`relative cursor-pointer rounded-xl border px-3 py-3 transition ${
                         isActive
                           ? "border-[rgb(var(--primary))/0.5] bg-[rgb(var(--primary))/0.07] shadow-[0_2px_14px_rgba(124,58,237,0.12)]"
@@ -1560,6 +1511,90 @@ export default function MessagingClient() {
                                     {msg.text}
                                   </p>
                                 )}
+
+                                {!!msg.attachments?.length && (
+                                  <div className="mt-2 space-y-2">
+                                    {msg.attachments.map((a) => {
+                                      const isImage = (a.contentType ?? "").startsWith("image/");
+                                      const isPdf = a.contentType === "application/pdf";
+
+                                      if (isImage && a.url) {
+                                        return (
+                                          <div key={a.id} className="overflow-hidden rounded-xl border border-white/10 bg-black/10">
+                                            <button
+                                              type="button"
+                                              onClick={() => openImageInChat(a.url!)}
+                                              className="block"
+                                            >
+                                              <Image
+                                                src={a.url}
+                                                alt={a.fileName}
+                                                width={1200}
+                                                height={800}
+                                                className="h-auto max-h-72 w-auto max-w-full object-contain"
+                                              />
+                                            </button>
+
+                                            <div className="flex items-center justify-between gap-2 px-2.5 py-2 text-[0.68rem]">
+                                              <span className="truncate">{a.fileName}</span>
+                                              <div className="flex items-center gap-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => openImageInChat(a.url!)}
+                                                  className="rounded-lg border border-white/10 px-2 py-1 hover:bg-white/10"
+                                                  title="Open"
+                                                >
+                                                  <IconOpen />
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => forceDownload(a.url!, a.fileName)}
+                                                  className="rounded-lg border border-white/10 px-2 py-1 hover:bg-white/10"
+                                                  title="Download"
+                                                >
+                                                  <IconDownload />
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+
+                                      return (
+                                        <div
+                                          key={a.id}
+                                          className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${
+                                            isMe
+                                              ? "border-white/10 bg-white/10"
+                                              : "border-[rgb(var(--border))] bg-[rgb(var(--card2))]"
+                                          }`}
+                                        >
+                                          <div className="flex min-w-0 items-center gap-2">
+                                            {isPdf ? <IconPdf /> : <span>📎</span>}
+                                            <div className="min-w-0">
+                                              <p className="truncate text-[0.72rem] font-medium">
+                                                {a.fileName}
+                                              </p>
+                                              <p className="text-[0.62rem] opacity-70">
+                                                {Math.max(1, Math.round(a.sizeBytes / 1024))} KB
+                                              </p>
+                                            </div>
+                                          </div>
+
+                                          {a.url && (
+                                            <button
+                                              type="button"
+                                              onClick={() => forceDownload(a.url!, a.fileName)}
+                                              className="rounded-lg border border-current/10 px-2 py-1 hover:bg-white/10"
+                                            >
+                                              <IconDownload />
+                                            </button>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </>
                             )}
                           </div>
@@ -1746,6 +1781,116 @@ export default function MessagingClient() {
           >
             Delete
           </button>
+        </div>
+      )}
+
+      {imgViewer.open && !!imgViewer.urls.length && (
+        <div
+          className="fixed inset-0 z-[120] bg-black/90 backdrop-blur-sm"
+          onClick={closeImageViewer}
+        >
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <button
+              type="button"
+              className="absolute right-4 top-4 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-sm text-white"
+              onClick={(e) => {
+                e.stopPropagation();
+                closeImageViewer();
+              }}
+            >
+              Close
+            </button>
+
+            {imgViewer.urls.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/10 px-3 py-2 text-white"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    prevImage();
+                  }}
+                >
+                  ←
+                </button>
+
+                <button
+                  type="button"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/10 px-3 py-2 text-white"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    nextImage();
+                  }}
+                >
+                  →
+                </button>
+              </>
+            )}
+
+            <div
+              className="relative max-h-full max-w-full overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => {
+                setDragging(true);
+                dragStart.current = {
+                  x: e.clientX - offset.x,
+                  y: e.clientY - offset.y,
+                };
+              }}
+              onMouseMove={(e) => {
+                if (!dragging || zoom <= 1) return;
+                setOffset({
+                  x: e.clientX - dragStart.current.x,
+                  y: e.clientY - dragStart.current.y,
+                });
+              }}
+              onMouseUp={() => setDragging(false)}
+              onMouseLeave={() => setDragging(false)}
+              onWheel={(e) => {
+                e.preventDefault();
+                setZoom((z) => Math.max(1, Math.min(4, z + (e.deltaY < 0 ? 0.2 : -0.2))));
+              }}
+            >
+              <img
+                src={imgViewer.urls[imgViewer.idx]}
+                alt={prettyNameFromUrl(imgViewer.urls[imgViewer.idx])}
+                className="max-h-[82vh] max-w-[92vw] select-none object-contain"
+                style={{
+                  transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+                  cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "default",
+                }}
+                draggable={false}
+              />
+
+              <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-sm text-white">
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.max(1, z - 0.2))}
+                  className="rounded px-2 py-0.5 hover:bg-white/10"
+                >
+                  −
+                </button>
+                <span>{Math.round(zoom * 100)}%</span>
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.min(4, z + 0.2))}
+                  className="rounded px-2 py-0.5 hover:bg-white/10"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setZoom(1);
+                    setOffset({ x: 0, y: 0 });
+                  }}
+                  className="rounded px-2 py-0.5 hover:bg-white/10"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

@@ -63,12 +63,6 @@ export default function ChatInboxIconClient({
 
     void safeRefresh();
 
-    const t = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        void safeRefresh();
-      }
-    }, 5000);
-
     const onRefresh = () => void safeRefresh();
     window.addEventListener("chat:unread-refresh", onRefresh);
 
@@ -81,7 +75,6 @@ export default function ChatInboxIconClient({
 
     return () => {
       stopped.current = true;
-      clearInterval(t);
       window.removeEventListener("chat:unread-refresh", onRefresh);
       document.removeEventListener("visibilitychange", onVis);
     };
