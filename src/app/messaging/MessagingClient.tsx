@@ -635,17 +635,12 @@ export default function MessagingClient() {
   const prevMsgCount = useRef(0);
 
   useEffect(() => {
-    if (messages.length > prevMsgCount.current) {
-      const el = msgScrollRef.current;
-      const nearBottom = el
-        ? el.scrollHeight - el.scrollTop - el.clientHeight < 200
-        : true;
+  if (messages.length > prevMsgCount.current) {
+    scrollToBottom("smooth");
+  }
 
-      if (nearBottom) scrollToBottom("smooth");
-    }
-
-    prevMsgCount.current = messages.length;
-  }, [messages.length, scrollToBottom]);
+  prevMsgCount.current = messages.length;
+}, [messages.length, scrollToBottom]);
 
   useEffect(() => {
     if (!activeId || !meId) return;
@@ -668,6 +663,10 @@ export default function MessagingClient() {
     createdAt: msg.createdAt,
     senderId: msg.senderId,
   });
+
+  if (channelId === activeIdRef.current) {
+    scrollToBottom("smooth");
+  }
 
   if (channelId === activeIdRef.current && msg.senderId !== meIdSnap) {
     await markChatRead(channelId);
