@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { MessageSquare } from "lucide-react";
 
@@ -12,11 +12,13 @@ export default function ChatInboxIconClient({
   initialUnread?: number;
   unreadCount?: number;
 }) {
-  const [total, setTotal] = useState<number>(initialUnread);
+  const [total, setTotal] = useState<number>(unreadCount ?? initialUnread);
   const pathname = usePathname();
 
   useEffect(() => {
-    if (unreadCount !== undefined) setTotal(unreadCount);
+    if (unreadCount !== undefined) {
+      setTotal(unreadCount);
+    }
   }, [unreadCount]);
 
   const isPublicAuthPage =
@@ -27,58 +29,28 @@ export default function ChatInboxIconClient({
     pathname === "/auth/forgot-password" ||
     pathname === "/auth/reset-password";
 
-  const refreshing = useRef(false);
-  const pending = useRef(false);
-  const stopped = useRef(false);
-
-  async function safeRefresh() {
-    if (stopped.current) return;
-    if (refreshing.current) {
-      pending.current = true;
-      return;
-    }
-
-    refreshing.current = true;
-
-    try {
-      const r = await fetch("/api/chat/unread-total", { cache: "no-store" });
-      if (!r.ok) return;
-
-      const j = await r.json().catch(() => null);
-      if (!stopped.current && j?.ok) {
-        setTotal(j.total ?? 0);
-      }
-    } finally {
-      refreshing.current = false;
-      if (pending.current && !stopped.current) {
-        pending.current = false;
-        void safeRefresh();
-      }
-    }
-  }
-
   useEffect(() => {
     if (isPublicAuthPage) return;
-    stopped.current = false;
+    if (unreadCount !== undefined) return;
 
-    void safeRefresh();
+    let stopped = false;
 
-    const onRefresh = () => void safeRefresh();
-    window.addEventListener("chat:unread-refresh", onRefresh);
+    (async () => {
+      const r = await fetch("/api/chat/unread-total", { cache: "no-store" }).catch(
+        () => null
+      );
+      if (!r || !r.ok || stopped) return;
 
-    const onVis = () => {
-      if (document.visibilityState === "visible") {
-        void safeRefresh();
+      const j = await r.json().catch(() => null);
+      if (!stopped && j?.ok) {
+        setTotal(j.total ?? 0);
       }
-    };
-    document.addEventListener("visibilitychange", onVis);
+    })();
 
     return () => {
-      stopped.current = true;
-      window.removeEventListener("chat:unread-refresh", onRefresh);
-      document.removeEventListener("visibilitychange", onVis);
+      stopped = true;
     };
-  }, [isPublicAuthPage]);
+  }, [isPublicAuthPage, unreadCount]);
 
   return (
     <div className="relative">

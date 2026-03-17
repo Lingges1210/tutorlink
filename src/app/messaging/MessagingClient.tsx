@@ -652,9 +652,8 @@ export default function MessagingClient() {
     let mounted = true;
     let localChannel: ReturnType<typeof supabase.channel> | null = null;
 
-    async function handleIncomingRow(row: ChatMessageRow) {
-  const latest = await fetchLatestMessage(channelId, row.id);
-  const msg = latest ?? mapRowToMsg(row);
+    function handleIncomingRow(row: ChatMessageRow) {
+  const msg = mapRowToMsg(row);
 
   storeMergeMessages(channelId, [msg]);
 
@@ -663,16 +662,6 @@ export default function MessagingClient() {
     createdAt: msg.createdAt,
     senderId: msg.senderId,
   });
-
-  if (channelId === activeIdRef.current) {
-    scrollToBottom("smooth");
-  }
-
-  if (channelId === activeIdRef.current && msg.senderId !== meIdSnap) {
-    await markChatRead(channelId);
-  }
-
-  window.dispatchEvent(new Event("chat:unread-refresh"));
 }
 
     async function start() {
@@ -787,12 +776,7 @@ export default function MessagingClient() {
 
     storeMergeMessages(data.channelId, [data.message]);
 
-    void (async () => {
-      const full = await fetchLatestMessage(data.channelId, data.message.id);
-      if (full) {
-        storeMergeMessages(data.channelId, [full]);
-      }
-    })();
+   
 
     patchConversationPreview(data.channelId, {
       text: data.message.text ?? "",

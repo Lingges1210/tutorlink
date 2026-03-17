@@ -108,7 +108,7 @@ export default function ChatMessageListener({
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "ChatMessage" },
-          (payload) => {
+          async (payload) => {
   const row = payload.new as ChatMessageRow;
 
   if (!row) return;
@@ -122,15 +122,18 @@ export default function ChatMessageListener({
   const openChannelId = isOnMessagingPage ? getOpenChannelId() : null;
   const isCurrentlyOpen = !!openChannelId && openChannelId === row.channelId;
 
-  const msg: Msg = {
-    id: row.id,
-    senderId: row.senderId,
-    text: row.text ?? "",
-    createdAt: row.createdAt,
-    isDeleted: row.isDeleted,
-    deletedAt: row.deletedAt ?? null,
-    attachments: [],
-  };
+  const fallbackMsg: Msg = {
+  id: row.id,
+  senderId: row.senderId,
+  text: row.text ?? "",
+  createdAt: row.createdAt,
+  isDeleted: row.isDeleted,
+  deletedAt: row.deletedAt ?? null,
+  attachments: [],
+};
+
+const fullMsg = await fetchLatestMessage(row.channelId, row.id);
+const msg = fullMsg ?? fallbackMsg;
 
   window.dispatchEvent(
     new CustomEvent("chat:message-incoming", {
@@ -157,6 +160,23 @@ export default function ChatMessageListener({
     globalUnreadCount += 1;
     onUnreadChange?.(globalUnreadCount);
   }
+
+  async function fetchLatestMessage(channelId: string, expectedId?: string) {
+  const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=1`, {
+    cache: "no-store",
+  })
+    .then((r) => r.json())
+    .catch(() => null);
+
+  if (!j?.ok || !Array.isArray(j.items) || !j.items.length) return null;
+
+  const latest = j.items[0] as Msg;
+  if (!expectedId) return latest;
+  if (latest.id === expectedId) return latest;
+
+  const found = (j.items as Msg[]).find((m) => m.id === expectedId);
+  return found ?? null;
+}
 
   window.dispatchEvent(new Event("chat:unread-refresh"));
 
