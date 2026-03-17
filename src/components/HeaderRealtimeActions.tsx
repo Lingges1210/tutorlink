@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import NotificationsBellClient from "@/components/NotificationsBellClient";
 import ChatInboxIconClient from "@/components/ChatInboxIconClient";
@@ -30,6 +30,39 @@ export default function HeaderRealtimeActions({
     pathname === "/auth/forgot-password" ||
     pathname === "/auth/reset-password" ||
     pathname.startsWith("/auth/");
+
+  useEffect(() => {
+    setLiveChatUnread(initialChatUnread);
+  }, [initialChatUnread]);
+
+  useEffect(() => {
+    if (!userId || isAuthPage) return;
+
+    let stopped = false;
+
+    async function refreshChatUnread() {
+      const r = await fetch("/api/chat/unread-total", { cache: "no-store" }).catch(
+        () => null
+      );
+      if (!r || !r.ok || stopped) return;
+
+      const j = await r.json().catch(() => null);
+      if (!stopped && j?.ok) {
+        setLiveChatUnread(j.total ?? 0);
+      }
+    }
+
+    const onRefresh = () => {
+      void refreshChatUnread();
+    };
+
+    window.addEventListener("chat:unread-refresh", onRefresh);
+
+    return () => {
+      stopped = true;
+      window.removeEventListener("chat:unread-refresh", onRefresh);
+    };
+  }, [userId, isAuthPage]);
 
   if (isAuthPage) return null;
 

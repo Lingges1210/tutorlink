@@ -574,48 +574,48 @@ export default function MessagingClient() {
     const hasCached = !!cached?.length;
 
     async function loadMessages() {
-      if (!hasCached) setLoadingMsgs(true);
+  if (hasCached) {
+    setLoadingMsgs(false);
+    scrollToBottom("auto");
+    await markChatRead(channelId);
+    return;
+  }
 
-      const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
-        cache: "no-store",
-      })
-        .then((r) => r.json())
-        .catch(() => null);
+  setLoadingMsgs(true);
 
-      if (cancelled) {
-        setLoadingMsgs(false);
-        return;
-      }
+  const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
+    cache: "no-store",
+  })
+    .then((r) => r.json())
+    .catch(() => null);
 
-      if (j?.ok) {
-        const msgs = sortMsgs((j.items as Msg[]).slice().reverse());
-        const existingNow = useChatStore.getState().messageCache[channelId] ?? [];
+  if (cancelled) {
+    setLoadingMsgs(false);
+    return;
+  }
 
-        if (existingNow.length > 0) {
-          storeMergeMessages(channelId, msgs);
-        } else {
-          storeSetMessages(channelId, msgs);
-        }
+  if (j?.ok) {
+    const msgs = sortMsgs((j.items as Msg[]).slice().reverse());
+    storeSetMessages(channelId, msgs);
+    storeSetCursor(channelId, j.nextCursor ?? null);
 
-        storeSetCursor(channelId, j.nextCursor ?? null);
+    if (j.read) setReadInfo(j.read);
 
-        if (j.read) setReadInfo(j.read);
-
-        if (typeof j.isChatClosed === "boolean") {
-          setChatMeta({
-            isChatClosed: !!j.isChatClosed,
-            chatCloseAt: j.chatCloseAt ?? null,
-          });
-        }
-      }
-
-      setLoadingMsgs(false);
-
-      if (!cancelled) {
-        scrollToBottom("auto");
-        await markChatRead(channelId);
-      }
+    if (typeof j.isChatClosed === "boolean") {
+      setChatMeta({
+        isChatClosed: !!j.isChatClosed,
+        chatCloseAt: j.chatCloseAt ?? null,
+      });
     }
+  }
+
+  setLoadingMsgs(false);
+
+  if (!cancelled) {
+    scrollToBottom("auto");
+    await markChatRead(channelId);
+  }
+}
 
     void loadMessages();
 
