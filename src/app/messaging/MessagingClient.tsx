@@ -243,24 +243,38 @@ export default function MessagingClient() {
   );
 
   const markChatRead = useCallback(
-    async (channelId: string) => {
-      const now = Date.now();
-      const last = lastMarkedReadRef.current[channelId] ?? 0;
+  async (channelId: string) => {
+    const now = Date.now();
+    const last = lastMarkedReadRef.current[channelId] ?? 0;
 
-      if (now - last < 1200) return;
-      lastMarkedReadRef.current[channelId] = now;
+    if (now - last < 1200) return;
+    lastMarkedReadRef.current[channelId] = now;
 
-      await fetch("/api/chat/read", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channelId }),
-      }).catch(() => {});
+    await fetch("/api/chat/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId }),
+    }).catch(() => {});
 
-      storeMarkRead(channelId);
-      window.dispatchEvent(new Event("chat:unread-refresh"));
-    },
-    [storeMarkRead]
-  );
+    if (chatRoomRef.current && meId) {
+      await chatRoomRef.current.send({
+        type: "broadcast",
+        event: "read-updated",
+        payload: {
+          channelId,
+          userId: meId,
+          readAt: new Date().toISOString(),
+        },
+      });
+      
+    }
+    
+
+    storeMarkRead(channelId);
+    window.dispatchEvent(new Event("chat:unread-refresh"));
+  },
+  [meId, storeMarkRead]
+);
 
 
   function prettyNameFromUrl(u: string) {
@@ -659,71 +673,88 @@ export default function MessagingClient() {
       if (!mounted) return;
 
       const channel = supabase
-        .channel(`chat-room-${channelId}`, {
-          config: { broadcast: { self: false } },
-        })
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "ChatMessage",
-            filter: `channelId=eq.${channelId}`,
-          },
-          (payload) => {
-            const row = payload.new as ChatMessageRow;
-            if (!row) return;
-            if (row.senderId === meIdSnap) return;
-            void handleIncomingRow(row);
-          }
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "ChatMessage",
-            filter: `channelId=eq.${channelId}`,
-          },
-          (payload) => {
-            const row = payload.new as ChatMessageRow;
-            if (!row) return;
+  .channel(`chat-room-${channelId}`, {
+    config: { broadcast: { self: false } },
+  })
+  .on(
+    "postgres_changes",
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "ChatMessage",
+      filter: `channelId=eq.${channelId}`,
+    },
+    (payload) => {
+      const row = payload.new as ChatMessageRow;
+      if (!row) return;
+      if (row.senderId === meIdSnap) return;
+      void handleIncomingRow(row);
+    }
+  )
+  .on(
+    "postgres_changes",
+    {
+      event: "UPDATE",
+      schema: "public",
+      table: "ChatMessage",
+      filter: `channelId=eq.${channelId}`,
+    },
+    (payload) => {
+      const row = payload.new as ChatMessageRow;
+      if (!row) return;
 
-            storePatchMessage(channelId, row.id, {
-              senderId: row.senderId,
-              text: row.text ?? "",
-              createdAt: row.createdAt,
-              isDeleted: row.isDeleted,
-              deletedAt: row.deletedAt ?? null,
-            });
-          }
-        )
-        .on("broadcast", { event: "typing" }, ({ payload }) => {
-          const data = payload as {
-            channelId: string;
-            userId: string;
-            isTyping: boolean;
-          };
+      storePatchMessage(channelId, row.id, {
+        senderId: row.senderId,
+        text: row.text ?? "",
+        createdAt: row.createdAt,
+        isDeleted: row.isDeleted,
+        deletedAt: row.deletedAt ?? null,
+      });
+    }
+  )
+  .on("broadcast", { event: "read-updated" }, ({ payload }) => {
+    const data = payload as {
+      channelId: string;
+      userId: string;
+      readAt: string;
+    };
 
-          if (data.channelId !== channelId || data.userId === meIdSnap) return;
+    if (data.channelId !== channelId) return;
+    if (data.userId === meIdSnap) return;
 
-          if (data.isTyping) {
-            setOtherTyping(true);
+    setReadInfo((prev) => ({
+      meLastReadAt: prev?.meLastReadAt ?? "",
+      otherLastReadAt: data.readAt,
+    }));
+  })
+  .on("broadcast", { event: "typing" }, ({ payload }) => {
+    const data = payload as {
+      channelId: string;
+      userId: string;
+      isTyping: boolean;
+    };
 
-            if (otherTypingExpiry.current) {
-              clearTimeout(otherTypingExpiry.current);
-            }
+    if (data.channelId !== channelId || data.userId === meIdSnap) return;
 
-            otherTypingExpiry.current = setTimeout(() => {
-              setOtherTyping(false);
-            }, 2500);
-          } else {
-            setOtherTyping(false);
-            if (otherTypingExpiry.current) {
-              clearTimeout(otherTypingExpiry.current);
-            }
-          }
-        });
+    if (data.isTyping) {
+      setOtherTyping(true);
+
+      if (otherTypingExpiry.current) {
+        clearTimeout(otherTypingExpiry.current);
+      }
+
+      otherTypingExpiry.current = setTimeout(() => {
+        setOtherTyping(false);
+      }, 2500);
+    } else {
+      setOtherTyping(false);
+      if (otherTypingExpiry.current) {
+        clearTimeout(otherTypingExpiry.current);
+      }
+    }
+  });
+
+        
 
       localChannel = channel;
       chatRoomRef.current = channel;
