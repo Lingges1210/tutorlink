@@ -809,7 +809,7 @@ export default function MessagingClient() {
         @keyframes shimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
       `}</style>
 
-      <div className="pt-12 pb-10">
+      <div className="pt-4 pb-4">
         <div className="mx-auto max-w-6xl space-y-5 px-4 sm:px-6 lg:px-8">
           <header className="flex items-end justify-between gap-4">
             <div>
