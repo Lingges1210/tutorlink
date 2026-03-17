@@ -23,6 +23,7 @@ type ChatMessageRow = {
   text: string;
   createdAt: string;
   isDeleted?: boolean;
+  deletedAt?: string | null;
 };
 
 let globalUnreadCount = 0;
@@ -36,13 +37,15 @@ export default function ChatMessageListener({
   initialUnread?: number;
   onUnreadChange?: (count: number) => void;
 }) {
-  const router   = useRouter();
+  const router = useRouter();
   const pathname = usePathname();
   const [items, setItems] = useState<ToastItem[]>([]);
-  const seenIdsRef  = useRef<Set<string>>(new Set());
+  const seenIdsRef = useRef<Set<string>>(new Set());
   const pathnameRef = useRef(pathname);
 
-  useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
 
   function dismiss(id: string) {
     setItems((prev) => prev.filter((x) => x.id !== id));
@@ -53,6 +56,7 @@ export default function ChatMessageListener({
       if (prev.some((x) => x.id === item.id)) return prev;
       return [item, ...prev].slice(0, 3);
     });
+
     window.setTimeout(() => {
       setItems((prev) => prev.filter((x) => x.id !== item.id));
     }, 6000);
@@ -68,14 +72,15 @@ export default function ChatMessageListener({
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
     async function start() {
-      // ── Required in production ────────────────────────────────────────────
-      // Without setAuth, postgres_changes subscriptions silently receive
-      // nothing in production even though subscribe() appears to succeed.
-      // This is the same fix applied to MessagingClient's realtime useEffect.
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (!mounted || !session?.access_token) return;
 
       await supabase.realtime.setAuth(session.access_token);
+
+      if (!mounted) return;
 
       channel = supabase
         .channel(`chat-message-listener-${userId}`)
@@ -89,47 +94,69 @@ export default function ChatMessageListener({
             if (row.senderId === userId) return;
             if (row.isDeleted) return;
 
-            if (useChatStore.getState().processedMsgIds.has(row.id)) return;
             if (seenIdsRef.current.has(row.id)) return;
             seenIdsRef.current.add(row.id);
 
-            // ── 1. Update badge ───────────────────────────────────────────
-            globalUnreadCount += 1;
-            onUnreadChange?.(globalUnreadCount);
-            window.dispatchEvent(new Event("chat:unread-refresh"));
-
-            // ── 2. Merge into store ───────────────────────────────────────
             const msg: Msg = {
               id: row.id,
               senderId: row.senderId,
               text: row.text ?? "",
               createdAt: row.createdAt,
               isDeleted: row.isDeleted,
+              deletedAt: row.deletedAt ?? null,
             };
-            useChatStore.getState().mergeMessages(row.channelId, [msg]);
+
+            const isOnMessagingPage = pathnameRef.current?.startsWith("/messaging");
+
+            if (!isOnMessagingPage) {
+              useChatStore.getState().appendMessage(row.channelId, msg);
+
+              window.dispatchEvent(
+                new CustomEvent("chat:message-incoming", {
+                  detail: {
+                    channelId: row.channelId,
+                    message: msg,
+                  },
+                })
+              );
+            }
 
             const convs = useChatStore.getState().conversations;
-            const updated = convs.map((c) =>
-              c.id === row.channelId
-                ? {
-                    ...c,
-                    lastMessage: row.text?.trim() || "📎 Attachment",
-                    lastAt: row.createdAt,
-                    unread: c.unread + 1,
-                  }
-                : c
-            );
-            updated.sort(
-              (a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()
-            );
-            useChatStore.getState().setConversations(updated);
+            const targetConv = convs.find((c) => c.id === row.channelId);
 
-            // ── 3. Toast — skip if already on /messaging ──────────────────
-            if (pathnameRef.current?.startsWith("/messaging")) return;
+            if (targetConv) {
+              const updated = convs
+                .map((c) =>
+                  c.id === row.channelId
+                    ? {
+                        ...c,
+                        lastMessage: row.text?.trim() || "📎 Attachment",
+                        lastAt: row.createdAt,
+                        unread: isOnMessagingPage ? c.unread : c.unread + 1,
+                      }
+                    : c
+                )
+                .sort(
+                  (a, b) =>
+                    new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime()
+                );
 
-            const conv = useChatStore.getState().conversations.find(
-              (c) => c.id === row.channelId
-            );
+              useChatStore.getState().setConversations(updated);
+            }
+
+            if (!isOnMessagingPage) {
+              globalUnreadCount += 1;
+              onUnreadChange?.(globalUnreadCount);
+            }
+
+            window.dispatchEvent(new Event("chat:unread-refresh"));
+
+            if (isOnMessagingPage) return;
+
+            const conv = useChatStore
+              .getState()
+              .conversations.find((c) => c.id === row.channelId);
+
             const senderName = conv?.name ?? "New message";
 
             pushToast({
@@ -184,6 +211,7 @@ export default function ChatMessageListener({
                         {item.text}
                       </p>
                     </div>
+
                     <button
                       type="button"
                       onClick={() => dismiss(item.id)}
@@ -202,6 +230,7 @@ export default function ChatMessageListener({
                     >
                       Dismiss
                     </button>
+
                     <button
                       type="button"
                       onClick={() => {

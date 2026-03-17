@@ -1,7 +1,5 @@
 "use client";
 
-// src/components/HeaderRealtimeActions.tsx
-
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import NotificationsBellClient from "@/components/NotificationsBellClient";
@@ -24,10 +22,6 @@ export default function HeaderRealtimeActions({
   dashboardHref: string;
 }) {
   const pathname = usePathname();
-
-  // ChatMessageListener pushes the live unread count up here,
-  // then we pass it down to ChatInboxIconClient so the badge
-  // updates instantly without any re-fetch or page change.
   const [liveChatUnread, setLiveChatUnread] = useState<number>(initialChatUnread);
 
   const isAuthPage =
@@ -41,10 +35,8 @@ export default function HeaderRealtimeActions({
 
   return (
     <>
-      {/* Background prefetch — keeps store warm on every page */}
       {userId && <ChatPrefetcher userId={userId} />}
 
-      {/* Chat realtime listener — badge + toast popup, mirrors SOS pattern */}
       {userId && (
         <ChatMessageListener
           userId={userId}
@@ -56,7 +48,6 @@ export default function HeaderRealtimeActions({
       {userId && isTutor && <TutorSOSNotificationListener userId={userId} />}
 
       <div className="flex items-center gap-0.5 rounded-xl bg-[rgb(var(--card))]/60 px-1 py-1 ring-1 ring-[rgb(var(--border))]/60">
-        {/* unreadCount is controlled by ChatMessageListener via liveChatUnread */}
         <ChatInboxIconClient
           initialUnread={initialChatUnread}
           unreadCount={liveChatUnread}
