@@ -206,10 +206,6 @@ export default function ChatMessageListener({
                       type="button"
                       onClick={() => {
                         dismiss(item.id);
-                        // Clear cache for this channel so MessagingClient
-                        // does a fresh fetch and loads the latest messages
-                        // instead of showing stale cached data
-                        useChatStore.getState().clearChannelMessages(item.channelId);
                         router.push(`/messaging?channelId=${item.channelId}`);
                       }}
                       className="inline-flex h-8 items-center gap-1 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-3 text-xs font-semibold text-white shadow-[0_6px_18px_rgba(124,58,237,0.35)] hover:opacity-95"

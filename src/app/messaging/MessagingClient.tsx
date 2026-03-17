@@ -327,32 +327,40 @@ export default function MessagingClient() {
     const hasCached = cached && cached.length > 0;
 
     async function loadMessages() {
-      if (!hasCached) {
-        setLoadingMsgs(true);
-        const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, { cache: "no-store" })
-          .then((r) => r.json()).catch(() => null);
-        if (cancelled) { setLoadingMsgs(false); return; }
-        if (j?.ok) {
-          const msgs = (j.items as Msg[]).slice().reverse();
-          // markProcessed first so CDC/broadcast can't race and double-add
-          useChatStore.getState().markProcessed(msgs.map((m) => m.id));
-          storeMergeMessages(channelId, msgs);
-          storeSetCursor(channelId, j.nextCursor ?? null);
-          if (j.read) setReadInfo(j.read);
-          if (typeof j.isChatClosed === "boolean")
-            setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
-        }
-        setLoadingMsgs(false);
-      } else {
-        // Cache hit — silently refresh metadata
-        fetch(`/api/chat/messages?channelId=${channelId}&take=1`, { cache: "no-store" })
-          .then((r) => r.json()).then((j) => {
-            if (cancelled || !j?.ok) return;
-            if (j.read) setReadInfo(j.read);
-            if (typeof j.isChatClosed === "boolean")
-              setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
-          }).catch(() => {});
+      // Show skeleton only when nothing is cached yet
+      if (!hasCached) setLoadingMsgs(true);
+
+      // Always fetch fresh messages from the server.
+      // When cache exists, render it instantly (no skeleton) then
+      // silently overwrite with the fresh data — this ensures the latest
+      // messages always appear even if ChatMessageListener pre-populated
+      // the cache with only a partial view.
+      const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, { cache: "no-store" })
+        .then((r) => r.json()).catch(() => null);
+
+      if (cancelled) { setLoadingMsgs(false); return; }
+
+      if (j?.ok) {
+        const msgs = (j.items as Msg[]).slice().reverse();
+        // Directly set the cache to the fresh server response.
+        // Do NOT call markProcessed here — mergeMessages handles dedup
+        // internally via processedMsgIds, and pre-marking would cause
+        // messages added by ChatMessageListener to be silently skipped.
+        useChatStore.setState((s) => ({
+          messageCache: {
+            ...s.messageCache,
+            [channelId]: msgs.sort(
+              (a: Msg, b: Msg) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            ),
+          },
+          cursorCache: { ...s.cursorCache, [channelId]: j.nextCursor ?? null },
+        }));
+        if (j.read) setReadInfo(j.read);
+        if (typeof j.isChatClosed === "boolean")
+          setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
       }
+
+      setLoadingMsgs(false);
 
       if (!cancelled) {
         scrollToBottom("auto");
