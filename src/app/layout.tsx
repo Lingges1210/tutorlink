@@ -1,4 +1,3 @@
-// src/app/layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
 import Link from "next/link";
@@ -7,8 +6,12 @@ import ThemeToggle from "@/components/ThemeToggle";
 import NavbarActions from "@/components/NavbarActions";
 import Image from "next/image";
 import UserPresenceBeacon from "@/components/presence/UserPresenceBeacon";
+import FloatingAdminHomeButton from "@/components/admin/FloatingAdminHomeButton";
 
-export const dynamic = "force-dynamic"; // ✅ add this line
+import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "TutorLink – USM Peer Tutoring",
@@ -16,22 +19,45 @@ export const metadata: Metadata = {
     "TutorLink is a campus-exclusive peer tutoring platform for Universiti Sains Malaysia students.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  // 🔐 Get logged-in user
+  const supabase = await supabaseServerComponent();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // 🔐 Check admin role
+  let isAdmin = false;
+
+  if (user?.email) {
+    const dbUser = await prisma.user.findUnique({
+      where: { email: user.email },
+      select: { role: true },
+    });
+
+    isAdmin = dbUser?.role === "ADMIN";
+  }
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen antialiased bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
         <ThemeProvider>
           <UserPresenceBeacon />
-          <div className="relative flex min-h-screen flex-col">
 
+          
+
+          <div className="relative flex min-h-screen flex-col">
             {/* GLOBAL HEADER */}
             <header className="sticky top-0 z-50">
-              {/* Thin animated gradient accent line at very top */}
+              {/* Top gradient line */}
               <div className="h-[2.5px] w-full bg-gradient-to-r from-[rgb(var(--primary))] via-[rgb(var(--primary2,var(--primary)))] to-[rgb(var(--primary))] opacity-80" />
 
               <div className="border-b border-[rgb(var(--border))]/60 bg-[rgb(var(--bg))]/50 backdrop-blur-xl">
                 <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-
                   {/* Brand */}
                   <Link href="/" className="flex items-center group">
                     <div className="relative h-9 w-[155px] flex-shrink-0 transition-opacity group-hover:opacity-85">
@@ -48,83 +74,63 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
                   {/* Right side */}
                   <div className="flex items-center gap-1.5">
-
-                    {/* Nav links */}
                     <div className="hidden items-center gap-1 md:flex">
+                      <ThemeToggle />
 
-                      {/* Theme toggle — between nav and profile */}
-                    <ThemeToggle />
-
-                    
                       <Link
                         href="/"
-                        className="nav-link relative rounded-xl px-3 py-2 text-sm font-medium text-[rgb(var(--muted2))] transition-colors hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card))]"
+                        className="nav-link rounded-xl px-3 py-2 text-sm font-medium text-[rgb(var(--muted2))] transition-colors hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card))]"
                       >
                         Home
                       </Link>
 
                       <Link
                         href="/find-tutor"
-                        prefetch={true}
-                        className="nav-link relative rounded-xl px-3 py-2 text-sm font-medium text-[rgb(var(--muted2))] transition-colors hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card))]"
+                        prefetch
+                        className="nav-link rounded-xl px-3 py-2 text-sm font-medium text-[rgb(var(--muted2))] transition-colors hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card))]"
                       >
                         Find Tutor
                       </Link>
 
-                      {/* AI Hub — subtle shimmer badge */}
+                      {/* AI Hub */}
                       <Link
                         href="/study"
-                        className="nav-link group/ai relative rounded-xl px-3 py-2 text-sm font-medium text-[rgb(var(--muted2))] transition-colors hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card))]"
-                        title="AI-powered study tools"
+                        className="nav-link group/ai rounded-xl px-3 py-2 text-sm font-medium text-[rgb(var(--muted2))] transition-colors hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card))]"
                       >
                         <span className="flex items-center gap-1.5">
                           AI Hub
-                          <span className="inline-flex items-center rounded-full bg-[rgb(var(--primary))]/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--primary))] transition-colors group-hover/ai:bg-[rgb(var(--primary))]/25">
+                          <span className="rounded-full bg-[rgb(var(--primary))]/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--primary))]">
                             New
                           </span>
                         </span>
                       </Link>
 
-                      {/* SOS Help — vivid gradient pill */}
+                      {/* SOS */}
                       <Link
                         href="/sos"
-                        prefetch={true}
-                        className="
-                          relative ml-1 overflow-hidden rounded-xl px-4 py-2
-                          text-sm font-semibold text-white
-                          bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary2,var(--primary)))]
-                          shadow-[0_4px_14px_rgba(0,0,0,0.18)]
-                          transition-all duration-200
-                          hover:shadow-[0_6px_20px_rgba(0,0,0,0.25)]
-                          hover:scale-[1.03]
-                          active:scale-[0.98]
-                        "
-                        title="Request urgent academic help"
+                        prefetch
+                        className="ml-1 rounded-xl px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary2,var(--primary)))] shadow hover:scale-[1.03] active:scale-[0.98] transition"
                       >
                         <span className="flex items-center gap-1.5">
-                          {/* Pulsing dot */}
                           <span className="relative flex h-2 w-2">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-60" />
-                            <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+                            <span className="absolute h-full w-full animate-ping rounded-full bg-white opacity-60" />
+                            <span className="relative h-2 w-2 rounded-full bg-white" />
                           </span>
                           SOS Help
                         </span>
                       </Link>
                     </div>
 
-                    
-
-                    {/* Auth actions */}
                     <NavbarActions />
                   </div>
                 </nav>
               </div>
             </header>
 
-            {/* PAGE CONTENT */}
+            {/* CONTENT */}
             <main className="flex-1">{children}</main>
 
-            {/* GLOBAL FOOTER */}
+            {/* FOOTER */}
             <footer className="border-t border-[rgb(var(--border))] bg-[rgb(var(--bg))]/60">
               <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-xs text-[rgb(var(--muted2))] md:flex-row md:items-center md:justify-between">
                 <div className="flex items-center gap-1.5">
@@ -132,13 +138,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   © {new Date().getFullYear()} TutorLink • Built for USM
                 </div>
                 <div className="flex gap-4">
-                  <span className="text-[rgb(var(--muted2))] cursor-default">Privacy</span>
-<span className="text-[rgb(var(--muted2))] cursor-default">Terms</span>
-<span className="text-[rgb(var(--muted2))] cursor-default">Contact</span>
+                  <span className="cursor-default">Privacy</span>
+                  <span className="cursor-default">Terms</span>
+                  <span className="cursor-default">Contact</span>
                 </div>
               </div>
             </footer>
           </div>
+          <FloatingAdminHomeButton isAdmin={isAdmin} />
         </ThemeProvider>
       </body>
     </html>
