@@ -38,13 +38,13 @@ type SOS = {
 function statusConfig(status: string) {
   switch (status) {
     case "SEARCHING":
-      return {
-        badge: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-700/40",
-        glow: "shadow-[0_0_20px_rgba(245,158,11,0.25)]",
-        dot: "bg-amber-400",
-        pulse: true,
-        label: "Searching…",
-      };
+  return {
+    badge: "border text-[11px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full",
+    glow: "shadow-[0_0_20px_rgba(245,158,11,0.25)]",
+    dot: "bg-amber-400",
+    pulse: true,
+    label: "Searching",
+  };
     case "ACCEPTED":
       return {
         badge: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-700/40",
@@ -355,18 +355,22 @@ export default function SOSDetailPage() {
                 </p>
               </div>
 
-              {cfg && (
-                <span
-                  className={`inline-flex items-center gap-1.5 text-xs border px-3 py-1.5 rounded-full font-semibold flex-shrink-0 ${cfg.badge}`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${cfg.dot} ${
-                      cfg.pulse ? "animate-pulse" : ""
-                    }`}
-                  />
-                  {cfg.label}
-                </span>
-              )}
+              {cfg && sos && (
+  sos.status === "SEARCHING" ? (
+    <span
+      className="inline-flex items-center gap-1.5 text-xs border px-3 py-1.5 rounded-full font-semibold flex-shrink-0"
+      style={{ background: "rgba(245,158,11,0.12)", color: "rgb(245,158,11)", borderColor: "rgba(245,158,11,0.35)" }}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+      Searching...
+    </span>
+  ) : (
+    <span className={`inline-flex items-center gap-1.5 text-xs border px-3 py-1.5 rounded-full font-semibold flex-shrink-0 ${cfg.badge}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot} ${cfg.pulse ? "animate-pulse" : ""}`} />
+      {cfg.label}
+    </span>
+  )
+)}
             </div>
 
             {/* ── Error ── */}
@@ -397,16 +401,22 @@ export default function SOSDetailPage() {
 
                 {/* ── Searching animation ── */}
                 {sos.status === "SEARCHING" && (
-                  <div className="anim-fade-up delay-2 rounded-2xl border border-amber-200/60 dark:border-amber-700/30 bg-amber-50/60 dark:bg-amber-900/10 px-4 py-5 text-center">
-                    <SearchingRings />
-                    <p className="mt-3 text-sm font-semibold text-amber-700 dark:text-amber-400">
-                      Looking for an available tutor…
-                    </p>
-                    <p className="text-xs text-amber-600/70 dark:text-amber-500/70 mt-0.5">
-                      Hang tight — we&apos;ll notify you the moment one accepts.
-                    </p>
-                  </div>
-                )}
+  <div
+    className="anim-fade-up delay-2 rounded-2xl px-4 py-5 text-center"
+    style={{
+      border: "1px solid rgba(245,158,11,0.35)",
+      background: "rgba(245,158,11,0.06)",
+    }}
+  >
+    <SearchingRings />
+    <p className="mt-3 text-sm font-semibold" style={{ color: "rgb(245,158,11)" }}>
+      Searching for an available tutor…
+    </p>
+    <p className="text-xs mt-1" style={{ color: "rgba(245,158,11,0.65)" }}>
+      Hang tight — you&apos;ll be connected the moment one accepts.
+    </p>
+  </div>
+)}
 
                 {/* ── Request info card ── */}
                 <div className="anim-fade-up delay-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4">
@@ -578,21 +588,19 @@ export default function SOSDetailPage() {
                   )}
                 </div>
 
-                {/* ── Debug pills ── */}
-                {(sessionId || channelId) && (
-                  <div className="flex flex-wrap gap-2 pt-1 border-t border-[rgb(var(--border))] mt-1">
-                    {sessionId && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2.5 py-1 text-[10px] font-mono text-[rgb(var(--muted2))]">
-                        Session: {sessionId}
-                      </span>
-                    )}
-                    {channelId && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2.5 py-1 text-[10px] font-mono text-[rgb(var(--muted2))]">
-                        Channel: {channelId}
-                      </span>
-                    )}
-                  </div>
-                )}
+                {/* ── Session link ── */}
+              {sessionId && (
+                <div className="pt-1 border-t border-[rgb(var(--border))] mt-1">
+                  <Link
+                    href={`/dashboard/student/sessions?focus=${sessionId}`}
+                    className="inline-flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:border-violet-400/40 transition-colors duration-150"
+                  >
+                    <CalendarClock className="h-3.5 w-3.5" />
+                    View session
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              )}
               </div>
             )}
           </div>

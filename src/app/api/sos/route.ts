@@ -17,14 +17,18 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const requests = await prisma.sOSRequest.findMany({
-      where: { studentId: user.id },
-      include: {
-        subject: { select: { id: true, code: true, title: true } },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    });
+    // In GET(), replace the findMany:
+const requests = await prisma.sOSRequest.findMany({
+  where: {
+    studentId: user.id,
+    status: { in: ["SEARCHING", "ACCEPTED", "IN_PROGRESS"] }, // ← add this
+  },
+  include: {
+    subject: { select: { id: true, code: true, title: true } },
+  },
+  orderBy: { createdAt: "desc" },
+  take: 20,
+});
 
     return NextResponse.json({ requests });
   } catch (e: any) {

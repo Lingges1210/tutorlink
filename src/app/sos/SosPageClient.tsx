@@ -137,6 +137,7 @@ export default function SOSPage() {
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inFlightRef = useRef(false);
+  const hasLoadedRef = useRef<Partial<Record<Tab, boolean>>>({});
 
   // Live elapsed tick
   const [, setTick] = useState(0);
@@ -188,18 +189,26 @@ useEffect(() => {
   }
 
   useEffect(() => {
-    if (!isTutor) { prevTutorIdsRef.current = []; setNewSOSIds([]); return; }
-    const prevIds = prevTutorIdsRef.current;
-    const currentIds = tutorItems.map((item) => item.id);
-    const freshIds = currentIds.filter((id) => !prevIds.includes(id));
-    if (freshIds.length > 0) {
-      setNewSOSIds((prev) => [...new Set([...prev, ...freshIds])]);
-      freshIds.forEach((id) => {
-        window.setTimeout(() => setNewSOSIds((prev) => prev.filter((x) => x !== id)), 6000);
-      });
-    }
+  if (!isTutor) { prevTutorIdsRef.current = []; setNewSOSIds([]); return; }
+  
+  const prevIds = prevTutorIdsRef.current;
+  const currentIds = tutorItems.map((item) => item.id);
+
+  // ── First load: just seed the ref, don't mark anything as new ──
+  if (prevIds.length === 0 && currentIds.length > 0) {
     prevTutorIdsRef.current = currentIds;
-  }, [tutorItems, isTutor]);
+    return;
+  }
+
+  const freshIds = currentIds.filter((id) => !prevIds.includes(id));
+  if (freshIds.length > 0) {
+    setNewSOSIds((prev) => [...new Set([...prev, ...freshIds])]);
+    freshIds.forEach((id) => {
+      window.setTimeout(() => setNewSOSIds((prev) => prev.filter((x) => x !== id)), 6000);
+    });
+  }
+  prevTutorIdsRef.current = currentIds;
+}, [tutorItems, isTutor]);
 
   const loadStudent = useCallback(async (opts?: { silent?: boolean }) => {
   const silent = !!opts?.silent;
@@ -254,12 +263,17 @@ useEffect(() => {
 }, [studentItems, tab, isStudent, loadStudent]);
 
   useEffect(() => {
-    if (loadingRoles) return;
-    if (tab !== "STUDENT") stopPolling();
-    if (tab === "STUDENT" && isStudent) loadStudent();
-    if (tab === "TUTOR" && isTutor) loadTutor();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, loadingRoles, isStudent, isTutor]);
+  if (loadingRoles) return;
+  if (tab !== "STUDENT") stopPolling();
+
+  // Only auto-load once per tab per mount
+  if (hasLoadedRef.current[tab]) return;
+  hasLoadedRef.current[tab] = true;
+
+  if (tab === "STUDENT" && isStudent) loadStudent();
+  if (tab === "TUTOR" && isTutor) loadTutor();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [tab, loadingRoles, isStudent, isTutor]);
 
   const tabs = useMemo(() => {
     const t: { key: Tab; label: string; icon: any; count?: number }[] = [];

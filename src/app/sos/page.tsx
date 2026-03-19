@@ -3,67 +3,61 @@ import SosPageClient from "./SosPageClient";
 
 function SosPageFallback() {
   return (
-    <div className="min-h-screen bg-[rgb(var(--bg))]">
-      <div className="mx-auto max-w-7xl px-4 py-8">
-        {/* Animated pulse skeleton that matches SOS urgency theme */}
-        <div className="space-y-6">
-          
-          {/* Header skeleton */}
-          <div className="rounded-3xl border border-red-500/20 bg-red-500/5 p-8">
-            <div className="flex items-center gap-4 mb-4">
-              {/* Pulsing SOS icon placeholder */}
-              <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-red-500/30 bg-red-500/10">
-                <div className="h-6 w-6 animate-ping rounded-full bg-red-500/40" />
-                <div className="absolute h-4 w-4 rounded-full bg-red-500/60" />
-              </div>
-              <div className="space-y-2 flex-1">
-                <div className="h-7 w-48 rounded-xl bg-[rgb(var(--border))] animate-pulse" />
-                <div className="h-4 w-72 rounded-lg bg-[rgb(var(--border))]/60 animate-pulse" />
-              </div>
+    <div className="pt-10 pb-10">
+      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 space-y-6">
+        {/* Header skeleton */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-3">
+            <div
+              className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
+              style={{ border: "1px solid rgb(var(--border))", background: "rgb(var(--card2))" }}
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+              </span>
+              <div className="h-3 w-32 rounded-full animate-pulse" style={{ background: "rgb(var(--border))" }} />
             </div>
-            {/* Shimmer bar */}
-            <div className="h-px w-full bg-gradient-to-r from-transparent via-red-500/30 to-transparent" />
+            <div className="space-y-2">
+              <div className="h-9 w-44 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
+              <div className="h-4 w-72 rounded-lg animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.6 }} />
+            </div>
           </div>
+          <div className="hidden sm:block h-10 w-28 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
+        </div>
 
-          {/* Cards skeleton */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 3 }).map((_, i) => (
+        {/* Main card skeleton */}
+        <div
+          className="rounded-3xl overflow-hidden"
+          style={{ border: "1px solid rgb(var(--border))", background: "rgb(var(--card))" }}
+        >
+          <div className="h-px w-full" style={{ background: "linear-gradient(90deg, transparent, rgba(139,92,246,0.5), transparent)" }} />
+          <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4" style={{ borderBottom: "1px solid rgb(var(--border))" }}>
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-28 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
+              <div className="h-8 w-24 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.5 }} />
+            </div>
+            <div className="h-8 w-20 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
+          </div>
+          <div className="p-5 space-y-3">
+            {[0, 1].map((i) => (
               <div
                 key={i}
-                className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 space-y-3"
-                style={{ animationDelay: `${i * 100}ms` }}
+                className="rounded-2xl p-5"
+                style={{ border: "1px solid rgb(var(--border))", background: "rgb(var(--card2))" }}
               >
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-xl bg-[rgb(var(--border))] animate-pulse" />
-                  <div className="h-4 w-32 rounded-lg bg-[rgb(var(--border))] animate-pulse" />
+                <div className="flex justify-between gap-4">
+                  <div className="flex-1 space-y-3">
+                    <div className="h-4 w-2/5 rounded-lg animate-pulse" style={{ background: "rgb(var(--border))" }} />
+                    <div className="h-3 w-3/5 rounded-lg animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.7 }} />
+                    <div className="h-3 w-1/4 rounded-lg animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.5 }} />
+                  </div>
+                  <div className="h-6 w-20 rounded-full animate-pulse" style={{ background: "rgb(var(--border))" }} />
                 </div>
-                <div className="space-y-2">
-                  <div className="h-3 w-full rounded bg-[rgb(var(--border))]/60 animate-pulse" />
-                  <div className="h-3 w-4/5 rounded bg-[rgb(var(--border))]/60 animate-pulse" />
-                  <div className="h-3 w-3/5 rounded bg-[rgb(var(--border))]/60 animate-pulse" />
-                </div>
-                <div className="h-9 w-full rounded-xl bg-[rgb(var(--border))]/80 animate-pulse" />
               </div>
             ))}
           </div>
-
-          {/* Bottom section skeleton */}
-          <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5">
-            <div className="h-4 w-40 rounded-lg bg-[rgb(var(--border))] animate-pulse mb-4" />
-            <div className="grid gap-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3 rounded-xl p-3 border border-[rgb(var(--border))]/50">
-                  <div className="h-8 w-8 rounded-lg bg-[rgb(var(--border))] animate-pulse" />
-                  <div className="flex-1 space-y-1.5">
-                    <div className="h-3 w-36 rounded bg-[rgb(var(--border))] animate-pulse" />
-                    <div className="h-2.5 w-24 rounded bg-[rgb(var(--border))]/60 animate-pulse" />
-                  </div>
-                  <div className="h-7 w-16 rounded-lg bg-[rgb(var(--border))]/80 animate-pulse" />
-                </div>
-              ))}
-            </div>
-          </div>
-
+          <div className="h-px w-full" style={{ background: "linear-gradient(90deg, transparent, rgba(217,70,239,0.35), transparent)" }} />
         </div>
       </div>
     </div>

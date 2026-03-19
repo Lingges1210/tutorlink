@@ -44,18 +44,18 @@ export async function POST(
 
     // Notify accepted tutor (if any)
     if (existing.acceptedTutorId) {
-      await prisma.notification.create({
-        data: {
-          userId: existing.acceptedTutorId,
-          type: "SOS_CANCELLED",
-          title: "SOS request cancelled",
-          body: "Student cancelled the SOS request.",
-          data: { sosId: id, subjectId: existing.subjectId },
-          dedupeKey: `sos:${id}:cancelled`,
-          status: "QUEUED",
-        },
-      });
-    }
+  await prisma.notification.create({
+    data: {
+      userId: existing.acceptedTutorId,
+      type: "SOS_CANCELLED",
+      title: "SOS request cancelled",
+      body: "Student cancelled the SOS request.",
+      data: { sosId: id, subjectId: existing.subjectId, viewer: "STUDENT" }, // ← add viewer
+      dedupeKey: `sos:${id}:cancelled`,
+      status: "QUEUED",
+    },
+  });
+}
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {

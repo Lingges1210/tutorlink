@@ -469,23 +469,38 @@ export default function NotificationsBellClient({
   );
 
   const pickHref = useCallback(
-    (n: NotiItem) => {
-      const data = safeParseData(n.data);
-      if (typeof data.href === "string") return data.href;
+  (n: NotiItem) => {
+    const data = safeParseData(n.data);
 
-      const sessionId = typeof data.sessionId === "string" ? data.sessionId : undefined;
-      const viewer = (data.viewer as ViewerHint | undefined) ?? null;
-      const page =
-        typeof data.page === "number"
-          ? data.page
-          : typeof data.page === "string"
-          ? parseInt(data.page, 10)
-          : undefined;
+    // Explicit override always wins
+    if (typeof data.href === "string") return data.href;
 
-      return buildFocusHref(sessionId, viewer, page);
-    },
-    [buildFocusHref]
-  );
+    // ── SOS notifications ──────────────────────────────────────────────
+    if (n.type === "SOS_REQUEST" || n.type === "SOS_CANCELLED") {
+      // Tutor sees incoming list; student sees their request detail
+      if (n.type === "SOS_REQUEST") {
+        return "/sos?tab=TUTOR";
+      }
+      if (typeof data.sosId === "string") {
+        return `/sos/${data.sosId}`;
+      }
+      return "/sos";
+    }
+
+    // ── Session / everything else ──────────────────────────────────────
+    const sessionId = typeof data.sessionId === "string" ? data.sessionId : undefined;
+    const viewer = (data.viewer as ViewerHint | undefined) ?? null;
+    const page =
+      typeof data.page === "number"
+        ? data.page
+        : typeof data.page === "string"
+        ? parseInt(data.page, 10)
+        : undefined;
+
+    return buildFocusHref(sessionId, viewer, page);
+  },
+  [buildFocusHref]
+);
 
   // ── Actions ────────────────────────────────────────────────────────────
   const deleteOne = useCallback(
