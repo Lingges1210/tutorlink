@@ -33,11 +33,11 @@ function initials(name: string | null) {
 
 function AvatarCircle({ name }: { name: string | null }) {
   const colors = [
-    "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300",
-    "bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300",
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300",
-    "bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300",
-    "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
+    "bg-[rgb(var(--primary)/0.12)] text-[rgb(var(--primary))]",
+    "bg-sky-500/10 text-sky-500",
+    "bg-emerald-500/10 text-emerald-500",
+    "bg-rose-500/10 text-rose-500",
+    "bg-amber-500/10 text-amber-500",
   ];
   const idx = (name?.charCodeAt(0) ?? 0) % colors.length;
   return (
