@@ -77,6 +77,16 @@ model User {
   streakShieldCount Int       @default(0)
   profileTitle      String?
   badgeFrame        String?
+  multiplierUntil         DateTime?
+  activeMultiplierKey     String?
+  streakFreezeUntil       DateTime?
+  streakBrokenAt          DateTime?
+  profileBanner           String?
+  avatarBorder            String?
+  usernameColor           String?
+  earlyAccessUntil        DateTime?
+  leaderboardSpotlightUntil DateTime?
+  vipSupportUntil         DateTime?
 
   acceptedSosRequests  SOSRequest[]       @relation("SOSAcceptedTutor")
   sosTutorResponses    SOSTutorResponse[] @relation("SOSTutor")

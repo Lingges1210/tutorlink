@@ -1,14 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
 export const REWARD_CATALOG = [
-  {
-    key: "PRIORITY_BOOST_24H",
-    name: "Priority Boost (24h)",
-    description: "Your requests get priority matching for the next 24 hours.",
-    pointsCost: 300,
-    durationHrs: 24,
-    stock: null as number | null,
-  },
+  // ── Boosts & Multipliers ─────────────────────────────────────────────────
   {
     key: "PRIORITY_BOOST_7D",
     name: "Priority Boost (7d)",
@@ -18,6 +11,48 @@ export const REWARD_CATALOG = [
     stock: null as number | null,
   },
   {
+    key: "POINTS_SURGE_6H",
+    name: "Points Surge (6h)",
+    description: "Earn 5x points for a 6-hour burst. Go hard, go fast.",
+    pointsCost: 350,
+    durationHrs: 6,
+    stock: null as number | null,
+  },
+  {
+    key: "COMBO_MULTIPLIER_24H",
+    name: "Combo Multiplier (24h)",
+    description: "Each consecutive action in a session stacks +10% bonus points, up to 3x.",
+    pointsCost: 600,
+    durationHrs: 24,
+    stock: null as number | null,
+  },
+  {
+    key: "FIRST_ACTION_BONUS_7D",
+    name: "First Action Bonus (7d)",
+    description: "Your first action each day earns 4x points for 7 days.",
+    pointsCost: 900,
+    durationHrs: 24 * 7,
+    stock: null as number | null,
+  },
+  {
+    key: "WEEKEND_BOOST",
+    name: "Weekend Warrior Boost",
+    description: "Earn 3x points on Saturday and Sunday for the next 4 weeks.",
+    pointsCost: 1100,
+    durationHrs: 24 * 7 * 4,
+    stock: null as number | null,
+  },
+  {
+    key: "CATCHUP_BOOST_48H",
+    name: "Catch-Up Boost (48h)",
+    description: "Earn 2x points for 48 hours — perfect after a quiet spell.",
+    pointsCost: 450,
+    durationHrs: 48,
+    stock: null as number | null,
+  },
+
+  // ── Streak & Protection ──────────────────────────────────────────────────
+  {
     key: "STREAK_SHIELD_1",
     name: "Streak Shield (1 use)",
     description: "Protect your streak once if you miss a day.",
@@ -25,6 +60,32 @@ export const REWARD_CATALOG = [
     durationHrs: null as number | null,
     stock: null as number | null,
   },
+  {
+    key: "STREAK_SHIELD_3",
+    name: "Streak Shield (3 uses)",
+    description: "Protect your streak up to 3 times before it expires.",
+    pointsCost: 500,
+    durationHrs: null as number | null,
+    stock: null as number | null,
+  },
+  {
+    key: "STREAK_FREEZE_7D",
+    name: "Streak Freeze (7d)",
+    description: "Pause your streak counter for up to 7 days — no progress lost.",
+    pointsCost: 700,
+    durationHrs: 24 * 7,
+    stock: null as number | null,
+  },
+  {
+    key: "STREAK_REPAIR",
+    name: "Streak Repair",
+    description: "Restore a streak that was broken within the last 48 hours.",
+    pointsCost: 800,
+    durationHrs: null as number | null,
+    stock: null as number | null,
+  },
+
+  // ── Cosmetics ────────────────────────────────────────────────────────────
   {
     key: "PROFILE_TITLE_UNLOCK",
     name: "Profile Title Unlock",
@@ -42,11 +103,77 @@ export const REWARD_CATALOG = [
     stock: null as number | null,
   },
   {
-    key: "DOUBLE_POINTS_24H",
-    name: "Double Points (24h)",
-    description: "Earn 2x points for the next 24 hours.",
-    pointsCost: 400,
-    durationHrs: 24,
+    key: "BADGE_FRAME_GOLD",
+    name: "Badge Frame: Gold Foil",
+    description: "A prestigious gold foil frame for your badge.",
+    pointsCost: 350,
+    durationHrs: null as number | null,
+    stock: null as number | null,
+  },
+  {
+    key: "BADGE_FRAME_HOLOGRAPHIC",
+    name: "Badge Frame: Holographic",
+    description: "A rare holographic shimmer frame. Limited prestige.",
+    pointsCost: 600,
+    durationHrs: null as number | null,
+    stock: 100 as number | null, // scarce
+  },
+  {
+    key: "PROFILE_BANNER_AURORA",
+    name: "Profile Banner: Aurora",
+    description: "An animated aurora borealis banner for your profile page.",
+    pointsCost: 500,
+    durationHrs: null as number | null,
+    stock: null as number | null,
+  },
+  {
+    key: "PROFILE_BANNER_SPACE",
+    name: "Profile Banner: Deep Space",
+    description: "A deep space starfield banner for your profile page.",
+    pointsCost: 500,
+    durationHrs: null as number | null,
+    stock: null as number | null,
+  },
+  {
+    key: "AVATAR_BORDER_ANIMATED",
+    name: "Animated Avatar Border",
+    description: "An animated gradient ring around your profile avatar.",
+    pointsCost: 450,
+    durationHrs: null as number | null,
+    stock: null as number | null,
+  },
+
+  // ── Exclusive Access ─────────────────────────────────────────────────────
+  {
+    key: "EARLY_ACCESS_FEATURES",
+    name: "Early Access Pass",
+    description: "Get early access to beta features before they roll out.",
+    pointsCost: 1000,
+    durationHrs: 24 * 30,
+    stock: null as number | null,
+  },
+  {
+    key: "CUSTOM_USERNAME_COLOR",
+    name: "Custom Username Color",
+    description: "Set a custom color for your display name across the platform.",
+    pointsCost: 750,
+    durationHrs: null as number | null,
+    stock: null as number | null,
+  },
+  {
+    key: "LEADERBOARD_SPOTLIGHT",
+    name: "Leaderboard Spotlight (7d)",
+    description: "Your profile is highlighted on the leaderboard for 7 days.",
+    pointsCost: 600,
+    durationHrs: 24 * 7,
+    stock: null as number | null,
+  },
+  {
+    key: "VIP_SUPPORT_7D",
+    name: "VIP Support (7d)",
+    description: "Get expedited support responses for the next 7 days.",
+    pointsCost: 850,
+    durationHrs: 24 * 7,
     stock: null as number | null,
   },
 ] as const;
