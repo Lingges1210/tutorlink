@@ -81,7 +81,7 @@ export default function LoginPage() {
       animation?.success();
 
       // ✅ Full page navigation instead of client-side routing
-      window.location.href = targetPath;
+      router.push(targetPath);
       return;
     } catch (err: unknown) {
       setStatus(err instanceof Error ? err.message : "Unexpected error");

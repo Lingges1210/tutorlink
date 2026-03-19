@@ -5,27 +5,31 @@ import { seedRewardsOnce } from "@/lib/gamification/rewards";
 
 export async function GET() {
   const supabase = await supabaseServerComponent();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   if (!user?.email) return NextResponse.json({ ok: false }, { status: 401 });
 
-  const me = await prisma.user.findUnique({
-    where: { email: user.email.toLowerCase() },
-    select: {
-      id: true,
-      role: true,
-      boostUntil: true,
-      doubleUntil: true,
-      streakShieldCount: true,
-      profileTitle: true,
-      badgeFrame: true,
-      pointsWallet: { select: { total: true } },
-    },
-  });
+  // ✅ Run auth + seed in parallel (seed is a no-op after first run)
+  const [me] = await Promise.all([
+    prisma.user.findUnique({
+      where: { email: user.email.toLowerCase() },
+      select: {
+        id: true,
+        role: true,
+        boostUntil: true,
+        doubleUntil: true,
+        streakShieldCount: true,
+        profileTitle: true,
+        badgeFrame: true,
+        pointsWallet: { select: { total: true } },
+      },
+    }),
+    seedRewardsOnce(), // ✅ no count() check — global.__rewardsSeeded handles it
+  ]);
 
   if (!me) return NextResponse.json({ ok: false }, { status: 401 });
-
-  // seed rewards if empty
-  if ((await prisma.reward.count()) === 0) await seedRewardsOnce();
 
   const rewards = await prisma.reward.findMany({
     orderBy: { pointsCost: "asc" },
@@ -43,6 +47,8 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     wallet: me.pointsWallet?.total ?? 0,
+    boostUntil: me.boostUntil,
+    doubleUntil: me.doubleUntil,
     effects: {
       boostUntil: me.boostUntil,
       doubleUntil: me.doubleUntil,

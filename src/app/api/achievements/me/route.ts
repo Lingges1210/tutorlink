@@ -17,33 +17,30 @@ export async function GET() {
     select: { id: true, name: true, role: true, isDeactivated: true },
   });
 
-  if (!me || me.isDeactivated) return NextResponse.json({ ok: false }, { status: 401 });
+  if (!me || me.isDeactivated)
+    return NextResponse.json({ ok: false }, { status: 401 });
 
-  const badgeCount = await prisma.badge.count();
-  if (badgeCount === 0) await seedBadgesOnce();
+  // ✅ Seed once per process — global flag means no DB count() on every request
+  await Promise.all([seedBadgesOnce(), seedRewardsOnce()]);
 
-  await prisma.pointsWallet.upsert({
-    where: { userId: me.id },
-    create: { userId: me.id, total: 0 },
-    update: {},
-  });
-
-  const wallet = await prisma.pointsWallet.findUnique({ where: { userId: me.id } });
-
-  const history = await prisma.pointsTransaction.findMany({
-    where: { userId: me.id },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
-
-  const badges = await prisma.userBadge.findMany({
-    where: { userId: me.id },
-    include: { badge: true },
-    orderBy: { awardedAt: "desc" },
-  });
-
-  const rewardCount = await prisma.reward.count();
-if (rewardCount === 0) await seedRewardsOnce();
+  // ✅ Upsert wallet + fetch history + fetch badges all in parallel
+  const [wallet, history, badges] = await Promise.all([
+    prisma.pointsWallet.upsert({
+      where: { userId: me.id },
+      create: { userId: me.id, total: 0 },
+      update: {},
+    }),
+    prisma.pointsTransaction.findMany({
+      where: { userId: me.id },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+    prisma.userBadge.findMany({
+      where: { userId: me.id },
+      include: { badge: true },
+      orderBy: { awardedAt: "desc" },
+    }),
+  ]);
 
   return NextResponse.json({
     ok: true,

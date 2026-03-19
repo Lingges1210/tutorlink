@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, memo, useCallback } from "react";
+import { useSWRConfig } from "swr";
 import {
   AlertTriangle,
   Calendar,
@@ -227,6 +228,7 @@ const BookingCard = memo(function BookingCard({
   const rated = !!ratingBySession[s.id];
   const ongoing = isOngoing(s);
   const soon = isStartingSoon(s);
+  
 
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -478,6 +480,7 @@ export default function MyBookingsClient() {
   const sp = useSearchParams();
   const focusId = sp.get("focus");
   const rateParam = sp.get("rate");
+  const { mutate } = useSWRConfig();
 
   const [items, setItems] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -904,6 +907,13 @@ export default function MyBookingsClient() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ text: data?.message ?? "Rating failed.", type: "error" }); return; }
       setRatingBySession((prev) => ({ ...prev, [rateSessionId]: { rating, comment: rateComment.trim() ? rateComment.trim() : null } }));
+      
+      // ✅ Invalidate achievement/progress caches so data is fresh instantly
+    await Promise.all([
+      mutate("/api/achievements/me"),
+      mutate("/api/achievements/recommendations"),
+      mutate("/api/progress/dashboard?tab=overview"),
+    ]);
 
       // ── Open optional survey after rating ──
       const submittedSessionId = rateSessionId;
