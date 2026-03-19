@@ -1,90 +1,58 @@
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { seedRewardsOnce } from "@/lib/gamification/rewards";
 
-export const REWARD_CATALOG = [
-  {
-    key: "PRIORITY_BOOST_24H",
-    name: "Priority Boost (24h)",
-    description: "Your requests get priority matching for the next 24 hours.",
-    pointsCost: 300,
-    durationHrs: 24,
-    stock: null as number | null,
-  },
-  {
-    key: "PRIORITY_BOOST_7D",
-    name: "Priority Boost (7d)",
-    description: "Priority matching for the next 7 days.",
-    pointsCost: 1200,
-    durationHrs: 24 * 7,
-    stock: null as number | null,
-  },
-  {
-    key: "STREAK_SHIELD_1",
-    name: "Streak Shield (1 use)",
-    description: "Protect your streak once if you miss a day.",
-    pointsCost: 200,
-    durationHrs: null as number | null,
-    stock: null as number | null,
-  },
-  {
-    key: "PROFILE_TITLE_UNLOCK",
-    name: "Profile Title Unlock",
-    description: "Unlock a special title shown on your profile.",
-    pointsCost: 150,
-    durationHrs: null as number | null,
-    stock: null as number | null,
-  },
-  {
-    key: "BADGE_FRAME_NEON",
-    name: "Badge Frame: Neon Glow",
-    description: "Adds a neon glow frame around your badge display.",
-    pointsCost: 250,
-    durationHrs: null as number | null,
-    stock: null as number | null,
-  },
-  {
-    key: "DOUBLE_POINTS_24H",
-    name: "Double Points (24h)",
-    description: "Earn 2x points for the next 24 hours.",
-    pointsCost: 400,
-    durationHrs: 24,
-    stock: null as number | null,
-  },
-] as const;
+export async function GET() {
+  const supabase = await supabaseServerComponent();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user?.email) return NextResponse.json({ ok: false }, { status: 401 });
 
-// ✅ Same global flag pattern as badges — no count() hit on every request
-declare global {
-  var __rewardsSeeded: boolean | undefined;
-  var __rewardsSeedingPromise: Promise<void> | undefined;
-}
+  // ✅ Run user lookup + seed in parallel
+  const [me] = await Promise.all([
+    prisma.user.findUnique({
+      where: { email: user.email.toLowerCase() },
+      select: {
+        id: true,
+        role: true,
+        boostUntil: true,
+        doubleUntil: true,
+        streakShieldCount: true,
+        profileTitle: true,
+        badgeFrame: true,
+        pointsWallet: { select: { total: true } },
+      },
+    }),
+    seedRewardsOnce(),
+  ]);
 
-export async function seedRewardsOnce() {
-  // Already seeded in this server process
-  if (global.__rewardsSeeded) return;
+  if (!me) return NextResponse.json({ ok: false }, { status: 401 });
 
-  // If another request is already seeding, await it (single-flight)
-  if (global.__rewardsSeedingPromise) {
-    await global.__rewardsSeedingPromise;
-    return;
-  }
+  const rewards = await prisma.reward.findMany({
+    orderBy: { pointsCost: "asc" },
+    select: {
+      id: true,
+      key: true,
+      name: true,
+      description: true,
+      pointsCost: true,
+      stock: true,
+      durationHrs: true,
+    },
+  });
 
-  global.__rewardsSeedingPromise = (async () => {
-    await prisma.reward.createMany({
-      data: REWARD_CATALOG.map((r) => ({
-        key: r.key,
-        name: r.name,
-        description: r.description,
-        pointsCost: r.pointsCost,
-        durationHrs: r.durationHrs ?? undefined,
-        stock: r.stock ?? undefined,
-      })),
-      skipDuplicates: true,
-    });
-    global.__rewardsSeeded = true;
-  })();
-
-  try {
-    await global.__rewardsSeedingPromise;
-  } finally {
-    global.__rewardsSeedingPromise = undefined;
-  }
+  return NextResponse.json({
+    ok: true,
+    wallet: me.pointsWallet?.total ?? 0,
+    boostUntil: me.boostUntil,
+    doubleUntil: me.doubleUntil,
+    effects: {
+      boostUntil: me.boostUntil,
+      doubleUntil: me.doubleUntil,
+      streakShieldCount: me.streakShieldCount,
+      profileTitle: me.profileTitle,
+      badgeFrame: me.badgeFrame,
+    },
+    rewards,
+  });
 }
