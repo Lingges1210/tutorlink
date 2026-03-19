@@ -12,7 +12,6 @@ function addHours(from: Date, hours: number) {
 // Only block if the user tries to redeem the EXACT same key while active.
 const BOOST_KEYS = new Set(["PRIORITY_BOOST_7D"]);
 const MULTIPLIER_KEYS = new Set([
-  "TRIPLE_POINTS_24H",
   "POINTS_SURGE_6H",
   "COMBO_MULTIPLIER_24H",
   "FIRST_ACTION_BONUS_7D",
