@@ -78,12 +78,6 @@ export default async function StudentLayout({
       ? ([
           {
             type: "link",
-            href: "/find-tutor",
-            label: "Find Tutor",
-            icon: "search",
-          },
-          {
-            type: "link",
             href: "/dashboard/student/sessions",
             label: "My Bookings",
             icon: "calendar",
@@ -109,7 +103,6 @@ export default async function StudentLayout({
               },
         ] as SidebarItem[])
       : ([
-          { type: "disabled", label: "Find Tutor (locked)", icon: "search" },
           { type: "disabled", label: "My Bookings (locked)", icon: "calendar" },
           { type: "disabled", label: "My Reports (locked)", icon: "shieldoff" },
           {

@@ -303,6 +303,7 @@ export default function NotificationsBellClient({
 }) {
   const router = useRouter();
 
+  // ── State ──────────────────────────────────────────────────────────────
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState<number>(initialUnread);
   const [loading, setLoading] = useState(false);
@@ -313,17 +314,14 @@ export default function NotificationsBellClient({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
 
-  // Track whether we have fresh data from a prefetch/panel fetch
-  // so the unread poll can skip a tick and avoid a redundant DB hit.
+  // ── Refs ───────────────────────────────────────────────────────────────
   const lastFetchTs = useRef<number>(0);
-
-  // Prefetch state: have we already kicked off a prefetch?
   const prefetchedRef = useRef(false);
-  // If a prefetch is in-flight when the panel opens, we wait for it.
   const prefetchPromiseRef = useRef<Promise<void> | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
 
+  // ── Derived values ─────────────────────────────────────────────────────
   const pathname = usePathname();
-
   const isPublicAuthPage =
     pathname?.startsWith("/auth/") ||
     pathname === "/" ||
@@ -332,23 +330,10 @@ export default function NotificationsBellClient({
     pathname === "/auth/forgot-password" ||
     pathname === "/auth/reset-password";
 
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const shown = showAll ? items : items.slice(0, 3);
   const hasItems = items.length > 0;
 
-  useEffect(() => {
-    function onDown(e: MouseEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, []);
-
-  useEffect(() => {
-    if (!open) setShowAll(false);
-  }, [open]);
-
-  // ── Core fetch function (shared by prefetch + panel open) ──────────────
+  // ── Core fetch function ────────────────────────────────────────────────
   const fetchNotifications = useCallback(async () => {
     setErr(null);
     setLoading(true);
@@ -366,7 +351,6 @@ export default function NotificationsBellClient({
             data: safeParseData(n.data),
           }))
         );
-        // Use the unreadCount from this response — no need for a separate poll tick
         setUnread(Number(data.unreadCount ?? 0));
         lastFetchTs.current = Date.now();
       }
@@ -377,32 +361,39 @@ export default function NotificationsBellClient({
     }
   }, []);
 
+  // ── Fetch on mount (eager load — no spinner when panel opens) ──────────
+  useEffect(() => {
+    if (isPublicAuthPage) return;
+    fetchNotifications();
+  }, [isPublicAuthPage, fetchNotifications]);
+
+  // ── Close panel on outside click ───────────────────────────────────────
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+
+  // ── Reset showAll when panel closes ───────────────────────────────────
+  useEffect(() => {
+    if (!open) setShowAll(false);
+  }, [open]);
+
+  // ── Open panel: re-fetch only if data is stale (>30s) ─────────────────
+  useEffect(() => {
+    if (!open) return;
+    if (Date.now() - lastFetchTs.current < 30_000) return;
+    fetchNotifications();
+  }, [open, fetchNotifications]);
+
   // ── Prefetch on hover/focus ────────────────────────────────────────────
   const handleBellHover = useCallback(() => {
     if (prefetchedRef.current || open) return;
     prefetchedRef.current = true;
     prefetchPromiseRef.current = fetchNotifications();
   }, [open, fetchNotifications]);
-
-  // ── Open panel: if prefetch is in-flight, just let it finish ──────────
-  useEffect(() => {
-    if (!open) return;
-
-    // If we already have data from a recent prefetch (within 30s), skip re-fetch
-    if (Date.now() - lastFetchTs.current < 30_000 && items.length > 0) return;
-
-    // If prefetch is in-flight, it will update state when done — nothing else needed
-    if (prefetchPromiseRef.current) {
-      prefetchPromiseRef.current.then(() => {
-        prefetchPromiseRef.current = null;
-      });
-      return;
-    }
-
-    // No prefetch happened — fetch now
-    fetchNotifications();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
 
   // ── Unread poll (skips tick if we fetched recently) ───────────────────
   useEffect(() => {
@@ -411,9 +402,7 @@ export default function NotificationsBellClient({
     let alive = true;
 
     async function tick() {
-      // Skip if we have a fresh full-fetch within the last 15s
       if (Date.now() - lastFetchTs.current < 15_000) return;
-
       try {
         const res = await fetch("/api/notifications/unread", { cache: "no-store" });
         if (!res.ok || !alive) return;
@@ -440,20 +429,19 @@ export default function NotificationsBellClient({
     };
   }, [isPublicAuthPage]);
 
-  // ── Reset prefetch flag when panel closes so next open re-prefetches ──
+  // ── Reset prefetch flag when panel closes (only if data is stale) ─────
   useEffect(() => {
     if (!open) {
-      // Allow re-prefetch after panel is closed, but only if data is stale
-      const stale = Date.now() - lastFetchTs.current > 30_000;
-      if (stale) prefetchedRef.current = false;
+      if (Date.now() - lastFetchTs.current > 30_000) prefetchedRef.current = false;
     }
   }, [open]);
 
-  // ── Stable setDraggingId (fixes NotiRow re-render on every state change) ──
+  // ── Stable setDraggingId ───────────────────────────────────────────────
   const setDraggingId = useCallback((id: string | null) => {
     setDeletingId(id);
   }, []);
 
+  // ── Navigation helpers ─────────────────────────────────────────────────
   const baseSessionsPath = useCallback(
     (viewer?: ViewerHint | null) => {
       if (viewer === "TUTOR") return "/dashboard/tutor/sessions";
@@ -499,6 +487,7 @@ export default function NotificationsBellClient({
     [buildFocusHref]
   );
 
+  // ── Actions ────────────────────────────────────────────────────────────
   const deleteOne = useCallback(
     async (n: NotiItem) => {
       if (deletingId) return;
@@ -548,6 +537,7 @@ export default function NotificationsBellClient({
     [router, pickHref]
   );
 
+  // ── Render ─────────────────────────────────────────────────────────────
   return (
     <div ref={rootRef} className="relative">
       <BellButton
