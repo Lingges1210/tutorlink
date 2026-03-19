@@ -2,151 +2,117 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const runtime = "nodejs";
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 async function getMe() {
   const supabase = await supabaseServerComponent();
   const { data } = await supabase.auth.getUser();
   const email = data.user?.email?.toLowerCase();
   if (!email) return null;
-
   return prisma.user.findUnique({
     where: { email },
     select: { id: true, isDeactivated: true },
   });
 }
 
-// ---- tiny fallback generator (so route always works) ----
-function clampText(s: string, max: number) {
-  return (s || "").replace(/\s+/g, " ").trim().slice(0, max);
-}
-
-function keywordConcepts(text: string, max = 50) {
-  const stop = new Set([
-    "the",
-    "a",
-    "an",
-    "and",
-    "or",
-    "of",
-    "to",
-    "in",
-    "is",
-    "are",
-    "was",
-    "were",
-    "be",
-    "as",
-    "at",
-    "by",
-    "for",
-    "from",
-    "that",
-    "this",
-    "these",
-    "those",
-    "with",
-    "it",
-    "its",
-    "on",
-    "into",
-    "than",
-    "then",
-    "not",
-    "we",
-    "you",
-    "i",
-    "they",
-    "their",
-    "our",
-    "your",
-    "can",
-    "will",
-    "would",
-    "should",
-    "could",
-  ]);
-
-  const words = text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s\-]/g, " ")
-    .split(/\s+/)
-    .filter((w) => w.length >= 4 && !stop.has(w));
-
-  const freq = new Map<string, number>();
-  for (const w of words) freq.set(w, (freq.get(w) ?? 0) + 1);
-
-  return [...freq.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, max)
-    .map(([w]) => w);
-}
-
-function makeFlashcards(concepts: string[], max = 20) {
-  const base = concepts.slice(0, max);
-  const cards = base.map((c) => ({
-    q: `Define: ${c}`,
-    a: `Write a short definition for "${c}" based on your notes.`,
-  }));
-
-  // If we don't have enough concepts, pad so UX still feels "full"
-  while (cards.length < Math.min(12, max)) {
-    const n = cards.length + 1;
-    cards.push({
-      q: `Key idea #${n}`,
-      a: "Write a 1–2 sentence explanation from your notes.",
-    });
-  }
-
-  return cards;
-}
-
-/**
- * Generates EXACTLY quizCount questions.
- * Uses concepts when available, otherwise pads with generic recall questions.
- */
-function makeQuiz(concepts: string[], quizCount: number) {
-  const base = concepts.slice(0, quizCount);
-
-  const quiz = base.map((c, i) => {
-    const options = [
-      `Definition of ${c}`,
-      `Example of ${c}`,
-      `Opposite of ${c}`,
-      `Unrelated concept`,
-    ];
-
-    return {
-      q: `Which option best matches "${c}"?`,
-      options,
-      answerIndex: 0,
-      explanation: `Best answer is the definition of "${c}".`,
-      difficulty: i < Math.ceil(quizCount * 0.33) ? "easy" : i < Math.ceil(quizCount * 0.66) ? "medium" : "hard",
-      topic: c,
-    };
-  });
-
-  // Pad up to quizCount if concepts are fewer than requested
-  while (quiz.length < quizCount) {
-    const idx = quiz.length + 1;
-    quiz.push({
-      q: `Recall #${idx}: Based on your notes, which statement is most accurate?`,
-      options: ["Statement A", "Statement B", "Statement C", "Statement D"],
-      answerIndex: 0,
-      explanation: "Review your notes and pick the most accurate option.",
-      difficulty: quiz.length < Math.ceil(quizCount * 0.33) ? "easy" : quiz.length < Math.ceil(quizCount * 0.66) ? "medium" : "hard",
-      topic: "general",
-    });
-  }
-
-  return quiz.slice(0, quizCount);
-}
-
 function clampInt(n: unknown, min: number, max: number, fallback: number) {
   const x = typeof n === "string" ? Number(n) : typeof n === "number" ? n : NaN;
   if (!Number.isFinite(x)) return fallback;
   return Math.min(max, Math.max(min, Math.floor(x)));
+}
+
+function chunkText(text: string, maxChars = 60000): string {
+  return text.slice(0, maxChars);
+}
+
+async function callGemini(prompt: string): Promise<string> {
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    generationConfig: {
+      temperature: 0.4,
+      responseMimeType: "application/json",
+    },
+  });
+  const result = await model.generateContent(prompt);
+  return result.response.text();
+}
+
+// ✅ Single prompt — 1 API call instead of 4, avoids rate limits entirely
+async function generateAll(
+  rawText: string,
+  quizCount: number,
+  flashcardCount: number
+): Promise<{
+  summary: string;
+  concepts: string[];
+  flashcards: { q: string; a: string }[];
+  quiz: {
+    q: string;
+    options: string[];
+    answerIndex: number;
+    explanation: string;
+    difficulty: string;
+    topic: string;
+  }[];
+}> {
+  const easyCount = Math.ceil(quizCount * 0.33);
+  const mediumCount = Math.ceil(quizCount * 0.34);
+  const hardCount = quizCount - easyCount - mediumCount;
+
+  const prompt = `You are a study assistant. Read the following study material carefully and generate all of the following in a single response:
+
+1. A SUMMARY (3-5 paragraphs, plain English, covering main topics and key concepts)
+2. CONCEPTS (exactly 20 key terms or topics from the material)
+3. FLASHCARDS (exactly ${flashcardCount} flashcards with questions and answers based on the material)
+4. QUIZ (exactly ${quizCount} multiple choice questions: ${easyCount} easy, ${mediumCount} medium, ${hardCount} hard)
+
+Rules for flashcards:
+- Questions must test understanding, not just definitions
+- Answers must be 1-3 sentences, based only on the material
+- Cover topics from throughout the material
+
+Rules for quiz:
+- Every question must be based directly on the material
+- Each question has exactly 4 options, only one correct
+- Wrong options must be plausible but clearly incorrect to someone who studied
+- Include an explanation for why the correct answer is right
+- Cover different topics spread throughout the material
+
+STUDY MATERIAL:
+${chunkText(rawText, 60000)}
+
+Respond with a single JSON object in this EXACT format (no extra text):
+{
+  "summary": "3-5 paragraph summary here",
+  "concepts": ["concept1", "concept2", "concept3"],
+  "flashcards": [
+    {"q": "question", "a": "answer"}
+  ],
+  "quiz": [
+    {
+      "q": "question",
+      "options": ["option A", "option B", "option C", "option D"],
+      "answerIndex": 0,
+      "explanation": "why the correct answer is right",
+      "difficulty": "easy",
+      "topic": "topic name"
+    }
+  ]
+}`;
+
+  const raw = await callGemini(prompt);
+  const parsed = JSON.parse(raw);
+
+  return {
+    summary: parsed.summary || "No summary available.",
+    concepts: parsed.concepts || [],
+    flashcards: parsed.flashcards || [],
+    quiz: parsed.quiz || [],
+  };
 }
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -156,9 +122,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
     const { id: materialId } = await ctx.params;
 
-    // ✅ Option A: accept quizCount from client
     const body = await req.json().catch(() => ({}));
-    const quizCount = clampInt(body?.quizCount, 20, 50, 20); // change min 20 -> 10 if you want
+    const quizCount = clampInt(body?.quizCount, 10, 50, 20);
+    const flashcardCount = clampInt(body?.flashcardCount, 10, 30, 20);
 
     const material = await prisma.studyMaterial.findFirst({
       where: { id: materialId, userId: me.id },
@@ -169,14 +135,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       return NextResponse.json({ ok: false, error: "Material not found" }, { status: 404 });
     }
 
-    const raw = material.rawText || "";
-    const summary = clampText(raw, 1200) || "No summary available.";
+    const rawText = material.rawText || "";
 
-    // Pull more concepts so we can support up to 50 Qs
-    const concepts = keywordConcepts(raw, Math.max(12, quizCount));
+    if (rawText.length < 50) {
+      return NextResponse.json(
+        { ok: false, error: "Material text is too short to generate study pack" },
+        { status: 400 }
+      );
+    }
 
-    const flashcards = makeFlashcards(concepts, Math.min(30, Math.max(12, Math.ceil(quizCount * 0.6))));
-    const quiz = makeQuiz(concepts, quizCount);
+    // ✅ Single API call — summary + concepts + flashcards + quiz in one shot
+    const { summary, concepts, flashcards, quiz } = await generateAll(
+      rawText,
+      quizCount,
+      flashcardCount
+    );
 
     const pack = await prisma.studyPack.create({
       data: {
@@ -185,14 +158,30 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         concepts,
         flashcards,
         quiz,
-        // Optional: if your schema allows, you can store quizCount too (only if column exists)
-        // quizCount,
       },
       select: { id: true },
     });
 
-    return NextResponse.json({ ok: true, packId: pack.id, quizCount: quiz.length });
+    return NextResponse.json({
+      ok: true,
+      packId: pack.id,
+      quizCount: quiz.length,
+      flashcardCount: flashcards.length,
+    });
   } catch (e: any) {
+    console.error("Generate failed:", e);
+
+    // ✅ Return a clear quota error to the frontend
+    if (e?.message?.includes("429") || e?.message?.includes("quota")) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Gemini API quota exceeded. Please wait a minute and try again, or upgrade your Gemini API plan.",
+        },
+        { status: 429 }
+      );
+    }
+
     return NextResponse.json(
       { ok: false, error: e?.message || "Generate failed" },
       { status: 500 }
