@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 type VerificationStatus = "AUTO_VERIFIED" | "PENDING_REVIEW";
 
@@ -294,6 +294,15 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
   const greetingHour = new Date().getHours();
   const greeting =
     greetingHour < 12 ? "Good morning" : greetingHour < 17 ? "Good afternoon" : "Good evening";
+
+  // ✅ Prefetch common pages in background so they load instantly when visited
+  useEffect(() => {
+    fetch("/api/achievements/me");
+    fetch("/api/achievements/recommendations");
+    fetch("/api/progress/dashboard?tab=overview");
+    fetch("/api/rewards/catalog");
+    if (isVerified) fetch("/api/tutor/application");
+  }, [isVerified]);
 
   return (
     <div className="space-y-5">
