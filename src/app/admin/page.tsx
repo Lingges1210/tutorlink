@@ -1,4 +1,3 @@
-//src/app/admin/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -375,22 +374,18 @@ export default function AdminPage() {
     setLoading(true);
     setErr(null);
     try {
-      const [queueRes, tutorAppsRes, overviewRes, chartsRes, healthRes] = await Promise.all([
-      fetch("/api/admin/verification-queue", { cache: "no-store" }),
-      fetch("/api/admin/tutor-applications", { cache: "no-store" }),
-      fetch("/api/admin/analytics/overview", { cache: "no-store" }),
-      fetch("/api/admin/analytics/charts", { cache: "no-store" }),
-      fetch("/api/admin/platform-health", {
-        cache: "no-store",
-        credentials: "include",
-      }),
-    ]);
+      // ── Core fetches — these must succeed for the dashboard to render ──
+      const [queueRes, tutorAppsRes, overviewRes, chartsRes] = await Promise.all([
+        fetch("/api/admin/verification-queue", { cache: "no-store" }),
+        fetch("/api/admin/tutor-applications", { cache: "no-store" }),
+        fetch("/api/admin/analytics/overview", { cache: "no-store" }),
+        fetch("/api/admin/analytics/charts", { cache: "no-store" }),
+      ]);
 
       const queueData     = await queueRes.json().catch(() => null);
       const tutorAppsData = await tutorAppsRes.json().catch(() => null);
       const overviewData  = await overviewRes.json().catch(() => null);
       const chartsData    = await chartsRes.json().catch(() => null);
-      const healthData    = await healthRes.json().catch(() => null);
 
       if (!queueRes.ok || !queueData?.success)
         throw new Error(queueData?.message || "Failed to load verification queue");
@@ -400,12 +395,9 @@ export default function AdminPage() {
         throw new Error(overviewData?.message || "Failed to load overview analytics");
       if (!chartsRes.ok || !chartsData?.success)
         throw new Error(chartsData?.message || "Failed to load chart analytics");
-      if (!healthRes.ok || !healthData?.success)
-        throw new Error(healthData?.message || "Failed to load platform health");
 
       setQueue(Array.isArray(queueData.users) ? queueData.users : []);
       setTutorApps(Array.isArray(tutorAppsData.applications) ? tutorAppsData.applications : []);
-      // Merge with defaults so new fields never come back undefined
       setStats((prev) => ({ ...prev, ...(overviewData.stats ?? {}) }));
       setWeeklySessions(Array.isArray(chartsData.weeklySessions) ? chartsData.weeklySessions : []);
       setWeeklySos(Array.isArray(chartsData.weeklySos) ? chartsData.weeklySos : []);
@@ -413,23 +405,37 @@ export default function AdminPage() {
       setSessionStatusBreakdown(
         Array.isArray(chartsData.sessionStatusBreakdown) ? chartsData.sessionStatusBreakdown : []
       );
-      setPlatformHealth(healthData.health ?? null);
     } catch (e: any) {
       setErr(e?.message ?? "Failed to load admin dashboard");
     } finally {
       setLoading(false);
     }
+
+    // ── Platform health — non-critical, fetched independently ──
+    // Isolated so a UptimeRobot failure never crashes the dashboard.
+    try {
+      const healthRes = await fetch("/api/admin/platform-health", {
+        cache: "no-store",
+        credentials: "include",
+      });
+      const healthData = await healthRes.json().catch(() => null);
+      if (healthRes.ok && healthData?.success) {
+        setPlatformHealth(healthData.health ?? null);
+      }
+    } catch {
+      // Leave platformHealth as null — panel shows skeleton state
+    }
   }
 
-    useEffect(() => {
+  useEffect(() => {
+    load();
+
+    const interval = setInterval(() => {
       load();
+    }, 30000);
 
-      const interval = setInterval(() => {
-        load();
-      }, 30000);
-
-      return () => clearInterval(interval);
-    }, []);
+    return () => clearInterval(interval);
+  }, []);
 
   const statCards = useMemo(
     () => [
@@ -673,117 +679,117 @@ export default function AdminPage() {
               </div>
 
               {/* ── Platform Health ── */}
-<div className={shell}>
-  <div className="px-6 py-5">
-    <div className="mb-5 flex items-start justify-between gap-3">
-      <SectionHeading
-        title="Platform Health"
-        sub="Live monitor data from UptimeRobot."
-      />
-      <span
-        className={`shrink-0 rounded-full border px-2.5 py-1 text-[0.62rem] font-bold ${
-          platformHealth?.overallStatus === "OUTAGE"
-            ? "border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-300"
-            : "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-        }`}
-      >
-        {platformHealth?.overallStatus ?? "Loading..."}
-      </span>
-    </div>
-
-    {!platformHealth ? (
-      <div className="flex h-40 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-xs text-[rgb(var(--muted))]">
-        Loading platform health...
-      </div>
-    ) : (
-      <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/8 px-4 py-4">
-          <p className="text-[0.65rem] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
-            System Uptime
-          </p>
-          <p className="mt-1 text-3xl font-black text-emerald-700 dark:text-emerald-300">
-            {platformHealth.uptimePercent == null
-              ? "Collecting data"
-              : `${platformHealth.uptimePercent}%`}
-          </p>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-emerald-500/15">
-            <div
-              className="h-full rounded-full bg-emerald-500/60"
-              style={{
-                width:
-                  platformHealth.uptimePercent == null
-                    ? "20%"
-                    : `${Math.min(platformHealth.uptimePercent, 100)}%`,
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3.5">
-          <p className="text-[0.62rem] font-bold uppercase tracking-widest text-[rgb(var(--muted))]">
-            Avg Response
-          </p>
-          <p className="mt-1 text-xl font-black text-[rgb(var(--primary))]">
-            {platformHealth.avgResponseMs ?? 0} ms
-          </p>
-          <p className="mt-0.5 text-[0.6rem] text-[rgb(var(--muted))]">
-            Across monitors
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3.5">
-          <p className="text-[0.62rem] font-bold uppercase tracking-widest text-[rgb(var(--muted))]">
-            Monitors
-          </p>
-          <p className="mt-1 text-xl font-black text-emerald-600 dark:text-emerald-300">
-            {platformHealth.totalMonitors ?? 0}
-          </p>
-          <p className="mt-0.5 text-[0.6rem] text-[rgb(var(--muted))]">
-            {platformHealth.downCount ?? 0} down
-          </p>
-        </div>
-
-        <div className="col-span-2 rounded-2xl border border-sky-500/20 bg-sky-500/8 px-4 py-3.5">
-          <p className="mb-3 text-[0.62rem] font-bold uppercase tracking-widest text-sky-700 dark:text-sky-400">
-            Monitor Status
-          </p>
-
-          <div className="space-y-2">
-            {Array.isArray(platformHealth.monitors) && platformHealth.monitors.length > 0 ? (
-              platformHealth.monitors.map((monitor: any) => (
-                <div
-                  key={monitor.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-bold text-[rgb(var(--fg))]">
-                      {monitor.name}
-                    </p>
-                    <p className="truncate text-[0.68rem] text-[rgb(var(--muted))]">
-                      {monitor.url}
-                    </p>
+              <div className={shell}>
+                <div className="px-6 py-5">
+                  <div className="mb-5 flex items-start justify-between gap-3">
+                    <SectionHeading
+                      title="Platform Health"
+                      sub="Live monitor data from UptimeRobot."
+                    />
+                    <span
+                      className={`shrink-0 rounded-full border px-2.5 py-1 text-[0.62rem] font-bold ${
+                        platformHealth?.overallStatus === "OUTAGE"
+                          ? "border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+                          : "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                      }`}
+                    >
+                      {platformHealth?.overallStatus ?? "Loading..."}
+                    </span>
                   </div>
 
-                  <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-bold ${
-                      monitor.status === "DOWN"
-                        ? "bg-rose-500/12 text-rose-700 dark:text-rose-300"
-                        : "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300"
-                    }`}
-                  >
-                    {monitor.status}
-                  </span>
+                  {!platformHealth ? (
+                    <div className="flex h-40 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-xs text-[rgb(var(--muted))]">
+                      Loading platform health...
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/8 px-4 py-4">
+                        <p className="text-[0.65rem] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
+                          System Uptime
+                        </p>
+                        <p className="mt-1 text-3xl font-black text-emerald-700 dark:text-emerald-300">
+                          {platformHealth.uptimePercent == null
+                            ? "Collecting data"
+                            : `${platformHealth.uptimePercent}%`}
+                        </p>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-emerald-500/15">
+                          <div
+                            className="h-full rounded-full bg-emerald-500/60"
+                            style={{
+                              width:
+                                platformHealth.uptimePercent == null
+                                  ? "20%"
+                                  : `${Math.min(platformHealth.uptimePercent, 100)}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3.5">
+                        <p className="text-[0.62rem] font-bold uppercase tracking-widest text-[rgb(var(--muted))]">
+                          Avg Response
+                        </p>
+                        <p className="mt-1 text-xl font-black text-[rgb(var(--primary))]">
+                          {platformHealth.avgResponseMs ?? 0} ms
+                        </p>
+                        <p className="mt-0.5 text-[0.6rem] text-[rgb(var(--muted))]">
+                          Across monitors
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-3.5">
+                        <p className="text-[0.62rem] font-bold uppercase tracking-widest text-[rgb(var(--muted))]">
+                          Monitors
+                        </p>
+                        <p className="mt-1 text-xl font-black text-emerald-600 dark:text-emerald-300">
+                          {platformHealth.totalMonitors ?? 0}
+                        </p>
+                        <p className="mt-0.5 text-[0.6rem] text-[rgb(var(--muted))]">
+                          {platformHealth.downCount ?? 0} down
+                        </p>
+                      </div>
+
+                      <div className="col-span-2 rounded-2xl border border-sky-500/20 bg-sky-500/8 px-4 py-3.5">
+                        <p className="mb-3 text-[0.62rem] font-bold uppercase tracking-widest text-sky-700 dark:text-sky-400">
+                          Monitor Status
+                        </p>
+
+                        <div className="space-y-2">
+                          {Array.isArray(platformHealth.monitors) && platformHealth.monitors.length > 0 ? (
+                            platformHealth.monitors.map((monitor: any) => (
+                              <div
+                                key={monitor.id}
+                                className="flex items-center justify-between gap-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2"
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate text-xs font-bold text-[rgb(var(--fg))]">
+                                    {monitor.name}
+                                  </p>
+                                  <p className="truncate text-[0.68rem] text-[rgb(var(--muted))]">
+                                    {monitor.url}
+                                  </p>
+                                </div>
+
+                                <span
+                                  className={`shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-bold ${
+                                    monitor.status === "DOWN"
+                                      ? "bg-rose-500/12 text-rose-700 dark:text-rose-300"
+                                      : "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300"
+                                  }`}
+                                >
+                                  {monitor.status}
+                                </span>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-xs text-[rgb(var(--muted))]">No monitors found.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ))
-            ) : (
-              <p className="text-xs text-[rgb(var(--muted))]">No monitors found.</p>
-            )}
-          </div>
-        </div>
-      </div>
-    )}
-  </div>
-</div>
+              </div>
             </section>
           </>
         )}
