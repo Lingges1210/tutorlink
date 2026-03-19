@@ -99,13 +99,11 @@ export async function seedBadgesOnce() {
 
   global.__badgesSeedingPromise = (async () => {
     //  sequential upserts = no pool explosion
-    for (const b of badgeDefs) {
-      await prisma.badge.upsert({
-        where: { key: b.key },
-        create: b,
-        update: { name: b.name, description: b.description, icon: b.icon },
-      });
-    }
+    // ✅ AFTER — 1 single DB call
+  await prisma.badge.createMany({
+    data: badgeDefs,
+    skipDuplicates: true,
+  });
     global.__badgesSeeded = true;
   })();
 
