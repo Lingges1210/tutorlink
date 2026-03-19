@@ -315,6 +315,8 @@ model ChatChannel {
   @@index([studentId])
   @@index([tutorId])
   @@index([lastMessageAt])
+  @@index([studentId, lastMessageAt])
+  @@index([tutorId, lastMessageAt])    
   @@schema("public")
 }
 
@@ -337,6 +339,7 @@ model ChatMessage {
 
   @@index([channelId, createdAt])
   @@index([senderId])
+  @@index([channelId, isDeleted, createdAt]) 
   @@schema("public")
 }
 
@@ -351,6 +354,7 @@ model ChatRead {
 
   @@unique([channelId, userId])
   @@index([userId])
+  @@index([channelId, userId, lastReadAt])  
   @@schema("public")
 }
 
