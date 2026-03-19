@@ -28,11 +28,12 @@ type TokenRes = {
 function VideoGrid() {
   const tracks = useTracks(
     [
-      { source: Track.Source.Camera, withPlaceholder: true },
+      { source: Track.Source.Camera, withPlaceholder: false }, // ← false here
       { source: Track.Source.ScreenShare, withPlaceholder: false },
     ],
     { onlySubscribed: false }
   );
+
   return (
     <GridLayout tracks={tracks} style={{ height: "100%" }}>
       <ParticipantTile />
