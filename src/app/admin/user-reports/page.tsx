@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ReportRow = {
   id: string;
@@ -208,8 +209,7 @@ function StatCard({ label, value, accent, icon, trend }: {
 function StatusBadge({ value }: { value: string }) {
   const c = STATUS_CONFIG[value] ?? STATUS_CONFIG.DISMISSED;
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.67rem] font-semibold tracking-wide ${c.pill}`}>
-      <span className={`relative flex h-1.5 w-1.5 rounded-full ${c.dot}`}>
+      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.67rem] font-semibold tracking-wide whitespace-nowrap ${c.pill}`}>      <span className={`relative flex h-1.5 w-1.5 rounded-full ${c.dot}`}>
         {value === "OPEN" && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />}
       </span>
       {c.label}
@@ -336,25 +336,31 @@ export default function AdminUserReportsPage() {
 
   const PAGE_SIZE = 8;
 
-  const load = useCallback(async () => {
-  setLoading(true);
-  try {
-    const res = await fetch("/api/admin/user-reports", { cache: "no-store" });
-    const data = await res.json();
-    const nextRows = data?.reports || [];
-    setRows(nextRows);
+  // ── ref to track selectedReport without causing load() to re-create ──
+  const selectedReportRef = useRef<ReportRow | null>(null);
+  useEffect(() => {
+    selectedReportRef.current = selectedReport;
+  }, [selectedReport]);
 
-    if (selectedReport) {
-      const fresh = nextRows.find((r: ReportRow) => r.id === selectedReport.id);
-      if (fresh) {
-        setSelectedReport(fresh);
-        setAdminNotes(fresh.adminNotes || "");
+  // ── stable load function — no deps so it never re-creates ──
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/user-reports", { cache: "no-store" });
+      const data = await res.json();
+      const nextRows: ReportRow[] = data?.reports || [];
+      setRows(nextRows);
+      if (selectedReportRef.current) {
+        const fresh = nextRows.find((r) => r.id === selectedReportRef.current!.id);
+        if (fresh) {
+          setSelectedReport(fresh);
+          setAdminNotes(fresh.adminNotes || "");
+        }
       }
+    } finally {
+      setLoading(false);
     }
-  } finally {
-    setLoading(false);
-  }
-}, [selectedReport]);
+  }, []); // intentionally empty — uses ref for selectedReport
 
   async function openEvidence(reportId: string) {
     try {
@@ -363,8 +369,11 @@ export default function AdminUserReportsPage() {
       const data = await res.json();
       if (!res.ok || !data?.ok || !data?.signedUrl) throw new Error(data?.error || "Failed to open evidence");
       window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-    } catch (e: any) { setNotice({ type: "error", text: e?.message || "Failed to open evidence" }); }
-    finally { setOpeningEvidenceId(null); }
+    } catch (e: any) {
+      setNotice({ type: "error", text: e?.message || "Failed to open evidence" });
+    } finally {
+      setOpeningEvidenceId(null);
+    }
   }
 
   async function updateStatus(id: string, status: string) {
@@ -374,7 +383,9 @@ export default function AdminUserReportsPage() {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }),
       });
       await load();
-    } finally { setSavingId(null); }
+    } finally {
+      setSavingId(null);
+    }
   }
 
   async function saveAdminUpdate(id: string, payload: Record<string, any>) {
@@ -389,8 +400,11 @@ export default function AdminUserReportsPage() {
       setSelectedReport(data.report);
       setAdminNotes(data.report.adminNotes || "");
       setNotice({ type: "success", text: "Report updated successfully." });
-    } catch (e) { setNotice({ type: "error", text: e instanceof Error ? e.message : "Failed to update" }); }
-    finally { setActionLoading(false); }
+    } catch (e) {
+      setNotice({ type: "error", text: e instanceof Error ? e.message : "Failed to update" });
+    } finally {
+      setActionLoading(false);
+    }
   }
 
   async function toggleUserLock() {
@@ -409,16 +423,21 @@ export default function AdminUserReportsPage() {
       if (!res.ok || !data?.ok) throw new Error(data?.error || "Failed to update lock status");
       await load();
       if (selectedReport.reportedUser) {
-        setSelectedReport({ ...selectedReport, reportedUser: { ...selectedReport.reportedUser, accountLockStatus: isLocked ? "ACTIVE" : "LOCKED" } });
+        setSelectedReport({
+          ...selectedReport,
+          reportedUser: { ...selectedReport.reportedUser, accountLockStatus: isLocked ? "ACTIVE" : "LOCKED" },
+        });
       }
       setNotice({ type: "success", text: `User ${isLocked ? "unlocked" : "locked"} successfully.` });
-    } catch (e) { setNotice({ type: "error", text: e instanceof Error ? e.message : "Failed to update lock status" }); }
-    finally { setActionLoading(false); }
+    } catch (e) {
+      setNotice({ type: "error", text: e instanceof Error ? e.message : "Failed to update lock status" });
+    } finally {
+      setActionLoading(false);
+    }
   }
 
-  useEffect(() => {
-  load();
-}, [load]);
+  // ── effects ──
+  useEffect(() => { load(); }, [load]);
   useEffect(() => { setCurrentPage(1); }, [q, viewMode]);
   useEffect(() => {
     if (!notice) return;
@@ -426,6 +445,7 @@ export default function AdminUserReportsPage() {
     return () => clearTimeout(t);
   }, [notice]);
 
+  // ── derived counts ──
   const counts = useMemo(() => ({
     all: rows.length,
     active: rows.filter((r) => !isPastReport(r)).length,
@@ -478,15 +498,6 @@ export default function AdminUserReportsPage() {
 
       <div className="mx-auto max-w-7xl space-y-5 px-4 pb-16 pt-7 sm:px-6 lg:px-8">
 
-        {/* ── back link ── */}
-        <div>
-          <a href="/admin"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] transition-colors duration-150 group">
-            <IconChevronLeft className="h-3.5 w-3.5 transition-transform duration-150 group-hover:-translate-x-0.5" />
-            Admin
-          </a>
-        </div>
-
         {/* ── header ── */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
@@ -503,19 +514,28 @@ export default function AdminUserReportsPage() {
               <p className="text-xs text-[rgb(var(--muted))]">Review complaints, appeals &amp; incidents</p>
             </div>
           </div>
-          <button onClick={load} type="button" disabled={loading}
-            className={`${softBtn} inline-flex items-center gap-2`}>
-            <IconRefresh className="h-3.5 w-3.5" spinning={loading} />
-            {loading ? "Refreshing…" : "Refresh"}
-          </button>
+          <div className="flex items-center gap-2.5">
+            <button onClick={load} type="button" disabled={loading}
+              className={`${softBtn} inline-flex items-center gap-2`}>
+              <IconRefresh className="h-3.5 w-3.5" spinning={loading} />
+              {loading ? "Refreshing…" : "Refresh"}
+            </button>
+            <a
+              href="/admin"
+              className="group inline-flex items-center gap-1.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3.5 py-2 text-xs font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:border-[rgb(var(--primary)/0.4)] transition-all duration-200"
+            >
+              <ArrowLeft className="h-3 w-3 transition-transform duration-200 group-hover:-translate-x-0.5" />
+              Admin
+            </a>
+          </div>
         </div>
 
         {/* ── stats grid ── */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard icon={<IconShield className="h-4.5 w-4.5" />}      label="Total"       value={counts.all}       accent="slate"   />
-          <StatCard icon={<IconClock className="h-4.5 w-4.5" />}       label="Active"      value={counts.active}    accent="amber"   />
-          <StatCard icon={<IconCheckCircle className="h-4.5 w-4.5" />} label="Resolved"    value={counts.resolved}  accent="emerald" />
-          <StatCard icon={<IconFire className="h-4.5 w-4.5" />}        label="Urgent"      value={counts.urgent}    accent="rose"    />
+          <StatCard icon={<IconShield className="h-4.5 w-4.5" />}      label="Total"    value={counts.all}      accent="slate"   />
+          <StatCard icon={<IconClock className="h-4.5 w-4.5" />}       label="Active"   value={counts.active}   accent="amber"   />
+          <StatCard icon={<IconCheckCircle className="h-4.5 w-4.5" />} label="Resolved" value={counts.resolved} accent="emerald" />
+          <StatCard icon={<IconFire className="h-4.5 w-4.5" />}        label="Urgent"   value={counts.urgent}   accent="rose"    />
         </div>
 
         {/* ── notice ── */}
@@ -526,13 +546,11 @@ export default function AdminUserReportsPage() {
 
           {/* card header */}
           <div className="flex flex-col gap-3 border-b border-[rgb(var(--border))] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            {/* tabs */}
             <div className="flex items-center gap-1 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-1">
               <ViewTab active={viewMode === "ACTIVE"} label="Active" count={counts.active} onClick={() => setViewMode("ACTIVE")} />
               <ViewTab active={viewMode === "PAST"}   label="Past"   count={counts.past}   onClick={() => setViewMode("PAST")} />
               <ViewTab active={viewMode === "ALL"}    label="All"    count={counts.all}    onClick={() => setViewMode("ALL")} />
             </div>
-            {/* search */}
             <div className="relative w-full max-w-xs">
               <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[rgb(var(--muted2))]">
                 <IconSearch className="h-3.5 w-3.5" />
@@ -572,8 +590,9 @@ export default function AdminUserReportsPage() {
               </p>
               <p className="text-sm text-[rgb(var(--muted2))]">{q ? `No results for "${q}"` : "Nothing here yet."}</p>
               {(q || viewMode !== "ALL") && (
-                <button onClick={() => { setQ(""); setViewMode("ALL"); }}
-                  className={`${softBtn} mt-1`}>Clear filters</button>
+                <button onClick={() => { setQ(""); setViewMode("ALL"); }} className={`${softBtn} mt-1`}>
+                  Clear filters
+                </button>
               )}
             </div>
           )}
@@ -618,7 +637,7 @@ export default function AdminUserReportsPage() {
 
                           {/* category */}
                           <td className="px-5 py-4">
-                            <span className="rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-1 text-[0.68rem] font-semibold text-[rgb(var(--muted))]">
+                            <span className="rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-1 text-[0.68rem] font-semibold text-[rgb(var(--muted))] whitespace-nowrap">
                               {niceLabel(row.category)}
                             </span>
                           </td>
@@ -896,9 +915,9 @@ export default function AdminUserReportsPage() {
                     )}
                   </div>
                   <div className="mt-4 flex items-start gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.5)] px-4 py-3 text-[0.71rem] text-[rgb(var(--muted))]">
-                  <IconWarning className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-                  Actions here affect the selected report and, if applicable, the reported user&apos;s account.
-                </div>
+                    <IconWarning className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                    Actions here affect the selected report and, if applicable, the reported user&apos;s account.
+                  </div>
                 </div>
               </div>
             </div>
