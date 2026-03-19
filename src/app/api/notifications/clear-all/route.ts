@@ -1,19 +1,20 @@
+// src/app/api/notifications/clear-all/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
 export async function POST() {
   const supabase = await supabaseServerComponent();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  if (!user?.email) {
+  // ✅ getSession() — reads cookie locally, no network call (fast)
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session?.user?.email) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
   const dbUser = await prisma.user.findUnique({
-    where: { email: user.email.toLowerCase() },
+    where: { email: session.user.email.toLowerCase() },
     select: { id: true, verificationStatus: true, isDeactivated: true },
   });
 

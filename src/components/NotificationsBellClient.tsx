@@ -604,23 +604,34 @@ export default function NotificationsBellClient({
                   type="button"
                   whileHover={{ scale: 1.04 }}
                   whileTap={{ scale: 0.96 }}
-                  onClick={async () => {
-                    if (markingAll) return;
-                    setErr(null);
-                    setMarkingAll(true);
-                    try {
-                      const res = await fetch("/api/notifications/read-all", { method: "POST" });
-                      if (!res.ok) throw new Error();
-                      setItems((p) =>
-                        p.map((x) => ({ ...x, readAt: x.readAt ?? new Date().toISOString() }))
-                      );
-                      setUnread(0);
-                    } catch {
-                      setErr("Failed to mark all as read.");
-                    } finally {
-                      setMarkingAll(false);
-                    }
-                  }}
+                  // ✅ FIXED — updates UI instantly, API runs in background
+onClick={async () => {
+  if (markingAll) return;
+  setErr(null);
+
+  // Snapshot for rollback
+  const prevItems = items;
+  const prevUnread = unread;
+
+  // Update UI immediately — no waiting
+  setItems((p) =>
+    p.map((x) => ({ ...x, readAt: x.readAt ?? new Date().toISOString() }))
+  );
+  setUnread(0);
+  setMarkingAll(true);
+
+  try {
+    const res = await fetch("/api/notifications/read-all", { method: "POST" });
+    if (!res.ok) throw new Error();
+  } catch {
+    // Rollback if API fails
+    setItems(prevItems);
+    setUnread(prevUnread);
+    setErr("Failed to mark all as read.");
+  } finally {
+    setMarkingAll(false);
+  }
+}}
                   disabled={markingAll || unread === 0}
                   className={[
                     "flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5",
@@ -810,21 +821,27 @@ export default function NotificationsBellClient({
                             <button
                               type="button"
                               onClick={async () => {
-                                setErr(null);
-                                try {
-                                  const res = await fetch("/api/notifications/clear-all", {
-                                    method: "POST",
-                                  });
-                                  if (!res.ok) throw new Error();
-                                  setItems([]);
-                                  setUnread(0);
-                                  setShowAll(false);
-                                  setConfirmClearOpen(false);
-                                } catch {
-                                  setErr("Failed to clear.");
-                                  setConfirmClearOpen(false);
-                                }
-                              }}
+  setErr(null);
+  setConfirmClearOpen(false);
+
+  // Stagger-remove items one by one (80ms apart)
+  const ids = items.map((n) => n.id);
+  for (const id of ids) {
+    await new Promise((r) => setTimeout(r, 80));
+    setItems((p) => p.filter((x) => x.id !== id));
+  }
+  setUnread(0);
+
+  // Fire API in background — already looks done to user
+  try {
+    const res = await fetch("/api/notifications/clear-all", { method: "POST" });
+    if (!res.ok) throw new Error();
+  } catch {
+    setErr("Failed to clear.");
+    // Refetch to restore real state if API failed
+    fetchNotifications();
+  }
+}}
                               className="rounded-xl px-3 py-1.5 text-xs font-bold text-white bg-rose-500 hover:bg-rose-600 transition-colors shadow-sm shadow-rose-500/30"
                             >
                               Clear all

@@ -1,10 +1,10 @@
+// src/middleware.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-
   const isApiRoute = pathname.startsWith("/api/");
   const isAuthPage = pathname.startsWith("/auth/");
 
@@ -27,7 +27,15 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // ✅ Wrap in try/catch — if Supabase is unreachable, fail open
+  let user = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch {
+    // Supabase fetch failed — allow request through rather than crash
+    return response;
+  }
 
   const needsDashboard  = pathname.startsWith("/dashboard");
   const needsAdmin      = pathname.startsWith("/admin");
@@ -45,36 +53,38 @@ export async function middleware(request: NextRequest) {
     pathname === "/account-locked/appeal" ||
     pathname.startsWith("/api/account-lock-appeal");
 
-  // Redirect unauthenticated users
   if (!user && (needsProtectedArea || allowedWhenLocked)) {
     const loginUrl = new URL("/auth/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Check lock status for authenticated users on page routes only
   if (user && !allowedWhenLocked && !isApiRoute && !isAuthPage) {
     const cachedStatus = request.cookies.get("__lock_status")?.value;
 
-    // Only trust "OK" cache — always recheck DB if LOCKED or missing
     if (cachedStatus === "OK") {
       // Not locked, carry on
     } else {
-      const lockCheckUrl = new URL("/api/auth/lock-status", request.url);
-      const lockRes = await fetch(lockCheckUrl, {
-        headers: { cookie: request.headers.get("cookie") ?? "" },
-      });
-      const { locked } = await lockRes.json().catch(() => ({ locked: false }));
+      // ✅ Wrap lock check in try/catch too
+      try {
+        const lockCheckUrl = new URL("/api/auth/lock-status", request.url);
+        const lockRes = await fetch(lockCheckUrl, {
+          headers: { cookie: request.headers.get("cookie") ?? "" },
+          signal: AbortSignal.timeout(3000), // ✅ 3s timeout — don't hang forever
+        });
+        const { locked } = await lockRes.json().catch(() => ({ locked: false }));
 
-      if (locked) {
-        const dest = NextResponse.redirect(new URL("/account-locked", request.url));
-        dest.cookies.set("__lock_status", "LOCKED", { httpOnly: true, path: "/", maxAge: 60 });
-        return dest;
+        if (locked) {
+          const dest = NextResponse.redirect(new URL("/account-locked", request.url));
+          dest.cookies.set("__lock_status", "LOCKED", { httpOnly: true, path: "/", maxAge: 60 });
+          return dest;
+        }
+
+        response.cookies.set("__lock_status", "", { httpOnly: true, path: "/", maxAge: 0 });
+        response.cookies.set("__lock_status", "OK", { httpOnly: true, path: "/", maxAge: 30 });
+      } catch {
+        // Lock check failed — fail open, don't block the user
       }
-
-      // DB says not locked — clear any stale LOCKED cookie and cache OK
-      response.cookies.set("__lock_status", "", { httpOnly: true, path: "/", maxAge: 0 });
-      response.cookies.set("__lock_status", "OK", { httpOnly: true, path: "/", maxAge: 30 });
     }
   }
 
