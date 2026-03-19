@@ -300,7 +300,7 @@ export default function UserMenuClient({
               }
             />
             <MenuItem
-              href="/dashboard/student/reports"
+              href="/dashboard/student/report"
               onClick={() => setOpen(false)}
               icon={<Shield size={13} />}
               label="My Reports"

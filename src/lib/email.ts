@@ -629,3 +629,85 @@ export async function sendPasswordResetEmail(opts: {
     html,
   });
 }
+
+export async function sendTutorApprovedEmail(email: string, name?: string | null) {
+  const subject = "Your TutorLink tutor application has been approved!";
+
+  const html = brandEmailLayout({
+    subject,
+    preheader: "Congratulations — you're now a verified tutor on TutorLink.",
+    badgeLabel: "Tutor Approved",
+    badgeStyle: "success",
+    title: "You're now a TutorLink Tutor!",
+    greetingName: name,
+    bodyHtml: `
+      <p style="margin:0 0 12px;">
+        Congratulations! Your tutor application has been
+        <strong style="color:${T.textPrimary};">approved</strong>.
+        You can now access your Tutor Dashboard to set your availability and start accepting sessions.
+      </p>
+      <p style="margin:0;">
+        Students can now find and book you based on the subjects you listed.
+      </p>
+    `,
+    cta: {
+      label: "Go to Tutor Dashboard",
+      href: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/tutor`,
+    },
+    footerNote: "Welcome to the TutorLink tutor team — thanks for contributing to the community.",
+  });
+
+  await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL!,
+    to: email,
+    subject,
+    html,
+  });
+}
+
+export async function sendTutorRejectedEmail(
+  email: string,
+  name?: string | null,
+  reason?: string | null
+) {
+  const subject = "Update on your TutorLink tutor application";
+
+  const reasonBlock = reason
+    ? `
+      <div style="margin:16px 0;background:${T.dangerBg};border:1px solid ${T.dangerBorder};border-radius:10px;padding:14px 16px;">
+        <p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:${T.dangerText};">Reason</p>
+        <p style="margin:0;font-size:14px;color:${T.textPrimary};">${esc(reason)}</p>
+      </div>`
+    : "";
+
+  const html = brandEmailLayout({
+    subject,
+    preheader: "Your tutor application was not approved. You may reapply after making changes.",
+    badgeLabel: "Application Unsuccessful",
+    badgeStyle: "danger",
+    title: "Tutor application not approved",
+    greetingName: name,
+    bodyHtml: `
+      <p style="margin:0 0 4px;">
+        Unfortunately, your tutor application could not be approved at this time.
+      </p>
+      ${reasonBlock}
+      <p style="margin:0;">
+        You're welcome to review the feedback above, update your details, and reapply.
+        Your previous information has been pre-filled for you.
+      </p>
+    `,
+    cta: {
+      label: "Reapply Now",
+      href: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/apply-tutor`,
+    },
+    footerNote: "If you believe this is a mistake, reply to this email and we'll look into it.",
+  });
+
+  await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL!,
+    to: email,
+    subject,
+    html,
+  });
+}

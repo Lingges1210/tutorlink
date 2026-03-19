@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminUser } from "@/lib/requireAdminUser";
 import { logAdminAction } from "@/lib/admin-audit";
+import { sendTutorRejectedEmail } from "@/lib/email";
 
 export async function POST(
   req: NextRequest,
@@ -24,6 +25,7 @@ export async function POST(
         id: true,
         userId: true,
         status: true,
+        user: { select: { email: true, name: true } },
       },
     });
 
@@ -56,12 +58,47 @@ export async function POST(
       },
     });
 
+    // In-app notification (upsert so re-rejections update the body with the latest reason)
+    const notifBody = reason
+      ? `Your application was not approved. Reason: ${reason}. You may update your details and reapply.`
+      : "Your tutor application was not approved. You may update your details and reapply.";
+
+    await prisma.notification.upsert({
+      where: {
+        userId_dedupeKey: {
+          userId: app.userId,
+          dedupeKey: `tutor_app_rejected_${app.id}`,
+        },
+      },
+      update: {
+        body: notifBody,
+        readAt: null, // re-surface as unread on re-rejection
+        status: "SENT",
+        sentAt: new Date(),
+      },
+      create: {
+        userId: app.userId,
+        type: "TUTOR_APP_REJECTED",
+        title: "Tutor application not approved",
+        body: notifBody,
+        status: "SENT",
+        sentAt: new Date(),
+        data: {
+          href: "/dashboard/student/apply-tutor",
+          viewer: "STUDENT",
+        },
+        dedupeKey: `tutor_app_rejected_${app.id}`,
+      },
+    });
+
+    // Email (best-effort — Resend failure won't break the response)
+    await sendTutorRejectedEmail(app.user.email, app.user.name, reason).catch(() => null);
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     const message = error?.message || "Failed to reject tutor application";
     const status =
       message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
-
     return NextResponse.json(
       { success: false, message },
       { status }

@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdminUser } from "@/lib/requireAdminUser";
 import { logAdminAction } from "@/lib/admin-audit";
+import { sendTutorApprovedEmail } from "@/lib/email";
 
 function splitSubjects(raw: string): string[] {
   return raw
@@ -38,6 +39,7 @@ export async function POST(
         status: true,
         userId: true,
         subjects: true,
+        user: { select: { email: true, name: true } },
       },
     });
 
@@ -77,7 +79,6 @@ export async function POST(
       });
 
       const lines = splitSubjects(app.subjects);
-
       for (const line of lines) {
         const foundCode = extractCode(line);
         const code = foundCode ?? line.toUpperCase();
@@ -122,12 +123,38 @@ export async function POST(
       },
     });
 
+    // In-app notification (upsert so re-approving after edge cases won't duplicate)
+    await prisma.notification.upsert({
+      where: {
+        userId_dedupeKey: {
+          userId: app.userId,
+          dedupeKey: `tutor_app_approved_${app.id}`,
+        },
+      },
+      update: {},
+      create: {
+        userId: app.userId,
+        type: "TUTOR_APP_APPROVED",
+        title: "Tutor application approved! 🎉",
+        body: "Congratulations! Your tutor application has been approved. You can now access your Tutor Dashboard.",
+        status: "SENT",
+        sentAt: new Date(),
+        data: {
+          href: "/dashboard/tutor",
+          viewer: "TUTOR",
+        },
+        dedupeKey: `tutor_app_approved_${app.id}`,
+      },
+    });
+
+    // Email (best-effort — Resend failure won't break the response)
+    await sendTutorApprovedEmail(app.user.email, app.user.name).catch(() => null);
+
     return NextResponse.json({ success: true, status: "APPROVED" });
   } catch (error: any) {
     const message = error?.message || "Failed to approve tutor application";
     const status =
       message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
-
     return NextResponse.json(
       { success: false, message },
       { status }
