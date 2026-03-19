@@ -3,8 +3,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { createClient } from "@supabase/supabase-js";
-import path from "path";
-import { pathToFileURL } from "url";
 
 export const runtime = "nodejs";
 
@@ -27,32 +25,51 @@ async function getMe() {
   });
 }
 
-async function extractTextWithPdfJs(buf: Buffer) {
-  const pdfjs: any = await import("pdfjs-dist/legacy/build/pdf.mjs");
+async function extractTextWithPdfJs(buf: Buffer): Promise<{ text: string; pages: number }> {
+  // ✅ Dynamically import the legacy build
+  const pdfjsLib: any = await import("pdfjs-dist/legacy/build/pdf.mjs");
 
-  const workerPath = path.join(
-    process.cwd(),
-    "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"
-  );
-  const workerUrl = pathToFileURL(workerPath).toString();
-  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+  // ✅ Disable the worker entirely for Node.js — setting a file URL causes hangs
+  pdfjsLib.GlobalWorkerOptions.workerSrc = false;
 
-  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buf) });
-  const doc = await loadingTask.promise;
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(buf),
+    // ✅ Disable font loading — not needed for text extraction
+    disableFontFace: true,
+    // ✅ Suppress noisy console warnings from pdfjs
+    verbosity: 0,
+    // ✅ Prevent any external fetch attempts inside Node.js
+    isEvalSupported: false,
+    useSystemFonts: false,
+  });
 
-  let out = "";
-  for (let p = 1; p <= doc.numPages; p++) {
-    const page = await doc.getPage(p);
-    const content = await page.getTextContent();
+  const pdfDocument = await loadingTask.promise;
+  const numPages: number = pdfDocument.numPages;
 
-    const strings = (content.items ?? [])
-      .map((it: any) => (typeof it.str === "string" ? it.str : ""))
-      .filter(Boolean);
+  const pageTexts: string[] = [];
 
-    out += strings.join(" ") + "\n";
+  for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+    const page = await pdfDocument.getPage(pageNum);
+    const textContent = await page.getTextContent();
+
+    const pageText: string = (textContent.items ?? [])
+      .filter((item: any) => typeof item.str === "string" && item.str.length > 0)
+      .map((item: any) => item.str)
+      .join(" ");
+
+    pageTexts.push(pageText);
+
+    // ✅ Release page resources to avoid memory leaks on large PDFs
+    page.cleanup();
   }
 
-  return { text: out.trim(), pages: doc.numPages };
+  // ✅ Fully destroy the document after extraction
+  await pdfDocument.destroy();
+
+  return {
+    text: pageTexts.join("\n").trim(),
+    pages: numPages,
+  };
 }
 
 /**
@@ -87,7 +104,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Missing objectPath" }, { status: 400 });
     }
 
-    // ✅ ensure folder is auth.uid()
+    // ✅ Verify the user is authenticated
     const supa = await supabaseServerComponent();
     const { data: authData, error: authErr } = await supa.auth.getUser();
     const authUid = authData?.user?.id;
@@ -96,11 +113,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Not logged in" }, { status: 401 });
     }
 
+    // ✅ Ensure the objectPath folder matches the authenticated user's UID
     if (!objectPath.startsWith(`${authUid}/`)) {
       return NextResponse.json({ ok: false, error: "Invalid objectPath" }, { status: 403 });
     }
 
-    // ✅ validate subject belongs to this user (optional)
+    // ✅ Validate that the subject belongs to this user (if provided)
     if (studySubjectId) {
       const ok = await prisma.studySubject.findFirst({
         where: { id: studySubjectId, userId: me.id },
@@ -111,7 +129,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // Download with service role
+    // ✅ Download the PDF from Supabase Storage using the service role
     const admin = getAdminSupabase();
     const { data, error } = await admin.storage.from("study-materials").download(objectPath);
 
@@ -124,6 +142,14 @@ export async function POST(req: Request) {
 
     const buf = Buffer.from(await data.arrayBuffer());
 
+    // ✅ Guard: make sure something was actually downloaded
+    if (!buf || buf.length === 0) {
+      return NextResponse.json(
+        { ok: false, error: "Downloaded file is empty. Check the storage path." },
+        { status: 500 }
+      );
+    }
+
     let extracted = "";
     let pages = 0;
 
@@ -133,7 +159,11 @@ export async function POST(req: Request) {
       pages = res.pages;
     } catch (e: any) {
       return NextResponse.json(
-        { ok: false, error: "PDF parse failed", details: e?.message ?? String(e) },
+        {
+          ok: false,
+          error: "PDF parse failed",
+          details: e?.message ?? String(e),
+        },
         { status: 500 }
       );
     }
@@ -142,7 +172,8 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Extracted text too short. If scanned PDF, OCR needed.",
+          error:
+            "Extracted text too short. The PDF may be scanned (image-based) and requires OCR.",
           details: { pages, extractedChars: extracted.length },
         },
         { status: 400 }
@@ -153,13 +184,13 @@ export async function POST(req: Request) {
       data: {
         userId: me.id,
         title: (title || fileName || "PDF Notes").slice(0, 120),
-        rawText: extracted.slice(0, 500000),
+        rawText: extracted.slice(0, 500_000),
 
-        // ✅ persist PDF info so DELETE can remove from storage
+        // ✅ Persist PDF storage info so DELETE can clean up the file
         objectPath,
         fileName: fileName || null,
 
-        // ✅ subject grouping
+        // ✅ Subject grouping
         studySubjectId,
       },
       select: { id: true },
@@ -168,6 +199,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       materialId: material.id,
+      pages,
       extractedChars: extracted.length,
     });
   } catch (e: any) {

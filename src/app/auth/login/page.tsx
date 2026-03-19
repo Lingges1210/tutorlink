@@ -78,7 +78,7 @@ export default function LoginPage() {
       setStatus("Login successful. Redirecting...");
       animation?.success();
 
-      router.push(targetPath);
+      window.location.href = targetPath;
       return;
     } catch (err: unknown) {
       setStatus(err instanceof Error ? err.message : "Unexpected error");
