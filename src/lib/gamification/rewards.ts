@@ -51,19 +51,40 @@ export const REWARD_CATALOG = [
   },
 ] as const;
 
-export async function seedRewardsOnce() {
-  const count = await prisma.reward.count();
-  if (count > 0) return;
+// ✅ Same global flag pattern as badges — no count() hit on every request
+declare global {
+  var __rewardsSeeded: boolean | undefined;
+  var __rewardsSeedingPromise: Promise<void> | undefined;
+}
 
-  await prisma.reward.createMany({
-    data: REWARD_CATALOG.map((r) => ({
-      key: r.key,
-      name: r.name,
-      description: r.description,
-      pointsCost: r.pointsCost,
-      durationHrs: r.durationHrs ?? undefined,
-      stock: r.stock ?? undefined,
-    })),
-    skipDuplicates: true,
-  });
+export async function seedRewardsOnce() {
+  // Already seeded in this server process
+  if (global.__rewardsSeeded) return;
+
+  // If another request is already seeding, await it (single-flight)
+  if (global.__rewardsSeedingPromise) {
+    await global.__rewardsSeedingPromise;
+    return;
+  }
+
+  global.__rewardsSeedingPromise = (async () => {
+    await prisma.reward.createMany({
+      data: REWARD_CATALOG.map((r) => ({
+        key: r.key,
+        name: r.name,
+        description: r.description,
+        pointsCost: r.pointsCost,
+        durationHrs: r.durationHrs ?? undefined,
+        stock: r.stock ?? undefined,
+      })),
+      skipDuplicates: true,
+    });
+    global.__rewardsSeeded = true;
+  })();
+
+  try {
+    await global.__rewardsSeedingPromise;
+  } finally {
+    global.__rewardsSeedingPromise = undefined;
+  }
 }
