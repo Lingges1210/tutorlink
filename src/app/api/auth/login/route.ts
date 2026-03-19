@@ -74,6 +74,7 @@ export async function POST(request: Request) {
         id: true,
         email: true,
         role: true,
+        name: true,
         isTutorApproved: true,
         verificationStatus: true,
         isDeactivated: true,
@@ -109,6 +110,7 @@ export async function POST(request: Request) {
       user: {
         id: user.id,
         email: user.email,
+        name: user.name,
         role: user.role,
         isTutorApproved: user.isTutorApproved,
         verificationStatus: user.verificationStatus,

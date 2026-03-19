@@ -6,6 +6,39 @@ import { useRouter } from "next/navigation";
 import AuthSplitLayout from "@/components/AuthSplitLayout";
 import { LoginAnimationHandle } from "@/components/LoginAnimation";
 
+const QUOTES = {
+  STUDENT: [
+    '"The expert in anything was once a beginner."',
+    '"An investment in knowledge pays the best interest."',
+    '"Education is the passport to the future."',
+    '"Push yourself, because no one else is going to do it for you."',
+    '"The more that you read, the more things you will know."',
+  ],
+  ADMIN: [
+    '"Great things are done by a series of small things brought together."',
+    '"Leadership is not about being in charge — it\'s about taking care of those in your charge."',
+    '"The best way to predict the future is to create it."',
+  ],
+};
+
+function getGreeting(name: string) {
+  const h = new Date().getHours();
+  const first = name.split(" ")[0] || "there";
+  if (h < 12) return `Good morning, ${first} 👋`;
+  if (h < 17) return `Good afternoon, ${first} 👋`;
+  return `Good evening, ${first} 👋`;
+}
+
+function getInitials(name: string) {
+  return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+}
+
+function getRandomQuote(role: string) {
+  const key = role === "ADMIN" ? "ADMIN" : "STUDENT";
+  const list = QUOTES[key];
+  return list[Math.floor(Math.random() * list.length)];
+}
+
 export default function LoginPage() {
   const router = useRouter();
 
@@ -19,6 +52,13 @@ export default function LoginPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [shake, setShake] = useState(false);
+
+  // ── Splash state ──
+  const [splash, setSplash] = useState<{
+    name: string;
+    role: string;
+    quote: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!status) return;
@@ -47,7 +87,7 @@ export default function LoginPage() {
         | {
             success?: boolean;
             message?: string;
-            user?: { role?: string };
+            user?: { role?: string; name?: string; email?: string };
           }
         | null = null;
 
@@ -75,10 +115,17 @@ export default function LoginPage() {
       const targetPath =
         redirectTo && redirectTo.startsWith("/") ? redirectTo : fallbackPath;
 
-      setStatus("Login successful. Redirecting...");
       animation?.success();
 
-      window.location.href = targetPath;
+      // ── Show splash then navigate ──
+      const userName = data?.user?.name ?? data?.user?.email ?? "";
+      const userRole = data?.user?.role === "ADMIN" ? "ADMIN" : "STUDENT";
+      setSplash({ name: userName, role: userRole, quote: getRandomQuote(userRole) });
+
+      setTimeout(() => {
+        window.location.href = targetPath;
+      }, 100);
+
       return;
     } catch (err: unknown) {
       setStatus(err instanceof Error ? err.message : "Unexpected error");
@@ -153,6 +200,113 @@ export default function LoginPage() {
         @keyframes label-in {
           from { opacity: 0; letter-spacing: 0.12em; }
           to   { opacity: 1; letter-spacing: 0.06em; }
+        }
+
+        @keyframes splash-in {
+          from { opacity: 0; transform: scale(0.96) translateY(8px); }
+          to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        @keyframes splash-fade {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+
+        /* ── Splash overlay ── */
+        .splash-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 9999;
+          background: rgb(var(--bg, 255 255 255) / 0.96);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          animation: splash-fade 0.25s ease both;
+        }
+
+        .splash-card {
+          text-align: center;
+          max-width: 360px;
+          width: 100%;
+          padding: 2.5rem 2rem;
+          animation: splash-in 0.35s cubic-bezier(0.34,1.3,0.64,1) both;
+          animation-delay: 0.05s;
+        }
+
+        .splash-avatar {
+          width: 68px; height: 68px;
+          border-radius: 50%;
+          background: rgb(var(--primary) / 0.12);
+          border: 2px solid rgb(var(--primary) / 0.2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.35rem;
+          font-weight: 700;
+          color: rgb(var(--primary));
+          margin: 0 auto 1.25rem;
+        }
+
+        .splash-greeting {
+          font-size: 1.25rem;
+          font-weight: 700;
+          color: rgb(var(--fg));
+          margin: 0 0 10px;
+          line-height: 1.3;
+        }
+
+        .splash-role {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          background: rgb(var(--primary) / 0.1);
+          color: rgb(var(--primary));
+          font-size: 0.72rem;
+          font-weight: 700;
+          border-radius: 99px;
+          padding: 4px 14px;
+          margin-bottom: 1.4rem;
+          border: 1px solid rgb(var(--primary) / 0.22);
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
+
+        .splash-role-dot {
+          width: 6px; height: 6px;
+          border-radius: 50%;
+          background: rgb(var(--primary));
+          animation: dot-bounce 1.4s ease-in-out infinite;
+        }
+
+        .splash-quote {
+          font-size: 0.8rem;
+          color: rgb(var(--muted));
+          line-height: 1.65;
+          font-style: italic;
+          margin: 0 0 1.5rem;
+          border-left: 2px solid rgb(var(--border));
+          padding-left: 12px;
+          text-align: left;
+        }
+
+        .splash-spinner-row {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 9px;
+          color: rgb(var(--muted2));
+          font-size: 0.8rem;
+        }
+
+        .splash-spinner {
+          width: 16px; height: 16px;
+          border: 2px solid rgb(var(--border));
+          border-top-color: rgb(var(--primary));
+          border-radius: 50%;
+          animation: spin 0.7s linear infinite;
+          flex-shrink: 0;
         }
 
         /* ── Shake wrapper ── */
@@ -396,7 +550,6 @@ export default function LoginPage() {
           transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
         }
 
-        /* Shimmer sweep */
         .submit-btn::before {
           content: '';
           position: absolute;
@@ -412,7 +565,6 @@ export default function LoginPage() {
           transition: opacity 0.2s;
         }
 
-        /* Top gloss */
         .submit-btn::after {
           content: '';
           position: absolute;
@@ -573,6 +725,40 @@ export default function LoginPage() {
         .register-link:hover::after { width: 100%; }
         .register-link:hover { opacity: 0.84; }
       `}</style>
+
+      {/* ── Welcome Splash Overlay ── */}
+      {splash && (
+        <div className="splash-overlay">
+          <div className="splash-card">
+            <div className="splash-avatar">
+              {getInitials(splash.name) || (
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="1.8"
+                  strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              )}
+            </div>
+
+            <p className="splash-greeting">
+              {getGreeting(splash.name)}
+            </p>
+
+            <div className="splash-role">
+              <span className="splash-role-dot" />
+              {splash.role.charAt(0) + splash.role.slice(1).toLowerCase()}
+            </div>
+
+            <p className="splash-quote">{splash.quote}</p>
+
+            <div className="splash-spinner-row">
+              <span className="splash-spinner" />
+              Loading your dashboard…
+            </div>
+          </div>
+        </div>
+      )}
 
       <AuthSplitLayout
         title="Sign in to TutorLink"
