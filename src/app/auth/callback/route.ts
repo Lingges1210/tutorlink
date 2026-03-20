@@ -36,7 +36,7 @@ export async function GET(req: Request) {
       return NextResponse.redirect(new URL("/auth/login?error=verify_failed", url.origin));
     }
 
-    const response = NextResponse.redirect(new URL("/dashboard/student", url.origin));
+    const response = NextResponse.redirect(new URL("/auth/login?verified=true", url.origin));
     cookiesToWrite.forEach(({ name, value, options }) => {
       response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
     });
@@ -55,7 +55,7 @@ export async function GET(req: Request) {
       return NextResponse.redirect(new URL("/auth/login?error=verify_failed", url.origin));
     }
 
-    const response = NextResponse.redirect(new URL("/dashboard/student", url.origin));
+    const response = NextResponse.redirect(new URL("/auth/login?verified=true", url.origin));
     cookiesToWrite.forEach(({ name, value, options }) => {
       response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
     });
