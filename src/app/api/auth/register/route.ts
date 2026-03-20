@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check Prisma for existing user
+    // Early duplicate checks (fast path before expensive ops)
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return NextResponse.json(
@@ -65,13 +65,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check Supabase for orphaned auth user from a previous failed attempt
-    // and clean it up so registration can proceed cleanly
+    // Clean up any orphaned Supabase auth user from a previous failed attempt
     try {
       const { data: { users } } = await supabaseServer.auth.admin.listUsers({
         perPage: 1000,
+        page: 1,
       });
-      const orphanedUser = users.find(u => u.email === email);
+      const orphanedUser = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
       if (orphanedUser) {
         console.warn(`Cleaning up orphaned Supabase user for ${email}`);
         await supabaseServer.auth.admin.deleteUser(orphanedUser.id);
@@ -156,31 +156,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create Prisma user — rollback Supabase user + file on failure
+    // Create Prisma user inside a transaction with a re-check to prevent
+    // race conditions from simultaneous requests slipping past the early check
     let user;
     try {
-      user = await prisma.user.create({
-        data: {
-          email,
-          name: fullName,
-          programme,
-          matricNo,
-          passwordHash,
-          matricCardUrl,
-          role,
-          verificationStatus,
-          ocrText: ocrText.slice(0, 5000),
-          ocrMatchedMatric,
-          ocrMatchedName,
-        },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          verificationStatus: true,
-          createdAt: true,
-        },
+      user = await prisma.$transaction(async (tx) => {
+        // Re-check inside transaction — atomic, prevents race condition
+        const existing = await tx.user.findUnique({ where: { email } });
+        if (existing) throw new Error("EMAIL_EXISTS");
+
+        const existingMatricInTx = await tx.user.findFirst({ where: { matricNo } });
+        if (existingMatricInTx) throw new Error("MATRIC_EXISTS");
+
+        return tx.user.create({
+          data: {
+            email,
+            name: fullName,
+            programme,
+            matricNo,
+            passwordHash,
+            matricCardUrl,
+            role,
+            verificationStatus,
+            ocrText: ocrText.slice(0, 5000),
+            ocrMatchedMatric,
+            ocrMatchedName,
+          },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            verificationStatus: true,
+            createdAt: true,
+          },
+        });
       });
     } catch (err: any) {
       // Rollback: delete the Supabase auth user and uploaded file
@@ -189,9 +199,15 @@ export async function POST(req: NextRequest) {
       }
       await supabaseServer.storage.from(bucket).remove([uploadData.path]);
 
-      if (err.code === "P2002") {
+      if (err.code === "P2002" || err.message === "EMAIL_EXISTS") {
         return NextResponse.json(
           { success: false, message: "Email is already registered." },
+          { status: 400 }
+        );
+      }
+      if (err.message === "MATRIC_EXISTS") {
+        return NextResponse.json(
+          { success: false, message: "This matric number is already linked to another account." },
           { status: 400 }
         );
       }
