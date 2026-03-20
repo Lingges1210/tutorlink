@@ -34,12 +34,17 @@ export default function RegisterPage() {
   const [status, setStatus] = useState<{ type: "error" | "success"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const submittingRef = useRef(false); // double-submit guard
 
   const strength = getPasswordStrength(password);
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+
+    // Block if already submitting (double-click / fast retry guard)
+    if (submittingRef.current) return;
+
     setStatus(null);
 
     if (password !== confirmPassword) {
@@ -55,6 +60,7 @@ export default function RegisterPage() {
       return;
     }
 
+    submittingRef.current = true;
     setLoading(true);
 
     try {
@@ -76,12 +82,16 @@ export default function RegisterPage() {
 
       if (!res.ok || !data.success) {
         setStatus({ type: "error", msg: data.message || "Registration failed" });
+        // Only re-enable on error so user can retry
+        submittingRef.current = false;
+        setLoading(false);
       } else {
+        // Keep loading state during redirect — no flicker
         router.push("/auth/login?registered=true");
       }
     } catch (err: any) {
       setStatus({ type: "error", msg: err.message ?? "Unexpected error" });
-    } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   }
