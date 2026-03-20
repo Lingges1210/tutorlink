@@ -101,6 +101,18 @@ export default function ChatMessageListener({
 
           useChatStore.getState().mergeMessages(conv.id, [msg]);
 
+          // If attachments present, fetch signed URLs and re-merge
+          if (msg.attachments?.length) {
+            fetch(`/api/chat/messages?channelId=${conv.id}&take=1`, { cache: 'no-store' })
+              .then((r) => r.json())
+              .then((full) => {
+                if (!full?.ok || !Array.isArray(full.items)) return;
+                const withUrls = full.items.find((m: { id: string }) => m.id === msg.id);
+                if (withUrls) useChatStore.getState().mergeMessages(conv.id, [withUrls]);
+              })
+              .catch(() => {});
+          }
+
           const targetConv = useChatStore
             .getState()
             .conversations.find((c) => c.id === conv.id);

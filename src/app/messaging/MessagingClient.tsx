@@ -385,12 +385,26 @@ export default function MessagingClient() {
       // Ignore our own messages — already shown via optimistic update + replace
       if (msg.senderId === meIdSnap) return;
 
+      // Merge immediately so message appears instantly
       storeMergeMessages(channelId, [msg]);
       patchConversationPreview(channelId, {
         text: msg.text ?? "",
         createdAt: msg.createdAt,
         senderId: msg.senderId,
       });
+
+      // If message has attachments, fetch signed URLs
+      // Pusher payload has url: null — need GET to generate real signed URLs
+      if (msg.attachments?.length) {
+        fetch(`/api/chat/messages?channelId=${channelId}&take=1`, { cache: "no-store" })
+          .then((r) => r.json())
+          .then((full) => {
+            if (!full?.ok || !Array.isArray(full.items)) return;
+            const withUrls = full.items.find((m: Msg) => m.id === msg.id);
+            if (withUrls) storeMergeMessages(channelId, [withUrls]);
+          })
+          .catch(() => {});
+      }
 
       // Auto-read if we're looking at this channel
       if (channelId === activeIdRef.current) {
@@ -701,6 +715,19 @@ export default function MessagingClient() {
           senderId: createdMsg.senderId,
         });
         scrollToBottom("smooth");
+
+        // If message has attachments, fetch signed URLs immediately
+        // POST returns url: null — GET generates real signed URLs
+        if (createdMsg.attachments?.length) {
+          fetch(`/api/chat/messages?channelId=${activeId}&take=1`, { cache: "no-store" })
+            .then((r) => r.json())
+            .then((full) => {
+              if (!full?.ok || !Array.isArray(full.items)) return;
+              const withUrls = full.items.find((m: Msg) => m.id === createdMsg.id);
+              if (withUrls) storeReplaceMessage(activeId, createdMsg.id, withUrls);
+            })
+            .catch(() => {});
+        }
       }
 
       setPickedFiles([]);
@@ -1081,21 +1108,44 @@ export default function MessagingClient() {
                                       }
 
                                       return (
-                                        <div key={att.id} className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${
+                                        <div key={att.id} className={`overflow-hidden rounded-xl border ${
                                           isMe ? "border-white/10 bg-white/10" : "border-[rgb(var(--border))] bg-[rgb(var(--card2))]"
                                         }`}>
-                                          <div className="flex min-w-0 items-center gap-2">
-                                            {isPdf ? <IconPdf /> : <span>📎</span>}
-                                            <div className="min-w-0">
-                                              <p className="truncate text-[0.72rem] font-medium">{att.fileName}</p>
-                                              <p className="text-[0.62rem] opacity-70">{Math.max(1, Math.round(att.sizeBytes / 1024))} KB</p>
-                                            </div>
-                                          </div>
-                                          {att.url && (
-                                            <button type="button" onClick={() => forceDownload(att.url!, att.fileName)} className="rounded-lg border border-current/10 px-2 py-1 hover:bg-white/10">
-                                              <IconDownload />
-                                            </button>
+                                          {isPdf && att.url && (
+                                            <iframe
+                                              src={`${att.url}#toolbar=0&navpanes=0&scrollbar=0`}
+                                              className="w-full rounded-t-xl"
+                                              style={{ height: "260px", border: "none" }}
+                                              title={att.fileName}
+                                            />
                                           )}
+                                          <div className="flex items-center justify-between gap-3 px-3 py-2">
+                                            <div className="flex min-w-0 items-center gap-2">
+                                              {isPdf ? <IconPdf /> : <span>📎</span>}
+                                              <div className="min-w-0">
+                                                <p className="truncate text-[0.72rem] font-medium">{att.fileName}</p>
+                                                <p className="text-[0.62rem] opacity-70">{Math.max(1, Math.round(att.sizeBytes / 1024))} KB</p>
+                                              </div>
+                                            </div>
+                                            {att.url && (
+                                              <div className="flex items-center gap-1">
+                                                {isPdf && (
+                                                  <a
+                                                    href={att.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="rounded-lg border border-current/10 px-2 py-1 hover:bg-white/10"
+                                                    title="Open in new tab"
+                                                  >
+                                                    <IconOpen />
+                                                  </a>
+                                                )}
+                                                <button type="button" onClick={() => forceDownload(att.url!, att.fileName)} className="rounded-lg border border-current/10 px-2 py-1 hover:bg-white/10" title="Download">
+                                                  <IconDownload />
+                                                </button>
+                                              </div>
+                                            )}
+                                          </div>
                                         </div>
                                       );
                                     })}
@@ -1274,11 +1324,26 @@ export default function MessagingClient() {
                 draggable={false}
               />
 
-              <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-sm text-white">
-                <button type="button" onClick={() => setZoom((z) => Math.max(1, z - 0.2))} className="rounded px-2 py-0.5 hover:bg-white/10">−</button>
-                <span>{Math.round(zoom * 100)}%</span>
-                <button type="button" onClick={() => setZoom((z) => Math.min(4, z + 0.2))} className="rounded px-2 py-0.5 hover:bg-white/10">+</button>
-                <button type="button" onClick={() => { setZoom(1); setOffset({ x: 0, y: 0 }); }} className="rounded px-2 py-0.5 hover:bg-white/10">Reset</button>
+              <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-black/60 px-3 py-1.5 text-sm text-white whitespace-nowrap">
+                <button type="button" onClick={(e) => { e.stopPropagation(); setZoom((z) => Math.max(1, z - 0.2)); }} className="rounded px-2 py-0.5 hover:bg-white/10 text-lg leading-none">−</button>
+                <span className="min-w-[3rem] text-center text-xs">{Math.round(zoom * 100)}%</span>
+                <button type="button" onClick={(e) => { e.stopPropagation(); setZoom((z) => Math.min(4, z + 0.2)); }} className="rounded px-2 py-0.5 hover:bg-white/10 text-lg leading-none">+</button>
+                <button type="button" onClick={(e) => { e.stopPropagation(); setZoom(1); setOffset({ x: 0, y: 0 }); }} className="rounded px-2 py-0.5 hover:bg-white/10 text-xs">Reset</button>
+                <span className="h-4 w-px bg-white/20" />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    forceDownload(
+                      imgViewer.urls[imgViewer.idx],
+                      prettyNameFromUrl(imgViewer.urls[imgViewer.idx])
+                    );
+                  }}
+                  className="rounded px-2 py-0.5 hover:bg-white/10 text-xs flex items-center gap-1"
+                  title="Download"
+                >
+                  <IconDownload className="inline" />
+                </button>
               </div>
             </div>
           </div>
