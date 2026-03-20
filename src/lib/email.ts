@@ -699,7 +699,7 @@ export async function sendTutorRejectedEmail(
     `,
     cta: {
       label: "Reapply Now",
-      href: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/apply-tutor`,
+      href: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/student/apply-tutor`,
     },
     footerNote: "If you believe this is a mistake, reply to this email and we'll look into it.",
   });

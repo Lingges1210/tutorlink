@@ -95,7 +95,9 @@ export default function TutorAvailabilityPage() {
       const res = await fetch("/api/tutor/availability", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ availability: JSON.stringify(availability) }),
+        body: JSON.stringify({ 
+  availability 
+})
       });
       const d = await res.json().catch(() => null);
       if (!res.ok || !d?.success) throw new Error(d?.message || "Failed to save");

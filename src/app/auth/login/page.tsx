@@ -397,7 +397,7 @@ function LoginPageInner() {
 
             {/* Email verified banner */}
             {verified && (
-              <div className="banner blue">
+              <div className="banner green">
                 <span className="banner-icon">✓</span>
                 <span>
                   <strong>Email verified!</strong> Your account is now active. Please log in to continue.

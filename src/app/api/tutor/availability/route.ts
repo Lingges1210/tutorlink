@@ -80,15 +80,16 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const availability =
-      typeof body.availability === "string" ? body.availability.trim() : "";
+const availabilityRaw = body.availability;
 
-    if (!availability) {
-      return NextResponse.json(
-        { success: false, message: "Availability is required" },
-        { status: 400 }
-      );
-    }
+if (!availabilityRaw || !Array.isArray(availabilityRaw)) {
+  return NextResponse.json(
+    { success: false, message: "Availability is required" },
+    { status: 400 }
+  );
+}
+
+const availability = JSON.stringify(availabilityRaw);
 
     const dbUser = await prisma.user.findUnique({
       where: { email: user.email.toLowerCase() },
