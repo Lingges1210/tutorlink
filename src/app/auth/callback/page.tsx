@@ -246,7 +246,7 @@ export default function CallbackPage() {
                 Email verified!
               </h1>
               <p style={{ margin: "0 0 6px", fontSize: "14px", color: "rgb(var(--muted))", lineHeight: 1.6 }}>
-                Your account is now active. Redirecting you to your dashboard…
+                Your account is now active. Redirecting you to login page...
               </p>
 
               <div className="progress-track">
