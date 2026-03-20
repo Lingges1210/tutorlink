@@ -11,6 +11,46 @@ type DayAvailability = { day: DayKey; off: boolean; slots: TimeSlot[] };
 const DAY_KEYS: DayKey[] = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const DEBUG_SMART_BOOKING = process.env.NODE_ENV !== "production";
 
+/**
+ * Malaysia timezone helpers
+ * Asia/Kuala_Lumpur = UTC+8, no DST
+ */
+const MY_TZ_OFFSET_MIN = 8 * 60;
+
+function getMalaysiaParts(d: Date) {
+  const shifted = new Date(d.getTime() + MY_TZ_OFFSET_MIN * 60_000);
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth(),
+    date: shifted.getUTCDate(),
+    day: shifted.getUTCDay(),
+    hours: shifted.getUTCHours(),
+    minutes: shifted.getUTCMinutes(),
+  };
+}
+
+function createMalaysiaDate(
+  year: number,
+  month: number,
+  date: number,
+  hours = 0,
+  minutes = 0
+) {
+  return new Date(
+    Date.UTC(year, month, date, hours, minutes) - MY_TZ_OFFSET_MIN * 60_000
+  );
+}
+
+function sameMalaysiaYMD(a: Date, b: Date) {
+  const pa = getMalaysiaParts(a);
+  const pb = getMalaysiaParts(b);
+  return (
+    pa.year === pb.year &&
+    pa.month === pb.month &&
+    pa.date === pb.date
+  );
+}
+
 function toMinutes(hhmm: string) {
   if (!hhmm) return 0;
   if (hhmm === "24:00") return 24 * 60;
@@ -19,7 +59,7 @@ function toMinutes(hhmm: string) {
 }
 
 function dayKeyFromDate(d: Date): DayKey {
-  return DAY_KEYS[d.getDay()];
+  return DAY_KEYS[getMalaysiaParts(d).day];
 }
 
 function parseAvailability(raw: unknown): DayAvailability[] | null {
@@ -65,11 +105,7 @@ function tutorDeclaredAvailable(
   start: Date,
   end: Date
 ): boolean {
-  const sameDay =
-    start.getFullYear() === end.getFullYear() &&
-    start.getMonth() === end.getMonth() &&
-    start.getDate() === end.getDate();
-
+  const sameDay = sameMalaysiaYMD(start, end);
   if (!sameDay) return false;
 
   const dk = dayKeyFromDate(start);
@@ -77,8 +113,11 @@ function tutorDeclaredAvailable(
   if (!day || day.off) return false;
   if (!Array.isArray(day.slots) || day.slots.length === 0) return false;
 
-  const startMin = start.getHours() * 60 + start.getMinutes();
-  const endMin = end.getHours() * 60 + end.getMinutes();
+  const startParts = getMalaysiaParts(start);
+  const endParts = getMalaysiaParts(end);
+
+  const startMin = startParts.hours * 60 + startParts.minutes;
+  const endMin = endParts.hours * 60 + endParts.minutes;
 
   return day.slots.some((s) => {
     const a = toMinutes(s.start);
@@ -92,7 +131,6 @@ function clamp(value: number, min = 0, max = 1) {
 }
 
 function scoreRating(avgRating: number, ratingCount: number) {
-  // Neutral default for new tutors
   if (ratingCount <= 0) return 0.6;
 
   const normalized = clamp(avgRating / 5);
@@ -159,16 +197,13 @@ function fairnessBoost(opts: {
 
   let boost = 0;
 
-  // New / low-history tutor boost
   if (completedCount === 0) boost += 10;
   else if (completedCount <= 3) boost += 7;
   else if (completedCount <= 10) boost += 4;
 
-  // Underused recently gets a chance
   if (recentAssignedCount === 0) boost += 3;
   else if (recentAssignedCount >= 4) boost -= 3;
 
-  // Avoid overloading
   if (upcomingCount >= 5) boost -= 8;
   else if (upcomingCount >= 3) boost -= 4;
 
@@ -292,13 +327,13 @@ export async function POST(req: Request) {
 
   if (studentClash) {
     return NextResponse.json(
-  {
-    success: false,
-    message: "You already have another booking that overlaps this time.",
-    debug: "STUDENT_CLASH",
-  },
-  { status: 409 }
-);
+      {
+        success: false,
+        message: "You already have another booking that overlaps this time.",
+        debug: "STUDENT_CLASH",
+      },
+      { status: 409 }
+    );
   }
 
   const links = await prisma.tutorSubject.findMany({
@@ -309,27 +344,27 @@ export async function POST(req: Request) {
   const tutorIds = links.map((x) => x.tutorId);
   if (tutorIds.length === 0) {
     return NextResponse.json(
-  {
-    success: false,
-    message: "No tutors for this subject yet.",
-    debug: "NO_TUTORS_FOR_SUBJECT",
-  },
-  { status: 409 }
-);
+      {
+        success: false,
+        message: "No tutors for this subject yet.",
+        debug: "NO_TUTORS_FOR_SUBJECT",
+      },
+      { status: 409 }
+    );
   }
 
   const tutors = await prisma.user.findMany({
-  where: {
-    id: { in: tutorIds },
-    isTutorApproved: true,
-    isDeactivated: false,
-  },
-  select: { id: true },
-});
+    where: {
+      id: { in: tutorIds },
+      isTutorApproved: true,
+      isDeactivated: false,
+    },
+    select: { id: true },
+  });
 
   const eligibleTutorIds = tutors.map((t) => t.id);
 
-    const tutorDebugRows = await prisma.user.findMany({
+  const tutorDebugRows = await prisma.user.findMany({
     where: {
       id: { in: tutorIds },
     },
@@ -344,7 +379,7 @@ export async function POST(req: Request) {
     },
   });
 
-    if (eligibleTutorIds.length === 0) {
+  if (eligibleTutorIds.length === 0) {
     return NextResponse.json(
       {
         success: false,
@@ -392,7 +427,7 @@ export async function POST(req: Request) {
     availableTutors.push(tutorId);
   }
 
-    if (DEBUG_SMART_BOOKING) {
+  if (DEBUG_SMART_BOOKING) {
     console.log("[smart-booking] availability filter", {
       subjectId,
       eligibleTutorIds,
@@ -404,20 +439,19 @@ export async function POST(req: Request) {
 
   if (availableTutors.length === 0) {
     return NextResponse.json(
-  {
-    success: false,
-    message: "That slot is no longer available. Pick another time.",
-    debug: "NO_AVAILABLE_TUTORS_AFTER_AVAILABILITY_FILTER",
-    meta: {
-      eligibleTutorIds,
-      availableTutors,
-    },
-  },
-  { status: 409 }
-);
+      {
+        success: false,
+        message: "That slot is no longer available. Pick another time.",
+        debug: "NO_AVAILABLE_TUTORS_AFTER_AVAILABILITY_FILTER",
+        meta: {
+          eligibleTutorIds,
+          availableTutors,
+        },
+      },
+      { status: 409 }
+    );
   }
 
-  // Smart + fair auto-assignment
   const tutorProfiles = await prisma.user.findMany({
     where: {
       id: { in: availableTutors },
@@ -519,7 +553,7 @@ export async function POST(req: Request) {
     })
     .sort((a, b) => b.finalScore - a.finalScore);
 
-      if (DEBUG_SMART_BOOKING) {
+  if (DEBUG_SMART_BOOKING) {
     console.log("[smart-booking] scored tutors", scoredTutors);
   }
 
@@ -527,16 +561,16 @@ export async function POST(req: Request) {
 
   if (!pickedTutor) {
     return NextResponse.json(
-  {
-    success: false,
-    message: "No tutor could be assigned for that slot.",
-    debug: "NO_PICKED_TUTOR",
-    meta: {
-      scoredTutors,
-    },
-  },
-  { status: 409 }
-);
+      {
+        success: false,
+        message: "No tutor could be assigned for that slot.",
+        debug: "NO_PICKED_TUTOR",
+        meta: {
+          scoredTutors,
+        },
+      },
+      { status: 409 }
+    );
   }
 
   const chosenTutorId = pickedTutor.tutorId;
@@ -633,13 +667,13 @@ export async function POST(req: Request) {
   } catch (e: any) {
     if (String(e?.message) === "RACE_CLASH") {
       return NextResponse.json(
-  {
-    success: false,
-    message: "That slot was just taken. Please choose another time.",
-    debug: "RACE_CLASH",
-  },
-  { status: 409 }
-);
+        {
+          success: false,
+          message: "That slot was just taken. Please choose another time.",
+          debug: "RACE_CLASH",
+        },
+        { status: 409 }
+      );
     }
 
     return NextResponse.json(
