@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, Video, Clock, CheckCircle2, XCircle, Zap, Calendar, MessageSquare, ChevronRight } from "lucide-react";
+import { AlertTriangle, Video, Clock, CheckCircle2, XCircle, Zap, Calendar, MessageSquare, ChevronRight, Sparkles } from "lucide-react";
 import Image from "next/image";
 
 type Row = {
@@ -16,6 +16,10 @@ type Row = {
   proposedAt?: string | null;
   proposedNote?: string | null;
   proposalStatus?: "PENDING" | "ACCEPTED" | "REJECTED" | null;
+  // ✅ Added: identifies who created the proposal.
+  // If proposedByUserId === student.id → student wants to reschedule (tutor must accept/reject).
+  // If proposedByUserId !== student.id (or null) → tutor proposed (awaiting student confirmation).
+  proposedByUserId?: string | null;
   subject: { code: string; title: string };
   student: {
     id: string;
@@ -136,17 +140,17 @@ function statusConfig(status: string) {
 
 function sectionConfig(kind?: string) {
   switch (kind) {
-    case "ONGOING":        return { dot: "bg-emerald-400 animate-pulse", label: "Live" };
-    case "NEEDS_COMPLETION": return { dot: "bg-amber-400 animate-pulse", label: "Action needed" };
-    case "UPCOMING":       return { dot: "bg-[rgb(var(--primary))]", label: "Scheduled" };
-    default:               return { dot: "bg-[rgb(var(--muted2))]", label: "" };
+    case "ONGOING":          return { dot: "bg-emerald-400 animate-pulse", label: "Live" };
+    case "NEEDS_COMPLETION": return { dot: "bg-amber-400 animate-pulse",   label: "Action needed" };
+    case "UPCOMING":         return { dot: "bg-[rgb(var(--primary))]",      label: "Scheduled" };
+    default:                 return { dot: "bg-[rgb(var(--muted2))]",       label: "" };
   }
 }
 
 const inputClass = "w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary)/0.15)] transition-all";
 const labelClass = "block text-[0.7rem] font-semibold uppercase tracking-wider text-[rgb(var(--muted2))] mb-1.5";
 
-// ─── ModalShell (outside parent — stable identity) ───────────────────────────
+// ─── ModalShell ───────────────────────────────────────────────────────────────
 
 function ModalShell({ children, onClose, actionLoading }: { children: React.ReactNode; onClose: () => void; actionLoading: boolean }) {
   return (
@@ -171,7 +175,7 @@ function ModalShell({ children, onClose, actionLoading }: { children: React.Reac
   );
 }
 
-// ─── SessionCard (outside parent — stable identity) ──────────────────────────
+// ─── SessionCard ──────────────────────────────────────────────────────────────
 
 type SessionCardProps = {
   s: Row;
@@ -186,22 +190,36 @@ type SessionCardProps = {
   onPropose: (s: Row) => void;
   onReport: (s: Row) => void;
   onCancel: (id: string) => void;
+  // ✅ New: tutor accepts/rejects a student-originated proposal
+  onAcceptStudentProposal: (id: string) => void;
+  onRejectStudentProposal: (id: string) => void;
 };
 
-function SessionCard({ s, kind, focusId, items, actionLoading, onAccept, onJoinCall, onChat, onComplete, onPropose, onReport, onCancel }: SessionCardProps) {
-  const pending = s.status === "PENDING";
+function SessionCard({
+  s, kind, focusId, items, actionLoading,
+  onAccept, onJoinCall, onChat, onComplete, onPropose, onReport, onCancel,
+  onAcceptStudentProposal, onRejectStudentProposal,
+}: SessionCardProps) {
+  const pending  = s.status === "PENDING";
   const accepted = s.status === "ACCEPTED";
-  const ongoing = isOngoing(s);
+  const ongoing  = isOngoing(s);
   const conflict = pending && tutorHasOverlap(s, items);
-  const active = pending || accepted;
-  const proposalPending = active && s.proposalStatus === "PENDING" && !!s.proposedAt;
+  const active   = pending || accepted;
   const isFocused = focusId === s.id;
   const endedNeedsCompletion = accepted && canComplete(s);
   const isNeedsCompletion = kind === "NEEDS_COMPLETION";
-  const showEndedAmber = isNeedsCompletion && endedNeedsCompletion && !proposalPending;
+  const showEndedAmber = isNeedsCompletion && endedNeedsCompletion;
   const sc = statusConfig(s.status);
   const initials = getInitials(s.student.name, s.student.email);
   const soon = isStartingSoon(s) && !ongoing;
+
+  // ✅ Determine proposal direction
+  const proposalPending = active && s.proposalStatus === "PENDING" && !!s.proposedAt;
+  const isStudentProposal = proposalPending && s.proposedByUserId === s.student.id;
+  const isTutorProposal   = proposalPending && !isStudentProposal;
+
+  // Don't show "complete" button if there's a student proposal pending
+  const showEndedAmberBanner = showEndedAmber && !proposalPending;
 
   return (
     <motion.div
@@ -215,18 +233,21 @@ function SessionCard({ s, kind, focusId, items, actionLoading, onAccept, onJoinC
         "group relative rounded-2xl border overflow-hidden transition-all duration-300",
         "border-[rgb(var(--border))] bg-[rgb(var(--card2))]",
         "hover:shadow-[0_8px_32px_rgb(var(--shadow)/0.12)] hover:-translate-y-0.5",
-        ongoing ? "ring-2 ring-emerald-400/60 shadow-[0_0_0_4px_rgb(var(--shadow)/0.04)]" : "",
-        soon ? "ring-2 ring-amber-400/60" : "",
-        showEndedAmber ? "ring-2 ring-amber-400/60" : "",
-        isFocused ? "ring-2 ring-[rgb(var(--primary)/0.7)]" : "",
+        ongoing          ? "ring-2 ring-emerald-400/60 shadow-[0_0_0_4px_rgb(var(--shadow)/0.04)]" : "",
+        soon             ? "ring-2 ring-amber-400/60" : "",
+        showEndedAmberBanner ? "ring-2 ring-amber-400/60" : "",
+        // ✅ Student proposal gets a distinct violet ring so it stands out
+        isStudentProposal ? "ring-2 ring-violet-400/60" : "",
+        isFocused        ? "ring-2 ring-[rgb(var(--primary)/0.7)]" : "",
       ].join(" ")}
     >
       <div className={[
         "absolute top-0 left-0 right-0 h-[2px]",
-        ongoing ? "bg-gradient-to-r from-emerald-400 via-emerald-300 to-transparent" :
-        showEndedAmber ? "bg-gradient-to-r from-amber-400 via-amber-300 to-transparent" :
-        pending ? "bg-gradient-to-r from-amber-400/60 via-amber-300/40 to-transparent" :
-        accepted ? "bg-gradient-to-r from-[rgb(var(--primary))] via-[rgb(var(--primary)/0.5)] to-transparent" :
+        ongoing           ? "bg-gradient-to-r from-emerald-400 via-emerald-300 to-transparent" :
+        showEndedAmberBanner ? "bg-gradient-to-r from-amber-400 via-amber-300 to-transparent" :
+        isStudentProposal ? "bg-gradient-to-r from-violet-400 via-violet-300 to-transparent" :
+        pending           ? "bg-gradient-to-r from-amber-400/60 via-amber-300/40 to-transparent" :
+        accepted          ? "bg-gradient-to-r from-[rgb(var(--primary))] via-[rgb(var(--primary)/0.5)] to-transparent" :
         "bg-transparent"
       ].join(" ")} />
 
@@ -234,23 +255,21 @@ function SessionCard({ s, kind, focusId, items, actionLoading, onAccept, onJoinC
         <div className="flex items-start gap-3 sm:gap-4">
           <div className={[
             "relative flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center text-xs font-bold select-none ring-2",
-            ongoing ? "ring-emerald-400/50 bg-emerald-400/15 text-emerald-600 dark:text-emerald-300" :
-            pending ? "ring-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-300" :
+            ongoing  ? "ring-emerald-400/50 bg-emerald-400/15 text-emerald-600 dark:text-emerald-300" :
+            pending  ? "ring-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-300" :
             accepted ? "ring-[rgb(var(--primary)/0.4)] bg-[rgb(var(--primary)/0.1)] text-[rgb(var(--primary))]" :
             "ring-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted2))]"
           ].join(" ")}>
-                  {s.student.avatarUrl ? (
-          <Image
-            src={s.student.avatarUrl}
-            alt={`${s.student.name ?? "Student"} avatar`}
-            width={40}
-            height={40}
-            unoptimized
-            className="h-full w-full rounded-full object-cover"
-          />
-        ) : (
-          initials
-        )}
+            {s.student.avatarUrl ? (
+              <Image
+                src={s.student.avatarUrl}
+                alt={`${s.student.name ?? "Student"} avatar`}
+                width={40} height={40} unoptimized
+                className="h-full w-full rounded-full object-cover"
+              />
+            ) : (
+              initials
+            )}
             {ongoing && <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 border-2 border-[rgb(var(--card2))]" />}
           </div>
 
@@ -299,7 +318,7 @@ function SessionCard({ s, kind, focusId, items, actionLoading, onAccept, onJoinC
               </div>
             )}
 
-            {showEndedAmber && (
+            {showEndedAmberBanner && (
               <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-400/15 border border-amber-400/30 px-3 py-1 text-[11px] font-bold text-amber-600 dark:text-amber-300">
                 <CheckCircle2 className="h-3 w-3" />Session ended — please complete review
               </div>
@@ -315,9 +334,51 @@ function SessionCard({ s, kind, focusId, items, actionLoading, onAccept, onJoinC
               <div className="mt-2 text-[0.7rem] text-[rgb(var(--muted2))] italic">Reason: {s.cancelReason}</div>
             )}
 
-            {proposalPending && (
-              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-400/30 bg-indigo-400/10 px-3 py-2.5">
+            {/* ✅ STUDENT proposal banner — tutor must accept or reject */}
+            {isStudentProposal && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-400/40 bg-violet-400/10 px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <div className="text-[0.8rem] font-semibold text-violet-600 dark:text-violet-300 flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Student proposed a new time
+                  </div>
+                  <div className="mt-0.5 text-[0.72rem] text-[rgb(var(--muted2))] truncate">
+                    {prettyDate(s.proposedAt!)}
+                    {s.proposedNote ? ` · ${s.proposedNote}` : ""}
+                  </div>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    disabled={actionLoading}
+                    onClick={() => onAcceptStudentProposal(s.id)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:opacity-90 disabled:opacity-60 shadow-sm transition-all"
+                  >
+                    {actionLoading ? "…" : "Accept"}
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    disabled={actionLoading}
+                    onClick={() => onRejectStudentProposal(s.id)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60 transition-colors"
+                  >
+                    Reject
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ✅ TUTOR proposal banner — awaiting student confirmation (unchanged) */}
+            {isTutorProposal && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-400/30 bg-indigo-400/10 px-3 py-2.5"
+              >
                 <div className="min-w-0">
                   <div className="text-[0.8rem] font-semibold text-indigo-600 dark:text-indigo-300">Proposed time sent to student</div>
                   <div className="mt-0.5 text-[0.72rem] text-[rgb(var(--muted2))] truncate">
@@ -334,14 +395,14 @@ function SessionCard({ s, kind, focusId, items, actionLoading, onAccept, onJoinC
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2 justify-end border-t border-[rgb(var(--border)/0.5)] pt-3">
-          {showEndedAmber && (
+          {showEndedAmberBanner && (
             <button disabled={actionLoading} onClick={() => onComplete(s.id)}
               className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-90 disabled:opacity-60 transition-opacity shadow-sm">
               <CheckCircle2 className="h-3.5 w-3.5" />Complete session
             </button>
           )}
 
-          {!showEndedAmber && (
+          {!showEndedAmberBanner && (
             <>
               {accepted && ongoing && (
                 <button disabled={actionLoading} onClick={() => onJoinCall(s.id)}
@@ -355,20 +416,15 @@ function SessionCard({ s, kind, focusId, items, actionLoading, onAccept, onJoinC
                   <MessageSquare className="h-3.5 w-3.5" />Chat
                 </button>
               )}
-              {pending && !proposalPending && (
-                <button disabled={actionLoading || conflict} onClick={() => onAccept(s.id)}
-                  title={conflict ? "Time conflict: you already have a session overlapping this slot." : ""}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-90 disabled:opacity-60 transition-opacity shadow-sm">
-                  <CheckCircle2 className="h-3.5 w-3.5" />Accept
-                </button>
-              )}
-              {canComplete(s) && (
+              
+              {canComplete(s) && !proposalPending && (
                 <button disabled={actionLoading} onClick={() => onComplete(s.id)}
                   className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-90 disabled:opacity-60 transition-opacity shadow-sm">
                   <CheckCircle2 className="h-3.5 w-3.5" />Complete
                 </button>
               )}
-              {active && (
+              {/* ✅ Hide "Propose time" if there's already any pending proposal */}
+              {active && !proposalPending && (
                 <button disabled={actionLoading} onClick={() => onPropose(s)}
                   className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60 transition-colors">
                   <Calendar className="h-3.5 w-3.5" />Propose time
@@ -393,7 +449,7 @@ function SessionCard({ s, kind, focusId, items, actionLoading, onAccept, onJoinC
   );
 }
 
-// ─── Section (outside parent — stable identity) ──────────────────────────────
+// ─── Section ──────────────────────────────────────────────────────────────────
 
 type SectionProps = {
   title: string;
@@ -411,9 +467,11 @@ type SectionProps = {
   onPropose: (s: Row) => void;
   onReport: (s: Row) => void;
   onCancel: (id: string) => void;
+  onAcceptStudentProposal: (id: string) => void;
+  onRejectStudentProposal: (id: string) => void;
 };
 
-function Section({ title, list, subtitle, rightSlot, kind, focusId, items, actionLoading, onAccept, onJoinCall, onChat, onComplete, onPropose, onReport, onCancel }: SectionProps) {
+function Section({ title, list, subtitle, rightSlot, kind, focusId, items, actionLoading, onAccept, onJoinCall, onChat, onComplete, onPropose, onReport, onCancel, onAcceptStudentProposal, onRejectStudentProposal }: SectionProps) {
   if (list.length === 0) return null;
   const sc = sectionConfig(kind);
 
@@ -436,7 +494,10 @@ function Section({ title, list, subtitle, rightSlot, kind, focusId, items, actio
         {list.map((s) => (
           <SessionCard key={s.id} s={s} kind={kind} focusId={focusId} items={items} actionLoading={actionLoading}
             onAccept={onAccept} onJoinCall={onJoinCall} onChat={onChat} onComplete={onComplete}
-            onPropose={onPropose} onReport={onReport} onCancel={onCancel} />
+            onPropose={onPropose} onReport={onReport} onCancel={onCancel}
+            onAcceptStudentProposal={onAcceptStudentProposal}
+            onRejectStudentProposal={onRejectStudentProposal}
+          />
         ))}
       </AnimatePresence>
     </motion.div>
@@ -446,34 +507,34 @@ function Section({ title, list, subtitle, rightSlot, kind, focusId, items, actio
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function TutorSessionsClient() {
-  const router = useRouter();
+  const router   = useRouter();
   const pathname = usePathname();
-  const sp = useSearchParams();
-  const focusId = sp.get("focus");
+  const sp       = useSearchParams();
+  const focusId  = sp.get("focus");
 
-  const [items, setItems] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [modalMsg, setModalMsg] = useState<string | null>(null);
-  const [, setTick] = useState(0);
+  const [items, setItems]               = useState<Row[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [msg, setMsg]                   = useState<string | null>(null);
+  const [modalMsg, setModalMsg]         = useState<string | null>(null);
+  const [, setTick]                     = useState(0);
   const [actionLoading, setActionLoading] = useState(false);
-  const [showPast, setShowPast] = useState(false);
-  const [pastFilter, setPastFilter] = useState<"ALL" | "COMPLETED" | "CANCELLED">("ALL");
+  const [showPast, setShowPast]         = useState(false);
+  const [pastFilter, setPastFilter]     = useState<"ALL" | "COMPLETED" | "CANCELLED">("ALL");
   const PAST_PAGE_SIZE = 5;
-  const [pastPage, setPastPage] = useState(1);
-  const [mode, setMode] = useState<"CANCEL" | "PROPOSE" | "COMPLETE" | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [reason, setReason] = useState("");
+  const [pastPage, setPastPage]         = useState(1);
+  const [mode, setMode]                 = useState<"CANCEL" | "PROPOSE" | "COMPLETE" | null>(null);
+  const [activeId, setActiveId]         = useState<string | null>(null);
+  const [reason, setReason]             = useState("");
   const [proposedTime, setProposedTime] = useState(() =>
     formatLocalInputValue(new Date(Date.now() + 60 * 60 * 1000))
   );
-  const [note, setNote] = useState("");
-  const [summary, setSummary] = useState("");
+  const [note, setNote]                 = useState("");
+  const [summary, setSummary]           = useState("");
   const [confidenceBefore, setConfidenceBefore] = useState(3);
-  const [confidenceAfter, setConfidenceAfter] = useState(4);
-  const [nextSteps, setNextSteps] = useState("");
-  const [topicInput, setTopicInput] = useState("");
-  const [topics, setTopics] = useState<string[]>([]);
+  const [confidenceAfter, setConfidenceAfter]   = useState(4);
+  const [nextSteps, setNextSteps]       = useState("");
+  const [topicInput, setTopicInput]     = useState("");
+  const [topics, setTopics]             = useState<string[]>([]);
 
   const activeSession = useMemo(() => {
     if (!activeId) return null;
@@ -504,14 +565,12 @@ export default function TutorSessionsClient() {
 
   useEffect(() => { refresh(); }, []);
 
-  // Pause polling while any modal is open
   useEffect(() => {
     if (mode !== null) return;
     const t = setInterval(() => refresh({ silent: true }), 3_000);
     return () => clearInterval(t);
   }, [mode]);
 
-  // Pause countdown tick while any modal is open
   useEffect(() => {
     if (mode !== null) return;
     const t = setInterval(() => setTick((x) => x + 1), 1000);
@@ -522,7 +581,7 @@ export default function TutorSessionsClient() {
     let t: any;
     const run = async () => { try { await fetch("/api/reminders/pull", { cache: "no-store" }); } catch {} };
     const start = () => { stop(); run(); t = setInterval(run, 60_000); };
-    const stop = () => { if (t) clearInterval(t); t = null; };
+    const stop  = () => { if (t) clearInterval(t); t = null; };
     const onVis = () => { if (document.visibilityState === "visible") start(); else stop(); };
     onVis();
     document.addEventListener("visibilitychange", onVis);
@@ -542,6 +601,35 @@ export default function TutorSessionsClient() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) setMsg(data?.message ?? "Accept failed.");
       else { await refresh({ silent: true }); await fetch("/api/reminders/pull", { cache: "no-store" }); }
+    } finally { setActionLoading(false); }
+  }
+
+  // ✅ Tutor accepts a student-originated reschedule proposal
+  async function acceptStudentProposal(id: string) {
+    setActionLoading(true); setMsg(null);
+    try {
+      const res = await fetch(`/api/tutor/sessions/${id}/proposal/accept`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) setMsg(data?.message ?? "Could not accept proposal.");
+      else {
+        setMsg("Proposal accepted — session time updated.");
+        await refresh({ silent: true });
+        await fetch("/api/reminders/pull", { cache: "no-store" });
+      }
+    } finally { setActionLoading(false); }
+  }
+
+  // ✅ Tutor rejects a student-originated reschedule proposal
+  async function rejectStudentProposal(id: string) {
+    setActionLoading(true); setMsg(null);
+    try {
+      const res = await fetch(`/api/tutor/sessions/${id}/proposal/reject`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) setMsg(data?.message ?? "Could not reject proposal.");
+      else {
+        setMsg("Proposal rejected. Session time unchanged.");
+        await refresh({ silent: true });
+      }
     } finally { setActionLoading(false); }
   }
 
@@ -571,7 +659,7 @@ export default function TutorSessionsClient() {
     const trimmedSummary = summary.trim();
     if (!trimmedSummary) { setModalMsg("Please write a short session summary."); return; }
     const before = clampInt(Number(confidenceBefore), 1, 5);
-    const after = clampInt(Number(confidenceAfter), 1, 5);
+    const after  = clampInt(Number(confidenceAfter), 1, 5);
     const cleanedTopics = topics.map(normalizeTopicLabel).filter(Boolean);
     if (cleanedTopics.length === 0) { setModalMsg("Please add at least 1 topic covered."); return; }
     setActionLoading(true);
@@ -654,10 +742,10 @@ export default function TutorSessionsClient() {
     const now = Date.now();
     const isClosed = (s: Row) => s.status === "CANCELLED" || s.status === "COMPLETED";
     const isEndedAccepted = (s: Row) => s.status === "ACCEPTED" && getEndTime(s) <= now;
-    const past = items.filter((s) => isClosed(s));
+    const past            = items.filter((s) => isClosed(s));
     const needsCompletion = items.filter((s) => !isClosed(s) && isEndedAccepted(s));
-    const ongoing = items.filter((s) => !isClosed(s) && isOngoing(s));
-    const upcoming = items.filter((s) => {
+    const ongoing         = items.filter((s) => !isClosed(s) && isOngoing(s));
+    const upcoming        = items.filter((s) => {
       if (isClosed(s) || isEndedAccepted(s)) return false;
       return new Date(s.scheduledAt).getTime() > now && !isOngoing(s);
     });
@@ -667,75 +755,72 @@ export default function TutorSessionsClient() {
     return { ongoing, upcoming, needsCompletion, past };
   }, [items]);
 
-  const filteredPast = pastFilter === "ALL" ? grouped.past : grouped.past.filter((x) => x.status === pastFilter);
-  const totalPastPages = Math.max(1, Math.ceil(filteredPast.length / PAST_PAGE_SIZE));
-  const safePastPage = Math.min(pastPage, totalPastPages);
-  const pagedPast = filteredPast.slice((safePastPage - 1) * PAST_PAGE_SIZE, safePastPage * PAST_PAGE_SIZE);
+  const filteredPast    = pastFilter === "ALL" ? grouped.past : grouped.past.filter((x) => x.status === pastFilter);
+  const totalPastPages  = Math.max(1, Math.ceil(filteredPast.length / PAST_PAGE_SIZE));
+  const safePastPage    = Math.min(pastPage, totalPastPages);
+  const pagedPast       = filteredPast.slice((safePastPage - 1) * PAST_PAGE_SIZE, safePastPage * PAST_PAGE_SIZE);
 
   useEffect(() => {
-  if (pastPage > totalPastPages) setPastPage(totalPastPages);
-}, [pastPage, totalPastPages]);
+    if (pastPage > totalPastPages) setPastPage(totalPastPages);
+  }, [pastPage, totalPastPages]);
 
   useEffect(() => {
-  if (!focusId || loading || !items.length) return;
-  if (!items.some((x) => x.id === focusId)) return;
-
-  const isFocusedPast = grouped.past.some((x) => x.id === focusId);
-
-  if (isFocusedPast) {
-    setShowPast(true);
-
-    const idx = filteredPast.findIndex((x) => x.id === focusId);
-    if (idx >= 0) {
-      setPastPage((p) => {
-        const cp = Math.floor(idx / PAST_PAGE_SIZE) + 1;
-        return p === cp ? p : cp;
-      });
+    if (!focusId || loading || !items.length) return;
+    if (!items.some((x) => x.id === focusId)) return;
+    const isFocusedPast = grouped.past.some((x) => x.id === focusId);
+    if (isFocusedPast) {
+      setShowPast(true);
+      const idx = filteredPast.findIndex((x) => x.id === focusId);
+      if (idx >= 0) {
+        setPastPage((p) => {
+          const cp = Math.floor(idx / PAST_PAGE_SIZE) + 1;
+          return p === cp ? p : cp;
+        });
+      }
     }
-  }
-
-  let alive = true;
-  let tries = 0;
-
-  const findAndScroll = () => {
-    if (!alive) return;
-
-    const el = document.getElementById(`session-${focusId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      el.classList.add("focus-glow");
-
-      window.setTimeout(() => {
-        document.getElementById(`session-${focusId}`)?.classList.remove("focus-glow");
-
-        const next = new URLSearchParams(sp.toString());
-        next.delete("focus");
-        const qs = next.toString();
-
-        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-      }, 15000);
-    } else {
-      tries++;
-      if (tries < 40) window.setTimeout(findAndScroll, 120);
-    }
-  };
-
-  requestAnimationFrame(() => window.setTimeout(findAndScroll, 0));
-
-  return () => {
-    alive = false;
-  };
-}, [focusId, loading, items, grouped.past, filteredPast, pastFilter, pastPage, showPast, pathname, router, sp]);
+    let alive = true;
+    let tries = 0;
+    const findAndScroll = () => {
+      if (!alive) return;
+      const el = document.getElementById(`session-${focusId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("focus-glow");
+        window.setTimeout(() => {
+          document.getElementById(`session-${focusId}`)?.classList.remove("focus-glow");
+          const next = new URLSearchParams(sp.toString());
+          next.delete("focus");
+          const qs = next.toString();
+          router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+        }, 15000);
+      } else {
+        tries++;
+        if (tries < 40) window.setTimeout(findAndScroll, 120);
+      }
+    };
+    requestAnimationFrame(() => window.setTimeout(findAndScroll, 0));
+    return () => { alive = false; };
+  }, [focusId, loading, items, grouped.past, filteredPast, pastFilter, pastPage, showPast, pathname, router, sp]);
 
   const activeCount = grouped.ongoing.length + grouped.upcoming.length + grouped.needsCompletion.length;
 
-  // Shared card action callbacks
   const handleComplete = (id: string) => { setActiveId(id); setMode("COMPLETE"); setModalMsg(null); resetCompleteForm(); };
-  const handleCancel  = (id: string) => { setActiveId(id); setMode("CANCEL");   setModalMsg(null); setReason(""); };
-  const handlePropose = (s: Row)     => { setActiveId(s.id); setMode("PROPOSE"); setModalMsg(null); setNote(""); setProposedTime(formatLocalInputValue(new Date(s.scheduledAt))); };
-  const handleJoinCall = (id: string) => router.push(`/call/${id}`);
+  const handleCancel   = (id: string) => { setActiveId(id); setMode("CANCEL");   setModalMsg(null); setReason(""); };
+  const handlePropose  = (s: Row)      => { setActiveId(s.id); setMode("PROPOSE"); setModalMsg(null); setNote(""); setProposedTime(formatLocalInputValue(new Date(s.scheduledAt))); };
+  const handleJoinCall = (id: string)  => router.push(`/call/${id}`);
 
-  const sharedCardProps = { focusId, items, actionLoading, onAccept: accept, onJoinCall: handleJoinCall, onChat: startChat, onComplete: handleComplete, onPropose: handlePropose, onReport: openReportForm, onCancel: handleCancel };
+  const sharedCardProps = {
+    focusId, items, actionLoading,
+    onAccept: accept,
+    onJoinCall: handleJoinCall,
+    onChat: startChat,
+    onComplete: handleComplete,
+    onPropose: handlePropose,
+    onReport: openReportForm,
+    onCancel: handleCancel,
+    onAcceptStudentProposal: acceptStudentProposal,
+    onRejectStudentProposal: rejectStudentProposal,
+  };
 
   return (
     <div className="space-y-5">
@@ -773,7 +858,7 @@ export default function TutorSessionsClient() {
         </div>
       </motion.div>
 
-      {/* Success banner */}
+      {/* Toast */}
       <AnimatePresence>
         {msg && (
           <motion.div initial={{ opacity: 0, y: -8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.98 }}
@@ -832,9 +917,9 @@ export default function TutorSessionsClient() {
 
               {activeCount > 0 && (
                 <>
-                  <Section kind="ONGOING" title="Ongoing" subtitle="Live now" list={grouped.ongoing} {...sharedCardProps} />
-                  <Section kind="NEEDS_COMPLETION" title="Needs completion" subtitle="Session ended" list={grouped.needsCompletion} {...sharedCardProps} />
-                  <Section kind="UPCOMING" title="Upcoming" subtitle="Scheduled next" list={grouped.upcoming} {...sharedCardProps} />
+                  <Section kind="ONGOING"          title="Ongoing"           subtitle="Live now"       list={grouped.ongoing}         {...sharedCardProps} />
+                  <Section kind="NEEDS_COMPLETION"  title="Needs completion"  subtitle="Session ended"  list={grouped.needsCompletion}  {...sharedCardProps} />
+                  <Section kind="UPCOMING"          title="Upcoming"          subtitle="Scheduled next" list={grouped.upcoming}         {...sharedCardProps} />
                 </>
               )}
 
@@ -857,7 +942,6 @@ export default function TutorSessionsClient() {
                           </div>
                         }
                       />
-
                       {filteredPast.length > 0 && totalPastPages > 1 && (
                         <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
                           {getPastPageItems(safePastPage, totalPastPages).map((it, idx) =>
@@ -872,7 +956,6 @@ export default function TutorSessionsClient() {
                           )}
                         </div>
                       )}
-
                       {filteredPast.length === 0 && (
                         <div className="rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-8 text-center text-sm text-[rgb(var(--muted2))]">
                           No {pastFilter !== "ALL" ? pastFilter.toLowerCase() : ""} sessions found.
@@ -995,7 +1078,6 @@ export default function TutorSessionsClient() {
                   </button>
                 </div>
               </div>
-
               <div className="p-6 space-y-4 max-h-[calc(100vh-180px)] overflow-y-auto">
                 {modalMsg && (
                   <div className="rounded-xl border border-rose-400/40 bg-rose-400/10 px-3.5 py-2.5 text-xs font-medium text-rose-700 dark:text-rose-300">{modalMsg}</div>

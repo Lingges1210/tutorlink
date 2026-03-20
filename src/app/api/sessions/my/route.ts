@@ -1,3 +1,4 @@
+// src/app/api/sessions/my/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
@@ -31,12 +32,11 @@ export async function GET() {
       status: true,
       cancelReason: true,
       tutorId: true,
-
-      //  NEW: proposal fields
+      // proposal fields
       proposedAt: true,
       proposedNote: true,
       proposalStatus: true,
-
+      proposedByUserId: true, // ✅ Added
       subject: { select: { code: true, title: true } },
       tutor: { select: { id: true, name: true, programme: true, avatarUrl: true, email: true } },
     },
@@ -49,15 +49,13 @@ export async function GET() {
     durationMin: s.durationMin,
     status: s.status,
     cancelReason: s.cancelReason,
-
     assigned: !!s.tutorId,
     subject: s.subject,
     tutor: s.tutor ?? null,
-
-    //  pass through proposal fields
     proposedAt: s.proposedAt ?? null,
     proposedNote: s.proposedNote ?? null,
     proposalStatus: s.proposalStatus ?? null,
+    proposedByUserId: s.proposedByUserId ?? null, // ✅ Added
   }));
 
   return NextResponse.json({ items });

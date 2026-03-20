@@ -1,12 +1,10 @@
 // src/app/api/tutor/sessions/route.ts
 export const runtime = "nodejs";
-
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
 export async function GET() {
-
   const supabase = await supabaseServerComponent();
   const {
     data: { user },
@@ -50,12 +48,15 @@ export async function GET() {
       cancelReason: true,
       cancelledAt: true,
       rescheduledAt: true,
-
-      //  proposal fields
+      // proposal fields
       proposedAt: true,
       proposedNote: true,
       proposalStatus: true,
-
+      // ✅ Added: tells the tutor UI whether the proposal came from the
+      // student (proposedByUserId === session.studentId) or from themselves.
+      // The tutor dashboard uses this to show the correct banner label:
+      // "Student proposed a new time" vs "You proposed a new time".
+      proposedByUserId: true,
       subject: { select: { code: true, title: true } },
       student: {
         select: {

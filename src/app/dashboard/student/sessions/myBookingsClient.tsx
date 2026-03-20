@@ -33,6 +33,10 @@ type Row = {
   proposedAt?: string | null;
   proposedNote?: string | null;
   proposalStatus?: "PENDING" | "ACCEPTED" | "REJECTED" | null;
+  // ✅ Added: who created the proposal.
+  // If proposedByUserId === tutor.id → tutor proposed → student sees Accept/Reject
+  // If proposedByUserId !== tutor.id → student proposed → student sees "Pending tutor response"
+  proposedByUserId?: string | null;
   subject: { code: string; title: string };
   tutor: {
     id: string;
@@ -62,13 +66,16 @@ function formatLocalInputValue(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// ✅ Fixed: always renders in Malaysia time (UTC+8), not server UTC
 function prettyDate(iso: string) {
-  return new Date(iso).toLocaleString("en-US", {
+  return new Date(iso).toLocaleString("en-MY", {
+    timeZone: "Asia/Kuala_Lumpur",
     weekday: "short",
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    hour12: true,
   });
 }
 
@@ -228,7 +235,12 @@ const BookingCard = memo(function BookingCard({
   const rated = !!ratingBySession[s.id];
   const ongoing = isOngoing(s);
   const soon = isStartingSoon(s);
-  
+
+  // ✅ Determine proposal direction using proposedByUserId
+  // tutorProposed = tutor sent this proposal → student should Accept/Reject
+  // studentProposed = student sent this proposal → waiting for tutor to respond
+  const tutorProposed  = proposalPending && !!s.tutor && s.proposedByUserId === s.tutor.id;
+  const studentProposed = proposalPending && !tutorProposed;
 
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -251,6 +263,8 @@ const BookingCard = memo(function BookingCard({
         closed ? "opacity-75" : "hover:shadow-[0_8px_32px_rgb(var(--shadow)/0.12)] hover:-translate-y-0.5",
         ongoing ? "ring-2 ring-[rgb(var(--primary))/0.6] shadow-[0_0_24px_rgb(var(--primary)/0.10)]" : "",
         soon && !ongoing ? "ring-2 ring-amber-400/70" : "",
+        // ✅ Violet ring when student's own proposal is pending
+        studentProposed ? "ring-2 ring-violet-400/60" : "",
         isFocused ? "ring-2 ring-[rgb(var(--primary))]" : "",
       ].join(" ")}
     >
@@ -259,6 +273,9 @@ const BookingCard = memo(function BookingCard({
       )}
       {soon && !ongoing && (
         <div className="h-0.5 w-full bg-gradient-to-r from-amber-400/40 via-amber-400 to-amber-400/40" />
+      )}
+      {studentProposed && (
+        <div className="h-0.5 w-full bg-gradient-to-r from-violet-400/40 via-violet-400 to-violet-400/40" />
       )}
 
       <div className="p-5">
@@ -428,36 +445,63 @@ const BookingCard = memo(function BookingCard({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -6, scale: 0.98 }}
               transition={{ duration: 0.18 }}
-              className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgb(var(--primary)/0.3)] bg-[rgb(var(--primary)/0.06)] px-4 py-3"
+              className={[
+                "mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3",
+                // ✅ Tutor proposed → primary color (student needs to act)
+                // Student proposed → violet color (waiting for tutor)
+                tutorProposed
+                  ? "border-[rgb(var(--primary)/0.3)] bg-[rgb(var(--primary)/0.06)]"
+                  : "border-violet-400/40 bg-violet-400/10",
+              ].join(" ")}
             >
               <div className="min-w-0">
-                <div className="text-[0.8rem] font-semibold text-[rgb(var(--fg))] flex items-center gap-1.5">
-                  <Sparkles size={13} className="text-[rgb(var(--primary))]" />
-                  Tutor proposed a new time
+                <div className={[
+                  "text-[0.8rem] font-semibold flex items-center gap-1.5",
+                  tutorProposed
+                    ? "text-[rgb(var(--fg))]"
+                    : "text-violet-600 dark:text-violet-300",
+                ].join(" ")}>
+                  <Sparkles
+                    size={13}
+                    className={tutorProposed ? "text-[rgb(var(--primary))]" : "text-violet-500"}
+                  />
+                  {/* ✅ Correct label based on who proposed */}
+                  {tutorProposed ? "Tutor proposed a new time" : "Awaiting tutor confirmation"}
                 </div>
                 <div className="mt-0.5 text-[0.75rem] text-[rgb(var(--muted2))] truncate">
                   {prettyDate(s.proposedAt!)}
                   {s.proposedNote && ` · ${s.proposedNote}`}
                 </div>
               </div>
-              <div className="flex gap-2 shrink-0">
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  disabled={actionLoading}
-                  onClick={() => onAcceptProposal(s.id)}
-                  className="rounded-lg px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:opacity-90 disabled:opacity-60 shadow-sm transition-all"
-                >
-                  {actionLoading ? "…" : "Accept"}
-                </motion.button>
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  disabled={actionLoading}
-                  onClick={() => onRejectProposal(s.id)}
-                  className="rounded-lg px-3 py-1.5 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60 transition-colors"
-                >
-                  Reject
-                </motion.button>
-              </div>
+
+              {/* ✅ Only show Accept/Reject when tutor proposed → student acts */}
+              {tutorProposed && (
+                <div className="flex gap-2 shrink-0">
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    disabled={actionLoading}
+                    onClick={() => onAcceptProposal(s.id)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:opacity-90 disabled:opacity-60 shadow-sm transition-all"
+                  >
+                    {actionLoading ? "…" : "Accept"}
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    disabled={actionLoading}
+                    onClick={() => onRejectProposal(s.id)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60 transition-colors"
+                  >
+                    Reject
+                  </motion.button>
+                </div>
+              )}
+
+              {/* ✅ Student proposed → just show waiting badge, no buttons */}
+              {studentProposed && (
+                <span className="rounded-full px-2.5 py-1 text-[10px] font-semibold border border-violet-400/30 bg-violet-400/15 text-violet-600 dark:text-violet-300 shrink-0">
+                  Pending tutor response
+                </span>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -561,7 +605,6 @@ export default function MyBookingsClient() {
       setSurveySubmitting(false);
     }
   }
-  // ───────────────────────────────────────────────────────────────────────────
 
   function closeModal() {
     setMode(null);
@@ -735,12 +778,19 @@ export default function MyBookingsClient() {
         body: JSON.stringify({ scheduledAt: chosen.toISOString() }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) setMsg({ text: data?.message ?? "Reschedule failed.", type: "error" });
-      else {
+      if (!res.ok) {
+        setMsg({ text: data?.message ?? "Reschedule failed.", type: "error" });
+      } else {
         closeModal();
         await refresh({ silent: true });
         await fetch("/api/reminders/pull", { cache: "no-store" });
-        setMsg({ text: "Booking rescheduled successfully.", type: "success" });
+        // ✅ Show correct message based on whether it was saved as proposal or direct reschedule
+        setMsg({
+          text: data?.proposed
+            ? "Reschedule request sent to your tutor. Waiting for their response."
+            : "Booking rescheduled successfully.",
+          type: "success",
+        });
       }
     } finally {
       setActionLoading(false);
@@ -907,21 +957,18 @@ export default function MyBookingsClient() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ text: data?.message ?? "Rating failed.", type: "error" }); return; }
       setRatingBySession((prev) => ({ ...prev, [rateSessionId]: { rating, comment: rateComment.trim() ? rateComment.trim() : null } }));
-      
-      // ✅ Invalidate achievement/progress caches so data is fresh instantly
-    await Promise.all([
-      mutate("/api/achievements/me"),
-      mutate("/api/achievements/recommendations"),
-      mutate("/api/progress/dashboard?tab=overview"),
-    ]);
 
-      // ── Open optional survey after rating ──
+      await Promise.all([
+        mutate("/api/achievements/me"),
+        mutate("/api/achievements/recommendations"),
+        mutate("/api/progress/dashboard?tab=overview"),
+      ]);
+
       const submittedSessionId = rateSessionId;
       closeRate();
       setSurveySessionId(submittedSessionId);
       setSurveyRating(rating);
       setSurveyOpen(true);
-      // ──────────────────────────────────────
 
       setMsg({ text: "Thanks! Your rating has been submitted.", type: "success" });
       await refresh({ silent: true });
@@ -1413,7 +1460,6 @@ export default function MyBookingsClient() {
               onMouseDown={(e) => e.stopPropagation()}
             >
               {surveyDone ? (
-                /* ── Thank you state ── */
                 <div className="py-4 text-center">
                   <div className="mb-3 text-4xl">🎉</div>
                   <h2 className="text-base font-black text-[rgb(var(--fg))]">Thanks for your feedback!</h2>
@@ -1429,7 +1475,6 @@ export default function MyBookingsClient() {
                 </div>
               ) : (
                 <>
-                  {/* Header */}
                   <div className="mb-1 flex items-center gap-2">
                     <Sparkles size={15} className="text-[rgb(var(--primary))]" />
                     <span className="text-sm font-bold text-[rgb(var(--fg))]">Quick feedback</span>
@@ -1442,7 +1487,6 @@ export default function MyBookingsClient() {
                   </p>
 
                   <div className="space-y-4">
-                    {/* Star rating */}
                     <div className="space-y-2">
                       <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[rgb(var(--muted2))]">
                         Overall experience
@@ -1465,7 +1509,6 @@ export default function MyBookingsClient() {
                       </div>
                     </div>
 
-                    {/* Yes/No questions */}
                     {(
                       [
                         { label: "Was it easier to find a tutor?",     val: surveyEasier,    set: setSurveyEasier },
@@ -1494,7 +1537,6 @@ export default function MyBookingsClient() {
                       </div>
                     ))}
 
-                    {/* Optional comment */}
                     <div className="space-y-1.5">
                       <p className="text-[0.7rem] font-semibold uppercase tracking-wide text-[rgb(var(--muted2))]">
                         Any comments? <span className="normal-case font-normal">(optional)</span>
@@ -1509,7 +1551,6 @@ export default function MyBookingsClient() {
                     </div>
                   </div>
 
-                  {/* Actions */}
                   <div className="mt-5 flex gap-2">
                     <button
                       onClick={closeSurvey}
