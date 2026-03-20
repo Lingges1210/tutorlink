@@ -2,6 +2,7 @@
 
 import { FormEvent, useState, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 function getPasswordStrength(password: string) {
   let score = 0;
@@ -17,6 +18,8 @@ function getPasswordStrength(password: string) {
 }
 
 export default function RegisterPage() {
+  const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [programme, setProgramme] = useState("");
@@ -31,7 +34,6 @@ export default function RegisterPage() {
   const [status, setStatus] = useState<{ type: "error" | "success"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
 
   const strength = getPasswordStrength(password);
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
@@ -75,10 +77,7 @@ export default function RegisterPage() {
       if (!res.ok || !data.success) {
         setStatus({ type: "error", msg: data.message || "Registration failed" });
       } else {
-        setStatus({ type: "success", msg: "Account created! You can now log in." });
-        setPassword("");
-        setConfirmPassword("");
-        setCaptcha("");
+        router.push("/auth/login?registered=true");
       }
     } catch (err: any) {
       setStatus({ type: "error", msg: err.message ?? "Unexpected error" });
@@ -196,9 +195,7 @@ export default function RegisterPage() {
         }
       `}</style>
 
-      {/* ── Star background ── */}
       <div className="relative min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
-
         <div className="relative z-10 mx-auto mb-12 mt-10 max-w-md px-4">
           <div
             className="register-card rounded-3xl border p-7"
@@ -212,7 +209,6 @@ export default function RegisterPage() {
           >
             {/* Header */}
             <div className="mb-6">
-              
               <h1 className="text-xl font-semibold leading-tight" style={{ color: "rgb(var(--fg))" }}>
                 Create your TutorLink account
               </h1>
