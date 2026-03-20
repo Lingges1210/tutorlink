@@ -711,3 +711,42 @@ export async function sendTutorRejectedEmail(
     html,
   });
 }
+
+export async function sendVerificationEmail(opts: {
+  toEmail: string;
+  toName?: string | null;
+  verificationLink: string;
+}) {
+  const subject = "Verify your TutorLink email";
+
+  const html = brandEmailLayout({
+    subject,
+    preheader: "Please verify your email address to activate your TutorLink account.",
+    badgeLabel: "Email Verification",
+    badgeStyle: "brand",
+    title: "Verify your email",
+    greetingName: opts.toName,
+    bodyHtml: `
+      <p style="margin:0 0 12px;">
+        Thanks for registering on <strong style="color:${T.textPrimary};">TutorLink</strong>.
+        Please verify your email address to activate your account.
+      </p>
+      <p style="margin:0;font-size:13px;color:${T.textMuted};">
+        This link expires in <strong style="color:${T.textSecondary};">24 hours</strong>.
+      </p>
+      <div style="margin-top:16px;padding:12px 16px;background:${T.cardBg2};border:1px solid ${T.border};border-radius:10px;word-break:break-all;">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:${T.textMuted};">Verification link</p>
+        <a href="${opts.verificationLink}" style="font-size:12px;color:${T.brand};">${opts.verificationLink}</a>
+      </div>
+    `,
+    cta: { label: "Verify Email", href: opts.verificationLink },
+    footerNote: "If you didn't create an account on TutorLink, you can safely ignore this email.",
+  });
+
+  await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL!,
+    to: opts.toEmail,
+    subject,
+    html,
+  });
+}

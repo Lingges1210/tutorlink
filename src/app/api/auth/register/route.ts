@@ -3,30 +3,24 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { supabaseServer } from "@/lib/supabase";
 import { supabaseServerAnon } from "@/lib/supabaseServerAnon";
-
-import {
-  extractTextFromImage,
-  matchMatricAndName,
-} from "@/lib/googleVision";
+import { extractTextFromImage, matchMatricAndName } from "@/lib/googleVision";
+import { sendVerificationEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
 
-    const email = String(formData.get("email") || "").trim().toLowerCase();
-    const fullName = String(formData.get("fullName") || "").trim();
-    const programme = String(formData.get("programme") || "").trim();
-    const matricNo = String(formData.get("matricNo") || "").trim();
-    const password = String(formData.get("password") || "");
-    const captcha = String(formData.get("captcha") || "").trim();
+    const email      = String(formData.get("email") || "").trim().toLowerCase();
+    const fullName   = String(formData.get("fullName") || "").trim();
+    const programme  = String(formData.get("programme") || "").trim();
+    const matricNo   = String(formData.get("matricNo") || "").trim();
+    const password   = String(formData.get("password") || "");
+    const captcha    = String(formData.get("captcha") || "").trim();
     const matricCard = formData.get("matricCard") as File | null;
 
     const roleRaw = String(formData.get("role") || "STUDENT").toUpperCase();
-    const role = roleRaw === "TUTOR" ? "TUTOR" : "STUDENT";
+    const role    = roleRaw === "TUTOR" ? "TUTOR" : "STUDENT";
 
-    // --------------------------
-    // Basic validation
-    // --------------------------
     if (!email || !fullName || !programme || !matricNo || !password) {
       return NextResponse.json(
         { success: false, message: "Please fill in all required fields." },
@@ -55,9 +49,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // --------------------------
-    // Prisma uniqueness checks
-    // --------------------------
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return NextResponse.json(
@@ -69,29 +60,19 @@ export async function POST(req: NextRequest) {
     const existingMatric = await prisma.user.findFirst({ where: { matricNo } });
     if (existingMatric) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "This matric number is already linked to another account.",
-        },
+        { success: false, message: "This matric number is already linked to another account." },
         { status: 400 }
       );
     }
 
-    // --------------------------
-    // Hash password (local DB)
-    // --------------------------
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // --------------------------
-    // Upload matric card to Supabase Storage
-    // --------------------------
-    const bucket = process.env.SUPABASE_STORAGE_BUCKET!;
-    const timestamp = Date.now();
-    const fileExt = matricCard.name.split(".").pop() || "bin";
+    const bucket     = process.env.SUPABASE_STORAGE_BUCKET!;
+    const timestamp  = Date.now();
+    const fileExt    = matricCard.name.split(".").pop() || "bin";
     const safeMatric = matricNo.replace(/[^a-zA-Z0-9_-]/g, "");
     const objectPath = `matric-cards/${safeMatric}-${timestamp}.${fileExt}`;
-
-    const buffer = Buffer.from(await matricCard.arrayBuffer());
+    const buffer     = Buffer.from(await matricCard.arrayBuffer());
 
     const { data: uploadData, error: uploadError } =
       await supabaseServer.storage.from(bucket).upload(objectPath, buffer, {
@@ -112,26 +93,16 @@ export async function POST(req: NextRequest) {
 
     const matricCardUrl = publicUrlData.publicUrl;
 
-    // --------------------------
-    // OCR verification (non-blocking)
-    // --------------------------
-    let ocrText = "";
+    let ocrText          = "";
     let ocrMatchedMatric = false;
-    let ocrMatchedName = false;
-    let verificationStatus: "AUTO_VERIFIED" | "PENDING_REVIEW" =
-      "PENDING_REVIEW";
+    let ocrMatchedName   = false;
+    let verificationStatus: "AUTO_VERIFIED" | "PENDING_REVIEW" = "PENDING_REVIEW";
 
     try {
       ocrText = await extractTextFromImage(buffer);
-
-      const match = matchMatricAndName({
-        ocrText,
-        matricNo,
-        fullName,
-      });
-
+      const match = matchMatricAndName({ ocrText, matricNo, fullName });
       ocrMatchedMatric = match.matricMatch;
-      ocrMatchedName = match.nameMatch;
+      ocrMatchedName   = match.nameMatch;
 
       const hasUSM =
         ocrText.toLowerCase().includes("usm") ||
@@ -141,19 +112,11 @@ export async function POST(req: NextRequest) {
         verificationStatus = "AUTO_VERIFIED";
       }
 
-      console.log("OCR RESULT:", {
-        ocrMatchedMatric,
-        ocrMatchedName,
-        hasUSM,
-        verificationStatus,
-      });
+      console.log("OCR RESULT:", { ocrMatchedMatric, ocrMatchedName, hasUSM, verificationStatus });
     } catch (err) {
       console.warn("OCR failed → manual review:", err);
     }
 
-    // --------------------------
-    // Create Supabase Auth user
-    // --------------------------
     const supabaseAnon = supabaseServerAnon();
 
     const { data: authData, error: authError } =
@@ -181,9 +144,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // --------------------------
-    // Create Prisma user
-    // --------------------------
     const user = await prisma.user.create({
       data: {
         email,
@@ -208,13 +168,38 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Send verification email via Resend
+    try {
+      const { data: linkData, error: linkError } =
+        await supabaseServer.auth.admin.generateLink({
+          type: "signup",
+          email,
+          password,
+          options: {
+            redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+          },
+        });
+
+      if (!linkError && linkData?.properties?.action_link) {
+        await sendVerificationEmail({
+          toEmail: email,
+          toName: fullName,
+          verificationLink: linkData.properties.action_link,
+        });
+      } else {
+        console.warn("Failed to generate verification link:", linkError);
+      }
+    } catch (emailErr) {
+      console.warn("Verification email failed:", emailErr);
+    }
+
     return NextResponse.json(
       {
         success: true,
         message:
           verificationStatus === "AUTO_VERIFIED"
             ? "Registration successful and verified."
-            : "Registration submitted. Pending admin verification.",
+            : "Registration submitted. Please check your email to verify your account.",
         user,
         supabaseUserId: authData.user?.id ?? null,
       },
