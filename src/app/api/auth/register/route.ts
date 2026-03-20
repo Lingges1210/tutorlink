@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { supabaseServer } from "@/lib/supabase";
-import { supabaseServerAnon } from "@/lib/supabaseServerAnon";
 import { extractTextFromImage, matchMatricAndName } from "@/lib/googleVision";
 import { sendVerificationEmail } from "@/lib/email";
 
@@ -117,22 +116,19 @@ export async function POST(req: NextRequest) {
       console.warn("OCR failed → manual review:", err);
     }
 
-    const supabaseAnon = supabaseServerAnon();
-
+    // Create Supabase auth user via admin (no auto email sent by Supabase)
     const { data: authData, error: authError } =
-      await (await supabaseAnon).auth.signUp({
+      await supabaseServer.auth.admin.createUser({
         email,
         password,
-        options: {
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-          data: {
-            role: role.toLowerCase(),
-            full_name: fullName,
-            programme,
-            matricNo,
-            matricCardUrl,
-            verificationStatus,
-          },
+        email_confirm: false,
+        user_metadata: {
+          role: role.toLowerCase(),
+          full_name: fullName,
+          programme,
+          matricNo,
+          matricCardUrl,
+          verificationStatus,
         },
       });
 
@@ -144,29 +140,47 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name: fullName,
-        programme,
-        matricNo,
-        passwordHash,
-        matricCardUrl,
-        role,
-        verificationStatus,
-        ocrText: ocrText.slice(0, 5000),
-        ocrMatchedMatric,
-        ocrMatchedName,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        verificationStatus: true,
-        createdAt: true,
-      },
-    });
+    // Create Prisma user — rollback Supabase user + file on failure
+    let user;
+    try {
+      user = await prisma.user.create({
+        data: {
+          email,
+          name: fullName,
+          programme,
+          matricNo,
+          passwordHash,
+          matricCardUrl,
+          role,
+          verificationStatus,
+          ocrText: ocrText.slice(0, 5000),
+          ocrMatchedMatric,
+          ocrMatchedName,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          verificationStatus: true,
+          createdAt: true,
+        },
+      });
+    } catch (err: any) {
+      // Rollback: delete the Supabase auth user and uploaded file
+      if (authData?.user?.id) {
+        await supabaseServer.auth.admin.deleteUser(authData.user.id);
+      }
+      await supabaseServer.storage.from(bucket).remove([uploadData.path]);
+
+      if (err.code === "P2002") {
+        return NextResponse.json(
+          { success: false, message: "Email is already registered." },
+          { status: 400 }
+        );
+      }
+      throw err;
+    }
 
     // Send verification email via Resend
     try {
