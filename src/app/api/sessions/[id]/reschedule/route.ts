@@ -7,10 +7,53 @@ import {
   scheduleSessionReminderEmail,
   computeOneHourBeforeISO,
   cancelScheduledEmail,
-  sendSessionInviteEmail, //  added
+  sendSessionInviteEmail,
 } from "@/lib/email";
 
-/** ---------- availability parsing helpers (best-effort) ---------- */
+/* ==========================================================================
+   MALAYSIA TIMEZONE HELPERS
+   Asia/Kuala_Lumpur = UTC+8, no DST
+   ========================================================================== */
+
+const MY_TZ_OFFSET_MIN = 8 * 60;
+
+function getMalaysiaParts(d: Date) {
+  const shifted = new Date(d.getTime() + MY_TZ_OFFSET_MIN * 60_000);
+  return {
+    year:    shifted.getUTCFullYear(),
+    month:   shifted.getUTCMonth(),
+    date:    shifted.getUTCDate(),
+    day:     shifted.getUTCDay(),
+    hours:   shifted.getUTCHours(),
+    minutes: shifted.getUTCMinutes(),
+  };
+}
+
+function sameMalaysiaYMD(a: Date, b: Date) {
+  const pa = getMalaysiaParts(a);
+  const pb = getMalaysiaParts(b);
+  return pa.year === pb.year && pa.month === pb.month && pa.date === pb.date;
+}
+
+function formatMYT(iso: string): string {
+  return (
+    new Date(iso).toLocaleString("en-MY", {
+      timeZone: "Asia/Kuala_Lumpur",
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }) + " MYT"
+  );
+}
+
+/* ==========================================================================
+   AVAILABILITY HELPERS
+   ========================================================================== */
+
 type DayKey = "SUN" | "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT";
 type TimeSlot = { start: string; end: string };
 type DayAvailability = { day: DayKey; off: boolean; slots: TimeSlot[] };
@@ -22,9 +65,10 @@ function toMinutes(hhmm: string) {
   return h * 60 + m;
 }
 
+// ✅ Fixed: uses Malaysia day-of-week, not UTC
 function dayKeyFromDate(d: Date): DayKey {
   const k: DayKey[] = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-  return k[d.getDay()];
+  return k[getMalaysiaParts(d).day];
 }
 
 function withinSlots(day: DayAvailability, startMin: number, endMin: number) {
@@ -40,7 +84,6 @@ function withinSlots(day: DayAvailability, startMin: number, endMin: number) {
 async function getTutorAvailability(
   tutorId: string
 ): Promise<DayAvailability[] | null> {
-  //  get latest APPROVED tutor application
   const app = await prisma.tutorApplication
     .findFirst({
       where: { userId: tutorId, status: "APPROVED" },
@@ -71,17 +114,14 @@ async function getTutorAvailability(
   }
 }
 
+// ✅ Fixed: uses getMalaysiaParts() for hours/minutes and same-day check
 async function tutorDeclaredAvailable(
   tutorId: string,
   start: Date,
   end: Date
 ): Promise<true | false | null> {
-  const sameDay =
-    start.getFullYear() === end.getFullYear() &&
-    start.getMonth() === end.getMonth() &&
-    start.getDate() === end.getDate();
-
-  if (!sameDay) return false;
+  // Must be same calendar day in Malaysia time
+  if (!sameMalaysiaYMD(start, end)) return false;
 
   const avail = await getTutorAvailability(tutorId);
   if (!avail) return null;
@@ -90,13 +130,157 @@ async function tutorDeclaredAvailable(
   const day = avail.find((d) => d.day === dayKey);
   if (!day) return false;
 
-  const startMin = start.getHours() * 60 + start.getMinutes();
-  const endMin = end.getHours() * 60 + end.getMinutes();
+  // ✅ Malaysia hours/minutes, not UTC
+  const sp = getMalaysiaParts(start);
+  const ep = getMalaysiaParts(end);
+  const startMin = sp.hours * 60 + sp.minutes;
+  const endMin   = ep.hours * 60 + ep.minutes;
 
   return withinSlots(day, startMin, endMin);
 }
 
-/** ---------- route ---------- */
+/* ==========================================================================
+   INLINE TUTOR REASSIGNMENT
+   Replaces the "wait for external cron" pattern.
+   Called immediately after a reschedule unassigns the tutor so the student
+   gets a tutor straight away instead of waiting indefinitely.
+   ========================================================================== */
+
+function shuffleInPlace<T>(arr: T[]) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+async function tryReassignTutor(opts: {
+  sessionId: string;
+  subjectId: string;
+  start: Date;
+  end: Date;
+  excludeTutorId?: string | null; // skip the tutor we just unassigned
+}): Promise<string | null> {
+  const { sessionId, subjectId, start, end, excludeTutorId } = opts;
+
+  // Find all approved tutors teaching this subject
+  const candidates = await prisma.tutorSubject.findMany({
+    where: {
+      subjectId,
+      tutor: {
+        isTutorApproved: true,
+        verificationStatus: "AUTO_VERIFIED",
+        isDeactivated: false,
+        // Optionally skip the previously unassigned tutor if they clashed
+        ...(excludeTutorId ? { id: { not: excludeTutorId } } : {}),
+      },
+    },
+    select: {
+      tutorId: true,
+      tutor: {
+        select: {
+          id: true,
+          tutorApplications: {
+            select: { availability: true },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+        },
+      },
+    },
+    take: 50,
+  });
+
+  if (candidates.length === 0) return null;
+
+  // Fairness: don't always pick the same tutor
+  shuffleInPlace(candidates);
+
+  const tutorIds = candidates.map((c) => c.tutorId);
+
+  // Find tutors with clashing sessions at the new time
+  const clashes = await prisma.session.findMany({
+    where: {
+      id: { not: sessionId }, // exclude the session being rescheduled
+      tutorId: { in: tutorIds },
+      status: { in: ["PENDING", "ACCEPTED"] },
+      scheduledAt: { lt: end },
+      AND: [
+        {
+          OR: [
+            { endsAt: { gt: start } },
+            { endsAt: null },
+          ],
+        },
+      ],
+    },
+    select: { tutorId: true },
+  });
+
+  const clashSet = new Set(
+    clashes.map((c) => c.tutorId).filter(Boolean) as string[]
+  );
+
+  // Pick first candidate that is free and declared available in MYT
+  for (const c of candidates) {
+    const tid = c.tutorId;
+    if (clashSet.has(tid)) continue;
+
+    const availabilityJson =
+      c.tutor.tutorApplications?.[0]?.availability ?? null;
+
+    if (!availabilityJson) continue;
+
+    let avail: DayAvailability[] | null = null;
+    try {
+      const parsed = JSON.parse(availabilityJson);
+      if (Array.isArray(parsed)) {
+        avail = parsed
+          .filter(Boolean)
+          .map((x: any) => ({ day: x.day, off: !!x.off, slots: Array.isArray(x.slots) ? x.slots : [] }))
+          .filter((x: any) => typeof x.day === "string");
+      }
+    } catch {
+      continue;
+    }
+
+    if (!avail || avail.length === 0) continue;
+
+    // ✅ MYT availability check
+    if (!sameMalaysiaYMD(start, end)) continue;
+
+    const dayKey = dayKeyFromDate(start);
+    const day = avail.find((d) => d.day === dayKey);
+    if (!day || day.off) continue;
+
+    const sp = getMalaysiaParts(start);
+    const ep = getMalaysiaParts(end);
+    const startMin = sp.hours * 60 + sp.minutes;
+    const endMin   = ep.hours * 60 + ep.minutes;
+
+    const fits = (day.slots || []).some((s) => {
+      const a = toMinutes(s.start);
+      const b = toMinutes(s.end);
+      return startMin >= a && endMin <= b;
+    });
+
+    if (!fits) continue;
+
+    // Race-safe assignment: only assign if session is still unassigned
+    const assigned = await prisma.session.updateMany({
+      where: { id: sessionId, tutorId: null, status: "PENDING" },
+      data: { tutorId: tid },
+    });
+
+    if (assigned.count > 0) return tid;
+  }
+
+  return null;
+}
+
+/* ==========================================================================
+   ROUTE
+   ========================================================================== */
+
 export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> }
@@ -144,28 +328,19 @@ export async function POST(
     return NextResponse.json({ message: "Invalid date" }, { status: 400 });
   }
 
-  //  Fetch existing session details
   const session = await prisma.session.findUnique({
     where: { id },
     select: {
       id: true,
       studentId: true,
-      tutorId: true, // may be null
+      tutorId: true,
       subjectId: true,
       status: true,
       durationMin: true,
-
-      //  for cancelling old scheduled email
       studentReminderEmailId: true,
-
-      //  calendar tracking
       calendarUid: true,
       calendarSequence: true,
-
-      //  for email subject/body
       subject: { select: { code: true, title: true } },
-
-      //  tutor email for calendar update email (if assigned)
       tutor: { select: { email: true, name: true } },
     },
   });
@@ -174,15 +349,6 @@ export async function POST(
     return NextResponse.json({ message: "Not found" }, { status: 404 });
   }
 
-  //  capture non-null values for TS (avoid "possibly null" inside helper)
-  const existingReminderId = session.studentReminderEmailId;
-  const subjCode = session.subject.code;
-  const subjTitle = session.subject.title;
-
-  const studentEmail = dbUser.email;
-  const studentName = dbUser.name;
-
-
   if (session.status === "CANCELLED" || session.status === "COMPLETED") {
     return NextResponse.json(
       { message: "Cannot reschedule this session" },
@@ -190,10 +356,18 @@ export async function POST(
     );
   }
 
-  const durationMin = session.durationMin ?? 60;
-  const newEndsAt = new Date(newScheduledAt.getTime() + durationMin * 60_000);
+  const existingReminderId = session.studentReminderEmailId;
+  const subjCode    = session.subject.code;
+  const subjTitle   = session.subject.title;
+  const studentEmail = dbUser.email;
+  const studentName  = dbUser.name;
 
-  //  1) Student overlap check (exclude this session)
+  const durationMin    = session.durationMin ?? 60;
+  const newEndsAt      = new Date(newScheduledAt.getTime() + durationMin * 60_000);
+  const prevTutorId    = session.tutorId;
+  const uid            = session.calendarUid ?? `${session.id}@tutorlink`;
+
+  // 1) Student overlap check (exclude this session)
   const studentClash = await prisma.session.findFirst({
     where: {
       id: { not: session.id },
@@ -212,14 +386,13 @@ export async function POST(
     );
   }
 
-  const prevTutorId = session.tutorId; //  keep old tutor for notifications
+  // ── Helpers ──────────────────────────────────────────────────────────────
 
   async function rescheduleReminderEmailSafe(
     finalSessionId: string,
     finalStartISO: string
   ) {
     try {
-      // cancel old scheduled email if exists
       if (existingReminderId) {
         await cancelScheduledEmail(existingReminderId);
         await prisma.session.update({
@@ -227,9 +400,7 @@ export async function POST(
           data: { studentReminderEmailId: null },
         });
       }
-
       const dueISO = computeOneHourBeforeISO(finalStartISO);
-
       await scheduleSessionReminderEmail({
         sessionId: finalSessionId,
         toEmail: studentEmail,
@@ -243,7 +414,6 @@ export async function POST(
     }
   }
 
-  //  helper: send UPDATED calendar invite to student + tutor
   async function sendCalendarUpdateSafe(opts: {
     finalStart: Date;
     finalEnd: Date;
@@ -253,7 +423,6 @@ export async function POST(
     sequence: number;
   }) {
     try {
-      // student update
       await sendSessionInviteEmail({
         mode: "RESCHEDULED",
         toEmail: studentEmail,
@@ -268,7 +437,6 @@ export async function POST(
         organizerEmail: process.env.RESEND_FROM_EMAIL!,
       });
 
-      // tutor update (only if we have email)
       if (opts.tutorEmail) {
         await sendSessionInviteEmail({
           mode: "RESCHEDULED",
@@ -289,10 +457,11 @@ export async function POST(
     }
   }
 
-  //  ensure calendar UID exists
-  const uid = session.calendarUid ?? `${session.id}@tutorlink`;
+  // ── Determine if we need to unassign the current tutor ───────────────────
 
-  //  If tutor is assigned, enforce tutor availability + overlap
+  let shouldUnassign = false;
+  let unassignReason: "CLASH" | "UNAVAILABLE" | null = null;
+
   if (session.tutorId) {
     // 2) Tutor overlap check
     const tutorClash = await prisma.session.findFirst({
@@ -307,147 +476,24 @@ export async function POST(
     });
 
     if (tutorClash) {
-      // 👉 queue behavior: unassign tutor instead of hard-failing
-      const updated = await prisma.session.update({
-        where: { id: session.id },
-        data: {
-          scheduledAt: newScheduledAt,
-          endsAt: newEndsAt,
-          rescheduledAt: new Date(),
-          status: "PENDING",
-          tutorId: null,
-
-          //  calendar tracking
-          calendarUid: uid,
-          calendarSequence: { increment: 1 },
-        },
-        select: {
-          id: true,
-          scheduledAt: true,
-          endsAt: true,
-          durationMin: true,
-          calendarUid: true,
-          calendarSequence: true,
-        },
-      });
-
-      //  email: cancel old + schedule new (still meaningful for student)
-      await rescheduleReminderEmailSafe(updated.id, updated.scheduledAt.toISOString());
-
-      //  calendar UPDATED invite to student only (tutor is unassigned now)
-      const end =
-        updated.endsAt ??
-        new Date(
-          new Date(updated.scheduledAt).getTime() +
-            (updated.durationMin ?? durationMin) * 60_000
-        );
-
-      await sendCalendarUpdateSafe({
-        finalStart: new Date(updated.scheduledAt),
-        finalEnd: end,
-        tutorEmail: null,
-        tutorName: null,
-        uid: updated.calendarUid ?? uid,
-        sequence: updated.calendarSequence ?? 0,
-      });
-
-      //  Notify old tutor that student rescheduled and tutor was unassigned
-      try {
-        if (prevTutorId) {
-          await notify.user({
-            userId: prevTutorId,
-            viewer: "TUTOR", //  FIX
-            type: "SESSION_RESCHEDULED_UNASSIGNED",
-            title: "Session rescheduled 🔄",
-            body: `Student rescheduled the session to ${newScheduledAt.toLocaleString()}. You’re no longer assigned due to a time conflict.`,
-            data: { sessionId: updated.id, newTime: newScheduledAt.toISOString() },
-          });
-        }
-      } catch {}
-
-      return NextResponse.json({
-        success: true,
-        queued: true,
-        message:
-          "Rescheduled, but your tutor is busy at that time. You’ve been queued for reassignment.",
-      });
-    }
-
-    // 3) Declared availability check (best-effort)
-    const declared = await tutorDeclaredAvailable(
-      session.tutorId,
-      newScheduledAt,
-      newEndsAt
-    );
-
-    if (declared === false) {
-      const updated = await prisma.session.update({
-        where: { id: session.id },
-        data: {
-          scheduledAt: newScheduledAt,
-          endsAt: newEndsAt,
-          rescheduledAt: new Date(),
-          status: "PENDING",
-          tutorId: null,
-
-          //  calendar tracking
-          calendarUid: uid,
-          calendarSequence: { increment: 1 },
-        },
-        select: {
-          id: true,
-          scheduledAt: true,
-          endsAt: true,
-          durationMin: true,
-          calendarUid: true,
-          calendarSequence: true,
-        },
-      });
-
-      //  email: cancel old + schedule new
-      await rescheduleReminderEmailSafe(updated.id, updated.scheduledAt.toISOString());
-
-      //  calendar UPDATED invite to student only (tutor unassigned)
-      const end =
-        updated.endsAt ??
-        new Date(
-          new Date(updated.scheduledAt).getTime() +
-            (updated.durationMin ?? durationMin) * 60_000
-        );
-
-      await sendCalendarUpdateSafe({
-        finalStart: new Date(updated.scheduledAt),
-        finalEnd: end,
-        tutorEmail: null,
-        tutorName: null,
-        uid: updated.calendarUid ?? uid,
-        sequence: updated.calendarSequence ?? 0,
-      });
-
-      //  Notify old tutor that student rescheduled and tutor was unassigned
-      try {
-        if (prevTutorId) {
-          await notify.user({
-            userId: prevTutorId,
-            viewer: "TUTOR", //  FIX
-            type: "SESSION_RESCHEDULED_UNASSIGNED",
-            title: "Session rescheduled 🔄",
-            body: `Student rescheduled the session to ${newScheduledAt.toLocaleString()}. You’re no longer assigned because you’re unavailable at that time.`,
-            data: { sessionId: updated.id, newTime: newScheduledAt.toISOString() },
-          });
-        }
-      } catch {}
-
-      return NextResponse.json({
-        success: true,
-        queued: true,
-        message:
-          "Rescheduled, but your tutor isn’t available then. You’ve been queued for reassignment.",
-      });
+      shouldUnassign = true;
+      unassignReason = "CLASH";
+    } else {
+      // 3) ✅ Fixed: MYT availability check (was using UTC getHours/getDay)
+      const declared = await tutorDeclaredAvailable(
+        session.tutorId,
+        newScheduledAt,
+        newEndsAt
+      );
+      if (declared === false) {
+        shouldUnassign = true;
+        unassignReason = "UNAVAILABLE";
+      }
     }
   }
 
-  //  No tutor assigned OR tutor is fine -> normal reschedule
+  // ── Perform the DB update ─────────────────────────────────────────────────
+
   const updated = await prisma.session.update({
     where: { id: session.id },
     data: {
@@ -455,8 +501,7 @@ export async function POST(
       endsAt: newEndsAt,
       rescheduledAt: new Date(),
       status: "PENDING",
-
-      //  calendar tracking
+      ...(shouldUnassign ? { tutorId: null } : {}),
       calendarUid: uid,
       calendarSequence: { increment: 1 },
     },
@@ -471,27 +516,43 @@ export async function POST(
     },
   });
 
-  //  email: cancel old + schedule new
-  await rescheduleReminderEmailSafe(updated.id, updated.scheduledAt.toISOString());
-
-  //  calendar UPDATED invite to student + (if assigned) tutor
   const finalStart = new Date(updated.scheduledAt);
-  const finalEnd =
+  const finalEnd   =
     updated.endsAt ??
     new Date(finalStart.getTime() + (updated.durationMin ?? durationMin) * 60_000);
+
+  // ── Emails ────────────────────────────────────────────────────────────────
+
+  await rescheduleReminderEmailSafe(updated.id, updated.scheduledAt.toISOString());
 
   await sendCalendarUpdateSafe({
     finalStart,
     finalEnd,
-    tutorEmail: session.tutorId ? session.tutor?.email : null,
-    tutorName: session.tutorId ? session.tutor?.name : null,
-    uid: updated.calendarUid ?? uid,
-    sequence: updated.calendarSequence ?? 0,
+    // Only send tutor calendar update if they're still assigned
+    tutorEmail: shouldUnassign ? null : (session.tutor?.email ?? null),
+    tutorName:  shouldUnassign ? null : (session.tutor?.name  ?? null),
+    uid:        updated.calendarUid ?? uid,
+    sequence:   updated.calendarSequence ?? 0,
   });
 
-  //  Notify tutor if still assigned (viewer must be TUTOR)
+  // ── Notifications ─────────────────────────────────────────────────────────
+
   try {
-    if (updated.tutorId) {
+    if (shouldUnassign && prevTutorId) {
+      const reason =
+        unassignReason === "CLASH"
+          ? "You're no longer assigned due to a time conflict."
+          : "You're no longer assigned because you're unavailable at that time.";
+
+      await notify.user({
+        userId: prevTutorId,
+        viewer: "TUTOR",
+        type: "SESSION_RESCHEDULED_UNASSIGNED",
+        title: "Session rescheduled",
+        body: `Student rescheduled to ${formatMYT(newScheduledAt.toISOString())}. ${reason}`,
+        data: { sessionId: updated.id, newTime: newScheduledAt.toISOString() },
+      });
+    } else if (!shouldUnassign && updated.tutorId) {
       await notify.sessionRescheduled(
         updated.tutorId,
         updated.id,
@@ -500,8 +561,62 @@ export async function POST(
       );
     }
   } catch {
-    // ignore
+    // ignore notification errors
   }
 
-  return NextResponse.json({ success: true, queued: !session.tutorId });
+  // ── ✅ Inline reassignment (replaces "wait for external cron") ────────────
+  // If the tutor was unassigned, try to immediately find a new one instead
+  // of leaving the session stranded waiting for the allocator cron to run.
+
+  if (shouldUnassign) {
+    try {
+      const newTutorId = await tryReassignTutor({
+        sessionId: updated.id,
+        subjectId: session.subjectId,
+        start: newScheduledAt,
+        end: newEndsAt,
+        // If clash: exclude old tutor (they're busy). If unavailable: also
+        // exclude them since they told us they're not free at this time.
+        excludeTutorId: prevTutorId,
+      });
+
+      if (newTutorId) {
+        // Notify the newly assigned tutor
+        try {
+          await notify.user({
+            userId: newTutorId,
+            viewer: "TUTOR",
+            type: "SESSION_BOOKED",
+            title: "New session assigned",
+            body: `You've been assigned a ${subjCode} session on ${formatMYT(newScheduledAt.toISOString())}.`,
+            data: {
+              sessionId: updated.id,
+              scheduledAt: newScheduledAt.toISOString(),
+              subjectCode: subjCode,
+              subjectTitle: subjTitle,
+            },
+          });
+        } catch {}
+
+        return NextResponse.json({
+          success: true,
+          queued: false,
+          message: "Rescheduled and a new tutor has been assigned.",
+        });
+      }
+    } catch {
+      // Reassignment attempt failed — session stays queued for cron fallback
+    }
+
+    return NextResponse.json({
+      success: true,
+      queued: true,
+      message:
+        unassignReason === "CLASH"
+          ? "Rescheduled, but your tutor is busy at that time. We're looking for a new tutor."
+          : "Rescheduled, but your tutor isn't available then. We're looking for a new tutor.",
+    });
+  }
+
+  return NextResponse.json({ success: true, queued: false });
 }

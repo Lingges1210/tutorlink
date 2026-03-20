@@ -15,6 +15,59 @@ function esc(s: string) {
 }
 
 /* ==========================================================================
+   MALAYSIA TIMEZONE HELPERS
+   Asia/Kuala_Lumpur = UTC+8, no DST
+   ========================================================================== */
+
+const MY_TZ = "Asia/Kuala_Lumpur";
+
+/**
+ * Format a date string/ISO into a human-readable date in Malaysia time.
+ * e.g. "Monday, 21 July 2025"
+ */
+function formatMYTDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-MY", {
+    timeZone: MY_TZ,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+/**
+ * Format a date string/ISO into a time string in Malaysia time.
+ * e.g. "10:30 AM"
+ */
+function formatMYTTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("en-MY", {
+    timeZone: MY_TZ,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+/**
+ * Format a full date+time in Malaysia time.
+ * e.g. "Mon, 21 Jul 2025, 10:30 AM MYT"
+ */
+function formatMYTFull(d: Date): string {
+  return (
+    d.toLocaleString("en-MY", {
+      timeZone: MY_TZ,
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }) + " MYT"
+  );
+}
+
+/* ==========================================================================
    DESIGN TOKENS
    ========================================================================== */
 const T = {
@@ -244,6 +297,9 @@ function brandEmailLayout(opts: {
 
 /* ==========================================================================
    SESSION CARD
+   ✅ Fixed: all date/time formatting now uses Asia/Kuala_Lumpur (MYT, UTC+8)
+   Previously used toLocaleDateString()/toLocaleTimeString() without a timezone,
+   which rendered in server UTC — showing times 8 hours behind MYT.
    ========================================================================== */
 
 function sessionCardHtml(opts: {
@@ -252,16 +308,14 @@ function sessionCardHtml(opts: {
   startISO: string;
   endISO?: string;
   extraLines?: string[];
-  highlight?: boolean; // draws a left-border accent
+  highlight?: boolean;
 }) {
   const { subjectCode, subjectTitle, startISO, endISO, extraLines = [], highlight } = opts;
 
-  const start = new Date(startISO);
-  const end   = endISO ? new Date(endISO) : null;
-
-  const dateStr  = start.toLocaleDateString(undefined, { weekday:"long", month:"long", day:"numeric" });
-  const startTime = start.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
-  const endTime   = end ? end.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" }) : null;
+  // ✅ Use MYT for all displayed date/time strings
+  const dateStr   = formatMYTDate(startISO);
+  const startTime = formatMYTTime(startISO);
+  const endTime   = endISO ? formatMYTTime(endISO) : null;
 
   const accentBar = highlight
     ? `border-left:3px solid ${T.brand};border-radius:0 12px 12px 0;`
@@ -318,7 +372,7 @@ function sessionCardHtml(opts: {
           </td>
           <td style="padding-left:8px;vertical-align:middle;">
             <span style="font-size:13px;color:${T.textSecondary};">
-              ${esc(startTime)}${endTime ? ` &ndash; ${esc(endTime)}` : ""}
+              ${esc(startTime)}${endTime ? ` &ndash; ${esc(endTime)}` : ""} <span style="color:${T.textMuted};font-size:11px;">MYT</span>
             </span>
           </td>
         </tr>
@@ -419,10 +473,10 @@ export async function sendRejectionEmail(email: string, reason?: string) {
 }
 
 export function computeOneHourBeforeISO(sessionISO: string) {
-  const start      = new Date(sessionISO).getTime();
+  const start         = new Date(sessionISO).getTime();
   const oneHourBefore = new Date(start - 60 * 60 * 1000);
-  const minFuture  = new Date(Date.now() + 60 * 1000);
-  const finalTime  = oneHourBefore > minFuture ? oneHourBefore : minFuture;
+  const minFuture     = new Date(Date.now() + 60 * 1000);
+  const finalTime     = oneHourBefore > minFuture ? oneHourBefore : minFuture;
   return finalTime.toISOString();
 }
 
@@ -437,9 +491,12 @@ export async function scheduleSessionReminderEmail(opts: {
   const { sessionId, toEmail, toName, subjectCode, subjectTitle, scheduledAtISO } = opts;
   const subject = `Reminder: Your ${subjectCode} session starts in 1 hour`;
 
+  // ✅ Show MYT time in the reminder subject line preview
+  const startTimeMYT = formatMYTTime(scheduledAtISO);
+
   const html = brandEmailLayout({
     subject,
-    preheader: "Your tutoring session is coming up. Get ready!",
+    preheader: `Your ${subjectCode} session starts at ${startTimeMYT} MYT. Get ready!`,
     badgeLabel: "Session Reminder",
     badgeStyle: "warning",
     title: "Your session is coming up",
@@ -503,9 +560,9 @@ export async function sendSessionInviteEmail(opts: {
   const method = opts.mode === "CANCELLED" ? "CANCEL" : "REQUEST";
 
   const modeConfig = {
-    ACCEPTED:    { badgeStyle: "success" as const, badgeLabel: "Session Confirmed",   title: "Session confirmed",  preheader: "Your session is confirmed. A calendar invite is attached." },
-    RESCHEDULED: { badgeStyle: "warning" as const, badgeLabel: "Session Updated",     title: "Session rescheduled", preheader: "Your session time has changed. Please update your calendar." },
-    CANCELLED:   { badgeStyle: "danger"  as const, badgeLabel: "Session Cancelled",   title: "Session cancelled",  preheader: "Your session has been cancelled." },
+    ACCEPTED:    { badgeStyle: "success" as const, badgeLabel: "Session Confirmed",  title: "Session confirmed",   preheader: "Your session is confirmed. A calendar invite is attached." },
+    RESCHEDULED: { badgeStyle: "warning" as const, badgeLabel: "Session Updated",    title: "Session rescheduled", preheader: "Your session time has changed. Please update your calendar." },
+    CANCELLED:   { badgeStyle: "danger"  as const, badgeLabel: "Session Cancelled",  title: "Session cancelled",   preheader: "Your session has been cancelled." },
   }[opts.mode];
 
   const subject =
@@ -557,10 +614,11 @@ export async function sendSessionInviteEmail(opts: {
     footerNote: "You're receiving this because you have a session booked on TutorLink.",
   });
 
+  // ✅ Use MYT-formatted strings for ICS description (human-readable)
   const descriptionLines = [
     `Course: ${opts.subjectCode} — ${opts.subjectTitle}`,
-    `Start: ${start.toLocaleString()}`,
-    `End: ${end.toLocaleString()}`,
+    `Start: ${formatMYTFull(start)}`,
+    `End:   ${formatMYTFull(end)}`,
     opts.mode === "CANCELLED" && opts.cancelReason ? `Reason: ${opts.cancelReason}` : null,
   ].filter(Boolean);
 

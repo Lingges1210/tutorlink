@@ -12,6 +12,34 @@ export type NotifyInput = {
   data?: Record<string, any>;
 };
 
+/* ==========================================================================
+   MALAYSIA TIMEZONE HELPER
+   Asia/Kuala_Lumpur = UTC+8, no DST
+   ========================================================================== */
+
+/**
+ * Format an ISO string into a human-readable date+time in Malaysia time.
+ * e.g. "Mon, 21 Jul 2025, 10:30 AM MYT"
+ */
+function formatMYT(iso: string): string {
+  return (
+    new Date(iso).toLocaleString("en-MY", {
+      timeZone: "Asia/Kuala_Lumpur",
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }) + " MYT"
+  );
+}
+
+/* ==========================================================================
+   INTERNAL HELPERS
+   ========================================================================== */
+
 function sessionsBase(viewer: ViewerHint) {
   return viewer === "TUTOR"
     ? "/dashboard/tutor/sessions"
@@ -26,10 +54,10 @@ async function create({ userId, type, title, body, viewer, data }: NotifyInput) 
   // Skip if recipient missing (e.g. tutor not assigned yet)
   if (!userId) return null;
 
-  //  always ensure viewer is stored (so bell can route correctly)
+  // always ensure viewer is stored (so bell can route correctly)
   const payload: Record<string, any> = { ...(data ?? {}), viewer };
 
-  //  if sessionId exists, also store direct href (no guessing in UI)
+  // if sessionId exists, also store direct href (no guessing in UI)
   const sessionId =
     typeof payload.sessionId === "string" ? payload.sessionId.trim() : "";
 
@@ -54,6 +82,10 @@ async function create({ userId, type, title, body, viewer, data }: NotifyInput) 
   });
 }
 
+/* ==========================================================================
+   NOTIFY API
+   ========================================================================== */
+
 export const notify = {
   /** Generic notification */
   user: create,
@@ -65,7 +97,8 @@ export const notify = {
     sessionId: string,
     whenISO: string
   ) => {
-    const when = new Date(whenISO).toLocaleString();
+    // ✅ Fixed: was new Date(whenISO).toLocaleString() — server UTC
+    const when = formatMYT(whenISO);
 
     await Promise.all([
       create({
@@ -94,7 +127,8 @@ export const notify = {
     sessionId: string,
     proposedAtISO: string
   ) => {
-    const when = new Date(proposedAtISO).toLocaleString();
+    // ✅ Fixed: was new Date(proposedAtISO).toLocaleString() — server UTC
+    const when = formatMYT(proposedAtISO);
 
     await create({
       userId: studentId,
@@ -113,7 +147,8 @@ export const notify = {
     sessionId: string,
     newTimeISO: string
   ) => {
-    const when = new Date(newTimeISO).toLocaleString();
+    // ✅ Fixed: was new Date(newTimeISO).toLocaleString() — server UTC
+    const when = formatMYT(newTimeISO);
 
     await create({
       userId: tutorId,
@@ -167,7 +202,8 @@ export const notify = {
     viewer: ViewerHint,
     newTimeISO: string
   ) => {
-    const when = new Date(newTimeISO).toLocaleString();
+    // ✅ Fixed: was new Date(newTimeISO).toLocaleString() — server UTC
+    const when = formatMYT(newTimeISO);
 
     await create({
       userId: otherPartyId,
@@ -185,7 +221,8 @@ export const notify = {
     sessionId: string,
     newTimeISO: string
   ) => {
-    const when = new Date(newTimeISO).toLocaleString();
+    // ✅ Fixed: was new Date(newTimeISO).toLocaleString() — server UTC
+    const when = formatMYT(newTimeISO);
 
     await create({
       userId: tutorId,
@@ -216,7 +253,7 @@ export const notify = {
         userId: tutorId,
         viewer: "TUTOR",
         type: "SESSION_COMPLETED",
-        title: "Session Completed",
+        title: "The tutoring session has been successfully completed.",
         body: "The tutoring session has been successfully completed.",
         data: { sessionId },
       }),
