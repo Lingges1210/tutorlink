@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check Prisma for existing user
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return NextResponse.json(
@@ -62,6 +63,21 @@ export async function POST(req: NextRequest) {
         { success: false, message: "This matric number is already linked to another account." },
         { status: 400 }
       );
+    }
+
+    // Check Supabase for orphaned auth user from a previous failed attempt
+    // and clean it up so registration can proceed cleanly
+    try {
+      const { data: { users } } = await supabaseServer.auth.admin.listUsers({
+        perPage: 1000,
+      });
+      const orphanedUser = users.find(u => u.email === email);
+      if (orphanedUser) {
+        console.warn(`Cleaning up orphaned Supabase user for ${email}`);
+        await supabaseServer.auth.admin.deleteUser(orphanedUser.id);
+      }
+    } catch (cleanupErr) {
+      console.warn("Failed to check/cleanup orphaned Supabase user:", cleanupErr);
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
