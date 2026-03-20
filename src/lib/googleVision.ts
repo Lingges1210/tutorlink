@@ -1,9 +1,11 @@
 // src/lib/googleVision.ts
 import vision from "@google-cloud/vision";
 
-// Uses GOOGLE_APPLICATION_CREDENTIALS env var automatically.
-// (For Option B, set GOOGLE_APPLICATION_CREDENTIALS=.secrets/google-vision.json)
-const client = new vision.ImageAnnotatorClient();
+const { ImageAnnotatorClient } = vision;
+
+const client = new ImageAnnotatorClient({
+  credentials: JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || "{}"),
+});
 
 export async function extractTextFromImage(buffer: Buffer): Promise<string> {
   const [result] = await client.textDetection({
@@ -31,24 +33,21 @@ export function matchMatricAndName({
 }) {
   const text = normalize(ocrText);
 
-  // Matric number match (still strict – numbers are reliable)
   const matricMatch = Boolean(matricNo) && text.includes(normalize(matricNo));
 
-  // Name matching (looser)
   const nameParts = normalize(fullName)
     .split(" ")
-    .filter((p) => p.length >= 3); // ignore short words like "bin", "a/l"
+    .filter((p) => p.length >= 3);
 
   const matchedParts = nameParts.filter((p) => text.includes(p));
   const nameScore =
     nameParts.length === 0 ? 0 : matchedParts.length / nameParts.length;
 
-  const nameMatch = nameScore >= 0.6; // 60% match threshold
+  const nameMatch = nameScore >= 0.6;
 
   return {
     matricMatch,
     nameMatch,
-    nameScore, // useful for admin/debug
+    nameScore,
   };
 }
-
