@@ -43,6 +43,7 @@ function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered");
+  const verified   = searchParams.get("verified");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -328,32 +329,35 @@ function LoginPageInner() {
         .register-link:hover::after { width: 100%; }
         .register-link:hover { opacity: 0.84; }
 
-        .registered-banner {
+        .banner {
           animation: banner-slide 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
           border-radius: 12px;
-          border: 1.5px solid rgb(16 185 129 / 0.35);
-          background: rgb(16 185 129 / 0.08);
+          border: 1.5px solid;
           padding: 12px 14px;
           font-size: 0.78rem;
-          color: rgb(16 185 129);
           display: flex;
           align-items: flex-start;
           gap: 10px;
           margin-bottom: 16px;
           line-height: 1.5;
         }
-        .registered-banner-icon {
-          width: 18px; height: 18px;
-          border-radius: 50%;
-          background: rgb(16 185 129 / 0.14);
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 0.72rem;
-          font-weight: 800;
-          flex-shrink: 0;
-          margin-top: 1px;
+        .banner.green {
+          border-color: rgb(16 185 129 / 0.35);
+          background: rgb(16 185 129 / 0.08);
+          color: rgb(16 185 129);
         }
+        .banner.blue {
+          border-color: rgb(59 130 246 / 0.35);
+          background: rgb(59 130 246 / 0.08);
+          color: rgb(37 99 235);
+        }
+        .banner-icon {
+          width: 18px; height: 18px; border-radius: 50%;
+          display: inline-flex; align-items: center; justify-content: center;
+          font-size: 0.72rem; font-weight: 800; flex-shrink: 0; margin-top: 1px;
+        }
+        .banner.green .banner-icon { background: rgb(16 185 129 / 0.14); }
+        .banner.blue  .banner-icon { background: rgb(59 130 246 / 0.14); }
       `}</style>
 
       {/* Splash overlay */}
@@ -391,10 +395,20 @@ function LoginPageInner() {
         {(animation) => (
           <form onSubmit={(e) => handleSubmit(e, animation)} noValidate>
 
-            {/* ── Registered success banner ── */}
-            {registered && (
-              <div className="registered-banner">
-                <span className="registered-banner-icon">✓</span>
+            {/* Email verified banner */}
+            {verified && (
+              <div className="banner blue">
+                <span className="banner-icon">✓</span>
+                <span>
+                  <strong>Email verified!</strong> Your account is now active. Please log in to continue.
+                </span>
+              </div>
+            )}
+
+            {/* Registered banner */}
+            {registered && !verified && (
+              <div className="banner green">
+                <span className="banner-icon">✓</span>
                 <span>
                   <strong>Account created!</strong> Please check your email and verify your account before logging in.
                 </span>
