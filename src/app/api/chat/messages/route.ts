@@ -1,6 +1,7 @@
 // src/app/api/chat/messages/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { pusherServer } from "@/lib/pusher";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -11,6 +12,8 @@ type IncomingAttachment = {
   contentType: string;
   sizeBytes: number;
 };
+
+// ─── GET: fetch paginated messages ────────────────────────────────────────────
 
 export async function GET(req: Request) {
   const supabase = await supabaseServerComponent();
@@ -25,7 +28,7 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const channelId = url.searchParams.get("channelId");
-  const take = Number(url.searchParams.get("take") ?? "30");
+  const take = Math.min(Math.max(Number(url.searchParams.get("take") ?? "30"), 1), 50);
   const cursor = url.searchParams.get("cursor");
 
   if (!channelId) {
@@ -47,26 +50,15 @@ export async function GET(req: Request) {
     );
   }
 
-  // Ensure user belongs to channel
   const ch = await prisma.chatChannel.findUnique({
     where: { id: channelId },
-    select: {
-      id: true,
-      studentId: true,
-      tutorId: true,
-      closeAt: true,
-      closedAt: true,
-    },
+    select: { id: true, studentId: true, tutorId: true, closeAt: true, closedAt: true },
   });
 
   if (!ch || (ch.studentId !== me.id && ch.tutorId !== me.id)) {
-    return NextResponse.json(
-      { ok: false, message: "Forbidden" },
-      { status: 403 }
-    );
+    return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
   }
 
-  // 🔥 READ RECEIPTS SECTION
   const otherUserId = ch.studentId === me.id ? ch.tutorId : ch.studentId;
 
   const reads = await prisma.chatRead.findMany({
@@ -76,21 +68,14 @@ export async function GET(req: Request) {
 
   const meLastReadAt =
     reads.find((r) => r.userId === me.id)?.lastReadAt ?? new Date(0);
-
   const otherLastReadAt =
     reads.find((r) => r.userId === otherUserId)?.lastReadAt ?? new Date(0);
 
-  // Messages + attachments
   const messages = await prisma.chatMessage.findMany({
     where: { channelId },
     orderBy: { createdAt: "desc" },
-    take: Math.min(Math.max(take, 1), 50),
-    ...(cursor
-      ? {
-          cursor: { id: cursor },
-          skip: 1,
-        }
-      : {}),
+    take,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     select: {
       id: true,
       senderId: true,
@@ -112,24 +97,18 @@ export async function GET(req: Request) {
     },
   });
 
-  const nextCursor =
-    messages.length >= Math.min(Math.max(take, 1), 50)
-      ? messages[messages.length - 1].id
-      : null;
+  const nextCursor = messages.length >= take ? messages[messages.length - 1].id : null;
 
-  //  include close window info for UI (no other behavior change)
   const isChatClosed =
     !!ch.closedAt ||
     (ch.closeAt ? new Date().getTime() >= ch.closeAt.getTime() : false);
 
-  // Signed URLs (1 hour) - only if message not deleted
   const admin = supabaseAdmin();
 
   const items = await Promise.all(
     messages.map(async (m) => {
       const atts = await Promise.all(
         (m.attachments ?? []).map(async (a) => {
-          // If message deleted, don't return working URLs
           if (m.isDeleted) {
             return {
               id: a.id,
@@ -140,11 +119,9 @@ export async function GET(req: Request) {
               createdAt: a.createdAt.toISOString(),
             };
           }
-
           const { data: signed } = await admin.storage
             .from(a.bucket)
             .createSignedUrl(a.objectPath, 60 * 60);
-
           return {
             id: a.id,
             fileName: a.fileName,
@@ -178,6 +155,8 @@ export async function GET(req: Request) {
   });
 }
 
+// ─── POST: send a message, then push via Pusher ───────────────────────────────
+
 export async function POST(req: Request) {
   const supabase = await supabaseServerComponent();
   const { data } = await supabase.auth.getUser();
@@ -192,11 +171,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const channelId = body?.channelId as string | undefined;
   const textRaw = body?.text as string | undefined;
-
-  const attachments = (Array.isArray(body?.attachments)
-    ? body.attachments
-    : []) as IncomingAttachment[];
-
+  const attachments = (Array.isArray(body?.attachments) ? body.attachments : []) as IncomingAttachment[];
   const text = (textRaw ?? "").trim();
 
   if (!channelId || (!text && attachments.length === 0)) {
@@ -212,33 +187,21 @@ export async function POST(req: Request) {
   });
 
   if (!me) {
-    return NextResponse.json(
-      { ok: false, message: "User not found" },
-      { status: 404 }
-    );
+    return NextResponse.json({ ok: false, message: "User not found" }, { status: 404 });
   }
 
   const ch = await prisma.chatChannel.findUnique({
     where: { id: channelId },
-    select: {
-      id: true,
-      studentId: true,
-      tutorId: true,
-      closeAt: true,
-      closedAt: true,
-    },
+    select: { id: true, studentId: true, tutorId: true, closeAt: true, closedAt: true },
   });
 
   if (!ch || (ch.studentId !== me.id && ch.tutorId !== me.id)) {
-    return NextResponse.json(
-      { ok: false, message: "Forbidden" },
-      { status: 403 }
-    );
+    return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
   }
 
-  const now = new Date();
   const isClosed =
-    !!ch.closedAt || (ch.closeAt ? ch.closeAt.getTime() <= now.getTime() : false);
+    !!ch.closedAt ||
+    (ch.closeAt ? ch.closeAt.getTime() <= Date.now() : false);
 
   if (isClosed) {
     return NextResponse.json(
@@ -249,28 +212,15 @@ export async function POST(req: Request) {
 
   for (const a of attachments) {
     if (!a?.bucket || !a?.objectPath || !a?.fileName || !a?.contentType) {
-      return NextResponse.json(
-        { ok: false, message: "Bad attachment payload" },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, message: "Bad attachment payload" }, { status: 400 });
     }
-
     const allowed =
-      a.contentType.startsWith("image/") ||
-      a.contentType === "application/pdf";
-
+      a.contentType.startsWith("image/") || a.contentType === "application/pdf";
     if (!allowed) {
-      return NextResponse.json(
-        { ok: false, message: "Only images/PDF allowed" },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, message: "Only images/PDF allowed" }, { status: 400 });
     }
-
     if (typeof a.sizeBytes !== "number" || a.sizeBytes <= 0) {
-      return NextResponse.json(
-        { ok: false, message: "Bad attachment size" },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, message: "Bad attachment size" }, { status: 400 });
     }
   }
 
@@ -322,24 +272,36 @@ export async function POST(req: Request) {
     }),
   ]);
 
+  const createdMsg = {
+    id: msg.id,
+    senderId: msg.senderId,
+    text: msg.text,
+    createdAt: msg.createdAt.toISOString(),
+    isDeleted: msg.isDeleted,
+    deletedAt: msg.deletedAt ? msg.deletedAt.toISOString() : null,
+    attachments: (msg.attachments ?? []).map((a) => ({
+      id: a.id,
+      fileName: a.fileName,
+      contentType: a.contentType,
+      sizeBytes: a.sizeBytes,
+      url: null as string | null,
+      createdAt: a.createdAt.toISOString(),
+    })),
+  };
+
+  // 🔔 Pusher: push new message to the channel
+  // We use `private-chat-{channelId}` so both participants receive it.
+  // The sender's optimistic message is already in their UI, so they ignore
+  // the event when senderId === meId (handled client-side).
+  await pusherServer.trigger(
+    `private-chat-${channelId}`,
+    "new-message",
+    createdMsg
+  );
+
   return NextResponse.json({
     ok: true,
-    message: {
-      id: msg.id,
-      senderId: msg.senderId,
-      text: msg.text,
-      createdAt: msg.createdAt.toISOString(),
-      isDeleted: msg.isDeleted,
-      deletedAt: msg.deletedAt ? msg.deletedAt.toISOString() : null,
-      attachments: (msg.attachments ?? []).map((a) => ({
-        id: a.id,
-        fileName: a.fileName,
-        contentType: a.contentType,
-        sizeBytes: a.sizeBytes,
-        url: null,
-        createdAt: a.createdAt.toISOString(),
-      })),
-    },
+    message: createdMsg,
     chatCloseAt: ch.closeAt ? ch.closeAt.toISOString() : null,
     isChatClosed: false,
   });

@@ -9,9 +9,12 @@ import React, {
 } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import type { Channel, PresenceChannel } from "pusher-js";
+import { getPusherClient } from "@/lib/pusherClient";
 import { useChatStore } from "@/store/chatStore";
-import type { Conv, Msg } from "@/store/chatStore";
+import type { Msg } from "@/store/chatStore";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type RoleFilter = "ALL" | "STUDENT" | "TUTOR";
 
@@ -32,49 +35,46 @@ type Attachment = {
   createdAt: string;
 };
 
-type ChatMessageRow = {
-  id: string;
+// Pusher event payloads
+type PusherNewMessage = Msg;
+
+type PusherReadUpdated = {
   channelId: string;
-  senderId: string;
-  text: string;
-  createdAt: string;
-  isDeleted?: boolean;
-  deletedAt?: string | null;
+  userId: string;
+  readAt: string;
 };
 
-function timeAgo(iso: string) {
-  const d = new Date(iso);
-  const diff = Date.now() - d.getTime();
-  const mins = Math.floor(diff / 60000);
+type PusherTyping = {
+  userId: string;
+  isTyping: boolean;
+};
 
+type PusherMessageDeleted = {
+  messageId: string;
+  isDeleted: boolean;
+  deletedAt: string | null;
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
   if (mins < 1) return "Just now";
   if (mins < 60) return `${mins}m ago`;
-
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
-
   const days = Math.floor(hrs / 24);
   return days === 1 ? "Yesterday" : `${days}d ago`;
 }
 
 function sortMsgs(list: Msg[]) {
   return [...list].sort(
-    (a, b) =>
-      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
 }
 
-function mapRowToMsg(row: ChatMessageRow): Msg {
-  return {
-    id: row.id,
-    senderId: row.senderId,
-    text: row.text ?? "",
-    createdAt: row.createdAt,
-    isDeleted: row.isDeleted,
-    deletedAt: row.deletedAt ?? null,
-    attachments: [],
-  };
-}
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function MessagingClient() {
   const [meId, setMeId] = useState<string | null>(null);
@@ -96,10 +96,7 @@ export default function MessagingClient() {
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    activeIdRef.current = activeId;
-  }, [activeId]);
+  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
 
   const conversations = storeConversations;
 
@@ -119,117 +116,134 @@ export default function MessagingClient() {
   const msgScrollRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
-  const scrollToBottom = useCallback(
-    (behavior: ScrollBehavior = "smooth") => {
-      const doScroll = () => {
-        if (bottomRef.current) {
-          bottomRef.current.scrollIntoView({ behavior, block: "end" });
-        } else if (msgScrollRef.current) {
-          msgScrollRef.current.scrollTop = msgScrollRef.current.scrollHeight;
-        }
-      };
-
-      requestAnimationFrame(() => {
-        doScroll();
-        requestAnimationFrame(doScroll);
-      });
-    },
-    []
-  );
-
-  const sp = useSearchParams();
-  const qsChannelId = sp.get("channelId");
-
-  const [q, setQ] = useState("");
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>("ALL");
-
-  const filteredConversations = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-
-    return conversations.filter((c) => {
-      if (roleFilter === "STUDENT" && !c.viewerIsStudent) return false;
-      if (roleFilter === "TUTOR" && c.viewerIsStudent) return false;
-      if (!needle) return true;
-
-      const hay = [c.subjectName ?? "", c.name ?? "", c.lastMessage ?? ""]
-        .join(" ")
-        .toLowerCase();
-
-      return hay.includes(needle);
-    });
-  }, [conversations, q, roleFilter]);
-
-  const [readInfo, setReadInfo] = useState<{
-    meLastReadAt: string;
-    otherLastReadAt: string;
-  } | null>(null);
-
-  const [otherTyping, setOtherTyping] = useState(false);
-  const typingStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastTypingSentAt = useRef(0);
-  const otherTypingExpiry = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const [chatMeta, setChatMeta] = useState<{
-    isChatClosed: boolean;
-    chatCloseAt: string | null;
-  }>({
-    isChatClosed: false,
-    chatCloseAt: null,
-  });
-
+  // ── Presence (online/offline) ────────────────────────────────────────────
   const [userPresence, setUserPresence] = useState<{
     isOnline: boolean;
     lastSeenAt: string | null;
   } | null>(null);
 
+  // ── Read receipts ────────────────────────────────────────────────────────
+  const [readInfo, setReadInfo] = useState<{
+    meLastReadAt: string;
+    otherLastReadAt: string;
+  } | null>(null);
+
+  // ── Typing ───────────────────────────────────────────────────────────────
+  const [otherTyping, setOtherTyping] = useState(false);
+  const typingStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingSentAt = useRef(0);
+  const otherTypingExpiry = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Chat meta ────────────────────────────────────────────────────────────
+  const [chatMeta, setChatMeta] = useState<{
+    isChatClosed: boolean;
+    chatCloseAt: string | null;
+  }>({ isChatClosed: false, chatCloseAt: null });
+
+  // ── UI state ─────────────────────────────────────────────────────────────
   const [sendErr, setSendErr] = useState<string | null>(null);
   const [pickedFiles, setPickedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const [q, setQ] = useState("");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("ALL");
+
+  const sp = useSearchParams();
+  const qsChannelId = sp.get("channelId");
+
+  // ── Image viewer ─────────────────────────────────────────────────────────
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
-
-  const [imgViewer, setImgViewer] = useState<{
-    open: boolean;
-    urls: string[];
-    idx: number;
-  }>({
-    open: false,
-    urls: [],
-    idx: 0,
+  const [imgViewer, setImgViewer] = useState<{ open: boolean; urls: string[]; idx: number }>({
+    open: false, urls: [], idx: 0,
   });
 
-  const chatRoomRef = useRef<ReturnType<typeof supabaseBrowser.channel> | null>(
-  null
-);
+  // ── Context menu ─────────────────────────────────────────────────────────
+  const [ctx, setCtx] = useState<{
+    open: boolean; x: number; y: number; messageId: string | null;
+  }>({ open: false, x: 0, y: 0, messageId: null });
 
+  // ── Throttle for mark-read ───────────────────────────────────────────────
   const lastMarkedReadRef = useRef<Record<string, number>>({});
+
+  // ─── Derived ────────────────────────────────────────────────────────────────
+
+  const filteredConversations = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return conversations.filter((c) => {
+      if (roleFilter === "STUDENT" && !c.viewerIsStudent) return false;
+      if (roleFilter === "TUTOR" && c.viewerIsStudent) return false;
+      if (!needle) return true;
+      const hay = [c.subjectName ?? "", c.name ?? "", c.lastMessage ?? ""]
+        .join(" ").toLowerCase();
+      return hay.includes(needle);
+    });
+  }, [conversations, q, roleFilter]);
 
   const allImageUrls = useMemo(() => {
     const urls: string[] = [];
-
     for (const m of messages) {
       for (const a of (m.attachments ?? []) as Attachment[]) {
-        if (a?.url && (a.contentType ?? "").startsWith("image/")) {
-          urls.push(a.url);
-        }
+        if (a?.url && (a.contentType ?? "").startsWith("image/")) urls.push(a.url);
       }
     }
-
     return Array.from(new Set(urls));
   }, [messages]);
 
+  const otherReadAtMs = readInfo ? new Date(readInfo.otherLastReadAt).getTime() : 0;
+
+  const lastMyMsgId = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].senderId === meId && !messages[i].id.startsWith("temp-")) {
+        return messages[i].id;
+      }
+    }
+    return null;
+  })();
+
+  const inputDisabled = !active || chatMeta.isChatClosed || uploading;
+
+  // ─── Scroll helpers ─────────────────────────────────────────────────────────
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const doScroll = () => {
+      if (bottomRef.current) {
+        bottomRef.current.scrollIntoView({ behavior, block: "end" });
+      } else if (msgScrollRef.current) {
+        msgScrollRef.current.scrollTop = msgScrollRef.current.scrollHeight;
+      }
+    };
+    requestAnimationFrame(() => { doScroll(); requestAnimationFrame(doScroll); });
+  }, []);
+
+  // ─── Mark read ──────────────────────────────────────────────────────────────
+
+  const markChatRead = useCallback(async (channelId: string) => {
+    const now = Date.now();
+    const last = lastMarkedReadRef.current[channelId] ?? 0;
+    if (now - last < 1200) return;
+    lastMarkedReadRef.current[channelId] = now;
+
+    // Fire-and-forget — the route will pusher.trigger("read-updated") to the other side
+    await fetch("/api/chat/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId }),
+    }).catch(() => {});
+
+    storeMarkRead(channelId);
+    window.dispatchEvent(new Event("chat:unread-refresh"));
+  }, [storeMarkRead]);
+
+  // ─── Conversation preview helper ────────────────────────────────────────────
+
   const patchConversationPreview = useCallback(
-    (
-      channelId: string,
-      payload: { text: string; createdAt: string; senderId: string }
-    ) => {
+    (channelId: string, payload: { text: string; createdAt: string; senderId: string }) => {
       const current = useChatStore.getState().conversations.find((c) => c.id === channelId);
       if (!current) return;
-
       storePatchConversation(channelId, {
         lastMessage: payload.text?.trim() || "📎 Attachment",
         lastAt: payload.createdAt,
@@ -242,205 +256,322 @@ export default function MessagingClient() {
     [meId, storePatchConversation]
   );
 
-  const markChatRead = useCallback(
-  async (channelId: string) => {
-    const now = Date.now();
-    const last = lastMarkedReadRef.current[channelId] ?? 0;
+  // ─── Typing ping ────────────────────────────────────────────────────────────
 
-    if (now - last < 1200) return;
-    lastMarkedReadRef.current[channelId] = now;
-
-    await fetch("/api/chat/read", {
+  async function pingTyping(isTyping: boolean) {
+    if (!activeId || !meId) return;
+    await fetch("/api/chat/typing", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channelId }),
+      body: JSON.stringify({ channelId: activeId, isTyping }),
     }).catch(() => {});
+  }
 
-    if (chatRoomRef.current && meId) {
-      await chatRoomRef.current.send({
-        type: "broadcast",
-        event: "read-updated",
-        payload: {
-          channelId,
-          userId: meId,
-          readAt: new Date().toISOString(),
-        },
+  // ─── Init: fetch me + prefetch conversations ─────────────────────────────────
+
+  useEffect(() => {
+    (async () => {
+      const r = await fetch("/api/me", { cache: "no-store" });
+      const j = await r.json().catch(() => null);
+      if (j?.ok) setMeId(j.id);
+    })();
+    if (!convLoaded) void prefetch();
+  }, [convLoaded, prefetch]);
+
+  // ─── Auto-select active conversation ────────────────────────────────────────
+
+  useEffect(() => {
+    if (qsChannelId && conversations.some((c) => c.id === qsChannelId)) {
+      if (activeId !== qsChannelId) setActiveId(qsChannelId);
+      return;
+    }
+    if (!activeId && conversations[0]?.id) {
+      setActiveId(conversations[0].id);
+      router.replace(`/messaging?channelId=${conversations[0].id}`, { scroll: false });
+    }
+  }, [conversations, qsChannelId, activeId, router]);
+
+  // ─── Guard: active conv removed ─────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!activeId) return;
+    if (conversations.some((c) => c.id === activeId)) return;
+    setActiveId(conversations[0]?.id ?? null);
+    setReadInfo(null);
+    setChatMeta({ isChatClosed: true, chatCloseAt: null });
+    setSendErr("This chat is no longer available.");
+  }, [conversations, activeId]);
+
+  // ─── Load messages for active conversation ───────────────────────────────────
+
+  useEffect(() => {
+    if (!activeId || !meId) return;
+    const channelId = activeId;
+    let cancelled = false;
+
+    setReadInfo(null);
+
+    const cached = useChatStore.getState().messageCache[channelId];
+    const hasCached = !!cached?.length;
+
+    async function loadMessages() {
+      if (hasCached) {
+        setLoadingMsgs(false);
+        if (!cancelled) { scrollToBottom("auto"); await markChatRead(channelId); }
+
+        // Fetch read info + chat meta only (no messages) so Seen/Sent and
+        // close timer are correct without re-fetching all messages
+        fetch(`/api/chat/messages?channelId=${channelId}&take=1`, { cache: "no-store" })
+          .then((r) => r.json())
+          .then((j) => {
+            if (!j?.ok || cancelled) return;
+            if (j.read) setReadInfo(j.read);
+            if (typeof j.isChatClosed === "boolean") {
+              setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
+            }
+          })
+          .catch(() => {});
+
+        return;
+      }
+
+      setLoadingMsgs(true);
+
+      const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
+        cache: "no-store",
+      }).then((r) => r.json()).catch(() => null);
+
+      if (cancelled) { setLoadingMsgs(false); return; }
+
+      if (j?.ok) {
+        const msgs = sortMsgs((j.items as Msg[]).slice().reverse());
+        storeSetMessages(channelId, msgs);
+        storeSetCursor(channelId, j.nextCursor ?? null);
+        if (j.read) setReadInfo(j.read);
+        if (typeof j.isChatClosed === "boolean") {
+          setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
+        }
+      }
+
+      setLoadingMsgs(false);
+      if (!cancelled) { scrollToBottom("auto"); await markChatRead(channelId); }
+    }
+
+    void loadMessages();
+    return () => { cancelled = true; };
+  }, [activeId, meId, scrollToBottom, storeSetMessages, storeSetCursor, markChatRead]);
+
+  // ─── Auto-scroll on new messages ────────────────────────────────────────────
+
+  const prevMsgCount = useRef(0);
+  useEffect(() => {
+    if (messages.length > prevMsgCount.current) scrollToBottom("smooth");
+    prevMsgCount.current = messages.length;
+  }, [messages.length, scrollToBottom]);
+
+  // ─── Pusher: subscribe to private + presence channels ───────────────────────
+
+  useEffect(() => {
+    if (!activeId || !meId) return;
+
+    const channelId = activeId;
+    const meIdSnap = meId;
+    const pusher = getPusherClient();
+
+    // ── Private channel: messages, typing, read receipts, deletes ────────────
+    const privateChannel: Channel = pusher.subscribe(`private-chat-${channelId}`);
+
+    privateChannel.bind("new-message", (msg: PusherNewMessage) => {
+      // Ignore our own messages — already shown via optimistic update + replace
+      if (msg.senderId === meIdSnap) return;
+
+      storeMergeMessages(channelId, [msg]);
+      patchConversationPreview(channelId, {
+        text: msg.text ?? "",
+        createdAt: msg.createdAt,
+        senderId: msg.senderId,
       });
-      
-    }
-    
 
-    storeMarkRead(channelId);
-    window.dispatchEvent(new Event("chat:unread-refresh"));
-  },
-  [meId, storeMarkRead]
-);
-
-
-  function prettyNameFromUrl(u: string) {
-    try {
-      return decodeURIComponent(new URL(u).pathname.split("/").pop() || "image");
-    } catch {
-      return decodeURIComponent((u.split("/").pop() || "image").split("?")[0]);
-    }
-  }
-
-  function openImageInChat(url: string) {
-    const urls = allImageUrls.length ? allImageUrls : [url];
-    setImgViewer({
-      open: true,
-      urls,
-      idx: Math.max(0, urls.indexOf(url)),
+      // Auto-read if we're looking at this channel
+      if (channelId === activeIdRef.current) {
+        void markChatRead(channelId);
+      }
     });
-  }
 
-  function closeImageViewer() {
-    setImgViewer((p) => ({ ...p, open: false }));
-  }
+    privateChannel.bind("message-deleted", (payload: PusherMessageDeleted) => {
+      storePatchMessage(channelId, payload.messageId, {
+        isDeleted: payload.isDeleted,
+        deletedAt: payload.deletedAt,
+        text: "",
+      });
+    });
 
-  function nextImage() {
-    setImgViewer((p) =>
-      !p.urls.length ? p : { ...p, idx: (p.idx + 1) % p.urls.length }
-    );
-  }
+    privateChannel.bind("read-updated", (payload: PusherReadUpdated) => {
+      if (payload.channelId !== channelId) return;
+      if (payload.userId === meIdSnap) return; // our own ack, ignore
 
-  function prevImage() {
-    setImgViewer((p) =>
-      !p.urls.length
-        ? p
-        : { ...p, idx: (p.idx - 1 + p.urls.length) % p.urls.length }
-    );
-  }
+      setReadInfo((prev) => ({
+        meLastReadAt: prev?.meLastReadAt ?? "",
+        otherLastReadAt: payload.readAt,
+      }));
+    });
 
-  function formatLastSeen(iso: string | null) {
-    if (!iso) return "Offline";
+    privateChannel.bind("typing", (payload: PusherTyping) => {
+      if (payload.userId === meIdSnap) return;
 
-    const diff = Date.now() - new Date(iso).getTime();
-    const mins = Math.floor(diff / 60000);
+      if (payload.isTyping) {
+        setOtherTyping(true);
+        if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
+        otherTypingExpiry.current = setTimeout(() => setOtherTyping(false), 2500);
+      } else {
+        setOtherTyping(false);
+        if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
+      }
+    });
 
-    if (mins < 1) return "Just now";
-    if (mins < 60) return `${mins}m ago`;
+    // ── Presence channel: online/offline ──────────────────────────────────────
+    const presenceChannel = pusher.subscribe(
+      `presence-chat-${channelId}`
+    ) as PresenceChannel;
 
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
+    const otherUserId = conversations.find((c) => c.id === channelId)?.otherUserId;
 
-    return `${Math.floor(hrs / 24)}d ago`;
-  }
+    function syncPresence() {
+      if (!otherUserId) {
+        setUserPresence(null);
+        return;
+      }
+      const members = presenceChannel.members;
+      const isOnline = !!members.get(otherUserId);
+      setUserPresence({
+        isOnline,
+        lastSeenAt: isOnline ? new Date().toISOString() : userPresence?.lastSeenAt ?? null,
+      });
+    }
+
+    presenceChannel.bind("pusher:subscription_succeeded", syncPresence);
+    presenceChannel.bind("pusher:member_added", syncPresence);
+    presenceChannel.bind("pusher:member_removed", syncPresence);
+
+    return () => {
+      privateChannel.unbind_all();
+      presenceChannel.unbind_all();
+      pusher.unsubscribe(`private-chat-${channelId}`);
+      pusher.unsubscribe(`presence-chat-${channelId}`);
+      setOtherTyping(false);
+      if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, meId]);
+
+  // ─── Cross-tab/window incoming message event ─────────────────────────────────
+  // (kept for compatibility with any other parts of the app that fire this)
+
+  useEffect(() => {
+    function onIncoming(ev: Event) {
+      const custom = ev as CustomEvent<{ channelId: string; message: Msg }>;
+      const data = custom.detail;
+      if (!data || !activeIdRef.current || data.channelId !== activeIdRef.current) return;
+
+      storeMergeMessages(data.channelId, [data.message]);
+      patchConversationPreview(data.channelId, {
+        text: data.message.text ?? "",
+        createdAt: data.message.createdAt,
+        senderId: data.message.senderId,
+      });
+
+      if (data.message.senderId !== meId) void markChatRead(data.channelId);
+      scrollToBottom("smooth");
+    }
+
+    window.addEventListener("chat:message-incoming", onIncoming as EventListener);
+    return () => window.removeEventListener("chat:message-incoming", onIncoming as EventListener);
+  }, [meId, markChatRead, patchConversationPreview, scrollToBottom, storeMergeMessages]);
+
+  // ─── Back/forward cache reload ───────────────────────────────────────────────
+
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      const nav = performance.getEntriesByType("navigation")[0] as
+        | PerformanceNavigationTiming | undefined;
+      if (e.persisted || nav?.type === "back_forward") window.location.reload();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
+  // ─── Context menu close ──────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const close = () => setCtx((p) => ({ ...p, open: false, messageId: null }));
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, []);
+
+  // ─── Image viewer keyboard / scroll lock ─────────────────────────────────────
 
   useEffect(() => {
     if (!imgViewer.open) return;
-
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") closeImageViewer();
       if (e.key === "ArrowRight") nextImage();
       if (e.key === "ArrowLeft") prevImage();
     };
-
     window.addEventListener("keydown", onKeyDown);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = prev;
-    };
+    return () => { window.removeEventListener("keydown", onKeyDown); document.body.style.overflow = prev; };
   }, [imgViewer.open]);
 
-  useEffect(() => {
-    setZoom(1);
-    setOffset({ x: 0, y: 0 });
-  }, [imgViewer.idx]);
+  useEffect(() => { setZoom(1); setOffset({ x: 0, y: 0 }); }, [imgViewer.idx]);
 
-  useEffect(() => {
-    if (!active?.otherUserId || !meId) {
-      setUserPresence(null);
-      return;
-    }
+  // ─── Handlers ───────────────────────────────────────────────────────────────
 
-    const supabase = supabaseBrowser;
-    const otherUserId = active.otherUserId;
+  function openImageInChat(url: string) {
+    const urls = allImageUrls.length ? allImageUrls : [url];
+    setImgViewer({ open: true, urls, idx: Math.max(0, urls.indexOf(url)) });
+  }
 
-    const presenceChannel = supabase.channel("user-presence", {
-      config: {
-        presence: {
-          key: meId,
-        },
-      },
-    });
+  function closeImageViewer() { setImgViewer((p) => ({ ...p, open: false })); }
+  function nextImage() { setImgViewer((p) => !p.urls.length ? p : { ...p, idx: (p.idx + 1) % p.urls.length }); }
+  function prevImage() { setImgViewer((p) => !p.urls.length ? p : { ...p, idx: (p.idx - 1 + p.urls.length) % p.urls.length }); }
 
-    const syncPresence = () => {
-      const state = presenceChannel.presenceState() as Record<
-        string,
-        Array<{ userId?: string; onlineAt?: string }>
-      >;
+  function prettyNameFromUrl(u: string) {
+    try { return decodeURIComponent(new URL(u).pathname.split("/").pop() || "image"); }
+    catch { return decodeURIComponent((u.split("/").pop() || "image").split("?")[0]); }
+  }
 
-      const entries = Object.values(state).flat();
-      const other = entries.find((p) => p.userId === otherUserId);
-
-      setUserPresence({
-        isOnline: !!other,
-        lastSeenAt: other?.onlineAt ?? null,
-      });
-    };
-
-    presenceChannel
-      .on("presence", { event: "sync" }, syncPresence)
-      .on("presence", { event: "join" }, syncPresence)
-      .on("presence", { event: "leave" }, syncPresence)
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await presenceChannel.track({
-            userId: meId,
-            onlineAt: new Date().toISOString(),
-          });
-          syncPresence();
-        }
-      });
-
-    return () => {
-      supabase.removeChannel(presenceChannel);
-    };
-  }, [active?.otherUserId, meId]);
-
-  async function pingTyping(isTyping: boolean) {
-    if (!activeId || !meId || !chatRoomRef.current) return;
-
-    await chatRoomRef.current.send({
-      type: "broadcast",
-      event: "typing",
-      payload: {
-        channelId: activeId,
-        userId: meId,
-        isTyping,
-      },
-    });
+  function formatLastSeen(iso: string | null) {
+    if (!iso) return "Offline";
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
   }
 
   function validateFile(file: File) {
-    if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
+    if (!file.type.startsWith("image/") && file.type !== "application/pdf")
       return "Only images or PDFs allowed";
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      return "File too large (max 10MB)";
-    }
-
+    if (file.size > 10 * 1024 * 1024) return "File too large (max 10MB)";
     return null;
   }
 
   function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
-
     for (const f of files) {
       const err = validateFile(f);
-      if (err) {
-        alert(err);
-        e.target.value = "";
-        return;
-      }
+      if (err) { alert(err); e.target.value = ""; return; }
     }
-
     setPickedFiles((prev) => [...prev, ...files]);
     e.target.value = "";
   }
@@ -452,46 +583,29 @@ export default function MessagingClient() {
   async function forceDownload(url: string, filename: string) {
     const res = await fetch(url);
     if (!res.ok) throw new Error("Download failed");
-
     const blob = await res.blob();
     const blobUrl = URL.createObjectURL(blob);
-
     const a = document.createElement("a");
     a.href = blobUrl;
     a.download = filename || "download";
     document.body.appendChild(a);
     a.click();
     a.remove();
-
     URL.revokeObjectURL(blobUrl);
   }
 
-  async function uploadAttachment(
-    channelId: string,
-    file: File
-  ): Promise<UploadPayload> {
+  async function uploadAttachment(channelId: string, file: File): Promise<UploadPayload> {
     const sign = await fetch("/api/chat/attachments/sign-upload", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        channelId,
-        fileName: file.name,
-        contentType: file.type,
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId, fileName: file.name, contentType: file.type }),
     }).then((r) => r.json());
 
-    if (!sign?.ok) {
-      throw new Error(sign?.message ?? "Sign upload failed");
-    }
+    if (!sign?.ok) throw new Error(sign?.message ?? "Sign upload failed");
 
     const put = await fetch(sign.signedUrl as string, {
       method: "PUT",
-      headers: {
-        "Content-Type": file.type,
-        "x-upsert": "false",
-      },
+      headers: { "Content-Type": file.type, "x-upsert": "false" },
       body: file,
     });
 
@@ -506,360 +620,22 @@ export default function MessagingClient() {
     };
   }
 
-  async function deleteMessage(messageId: string) {
-    const r = await fetch(`/api/chat/messages/${messageId}`, {
-      method: "DELETE",
-    });
-
-    const j = await r.json().catch(() => null);
-
-    if (j?.ok && activeId) {
-      storePatchMessage(activeId, messageId, {
-        isDeleted: true,
-        deletedAt: j.message?.deletedAt ?? null,
-        text: "",
-      });
-    }
-  }
-
-  useEffect(() => {
-    (async () => {
-      const r = await fetch("/api/me", { cache: "no-store" });
-      const j = await r.json().catch(() => null);
-      if (j?.ok) setMeId(j.id);
-    })();
-
-    if (!convLoaded) void prefetch();
-  }, [convLoaded, prefetch]);
-
-  useEffect(() => {
-  if (qsChannelId && conversations.some((c) => c.id === qsChannelId)) {
-    if (activeId !== qsChannelId) {
-      setActiveId(qsChannelId);
-    }
-    return;
-  }
-
-  if (!activeId && conversations[0]?.id) {
-    setActiveId(conversations[0].id);
-    router.replace(`/messaging?channelId=${conversations[0].id}`, {
-      scroll: false,
-    });
-  }
-}, [conversations, qsChannelId, activeId, router]);
-
-  useEffect(() => {
-    if (!activeId) return;
-    if (conversations.some((c) => c.id === activeId)) return;
-
-    setActiveId(conversations[0]?.id ?? null);
-    setReadInfo(null);
-    setChatMeta({ isChatClosed: true, chatCloseAt: null });
-    setSendErr("This chat is no longer available.");
-  }, [conversations, activeId]);
-
-  useEffect(() => {
-  if (!activeId || !meId) return;
-
-  const channelId = activeId;
-  let cancelled = false;
-
-  setReadInfo(null);
-
-  const cached = useChatStore.getState().messageCache[channelId];
-  const hasCached = !!cached?.length;
-
-  async function loadMessages() {
-    if (hasCached) {
-      setLoadingMsgs(false);
-
-      if (!cancelled) {
-        scrollToBottom("auto");
-        await markChatRead(channelId);
-      }
-      return;
-    }
-
-    setLoadingMsgs(true);
-
-    const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=30`, {
-      cache: "no-store",
-    })
-      .then((r) => r.json())
-      .catch(() => null);
-
-    if (cancelled) {
-      setLoadingMsgs(false);
-      return;
-    }
-
-    if (j?.ok) {
-      const msgs = sortMsgs((j.items as Msg[]).slice().reverse());
-      storeSetMessages(channelId, msgs);
-      storeSetCursor(channelId, j.nextCursor ?? null);
-
-      if (j.read) setReadInfo(j.read);
-
-      if (typeof j.isChatClosed === "boolean") {
-        setChatMeta({
-          isChatClosed: !!j.isChatClosed,
-          chatCloseAt: j.chatCloseAt ?? null,
-        });
-      }
-    }
-
-    setLoadingMsgs(false);
-
-    if (!cancelled) {
-      scrollToBottom("auto");
-      await markChatRead(channelId);
-    }
-  }
-
-  void loadMessages();
-
-  return () => {
-    cancelled = true;
-  };
-}, [
-  activeId,
-  meId,
-  scrollToBottom,
-  storeSetMessages,
-  storeSetCursor,
-  markChatRead,
-]);
-
-  const prevMsgCount = useRef(0);
-
-  useEffect(() => {
-  if (messages.length > prevMsgCount.current) {
-    scrollToBottom("smooth");
-  }
-
-  prevMsgCount.current = messages.length;
-}, [messages.length, scrollToBottom]);
-
-  useEffect(() => {
-    if (!activeId || !meId) return;
-
-    const channelId = activeId;
-    const meIdSnap = meId;
-    const supabase = supabaseBrowser;
-
-    let mounted = true;
-    let localChannel: ReturnType<typeof supabase.channel> | null = null;
-
-    function handleIncomingRow(row: ChatMessageRow) {
-  const msg = mapRowToMsg(row);
-
-  storeMergeMessages(channelId, [msg]);
-
-  patchConversationPreview(channelId, {
-    text: msg.text ?? "",
-    createdAt: msg.createdAt,
-    senderId: msg.senderId,
-  });
-}
-
-    async function start() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!mounted || !session?.access_token) return;
-
-      await supabase.realtime.setAuth(session.access_token);
-      if (!mounted) return;
-
-      const channel = supabase
-  .channel(`chat-room-${channelId}`, {
-    config: { broadcast: { self: false } },
-  })
-  .on(
-    "postgres_changes",
-    {
-      event: "INSERT",
-      schema: "public",
-      table: "ChatMessage",
-      filter: `channelId=eq.${channelId}`,
-    },
-    (payload) => {
-      const row = payload.new as ChatMessageRow;
-      if (!row) return;
-      if (row.senderId === meIdSnap) return;
-      void handleIncomingRow(row);
-    }
-  )
-  .on(
-    "postgres_changes",
-    {
-      event: "UPDATE",
-      schema: "public",
-      table: "ChatMessage",
-      filter: `channelId=eq.${channelId}`,
-    },
-    (payload) => {
-      const row = payload.new as ChatMessageRow;
-      if (!row) return;
-
-      storePatchMessage(channelId, row.id, {
-        senderId: row.senderId,
-        text: row.text ?? "",
-        createdAt: row.createdAt,
-        isDeleted: row.isDeleted,
-        deletedAt: row.deletedAt ?? null,
-      });
-    }
-  )
-  .on("broadcast", { event: "read-updated" }, ({ payload }) => {
-    const data = payload as {
-      channelId: string;
-      userId: string;
-      readAt: string;
-    };
-
-    if (data.channelId !== channelId) return;
-    if (data.userId === meIdSnap) return;
-
-    setReadInfo((prev) => ({
-      meLastReadAt: prev?.meLastReadAt ?? "",
-      otherLastReadAt: data.readAt,
-    }));
-  })
-  .on("broadcast", { event: "typing" }, ({ payload }) => {
-    const data = payload as {
-      channelId: string;
-      userId: string;
-      isTyping: boolean;
-    };
-
-    if (data.channelId !== channelId || data.userId === meIdSnap) return;
-
-    if (data.isTyping) {
-      setOtherTyping(true);
-
-      if (otherTypingExpiry.current) {
-        clearTimeout(otherTypingExpiry.current);
-      }
-
-      otherTypingExpiry.current = setTimeout(() => {
-        setOtherTyping(false);
-      }, 2500);
-    } else {
-      setOtherTyping(false);
-      if (otherTypingExpiry.current) {
-        clearTimeout(otherTypingExpiry.current);
-      }
-    }
-  });
-
-        
-
-      localChannel = channel;
-      chatRoomRef.current = channel;
-
-      channel.subscribe((status) => {
-        console.log(`[MessagingClient] chat-room-${channelId}`, status);
-      });
-    }
-
-    void start();
-
-    return () => {
-      mounted = false;
-      chatRoomRef.current = null;
-      if (localChannel) supabase.removeChannel(localChannel);
-    };
-  }, [
-  activeId,
-  meId,
-  patchConversationPreview,
-  storeMergeMessages,
-  storePatchMessage,
-  markChatRead,
-]);
-
-  useEffect(() => {
-  function onIncoming(ev: Event) {
-    const custom = ev as CustomEvent<{ channelId: string; message: Msg }>;
-    const data = custom.detail;
-    if (!data) return;
-    if (!activeIdRef.current) return;
-    if (data.channelId !== activeIdRef.current) return;
-
-    storeMergeMessages(data.channelId, [data.message]);
-
-   
-
-    patchConversationPreview(data.channelId, {
-      text: data.message.text ?? "",
-      createdAt: data.message.createdAt,
-      senderId: data.message.senderId,
-    });
-
-    if (data.message.senderId !== meId) {
-      void markChatRead(data.channelId);
-    }
-
-    scrollToBottom("smooth");
-  }
-
-  window.addEventListener("chat:message-incoming", onIncoming as EventListener);
-
-  return () => {
-    window.removeEventListener(
-      "chat:message-incoming",
-      onIncoming as EventListener
-    );
-  };
-}, [
-  meId,
-  markChatRead,
-  patchConversationPreview,
-  scrollToBottom,
-  storeMergeMessages,
-]);
-
-  useEffect(() => {
-    const onPageShow = (e: PageTransitionEvent) => {
-      const nav = performance.getEntriesByType("navigation")[0] as
-        | PerformanceNavigationTiming
-        | undefined;
-
-      if (e.persisted || nav?.type === "back_forward") {
-        window.location.reload();
-      }
-    };
-
-    window.addEventListener("pageshow", onPageShow);
-    return () => window.removeEventListener("pageshow", onPageShow);
-  }, []);
-
   async function loadOlder() {
     if (!activeId || !nextCursor) return;
-
     setLoadingMsgs(true);
 
-    const r = await fetch(
+    const j = await fetch(
       `/api/chat/messages?channelId=${activeId}&take=30&cursor=${nextCursor}`,
       { cache: "no-store" }
-    );
-
-    const j = await r.json().catch(() => null);
+    ).then((r) => r.json()).catch(() => null);
 
     if (j?.ok) {
       const older = sortMsgs((j.items as Msg[]).slice().reverse());
       storeMergeMessages(activeId, older);
       storeSetCursor(activeId, j.nextCursor ?? null);
-
       if (j.read) setReadInfo(j.read);
-
       if (typeof j.isChatClosed === "boolean") {
-        setChatMeta({
-          isChatClosed: !!j.isChatClosed,
-          chatCloseAt: j.chatCloseAt ?? null,
-        });
+        setChatMeta({ isChatClosed: !!j.isChatClosed, chatCloseAt: j.chatCloseAt ?? null });
       }
     }
 
@@ -868,11 +644,7 @@ export default function MessagingClient() {
 
   async function send() {
     if (!activeId) return;
-
-    if (chatMeta.isChatClosed) {
-      setSendErr("Chat is closed.");
-      return;
-    }
+    if (chatMeta.isChatClosed) { setSendErr("Chat is closed."); return; }
 
     const t = text.trim();
     if (!t && pickedFiles.length === 0) return;
@@ -884,17 +656,12 @@ export default function MessagingClient() {
     setSendErr(null);
     setUploading(true);
 
-    const optimisticId = `temp-${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2, 8)}`;
-
-    const optimisticCreatedAt = new Date().toISOString();
-
+    const optimisticId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const optimisticMsg: Msg = {
       id: optimisticId,
       senderId: meId ?? "",
       text: t,
-      createdAt: optimisticCreatedAt,
+      createdAt: new Date().toISOString(),
       attachments: [],
     };
 
@@ -902,18 +669,12 @@ export default function MessagingClient() {
     scrollToBottom("smooth");
 
     try {
-      const uploaded = await Promise.all(
-        pickedFiles.map((f) => uploadAttachment(activeId, f))
-      );
+      const uploaded = await Promise.all(pickedFiles.map((f) => uploadAttachment(activeId, f)));
 
       const r = await fetch("/api/chat/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          channelId: activeId,
-          text: t,
-          attachments: uploaded,
-        }),
+        body: JSON.stringify({ channelId: activeId, text: t, attachments: uploaded }),
       });
 
       const j = await r.json().catch(() => null);
@@ -921,28 +682,22 @@ export default function MessagingClient() {
       if (!r.ok) {
         storeRemoveMessage(activeId, optimisticId);
         setSendErr(j?.message ?? "Failed to send");
-
-        if (
-          r.status === 403 &&
-          (j?.message?.toLowerCase?.() ?? "").includes("closed")
-        ) {
+        if (r.status === 403 && (j?.message?.toLowerCase?.() ?? "").includes("closed")) {
           setChatMeta((p) => ({ ...p, isChatClosed: true }));
         }
-
         setText(t);
         return;
       }
 
       if (j?.ok && j.message) {
         const createdMsg = j.message as Msg;
+        // Replace optimistic with confirmed message
         storeReplaceMessage(activeId, optimisticId, createdMsg);
-
         patchConversationPreview(activeId, {
           text: createdMsg.text?.trim() || "📎 Attachment",
           createdAt: createdMsg.createdAt,
           senderId: createdMsg.senderId,
         });
-
         scrollToBottom("smooth");
       }
 
@@ -957,55 +712,25 @@ export default function MessagingClient() {
     }
   }
 
-  const [ctx, setCtx] = useState<{
-    open: boolean;
-    x: number;
-    y: number;
-    messageId: string | null;
-  }>({
-    open: false,
-    x: 0,
-    y: 0,
-    messageId: null,
-  });
+  async function deleteMessage(messageId: string) {
+    const r = await fetch(`/api/chat/messages/${messageId}`, { method: "DELETE" });
+    const j = await r.json().catch(() => null);
 
-  useEffect(() => {
-    const close = () =>
-      setCtx((p) => ({ ...p, open: false, messageId: null }));
-
-    window.addEventListener("click", close);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-
-    return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
-    };
-  }, []);
-
-  const otherReadAtMs = readInfo
-    ? new Date(readInfo.otherLastReadAt).getTime()
-    : 0;
-
-  const lastMyMsgId = (() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].senderId === meId && !messages[i].id.startsWith("temp-")) {
-        return messages[i].id;
-      }
+    // Optimistic local update — Pusher will also fire "message-deleted" to the other side
+    if (j?.ok && activeId) {
+      storePatchMessage(activeId, messageId, {
+        isDeleted: true,
+        deletedAt: j.message?.deletedAt ?? null,
+        text: "",
+      });
     }
-    return null;
-  })();
-
-  const inputDisabled = !active || chatMeta.isChatClosed || uploading;
+  }
 
   function timeLeft(iso: string) {
     const ms = new Date(iso).getTime() - Date.now();
     if (ms <= 0) return "Closed";
-
     const mins = Math.ceil(ms / 60000);
     if (mins < 60) return `${mins}m left`;
-
     const hrs = Math.floor(mins / 60);
     const rem = mins % 60;
     return rem ? `${hrs}h ${rem}m` : `${hrs}h left`;
@@ -1013,7 +738,6 @@ export default function MessagingClient() {
 
   function closeUrgency(iso: string | null) {
     if (!iso) return "none";
-
     const ms = new Date(iso).getTime() - Date.now();
     if (ms <= 0) return "closed";
     if (ms <= 2 * 60 * 1000) return "danger";
@@ -1021,134 +745,52 @@ export default function MessagingClient() {
     return "ok";
   }
 
+  // ─── Icons ───────────────────────────────────────────────────────────────────
+
   const IconOpen = ({ className = "" }: { className?: string }) => (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      className={className}
-    >
-      <path
-        d="M14 5h5v5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M10 14L19 5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M19 14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M14 5h5v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 14L19 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M19 14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 
   const IconDownload = ({ className = "" }: { className?: string }) => (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      className={className}
-    >
-      <path
-        d="M12 3v12"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M7 10l5 5 5-5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M5 21h14"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M7 10l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 
   const IconPdf = ({ className = "" }: { className?: string }) => (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      className={className}
-    >
-      <path
-        d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
       <path d="M14 2v5h5" stroke="currentColor" strokeWidth="2" />
     </svg>
   );
 
   const IconSearch = () => (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      className="shrink-0 opacity-50"
-    >
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" className="shrink-0 opacity-50">
       <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-      <path
-        d="M16.5 16.5l4 4"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+      <path d="M16.5 16.5l4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 
   const IconSend = () => (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M22 2L11 13"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M22 2L15 22 11 13 2 9l20-7z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M22 2L15 22 11 13 2 9l20-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 
   const IconAttach = () => (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.48"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.48" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
+
+  // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <>
@@ -1168,14 +810,14 @@ export default function MessagingClient() {
               <div className="flex items-center gap-1.5 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-1.5">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 <span className="text-[0.7rem] font-medium text-[rgb(var(--muted))]">
-                  {conversations.length} conversation
-                  {conversations.length !== 1 ? "s" : ""}
+                  {conversations.length} conversation{conversations.length !== 1 ? "s" : ""}
                 </span>
               </div>
             )}
           </header>
 
           <section className="grid h-[calc(100vh-250px)] min-h-[520px] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_20px_60px_rgba(0,0,0,0.10)] lg:grid-cols-[300px_1fr]">
+            {/* ── Sidebar ─────────────────────────────────────────────────── */}
             <div className="flex min-h-0 flex-col border-b border-[rgb(var(--border))] bg-[rgb(var(--card2))]/60 lg:border-b-0 lg:border-r">
               <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] px-4 py-3.5">
                 <span className="text-[0.8rem] font-semibold text-[rgb(var(--fg))]">
@@ -1209,14 +851,8 @@ export default function MessagingClient() {
 
               <div className="flex gap-1.5 px-3 pb-3">
                 {(["ALL", "STUDENT", "TUTOR"] as RoleFilter[]).map((key) => {
-                  const labels = {
-                    ALL: "All",
-                    STUDENT: "Student",
-                    TUTOR: "Tutor",
-                  };
-
+                  const labels = { ALL: "All", STUDENT: "Student", TUTOR: "Tutor" };
                   const isActive = roleFilter === key;
-
                   return (
                     <button
                       key={key}
@@ -1238,7 +874,6 @@ export default function MessagingClient() {
                 {filteredConversations.map((conv) => {
                   const isActive = conv.id === activeId;
                   const isStudent = conv.viewerIsStudent;
-
                   return (
                     <div
                       key={conv.id}
@@ -1252,40 +887,22 @@ export default function MessagingClient() {
                           : "border-[rgb(var(--border))] bg-[rgb(var(--card))] hover:border-[rgb(var(--primary))/0.25]"
                       }`}
                     >
-                      <div
-                        className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full ${
-                          isStudent ? "bg-violet-500" : "bg-fuchsia-500"
-                        }`}
-                      />
-
+                      <div className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full ${isStudent ? "bg-violet-500" : "bg-fuchsia-500"}`} />
                       <div className="flex items-start justify-between gap-2 pl-2">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[0.75rem] font-semibold text-[rgb(var(--fg))]">
-                            {conv.subjectName}
-                          </p>
-                          <p className="mt-0.5 truncate text-[0.68rem] text-[rgb(var(--muted))]">
-                            {conv.name}
-                          </p>
-                          <p className="mt-1 line-clamp-1 text-[0.66rem] text-[rgb(var(--muted2))]">
-                            {conv.lastMessage || "No messages yet"}
-                          </p>
+                          <p className="truncate text-[0.75rem] font-semibold text-[rgb(var(--fg))]">{conv.subjectName}</p>
+                          <p className="mt-0.5 truncate text-[0.68rem] text-[rgb(var(--muted))]">{conv.name}</p>
+                          <p className="mt-1 line-clamp-1 text-[0.66rem] text-[rgb(var(--muted2))]">{conv.lastMessage || "No messages yet"}</p>
                         </div>
-
                         <div className="flex shrink-0 flex-col items-end gap-1.5">
-                          <span
-                            className={`rounded-md px-1.5 py-0.5 text-[0.58rem] font-bold uppercase tracking-wide ${
-                              isStudent
-                                ? "bg-violet-500/10 text-violet-600 dark:text-violet-300"
-                                : "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-300"
-                            }`}
-                          >
+                          <span className={`rounded-md px-1.5 py-0.5 text-[0.58rem] font-bold uppercase tracking-wide ${
+                            isStudent
+                              ? "bg-violet-500/10 text-violet-600 dark:text-violet-300"
+                              : "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-300"
+                          }`}>
                             {isStudent ? "S" : "T"}
                           </span>
-
-                          <span className="text-[0.6rem] text-[rgb(var(--muted2))]">
-                            {timeAgo(conv.lastAt)}
-                          </span>
-
+                          <span className="text-[0.6rem] text-[rgb(var(--muted2))]">{timeAgo(conv.lastAt)}</span>
                           {conv.unread > 0 && (
                             <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[rgb(var(--primary))] px-1 text-[0.58rem] font-bold text-white">
                               {conv.unread}
@@ -1299,49 +916,28 @@ export default function MessagingClient() {
               </div>
             </div>
 
+            {/* ── Chat panel ──────────────────────────────────────────────── */}
             <div className="flex min-h-0 flex-col">
+              {/* Header */}
               <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] bg-[rgb(var(--card))]/80 px-5 py-3.5">
                 {active ? (
                   <div className="flex min-w-0 items-center gap-3">
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${
-                        active.viewerIsStudent
-                          ? "bg-gradient-to-br from-violet-500 to-purple-600"
-                          : "bg-gradient-to-br from-fuchsia-500 to-pink-600"
-                      }`}
-                    >
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${
+                      active.viewerIsStudent
+                        ? "bg-gradient-to-br from-violet-500 to-purple-600"
+                        : "bg-gradient-to-br from-fuchsia-500 to-pink-600"
+                    }`}>
                       {active.name.charAt(0).toUpperCase()}
                     </div>
-
                     <div className="min-w-0">
-                      <p className="truncate text-[0.85rem] font-semibold text-[rgb(var(--fg))]">
-                        {active.subjectName}
-                      </p>
-
+                      <p className="truncate text-[0.85rem] font-semibold text-[rgb(var(--fg))]">{active.subjectName}</p>
                       <div className="mt-0.5 flex items-center gap-2">
-                        <span className="text-[0.68rem] text-[rgb(var(--muted))]">
-                          {active.name}
-                        </span>
-
+                        <span className="text-[0.68rem] text-[rgb(var(--muted))]">{active.name}</span>
                         {active.otherUserId && userPresence && (
                           <>
-                            <span
-                              className={`h-1.5 w-1.5 rounded-full ${
-                                userPresence.isOnline
-                                  ? "bg-emerald-500"
-                                  : "bg-gray-400"
-                              }`}
-                            />
-                            <span
-                              className={`text-[0.65rem] font-medium ${
-                                userPresence.isOnline
-                                  ? "text-emerald-600 dark:text-emerald-400"
-                                  : "text-[rgb(var(--muted2))]"
-                              }`}
-                            >
-                              {userPresence.isOnline
-                                ? "Online"
-                                : formatLastSeen(userPresence.lastSeenAt)}
+                            <span className={`h-1.5 w-1.5 rounded-full ${userPresence.isOnline ? "bg-emerald-500" : "bg-gray-400"}`} />
+                            <span className={`text-[0.65rem] font-medium ${userPresence.isOnline ? "text-emerald-600 dark:text-emerald-400" : "text-[rgb(var(--muted2))]"}`}>
+                              {userPresence.isOnline ? "Online" : formatLastSeen(userPresence.lastSeenAt)}
                             </span>
                           </>
                         )}
@@ -1349,18 +945,14 @@ export default function MessagingClient() {
                     </div>
 
                     {chatMeta.chatCloseAt && !chatMeta.isChatClosed && (
-                      <span
-                        className={`ml-2 rounded-full border px-2.5 py-0.5 text-[0.62rem] font-semibold ${
-                          closeUrgency(chatMeta.chatCloseAt) === "danger"
-                            ? "border-red-400/40 bg-red-500/10 text-red-600 dark:text-red-400"
-                            : closeUrgency(chatMeta.chatCloseAt) === "warn"
-                            ? "border-amber-400/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                            : "border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                        }`}
-                      >
-                        {closeUrgency(chatMeta.chatCloseAt) === "danger"
-                          ? "⚠ "
-                          : ""}
+                      <span className={`ml-2 rounded-full border px-2.5 py-0.5 text-[0.62rem] font-semibold ${
+                        closeUrgency(chatMeta.chatCloseAt) === "danger"
+                          ? "border-red-400/40 bg-red-500/10 text-red-600 dark:text-red-400"
+                          : closeUrgency(chatMeta.chatCloseAt) === "warn"
+                          ? "border-amber-400/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                          : "border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                      }`}>
+                        {closeUrgency(chatMeta.chatCloseAt) === "danger" ? "⚠ " : ""}
                         {timeLeft(chatMeta.chatCloseAt)}
                       </span>
                     )}
@@ -1372,9 +964,7 @@ export default function MessagingClient() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-sm text-[rgb(var(--muted))]">
-                    Select a conversation
-                  </p>
+                  <p className="text-sm text-[rgb(var(--muted))]">Select a conversation</p>
                 )}
 
                 {active && (
@@ -1387,28 +977,18 @@ export default function MessagingClient() {
                 )}
               </div>
 
+              {/* Closed banner */}
               {active && chatMeta.isChatClosed && (
                 <div className="mx-4 mt-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-[0.72rem] text-[rgb(var(--muted))]">
                   💬 Chat closed
                   {chatMeta.chatCloseAt && (
-                    <>
-                      {" "}
-                      ·{" "}
-                      {new Date(chatMeta.chatCloseAt).toLocaleString([], {
-                        month: "short",
-                        day: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </>
+                    <> · {new Date(chatMeta.chatCloseAt).toLocaleString([], { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</>
                   )}
                 </div>
               )}
 
-              <div
-                ref={msgScrollRef}
-                className="flex-1 space-y-1 overflow-y-auto px-4 py-4"
-              >
+              {/* Messages list */}
+              <div ref={msgScrollRef} className="flex-1 space-y-1 overflow-y-auto px-4 py-4">
                 {nextCursor && (
                   <div className="mb-3 flex justify-center">
                     <button
@@ -1421,133 +1001,75 @@ export default function MessagingClient() {
                   </div>
                 )}
 
-                {showSkeleton &&
-                  [1, 2, 3, 4].map((i) => (
+                {showSkeleton && [1, 2, 3, 4].map((i) => (
+                  <div key={i} className={`mb-2 flex ${i % 2 === 0 ? "justify-end" : "justify-start"}`}>
                     <div
-                      key={i}
-                      className={`mb-2 flex ${
-                        i % 2 === 0 ? "justify-end" : "justify-start"
-                      }`}
-                    >
-                      <div
-                        className={`rounded-2xl ${
-                          i % 2 === 0 ? "rounded-br-sm" : "rounded-bl-sm"
-                        } bg-[rgb(var(--card2))]`}
-                        style={{ width: `${120 + i * 30}px`, height: "36px" }}
-                      />
-                    </div>
-                  ))}
+                      className={`rounded-2xl ${i % 2 === 0 ? "rounded-br-sm" : "rounded-bl-sm"} bg-[rgb(var(--card2))]`}
+                      style={{ width: `${120 + i * 30}px`, height: "36px" }}
+                    />
+                  </div>
+                ))}
 
                 {messages.map((msg, i) => {
                   const isMe = msg.senderId === meId;
                   const isTemp = msg.id.startsWith("temp-");
                   const isLastMine = isMe && msg.id === lastMyMsgId;
-                  const isSeen =
-                    isLastMine &&
-                    new Date(msg.createdAt).getTime() <= otherReadAtMs;
+                  const isSeen = isLastMine && new Date(msg.createdAt).getTime() <= otherReadAtMs;
 
                   const showTime =
                     i === 0 ||
-                    new Date(msg.createdAt).getTime() -
-                      new Date(messages[i - 1].createdAt).getTime() >
-                      5 * 60 * 1000;
+                    new Date(msg.createdAt).getTime() - new Date(messages[i - 1].createdAt).getTime() > 5 * 60 * 1000;
 
                   return (
                     <React.Fragment key={msg.id}>
                       {showTime && (
                         <div className="flex justify-center py-2">
                           <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-0.5 text-[0.6rem] text-[rgb(var(--muted2))]">
-                            {new Date(msg.createdAt).toLocaleString([], {
-                              month: "short",
-                              day: "2-digit",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {new Date(msg.createdAt).toLocaleString([], { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </div>
                       )}
 
                       <div
-                        className={`flex ${
-                          isMe ? "justify-end" : "justify-start"
-                        }`}
+                        className={`flex ${isMe ? "justify-end" : "justify-start"}`}
                         onContextMenu={(e) => {
                           if (!isMe || msg.isDeleted || isTemp) return;
                           e.preventDefault();
-                          setCtx({
-                            open: true,
-                            x: e.clientX,
-                            y: e.clientY,
-                            messageId: msg.id,
-                          });
+                          setCtx({ open: true, x: e.clientX, y: e.clientY, messageId: msg.id });
                         }}
                       >
-                        <div
-                          className={`group relative flex max-w-[68%] flex-col ${
-                            isMe ? "items-end" : "items-start"
-                          }`}
-                        >
-                          <div
-                            className={`rounded-2xl px-3.5 py-2.5 text-[0.8rem] leading-relaxed shadow-sm ${
-                              isMe
-                                ? `rounded-br-sm bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white ${
-                                    isTemp ? "opacity-60" : ""
-                                  }`
-                                : "rounded-bl-sm border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]"
-                            }`}
-                          >
+                        <div className={`group relative flex max-w-[68%] flex-col ${isMe ? "items-end" : "items-start"}`}>
+                          <div className={`rounded-2xl px-3.5 py-2.5 text-[0.8rem] leading-relaxed shadow-sm ${
+                            isMe
+                              ? `rounded-br-sm bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white ${isTemp ? "opacity-60" : ""}`
+                              : "rounded-bl-sm border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]"
+                          }`}>
                             {msg.isDeleted ? (
-                              <p className="text-[0.75rem] italic opacity-70">
-                                Message deleted
-                              </p>
+                              <p className="text-[0.75rem] italic opacity-70">Message deleted</p>
                             ) : (
                               <>
-                                {msg.text && (
-                                  <p className="whitespace-pre-wrap break-words">
-                                    {msg.text}
-                                  </p>
-                                )}
+                                {msg.text && <p className="whitespace-pre-wrap break-words">{msg.text}</p>}
 
                                 {!!msg.attachments?.length && (
                                   <div className="mt-2 space-y-2">
                                     {msg.attachments.map((a) => {
-                                      const isImage = (a.contentType ?? "").startsWith("image/");
-                                      const isPdf = a.contentType === "application/pdf";
+                                      const att = a as Attachment;
+                                      const isImage = (att.contentType ?? "").startsWith("image/");
+                                      const isPdf = att.contentType === "application/pdf";
 
-                                      if (isImage && a.url) {
+                                      if (isImage && att.url) {
                                         return (
-                                          <div key={a.id} className="overflow-hidden rounded-xl border border-white/10 bg-black/10">
-                                            <button
-                                              type="button"
-                                              onClick={() => openImageInChat(a.url!)}
-                                              className="block"
-                                            >
-                                              <Image
-                                                src={a.url}
-                                                alt={a.fileName}
-                                                width={1200}
-                                                height={800}
-                                                className="h-auto max-h-72 w-auto max-w-full object-contain"
-                                              />
+                                          <div key={att.id} className="overflow-hidden rounded-xl border border-white/10 bg-black/10">
+                                            <button type="button" onClick={() => openImageInChat(att.url!)} className="block">
+                                              <Image src={att.url} alt={att.fileName} width={1200} height={800} className="h-auto max-h-72 w-auto max-w-full object-contain" />
                                             </button>
-
                                             <div className="flex items-center justify-between gap-2 px-2.5 py-2 text-[0.68rem]">
-                                              <span className="truncate">{a.fileName}</span>
+                                              <span className="truncate">{att.fileName}</span>
                                               <div className="flex items-center gap-1">
-                                                <button
-                                                  type="button"
-                                                  onClick={() => openImageInChat(a.url!)}
-                                                  className="rounded-lg border border-white/10 px-2 py-1 hover:bg-white/10"
-                                                  title="Open"
-                                                >
+                                                <button type="button" onClick={() => openImageInChat(att.url!)} className="rounded-lg border border-white/10 px-2 py-1 hover:bg-white/10" title="Open">
                                                   <IconOpen />
                                                 </button>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => forceDownload(a.url!, a.fileName)}
-                                                  className="rounded-lg border border-white/10 px-2 py-1 hover:bg-white/10"
-                                                  title="Download"
-                                                >
+                                                <button type="button" onClick={() => forceDownload(att.url!, att.fileName)} className="rounded-lg border border-white/10 px-2 py-1 hover:bg-white/10" title="Download">
                                                   <IconDownload />
                                                 </button>
                                               </div>
@@ -1557,32 +1079,18 @@ export default function MessagingClient() {
                                       }
 
                                       return (
-                                        <div
-                                          key={a.id}
-                                          className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${
-                                            isMe
-                                              ? "border-white/10 bg-white/10"
-                                              : "border-[rgb(var(--border))] bg-[rgb(var(--card2))]"
-                                          }`}
-                                        >
+                                        <div key={att.id} className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${
+                                          isMe ? "border-white/10 bg-white/10" : "border-[rgb(var(--border))] bg-[rgb(var(--card2))]"
+                                        }`}>
                                           <div className="flex min-w-0 items-center gap-2">
                                             {isPdf ? <IconPdf /> : <span>📎</span>}
                                             <div className="min-w-0">
-                                              <p className="truncate text-[0.72rem] font-medium">
-                                                {a.fileName}
-                                              </p>
-                                              <p className="text-[0.62rem] opacity-70">
-                                                {Math.max(1, Math.round(a.sizeBytes / 1024))} KB
-                                              </p>
+                                              <p className="truncate text-[0.72rem] font-medium">{att.fileName}</p>
+                                              <p className="text-[0.62rem] opacity-70">{Math.max(1, Math.round(att.sizeBytes / 1024))} KB</p>
                                             </div>
                                           </div>
-
-                                          {a.url && (
-                                            <button
-                                              type="button"
-                                              onClick={() => forceDownload(a.url!, a.fileName)}
-                                              className="rounded-lg border border-current/10 px-2 py-1 hover:bg-white/10"
-                                            >
+                                          {att.url && (
+                                            <button type="button" onClick={() => forceDownload(att.url!, att.fileName)} className="rounded-lg border border-current/10 px-2 py-1 hover:bg-white/10">
                                               <IconDownload />
                                             </button>
                                           )}
@@ -1595,30 +1103,12 @@ export default function MessagingClient() {
                             )}
                           </div>
 
-                          <div
-                            className={`mt-1 flex items-center gap-1.5 px-0.5 text-[0.6rem] ${
-                              isMe
-                                ? "justify-end text-[rgb(var(--muted2))]"
-                                : "text-[rgb(var(--muted2))]"
-                            }`}
-                          >
+                          <div className={`mt-1 flex items-center gap-1.5 px-0.5 text-[0.6rem] ${isMe ? "justify-end text-[rgb(var(--muted2))]" : "text-[rgb(var(--muted2))]"}`}>
                             <span>
-                              {isTemp
-                                ? "Sending…"
-                                : new Date(msg.createdAt).toLocaleTimeString([], {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
+                              {isTemp ? "Sending…" : new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                             </span>
-
                             {isLastMine && !isTemp && (
-                              <span
-                                className={`text-[0.58rem] font-medium ${
-                                  isSeen
-                                    ? "text-[rgb(var(--primary))]"
-                                    : "text-[rgb(var(--muted2))]"
-                                }`}
-                              >
+                              <span className={`text-[0.58rem] font-medium ${isSeen ? "text-[rgb(var(--primary))]" : "text-[rgb(var(--muted2))]"}`}>
                                 {isSeen ? "Seen" : "Sent"}
                               </span>
                             )}
@@ -1634,10 +1124,7 @@ export default function MessagingClient() {
                     <div className="rounded-2xl rounded-bl-sm border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3">
                       <div className="flex items-center gap-1">
                         {[0, 1, 2].map((i) => (
-                          <span
-                            key={i}
-                            className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--muted))]"
-                          />
+                          <span key={i} className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--muted))]" />
                         ))}
                       </div>
                     </div>
@@ -1646,54 +1133,37 @@ export default function MessagingClient() {
 
                 {messages.length === 0 && active && !loadingMsgs && (
                   <div className="flex flex-col items-center justify-center gap-2 pt-12 text-center">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-xl">
-                      👋
-                    </div>
-                    <p className="text-[0.75rem] text-[rgb(var(--muted))]">
-                      No messages yet — say hi!
-                    </p>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-xl">👋</div>
+                    <p className="text-[0.75rem] text-[rgb(var(--muted))]">No messages yet — say hi!</p>
                   </div>
                 )}
 
                 <div ref={bottomRef} />
               </div>
 
+              {/* Error */}
               {active && sendErr && (
                 <div className="mx-4 mb-2 flex items-center gap-2 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-[0.72rem] text-red-600 dark:text-red-400">
                   <span>⚠</span>
                   <span>{sendErr}</span>
-                  <button
-                    type="button"
-                    onClick={() => setSendErr(null)}
-                    className="ml-auto opacity-60 hover:opacity-100"
-                  >
-                    ✕
-                  </button>
+                  <button type="button" onClick={() => setSendErr(null)} className="ml-auto opacity-60 hover:opacity-100">✕</button>
                 </div>
               )}
 
+              {/* File previews */}
               {pickedFiles.length > 0 && (
                 <div className="mx-4 mb-1 flex flex-wrap gap-1.5">
                   {pickedFiles.map((f, idx) => (
-                    <div
-                      key={`${f.name}-${idx}`}
-                      className="flex items-center gap-1.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-1 text-[0.68rem] text-[rgb(var(--fg))]"
-                    >
+                    <div key={`${f.name}-${idx}`} className="flex items-center gap-1.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2.5 py-1 text-[0.68rem] text-[rgb(var(--fg))]">
                       <span className="opacity-50">📎</span>
                       <span className="max-w-[180px] truncate">{f.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => removePickedFile(idx)}
-                        disabled={uploading}
-                        className="opacity-40 transition hover:opacity-100"
-                      >
-                        ✕
-                      </button>
+                      <button type="button" onClick={() => removePickedFile(idx)} disabled={uploading} className="opacity-40 transition hover:opacity-100">✕</button>
                     </div>
                   ))}
                 </div>
               )}
 
+              {/* Input bar */}
               <div className="border-t border-[rgb(var(--border))] bg-[rgb(var(--card))]/80 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <button
@@ -1711,35 +1181,22 @@ export default function MessagingClient() {
                       value={text}
                       onChange={(e) => {
                         setText(e.target.value);
-
                         const now = Date.now();
                         if (now - lastTypingSentAt.current > 800) {
                           lastTypingSentAt.current = now;
                           void pingTyping(true);
                         }
-
-                        if (typingStopTimer.current) {
-                          clearTimeout(typingStopTimer.current);
-                        }
-
-                        typingStopTimer.current = setTimeout(() => {
-                          void pingTyping(false);
-                        }, 1200);
+                        if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
+                        typingStopTimer.current = setTimeout(() => void pingTyping(false), 1200);
                       }}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          void send();
-                        }
+                        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); }
                       }}
                       className="w-full rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-4 py-2.5 text-[0.8rem] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] focus:border-[rgb(var(--primary))/0.5] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] transition"
                       placeholder={
-                        !active
-                          ? "Select a conversation…"
-                          : chatMeta.isChatClosed
-                          ? "Chat is closed"
-                          : uploading
-                          ? "Sending…"
+                        !active ? "Select a conversation…"
+                          : chatMeta.isChatClosed ? "Chat is closed"
+                          : uploading ? "Sending…"
                           : "Type a message…"
                       }
                       disabled={inputDisabled}
@@ -1748,9 +1205,7 @@ export default function MessagingClient() {
 
                   <button
                     onClick={send}
-                    disabled={
-                      inputDisabled || (!text.trim() && pickedFiles.length === 0)
-                    }
+                    disabled={inputDisabled || (!text.trim() && pickedFiles.length === 0)}
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-[0_4px_14px_rgba(124,58,237,0.35)] disabled:opacity-40 disabled:shadow-none"
                   >
                     <IconSend />
@@ -1762,6 +1217,7 @@ export default function MessagingClient() {
         </div>
       </div>
 
+      {/* Context menu */}
       {ctx.open && ctx.messageId && (
         <div
           style={{ left: ctx.x, top: ctx.y }}
@@ -1780,124 +1236,54 @@ export default function MessagingClient() {
         </div>
       )}
 
+      {/* Image viewer */}
       {imgViewer.open && !!imgViewer.urls.length && (
-        <div
-          className="fixed inset-0 z-[120] bg-black/90 backdrop-blur-sm"
-          onClick={closeImageViewer}
-        >
+        <div className="fixed inset-0 z-[120] bg-black/90 backdrop-blur-sm" onClick={closeImageViewer}>
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <button
               type="button"
               className="absolute right-4 top-4 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-sm text-white"
-              onClick={(e) => {
-                e.stopPropagation();
-                closeImageViewer();
-              }}
+              onClick={(e) => { e.stopPropagation(); closeImageViewer(); }}
             >
               Close
             </button>
 
             {imgViewer.urls.length > 1 && (
               <>
-                <button
-                  type="button"
-                  className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/10 px-3 py-2 text-white"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    prevImage();
-                  }}
-                >
-                  ←
-                </button>
-
-                <button
-                  type="button"
-                  className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/10 px-3 py-2 text-white"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    nextImage();
-                  }}
-                >
-                  →
-                </button>
+                <button type="button" className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/10 px-3 py-2 text-white" onClick={(e) => { e.stopPropagation(); prevImage(); }}>←</button>
+                <button type="button" className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/10 px-3 py-2 text-white" onClick={(e) => { e.stopPropagation(); nextImage(); }}>→</button>
               </>
             )}
 
             <div
               className="relative max-h-full max-w-full overflow-hidden"
               onClick={(e) => e.stopPropagation()}
-              onMouseDown={(e) => {
-                setDragging(true);
-                dragStart.current = {
-                  x: e.clientX - offset.x,
-                  y: e.clientY - offset.y,
-                };
-              }}
-              onMouseMove={(e) => {
-                if (!dragging || zoom <= 1) return;
-                setOffset({
-                  x: e.clientX - dragStart.current.x,
-                  y: e.clientY - dragStart.current.y,
-                });
-              }}
+              onMouseDown={(e) => { setDragging(true); dragStart.current = { x: e.clientX - offset.x, y: e.clientY - offset.y }; }}
+              onMouseMove={(e) => { if (!dragging || zoom <= 1) return; setOffset({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y }); }}
               onMouseUp={() => setDragging(false)}
               onMouseLeave={() => setDragging(false)}
-              onWheel={(e) => {
-                e.preventDefault();
-                setZoom((z) => Math.max(1, Math.min(4, z + (e.deltaY < 0 ? 0.2 : -0.2))));
-              }}
+              onWheel={(e) => { e.preventDefault(); setZoom((z) => Math.max(1, Math.min(4, z + (e.deltaY < 0 ? 0.2 : -0.2)))); }}
             >
               <img
                 src={imgViewer.urls[imgViewer.idx]}
                 alt={prettyNameFromUrl(imgViewer.urls[imgViewer.idx])}
                 className="max-h-[82vh] max-w-[92vw] select-none object-contain"
-                style={{
-                  transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
-                  cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "default",
-                }}
+                style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`, cursor: zoom > 1 ? (dragging ? "grabbing" : "grab") : "default" }}
                 draggable={false}
               />
 
               <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-sm text-white">
-                <button
-                  type="button"
-                  onClick={() => setZoom((z) => Math.max(1, z - 0.2))}
-                  className="rounded px-2 py-0.5 hover:bg-white/10"
-                >
-                  −
-                </button>
+                <button type="button" onClick={() => setZoom((z) => Math.max(1, z - 0.2))} className="rounded px-2 py-0.5 hover:bg-white/10">−</button>
                 <span>{Math.round(zoom * 100)}%</span>
-                <button
-                  type="button"
-                  onClick={() => setZoom((z) => Math.min(4, z + 0.2))}
-                  className="rounded px-2 py-0.5 hover:bg-white/10"
-                >
-                  +
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setZoom(1);
-                    setOffset({ x: 0, y: 0 });
-                  }}
-                  className="rounded px-2 py-0.5 hover:bg-white/10"
-                >
-                  Reset
-                </button>
+                <button type="button" onClick={() => setZoom((z) => Math.min(4, z + 0.2))} className="rounded px-2 py-0.5 hover:bg-white/10">+</button>
+                <button type="button" onClick={() => { setZoom(1); setOffset({ x: 0, y: 0 }); }} className="rounded px-2 py-0.5 hover:bg-white/10">Reset</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*,application/pdf"
-        multiple
-        className="hidden"
-        onChange={onPickFiles}
-      />
+      <input ref={fileInputRef} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={onPickFiles} />
     </>
   );
 }

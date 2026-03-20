@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageSquare, X, ChevronRight } from "lucide-react";
-import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { getPusherClient } from "@/lib/pusherClient";
 import { useChatStore } from "@/store/chatStore";
 import type { Msg } from "@/store/chatStore";
 
@@ -16,15 +16,7 @@ type ToastItem = {
   createdAt: string;
 };
 
-type ChatMessageRow = {
-  id: string;
-  channelId: string;
-  senderId: string;
-  text: string;
-  createdAt: string;
-  isDeleted?: boolean;
-  deletedAt?: string | null;
-};
+type PusherNewMessage = Msg;
 
 let globalUnreadCount = 0;
 
@@ -42,6 +34,7 @@ export default function ChatMessageListener({
   const [items, setItems] = useState<ToastItem[]>([]);
   const seenIdsRef = useRef<Set<string>>(new Set());
   const pathnameRef = useRef(pathname);
+  const subscribedChannels = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     pathnameRef.current = pathname;
@@ -56,7 +49,6 @@ export default function ChatMessageListener({
       if (prev.some((x) => x.id === item.id)) return prev;
       return [item, ...prev].slice(0, 3);
     });
-
     window.setTimeout(() => {
       setItems((prev) => prev.filter((x) => x.id !== item.id));
     }, 6000);
@@ -72,143 +64,107 @@ export default function ChatMessageListener({
 
     globalUnreadCount = initialUnread;
 
-    const supabase = supabaseBrowser;
-    let mounted = true;
-    let messageChannel: ReturnType<typeof supabase.channel> | null = null;
-    let presenceChannel: ReturnType<typeof supabase.channel> | null = null;
-
-    async function start() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!mounted || !session?.access_token) return;
-
-      await supabase.realtime.setAuth(session.access_token);
-
-      if (!mounted) return;
-
-      presenceChannel = supabase.channel("user-presence", {
-        config: {
-          presence: { key: userId },
-        },
-      });
-
-      presenceChannel.subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await presenceChannel?.track({
-            userId,
-            onlineAt: new Date().toISOString(),
-          });
-        }
-      });
-
-      messageChannel = supabase
-        .channel(`chat-message-listener-${userId}`)
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "ChatMessage" },
-          async (payload) => {
-  const row = payload.new as ChatMessageRow;
-
-  if (!row) return;
-  if (row.senderId === userId) return;
-  if (row.isDeleted) return;
-  if (seenIdsRef.current.has(row.id)) return;
-
-  seenIdsRef.current.add(row.id);
-
-  const isOnMessagingPage = pathnameRef.current?.startsWith("/messaging");
-  const openChannelId = isOnMessagingPage ? getOpenChannelId() : null;
-  const isCurrentlyOpen = !!openChannelId && openChannelId === row.channelId;
-
-  const fallbackMsg: Msg = {
-  id: row.id,
-  senderId: row.senderId,
-  text: row.text ?? "",
-  createdAt: row.createdAt,
-  isDeleted: row.isDeleted,
-  deletedAt: row.deletedAt ?? null,
-  attachments: [],
-};
-
-const fullMsg = await fetchLatestMessage(row.channelId, row.id);
-const msg = fullMsg ?? fallbackMsg;
-
-  window.dispatchEvent(
-    new CustomEvent("chat:message-incoming", {
-      detail: {
-        channelId: row.channelId,
-        message: msg,
-      },
-    })
-  );
-
-  const targetConv = useChatStore
-    .getState()
-    .conversations.find((c) => c.id === row.channelId);
-
-  if (targetConv) {
-    useChatStore.getState().patchConversation(row.channelId, {
-      lastMessage: row.text?.trim() || "📎 Attachment",
-      lastAt: row.createdAt,
-      unread: isCurrentlyOpen ? 0 : targetConv.unread + 1,
-    });
-  }
-
-  if (!isCurrentlyOpen) {
-    globalUnreadCount += 1;
-    onUnreadChange?.(globalUnreadCount);
-  }
-
-  async function fetchLatestMessage(channelId: string, expectedId?: string) {
-  const j = await fetch(`/api/chat/messages?channelId=${channelId}&take=1`, {
-    cache: "no-store",
-  })
-    .then((r) => r.json())
-    .catch(() => null);
-
-  if (!j?.ok || !Array.isArray(j.items) || !j.items.length) return null;
-
-  const latest = j.items[0] as Msg;
-  if (!expectedId) return latest;
-  if (latest.id === expectedId) return latest;
-
-  const found = (j.items as Msg[]).find((m) => m.id === expectedId);
-  return found ?? null;
-}
-
-  window.dispatchEvent(new Event("chat:unread-refresh"));
-
-  const shouldSuppressToast = isOnMessagingPage && isCurrentlyOpen;
-  if (shouldSuppressToast) return;
-
-  const conv = useChatStore
-    .getState()
-    .conversations.find((c) => c.id === row.channelId);
-
-  const senderName = conv?.name ?? "New message";
-
-  pushToast({
-    id: row.id,
-    senderName,
-    text: row.text?.trim() || "📎 Attachment",
-    channelId: row.channelId,
-    createdAt: row.createdAt,
-  });
-}
-        )
-        .subscribe((status) => {
-          console.log(`[ChatMessageListener] ${userId}`, status);
-        });
+    // Only prefetch if not already loaded and not currently loading
+    // (ChatPrefetcher may already be doing this — avoid double fetch)
+    const convLoaded = useChatStore.getState().convLoaded;
+    if (!convLoaded) {
+      void useChatStore.getState().prefetch();
     }
 
-    void start();
+    function subscribeToConversations() {
+      const conversations = useChatStore.getState().conversations;
+      if (!conversations.length) return;
+
+      const pusher = getPusherClient();
+
+      for (const conv of conversations) {
+        const channelName = `private-chat-${conv.id}`;
+
+        // Already subscribed — skip
+        if (subscribedChannels.current.has(channelName)) continue;
+
+        subscribedChannels.current.add(channelName);
+        const channel = pusher.subscribe(channelName);
+
+        channel.bind("new-message", (msg: PusherNewMessage) => {
+          // Ignore our own messages
+          if (msg.senderId === userId) return;
+          if (msg.isDeleted) return;
+          if (seenIdsRef.current.has(msg.id)) return;
+          seenIdsRef.current.add(msg.id);
+
+          const isOnMessagingPage = pathnameRef.current?.startsWith("/messaging");
+          const openChannelId = isOnMessagingPage ? getOpenChannelId() : null;
+          const isCurrentlyOpen = !!openChannelId && openChannelId === conv.id;
+
+          // Dispatch so MessagingClient can merge if it's open
+          window.dispatchEvent(
+            new CustomEvent("chat:message-incoming", {
+              detail: { channelId: conv.id, message: msg },
+            })
+          );
+
+          // Merge message into store so it's visible when navigating from toast
+          useChatStore.getState().mergeMessages(conv.id, [msg]);
+
+          // Update conversation preview
+          const targetConv = useChatStore
+            .getState()
+            .conversations.find((c) => c.id === conv.id);
+
+          if (targetConv) {
+            useChatStore.getState().patchConversation(conv.id, {
+              lastMessage: msg.text?.trim() || "📎 Attachment",
+              lastAt: msg.createdAt,
+              unread: isCurrentlyOpen ? 0 : targetConv.unread + 1,
+            });
+          }
+
+          if (!isCurrentlyOpen) {
+            globalUnreadCount += 1;
+            onUnreadChange?.(globalUnreadCount);
+          }
+
+          window.dispatchEvent(new Event("chat:unread-refresh"));
+
+          // Suppress toast if user is already looking at this channel
+          if (isOnMessagingPage && isCurrentlyOpen) return;
+
+          const senderName = targetConv?.name ?? "New message";
+
+          pushToast({
+            id: msg.id,
+            senderName,
+            text: msg.text?.trim() || "📎 Attachment",
+            channelId: conv.id,
+            createdAt: msg.createdAt,
+          });
+        });
+      }
+    }
+
+    // Subscribe immediately if conversations are already loaded
+    subscribeToConversations();
+
+    // Re-run when conversations change (throttled to avoid rapid re-subscription)
+    let subscribeTimer: ReturnType<typeof setTimeout> | null = null;
+    const unsub = useChatStore.subscribe(() => {
+      if (subscribeTimer) return;
+      subscribeTimer = setTimeout(() => {
+        subscribeTimer = null;
+        subscribeToConversations();
+      }, 500);
+    });
 
     return () => {
-      mounted = false;
-      if (messageChannel) supabase.removeChannel(messageChannel);
-      if (presenceChannel) supabase.removeChannel(presenceChannel);
+      unsub();
+
+      // Unsubscribe from all channels
+      const pusher = getPusherClient();
+      for (const channelName of subscribedChannels.current) {
+        pusher.unsubscribe(channelName);
+      }
+      subscribedChannels.current.clear();
     };
   }, [userId, initialUnread, onUnreadChange]);
 

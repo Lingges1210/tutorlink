@@ -33,6 +33,8 @@
     "pdfjs-dist": "^5.5.207",
     "pdfkit": "^0.17.2",
     "prisma": "^6.19.0",
+    "pusher": "^5.3.3",
+    "pusher-js": "^8.4.3",
     "react": "19.1.0",
     "react-big-calendar": "^1.19.4",
     "react-dom": "19.1.0",

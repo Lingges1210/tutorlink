@@ -1,5 +1,7 @@
+// src/app/api/chat/messages/[id]/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { pusherServer } from "@/lib/pusher";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
 export async function DELETE(
@@ -28,11 +30,7 @@ export async function DELETE(
 
   const existing = await prisma.chatMessage.findUnique({
     where: { id },
-    select: {
-      id: true,
-      senderId: true,
-      isDeleted: true,
-    },
+    select: { id: true, senderId: true, isDeleted: true, channelId: true },
   });
 
   if (!existing) {
@@ -43,6 +41,7 @@ export async function DELETE(
     return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
   }
 
+  // Already deleted — idempotent
   if (existing.isDeleted) {
     return NextResponse.json({
       ok: true,
@@ -52,17 +51,20 @@ export async function DELETE(
 
   const deleted = await prisma.chatMessage.update({
     where: { id },
-    data: {
-      isDeleted: true,
-      deletedAt: new Date(),
-      text: "",
-    },
-    select: {
-      id: true,
-      isDeleted: true,
-      deletedAt: true,
-    },
+    data: { isDeleted: true, deletedAt: new Date(), text: "" },
+    select: { id: true, isDeleted: true, deletedAt: true, channelId: true },
   });
+
+  // 🔔 Pusher: notify both participants the message was deleted
+  await pusherServer.trigger(
+    `private-chat-${deleted.channelId}`,
+    "message-deleted",
+    {
+      messageId: deleted.id,
+      isDeleted: true,
+      deletedAt: deleted.deletedAt?.toISOString() ?? null,
+    }
+  );
 
   return NextResponse.json({
     ok: true,

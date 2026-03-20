@@ -1,6 +1,7 @@
 // src/app/api/chat/read/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { pusherServer } from "@/lib/pusher";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 
 export async function POST(req: Request) {
@@ -28,7 +29,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, message: "User not found" }, { status: 404 });
   }
 
-  //  Verify membership using ChatChannel itself (most reliable)
   const channel = await prisma.chatChannel.findUnique({
     where: { id: channelId },
     select: { id: true, studentId: true, tutorId: true },
@@ -43,22 +43,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
   }
 
-  //  Upsert ChatRead so old channels don't break
+  const readAt = new Date();
+
   await prisma.chatRead.upsert({
-    where: {
-      channelId_userId: {
-        channelId: channel.id,
-        userId: me.id,
-      },
-    },
-    create: {
-      channelId: channel.id,
-      userId: me.id,
-      lastReadAt: new Date(),
-    },
-    update: {
-      lastReadAt: new Date(),
-    },
+    where: { channelId_userId: { channelId: channel.id, userId: me.id } },
+    create: { channelId: channel.id, userId: me.id, lastReadAt: readAt },
+    update: { lastReadAt: readAt },
+  });
+
+  // 🔔 Pusher: notify the other participant their messages were seen
+  await pusherServer.trigger(`private-chat-${channelId}`, "read-updated", {
+    channelId,
+    userId: me.id,
+    readAt: readAt.toISOString(),
   });
 
   return NextResponse.json({ ok: true });
