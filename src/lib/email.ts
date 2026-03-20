@@ -734,10 +734,6 @@ export async function sendVerificationEmail(opts: {
       <p style="margin:0;font-size:13px;color:${T.textMuted};">
         This link expires in <strong style="color:${T.textSecondary};">24 hours</strong>.
       </p>
-      <div style="margin-top:16px;padding:12px 16px;background:${T.cardBg2};border:1px solid ${T.border};border-radius:10px;word-break:break-all;">
-        <p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:${T.textMuted};">Verification link</p>
-        <a href="${opts.verificationLink}" style="font-size:12px;color:${T.brand};">${opts.verificationLink}</a>
-      </div>
     `,
     cta: { label: "Verify Email", href: opts.verificationLink },
     footerNote: "If you didn't create an account on TutorLink, you can safely ignore this email.",
