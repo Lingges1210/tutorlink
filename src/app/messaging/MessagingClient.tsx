@@ -454,9 +454,11 @@ export default function MessagingClient() {
     presenceChannel.bind("pusher:member_removed", syncPresence);
 
     return () => {
+      // Only unbind our handlers — don't unsubscribe the private channel because
+      // ChatMessageListener owns its lifecycle and may still be listening on it.
       privateChannel.unbind_all();
       presenceChannel.unbind_all();
-      pusher.unsubscribe(`private-chat-${channelId}`);
+      // Only unsubscribe presence — it's only used by MessagingClient
       pusher.unsubscribe(`presence-chat-${channelId}`);
       setOtherTyping(false);
       if (otherTypingExpiry.current) clearTimeout(otherTypingExpiry.current);
