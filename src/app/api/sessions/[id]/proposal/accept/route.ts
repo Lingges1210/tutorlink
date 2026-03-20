@@ -4,6 +4,21 @@ import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { notify } from "@/lib/notify";
 
+/** ---------- Malaysia timezone helpers ---------- */
+const MY_TZ_OFFSET_MIN = 8 * 60;
+
+function getMalaysiaParts(d: Date) {
+  const shifted = new Date(d.getTime() + MY_TZ_OFFSET_MIN * 60_000);
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth(),
+    date: shifted.getUTCDate(),
+    day: shifted.getUTCDay(),
+    hours: shifted.getUTCHours(),
+    minutes: shifted.getUTCMinutes(),
+  };
+}
+
 /** ---------- availability parsing helpers ---------- */
 type DayKey = "SUN" | "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT";
 type TimeSlot = { start: string; end: string };
@@ -12,14 +27,24 @@ type DayAvailability = { day: DayKey; off: boolean; slots: TimeSlot[] };
 function toMinutes(hhmm: string) {
   if (!hhmm) return 0;
   if (hhmm === "24:00") return 24 * 60;
-
   const [h, m] = hhmm.split(":").map((x) => parseInt(x, 10));
   return h * 60 + m;
 }
 
+// ✅ Fixed: uses Malaysia time (UTC+8), not raw UTC
 function dayKeyFromDate(d: Date): DayKey {
   const k: DayKey[] = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-  return k[d.getDay()];
+  return k[getMalaysiaParts(d).day];
+}
+
+function sameMalaysiaYMD(a: Date, b: Date) {
+  const pa = getMalaysiaParts(a);
+  const pb = getMalaysiaParts(b);
+  return (
+    pa.year === pb.year &&
+    pa.month === pb.month &&
+    pa.date === pb.date
+  );
 }
 
 function withinSlots(day: DayAvailability, startMin: number, endMin: number) {
@@ -47,7 +72,6 @@ function isValidDayKey(value: unknown): value is DayKey {
 
 function isTimeSlot(value: unknown): value is TimeSlot {
   if (!value || typeof value !== "object") return false;
-
   const obj = value as Record<string, unknown>;
   return typeof obj.start === "string" && typeof obj.end === "string";
 }
@@ -87,17 +111,14 @@ async function getTutorAvailability(
   return parseAvailability(raw);
 }
 
+// ✅ Fixed: computes startMin/endMin using Malaysia hours, not UTC hours
 async function tutorDeclaredAvailable(
   tutorId: string,
   start: Date,
   end: Date
 ): Promise<true | false | null> {
-  const sameDay =
-    start.getFullYear() === end.getFullYear() &&
-    start.getMonth() === end.getMonth() &&
-    start.getDate() === end.getDate();
-
-  if (!sameDay) return false;
+  // Must be same calendar day in Malaysia time
+  if (!sameMalaysiaYMD(start, end)) return false;
 
   const avail = await getTutorAvailability(tutorId);
   if (!avail) return null;
@@ -106,8 +127,11 @@ async function tutorDeclaredAvailable(
   const day = avail.find((d) => d.day === dayKey);
   if (!day) return false;
 
-  const startMin = start.getHours() * 60 + start.getMinutes();
-  const endMin = end.getHours() * 60 + end.getMinutes();
+  // ✅ Use Malaysia hours/minutes, not UTC
+  const sp = getMalaysiaParts(start);
+  const ep = getMalaysiaParts(end);
+  const startMin = sp.hours * 60 + sp.minutes;
+  const endMin = ep.hours * 60 + ep.minutes;
 
   return withinSlots(day, startMin, endMin);
 }
@@ -229,6 +253,8 @@ export async function POST(
       newEndsAt
     );
 
+    // ✅ Only hard-reject if explicitly false (not null).
+    // null means availability data is missing — allow it through.
     if (declared === false) {
       return NextResponse.json(
         { message: "Tutor is not available at this proposed time." },

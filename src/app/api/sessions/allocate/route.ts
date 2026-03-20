@@ -1,6 +1,31 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+/** ---------- Malaysia timezone helpers ---------- */
+const MY_TZ_OFFSET_MIN = 8 * 60;
+
+function getMalaysiaParts(d: Date) {
+  const shifted = new Date(d.getTime() + MY_TZ_OFFSET_MIN * 60_000);
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth(),
+    date: shifted.getUTCDate(),
+    day: shifted.getUTCDay(),
+    hours: shifted.getUTCHours(),
+    minutes: shifted.getUTCMinutes(),
+  };
+}
+
+function sameMalaysiaYMD(a: Date, b: Date) {
+  const pa = getMalaysiaParts(a);
+  const pb = getMalaysiaParts(b);
+  return (
+    pa.year === pb.year &&
+    pa.month === pb.month &&
+    pa.date === pb.date
+  );
+}
+
 /** ---------- helpers ---------- */
 function toMinutes(hhmm: string) {
   if (!hhmm || hhmm === "24:00") return 24 * 60;
@@ -12,12 +37,18 @@ type DayKey = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
 type TimeSlot = { start: string; end: string };
 type DayAvailability = { day: DayKey; off: boolean; slots: TimeSlot[] };
 
+// ✅ Fixed: uses Malaysia day, not UTC day
 function getDayKey(d: Date): DayKey {
   const map: DayKey[] = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-  return map[d.getDay()];
+  return map[getMalaysiaParts(d).day];
 }
 
-/** only supports sessions within the same day (safe for typical 30–180min slots) */
+/**
+ * ✅ Fixed: uses Malaysia hours/minutes for startMin/endMin,
+ * and Malaysia calendar date for same-day check.
+ * Previously used raw UTC getHours()/getDay() which caused wrong
+ * availability results for any session scheduled in MYT morning (UTC night).
+ */
 function isWithinAvailability(
   availabilityJson: string | null | undefined,
   start: Date,
@@ -33,6 +64,10 @@ function isWithinAvailability(
   }
   if (!Array.isArray(parsed)) return false;
 
+  // ✅ Same-day check using Malaysia calendar date
+  if (!sameMalaysiaYMD(start, end)) return false;
+
+  // ✅ Day-of-week using Malaysia time
   const startDay = getDayKey(start);
   const endDay = getDayKey(end);
   if (startDay !== endDay) return false;
@@ -41,8 +76,11 @@ function isWithinAvailability(
   if (!day || day.off) return false;
   if (!Array.isArray(day.slots) || day.slots.length === 0) return false;
 
-  const startMin = start.getHours() * 60 + start.getMinutes();
-  const endMin = end.getHours() * 60 + end.getMinutes();
+  // ✅ Hours/minutes in Malaysia time, not UTC
+  const sp = getMalaysiaParts(start);
+  const ep = getMalaysiaParts(end);
+  const startMin = sp.hours * 60 + sp.minutes;
+  const endMin = ep.hours * 60 + ep.minutes;
 
   return day.slots.some((s) => {
     const a = toMinutes(s.start);
@@ -62,11 +100,8 @@ function shuffleInPlace<T>(arr: T[]) {
  * Picks first eligible tutor:
  * - teaches subjectId (tutorSubject join)
  * - approved + verified + not deactivated
- * - availability covers slot
+ * - availability covers slot (checked in MYT)
  * - no overlap with existing PENDING/ACCEPTED sessions
- *
- * IMPORTANT: This assumes tutor availability is stored at:
- *   tutor.tutorApplications[0].availability  (latest)
  */
 async function pickTutorForExactSubject(opts: {
   subjectId: string;
@@ -91,7 +126,7 @@ async function pickTutorForExactSubject(opts: {
           id: true,
           tutorApplications: {
             select: { availability: true },
-            orderBy: { createdAt: "desc" }, //  FIX 1
+            orderBy: { createdAt: "desc" },
             take: 1,
           },
         },
@@ -102,12 +137,11 @@ async function pickTutorForExactSubject(opts: {
 
   if (candidates.length === 0) return null;
 
-  //  fairness: don’t always pick same tutor
+  // fairness: don't always pick same tutor
   shuffleInPlace(candidates);
 
   const tutorIds = Array.from(new Set(candidates.map((c) => c.tutorId)));
 
-  //  FIX 2: handle endsAt null safely
   const clashes = await prisma.session.findMany({
     where: {
       tutorId: { in: tutorIds },
@@ -184,7 +218,7 @@ export async function POST(req: Request) {
 
     if (!tutorId) continue;
 
-    //  race-safe assignment (only assign if still unassigned)
+    // race-safe assignment (only assign if still unassigned)
     const updated = await prisma.session.updateMany({
       where: { id: s.id, tutorId: null, status: "PENDING" },
       data: { tutorId },
