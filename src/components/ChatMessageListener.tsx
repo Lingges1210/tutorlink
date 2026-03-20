@@ -35,6 +35,11 @@ export default function ChatMessageListener({
   const seenIdsRef = useRef<Set<string>>(new Set());
   const pathnameRef = useRef(pathname);
   const subscribedChannels = useRef<Set<string>>(new Set());
+  const onUnreadChangeRef = useRef(onUnreadChange);
+
+  useEffect(() => {
+    onUnreadChangeRef.current = onUnreadChange;
+  }, [onUnreadChange]);
 
   useEffect(() => {
     pathnameRef.current = pathname;
@@ -64,13 +69,6 @@ export default function ChatMessageListener({
 
     globalUnreadCount = initialUnread;
 
-    // Only prefetch if not already loaded and not currently loading
-    // (ChatPrefetcher may already be doing this — avoid double fetch)
-    const convLoaded = useChatStore.getState().convLoaded;
-    if (!convLoaded) {
-      void useChatStore.getState().prefetch();
-    }
-
     function subscribeToConversations() {
       const conversations = useChatStore.getState().conversations;
       if (!conversations.length) return;
@@ -80,14 +78,12 @@ export default function ChatMessageListener({
       for (const conv of conversations) {
         const channelName = `private-chat-${conv.id}`;
 
-        // Already subscribed — skip
         if (subscribedChannels.current.has(channelName)) continue;
-
         subscribedChannels.current.add(channelName);
+
         const channel = pusher.subscribe(channelName);
 
         channel.bind("new-message", (msg: PusherNewMessage) => {
-          // Ignore our own messages
           if (msg.senderId === userId) return;
           if (msg.isDeleted) return;
           if (seenIdsRef.current.has(msg.id)) return;
@@ -97,17 +93,14 @@ export default function ChatMessageListener({
           const openChannelId = isOnMessagingPage ? getOpenChannelId() : null;
           const isCurrentlyOpen = !!openChannelId && openChannelId === conv.id;
 
-          // Dispatch so MessagingClient can merge if it's open
           window.dispatchEvent(
             new CustomEvent("chat:message-incoming", {
               detail: { channelId: conv.id, message: msg },
             })
           );
 
-          // Merge message into store so it's visible when navigating from toast
           useChatStore.getState().mergeMessages(conv.id, [msg]);
 
-          // Update conversation preview
           const targetConv = useChatStore
             .getState()
             .conversations.find((c) => c.id === conv.id);
@@ -122,12 +115,11 @@ export default function ChatMessageListener({
 
           if (!isCurrentlyOpen) {
             globalUnreadCount += 1;
-            onUnreadChange?.(globalUnreadCount);
+            onUnreadChangeRef.current?.(globalUnreadCount);
           }
 
           window.dispatchEvent(new Event("chat:unread-refresh"));
 
-          // Suppress toast if user is already looking at this channel
           if (isOnMessagingPage && isCurrentlyOpen) return;
 
           const senderName = targetConv?.name ?? "New message";
@@ -143,30 +135,36 @@ export default function ChatMessageListener({
       }
     }
 
-    // Subscribe immediately if conversations are already loaded
-    subscribeToConversations();
+    // Kick off prefetch if conversations not yet loaded
+    const convLoaded = useChatStore.getState().convLoaded;
+    if (!convLoaded) {
+      useChatStore.getState().prefetch().then(() => {
+        subscribeToConversations();
+      });
+    } else {
+      subscribeToConversations();
+    }
 
-    // Re-run when conversations change (throttled to avoid rapid re-subscription)
+    // Throttled store subscriber — catches new convs added after load
     let subscribeTimer: ReturnType<typeof setTimeout> | null = null;
     const unsub = useChatStore.subscribe(() => {
       if (subscribeTimer) return;
       subscribeTimer = setTimeout(() => {
         subscribeTimer = null;
         subscribeToConversations();
-      }, 500);
+      }, 300);
     });
 
     return () => {
       unsub();
-
-      // Unsubscribe from all channels
+      if (subscribeTimer) clearTimeout(subscribeTimer);
       const pusher = getPusherClient();
       for (const channelName of subscribedChannels.current) {
         pusher.unsubscribe(channelName);
       }
       subscribedChannels.current.clear();
     };
-  }, [userId, initialUnread, onUnreadChange]);
+  }, [userId, initialUnread]);
 
   return (
     <div className="pointer-events-none fixed right-4 top-20 z-[100] flex w-[min(92vw,360px)] flex-col gap-3">
