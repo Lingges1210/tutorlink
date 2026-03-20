@@ -17,61 +17,61 @@ export default function CallbackPage() {
     );
 
     let redirectTimer: ReturnType<typeof setTimeout>;
+    let resolved = false;
 
     function handleSuccess() {
+      if (resolved) return;
+      resolved = true;
       setStage("success");
-      // Show verified screen for 2.5s then go to login
       redirectTimer = setTimeout(() => {
         router.replace("/auth/login?verified=true");
       }, 2500);
     }
 
     function handleError() {
+      if (resolved) return;
+      resolved = true;
       setStage("error");
     }
 
-    // 1. Check if session already exists immediately
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
+    // Listen for auth state change FIRST before anything else
+    // This catches the hash token being processed by Supabase JS
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session) {
         handleSuccess();
-        return;
+      } else if (event === "PASSWORD_RECOVERY") {
+        resolved = true;
+        router.replace("/auth/reset-password");
       }
-
-      // 2. Handle ?code= param (PKCE flow)
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
-      if (code) {
-        supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-          if (error) handleError();
-          else handleSuccess();
-        });
-        return;
-      }
-
-      // 3. Listen for auth state change (hash token flow)
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === "SIGNED_IN" && session) {
-          handleSuccess();
-        } else if (event === "PASSWORD_RECOVERY") {
-          router.replace("/auth/reset-password");
-        }
-      });
-
-      // 4. Fallback — re-check after 3s in case hash processing is async
-      const fallbackTimer = setTimeout(async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) handleSuccess();
-        else handleError();
-        subscription.unsubscribe();
-      }, 3000);
-
-      return () => {
-        clearTimeout(fallbackTimer);
-        subscription.unsubscribe();
-      };
     });
 
-    return () => clearTimeout(redirectTimer);
+    // Also handle ?code= param (PKCE flow)
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+        if (error) handleError();
+        else handleSuccess();
+      });
+    }
+
+    // Poll for session — checks at 500ms, 1.5s, 3s, 5s
+    // Handles cases where SIGNED_IN event fires before listener is attached
+    const delays = [500, 1500, 3000, 5000];
+    const timers = delays.map((ms) =>
+      setTimeout(async () => {
+        if (resolved) return;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) handleSuccess();
+        else if (ms === 5000) handleError(); // give up after 5s
+      }, ms)
+    );
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(redirectTimer);
+      timers.forEach(clearTimeout);
+    };
   }, [router]);
 
   return (
