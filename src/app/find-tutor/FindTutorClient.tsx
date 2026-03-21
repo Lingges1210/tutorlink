@@ -92,6 +92,52 @@ const IconChevron = () => (
     <path d="m9 18 6-6-6-6"/>
   </svg>
 );
+/* ─── replacement icons for emoji ──────────────────────── */
+const IconBookOpen = ({ size = 20 }: { size?: number }) => (
+  <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+  </svg>
+);
+const IconCalendar = ({ size = 20 }: { size?: number }) => (
+  <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2"/>
+    <path d="M16 2v4M8 2v4M3 10h18"/>
+  </svg>
+);
+const IconZap = ({ size = 20 }: { size?: number }) => (
+  <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+  </svg>
+);
+const IconGradCap = ({ size = 32 }: { size?: number }) => (
+  <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+    <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+  </svg>
+);
+const IconFrown = ({ size = 40 }: { size?: number }) => (
+  <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M16 16s-1.5-2-4-2-4 2-4 2"/>
+    <line x1="9" y1="9" x2="9.01" y2="9"/>
+    <line x1="15" y1="9" x2="15.01" y2="9"/>
+  </svg>
+);
+const IconCheckCircle = ({ size = 20 }: { size?: number }) => (
+  <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+    <polyline points="22 4 12 14.01 9 11.01"/>
+  </svg>
+);
+const IconAlertTriangle = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/>
+    <line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+);
+
 
 /* ─── Spinner ───────────────────────────────────────────── */
 function Spinner({ size = 14 }: { size?: number }) {
@@ -312,6 +358,28 @@ export default function FindTutorClient({
     { code: "MAT100", name: "Calculus" },
   ];
 
+  /* ── "how it works" steps — SVG icons instead of emoji ── */
+  const howItWorks = [
+    {
+      n: "01",
+      icon: <IconSearch />,
+      t: "Search",
+      d: "Type a subject code or topic name",
+    },
+    {
+      n: "02",
+      icon: <IconCalendar size={16} />,
+      t: "Pick a time",
+      d: "Choose the earliest or browse by day",
+    },
+    {
+      n: "03",
+      icon: <IconZap size={16} />,
+      t: "Booked!",
+      d: "A tutor is assigned to you instantly",
+    },
+  ];
+
   /* ═══════════════════════════════════════════════════════
      RENDER
   ════════════════════════════════════════════════════════ */
@@ -404,7 +472,11 @@ export default function FindTutorClient({
               className="mb-6 overflow-hidden"
             >
               <div className="rounded-2xl border border-amber-500/25 bg-amber-500/8 px-5 py-4">
-                <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">⚠ Account pending verification</p>
+                
+                <p className="text-sm font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                  <IconAlertTriangle size={14} />
+                  Account pending verification
+                </p>
                 <p className="mt-0.5 text-sm text-[rgb(var(--muted))]">Search and booking will unlock once your account is verified.</p>
               </div>
             </motion.div>
@@ -671,15 +743,13 @@ export default function FindTutorClient({
               >
                 <p className="text-[0.67rem] font-bold uppercase tracking-widest text-[rgb(var(--muted2))] mb-3">How it works</p>
                 <div className="space-y-3">
-                  {[
-                    { n:"01", icon:"🔍", t:"Search", d:"Type a subject code or topic name" },
-                    { n:"02", icon:"📅", t:"Pick a time", d:"Choose the earliest or browse by day" },
-                    { n:"03", icon:"⚡", t:"Booked!", d:"A tutor is assigned to you instantly" },
-                  ].map(item => (
+                  {howItWorks.map(item => (
                     <div key={item.n} className="flex items-start gap-3">
                       <span className="text-[0.6rem] font-black text-[rgb(var(--muted2)/0.5)] mt-1 w-5 shrink-0">{item.n}</span>
+                      {/* SVG icon in a small box */}
+                      <span className="shrink-0 mt-0.5 text-[rgb(var(--primary))]">{item.icon}</span>
                       <div>
-                        <p className="text-xs font-bold text-[rgb(var(--fg))]">{item.icon} {item.t}</p>
+                        <p className="text-xs font-bold text-[rgb(var(--fg))]">{item.t}</p>
                         <p className="text-[0.7rem] text-[rgb(var(--muted))]">{item.d}</p>
                       </div>
                     </div>
@@ -698,8 +768,8 @@ export default function FindTutorClient({
             {/* Empty state */}
             {!selected && (
               <div className="h-full min-h-[320px] rounded-3xl border border-dashed border-[rgb(var(--border))] flex flex-col items-center justify-center text-center p-8 gap-4">
-                <div className="h-16 w-16 rounded-2xl bg-[rgb(var(--card2))] flex items-center justify-center text-3xl shadow-sm">
-                  🎓
+                <div className="h-16 w-16 rounded-2xl bg-[rgb(var(--card2))] flex items-center justify-center text-[rgb(var(--primary))] shadow-sm">
+                  <IconGradCap size={32} />
                 </div>
                 <div>
                   <p className="text-base font-bold text-[rgb(var(--fg))]">Search a subject to get started</p>
@@ -729,7 +799,9 @@ export default function FindTutorClient({
                 initial={{ opacity:0 }} animate={{ opacity:1 }}
                 className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.8)] p-6 text-center space-y-4"
               >
-                <div className="text-4xl">😞</div>
+                <div className="flex justify-center text-[rgb(var(--muted2))]">
+                  <IconFrown size={40} />
+                </div>
                 <div>
                   <p className="text-sm font-bold text-[rgb(var(--fg))]">No slots available</p>
                   <p className="mt-1 text-sm text-[rgb(var(--muted))]">{slotsError}</p>
@@ -761,7 +833,9 @@ export default function FindTutorClient({
                       initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-8 }}
                       className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 flex items-center gap-3"
                     >
-                      <span className="text-xl">✅</span>
+                      <span className="text-emerald-500 shrink-0">
+                        <IconCheckCircle size={20} />
+                      </span>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">Session booked!</p>
                         <p className="text-xs text-[rgb(var(--muted))]">

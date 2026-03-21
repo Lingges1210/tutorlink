@@ -23,23 +23,23 @@ const outcomes = [
 ];
 
 const stats = [
-  { label: "Campus-exclusive", value: "USM only", icon: "🏛" },
-  { label: "Fast coordination", value: "Book in minutes", icon: "⏱" },
-  { label: "Built for students", value: "Peer-first", icon: "👥" },
-  { label: "Community trust", value: "Verified users", icon: "🛡" },
+  { label: "Campus-exclusive", value: "USM only", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>` },
+  { label: "Fast coordination", value: "Book in minutes", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>` },
+  { label: "Built for students", value: "Peer-first", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>` },
+  { label: "Community trust", value: "Verified users", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>` },
 ];
 
 const reviews = [
-  { initials: "ZA", name: "Zara A.", course: "Year 2 · CSC", stars: 5, quote: "I stopped wasting time asking around. Found someone who actually explains things properly." },
-  { initials: "KR", name: "Kumar R.", course: "Tutor · MAT", stars: 5, quote: "Everything is organized and sessions are clear. So much easier to help people this way." },
-  { initials: "NF", name: "Nur F.", course: "New Intake · EEE", stars: 5, quote: "Didn't know many seniors yet — this made getting help feel way less intimidating." },
-  { initials: "HA", name: "Haziq A.", course: "Year 3 · ECE", stars: 5, quote: "Booked a tutor for my circuits module in under 5 minutes. Exam prep sorted." },
-  { initials: "LM", name: "Li Mei", course: "Year 1 · BIO", stars: 5, quote: "The SOS feature saved me the night before my lab report was due. Incredible." },
-  { initials: "RS", name: "Raj S.", course: "Tutor · PHY", stars: 5, quote: "I love that students can actually find me based on subject and time. No more random DMs." },
-  { initials: "AM", name: "Amirah M.", course: "Year 2 · CHE", stars: 5, quote: "My study streak keeps me accountable. I've been consistent for 3 weeks now." },
-  { initials: "DP", name: "Danish P.", course: "Year 3 · COM", stars: 4, quote: "Smart matching actually works — got paired with a senior who took the same module." },
-  { initials: "YS", name: "Yuna S.", course: "New Intake · MED", stars: 5, quote: "As a new student, TutorLink made me feel like I had support from day one." },
-  { initials: "FH", name: "Farid H.", course: "Tutor · MAT", stars: 5, quote: "The points system motivates me to tutor more. It genuinely feels rewarding." },
+  { initials: "ZA", name: "Zara A.", course: "Year 2 · CSC", stars: 5, avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=ZaraA&backgroundColor=b6e3f4", quote: "I stopped wasting time asking around. Found someone who actually explains things properly." },
+  { initials: "KR", name: "Kumar R.", course: "Tutor · MAT", stars: 5, avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=KumarR&backgroundColor=c0aede", quote: "Everything is organized and sessions are clear. So much easier to help people this way." },
+  { initials: "NF", name: "Nur F.", course: "New Intake · EEE", stars: 5, avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=NurF&backgroundColor=d1d4f9", quote: "Didn't know many seniors yet — this made getting help feel way less intimidating." },
+  { initials: "HA", name: "Haziq A.", course: "Year 3 · ECE", stars: 5, avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=HaziqA&backgroundColor=ffd5dc", quote: "Booked a tutor for my circuits module in under 5 minutes. Exam prep sorted." },
+  { initials: "LM", name: "Li Mei", course: "Year 1 · BIO", stars: 5, avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=LiMei&backgroundColor=b6e3f4", quote: "The SOS feature saved me the night before my lab report was due. Incredible." },
+  { initials: "RS", name: "Raj S.", course: "Tutor · PHY", stars: 5, avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=RajS&backgroundColor=c0aede", quote: "I love that students can actually find me based on subject and time. No more random DMs." },
+  { initials: "AM", name: "Amirah M.", course: "Year 2 · CHE", stars: 5, avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=AmirahM&backgroundColor=d1d4f9", quote: "My study streak keeps me accountable. I've been consistent for 3 weeks now." },
+  { initials: "DP", name: "Danish P.", course: "Year 3 · COM", stars: 5, avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=DanishP&backgroundColor=ffd5dc", quote: "Smart matching actually works — got paired with a senior who took the same module." },
+  { initials: "YS", name: "Yuna S.", course: "New Intake · MED", stars: 5, avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=YunaS&backgroundColor=b6e3f4", quote: "As a new student, TutorLink made me feel like I had support from day one." },
+  { initials: "FH", name: "Farid H.", course: "Tutor · MAT", stars: 5, avatar: "https://api.dicebear.com/9.x/notionists/svg?seed=FaridH&backgroundColor=c0aede", quote: "The points system motivates me to tutor more. It genuinely feels rewarding." },
 ];
 
 const faqs = [
@@ -56,10 +56,10 @@ const faqs = [
 ];
 
 const trustItems = [
-  { icon: "🔐", title: "USM verification", desc: "Only verified university accounts can access the platform." },
-  { icon: "⭐", title: "Tutor accountability", desc: "Profiles, feedback, and reporting help keep the community safe." },
-  { icon: "🪪", title: "Clear roles", desc: "Students and tutors have separate permissions and experiences." },
-  { icon: "🔒", title: "Privacy-first mindset", desc: "Keep personal data minimal — only what's needed for the service." },
+  { icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`, title: "USM verification", desc: "Only verified university accounts can access the platform." },
+  { icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`, title: "Tutor accountability", desc: "Profiles, feedback, and reporting help keep the community safe." },
+  { icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`, title: "Clear roles", desc: "Students and tutors have separate permissions and experiences." },
+  { icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`, title: "Privacy-first mindset", desc: "Keep personal data minimal — only what's needed for the service." },
 ];
 
 const tutors = [
@@ -777,15 +777,21 @@ export default function HomePage() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-1.5">
-                {[{ d:"✦",l:"Smart Matching"},{d:"◈",l:"SOS Help"},{d:"◎",l:"Analytics"},{d:"◆",l:"Points & Badges"}].map(c=>(
+                {[
+                  { icon:`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgb(var(--primary))" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`, l:"Smart Matching"},
+                  { icon:`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgb(var(--primary))" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`, l:"SOS Help"},
+                  { icon:`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgb(var(--primary))" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`, l:"Analytics"},
+                  { icon:`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgb(var(--primary))" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>`, l:"Points & Badges"},
+                ].map(c=>(
                   <span key={c.l} className="chip">
-                    <span style={{ color:"rgb(var(--primary))", fontSize:9 }}>{c.d}</span>{c.l}
+                    <span style={{ display:"flex", alignItems:"center" }} dangerouslySetInnerHTML={{ __html:c.icon }} />
+                    {c.l}
                   </span>
                 ))}
               </div>
 
               <div className="mt-6 flex items-center gap-5">
-                {[["500+","Students"],["80+","Tutors"],["4.8★","Avg rating"]].map(([v,l],i)=>(
+                {[["500+","Students"],["80+","Tutors"],["4.8","Avg rating"]].map(([v,l],i)=>(
                   <div key={l} className="flex items-center gap-5">
                     {i>0 && <div style={{ width:1,height:26,background:"rgb(var(--border))" }} />}
                     <div>
@@ -817,7 +823,7 @@ export default function HomePage() {
                 <div key={i} className="twinkle-star" style={{
                   position:"absolute", fontSize:16,
                   ...s, ["--dur" as string]:s.dur, ["--delay" as string]:s.delay,
-                }}>✦</div>
+                }}><svg width="14" height="14" viewBox="0 0 16 16" fill="rgb(var(--primary))"><path d="M8 0l1.5 6.5L16 8l-6.5 1.5L8 16l-1.5-6.5L0 8l6.5-1.5z"/></svg></div>
               ))}
 
               <div className="flex items-start justify-between mb-4">
@@ -859,7 +865,7 @@ export default function HomePage() {
                         )}
                       </div>
                       <div className="mt-0.5 text-[11px]" style={{ color:"rgb(var(--muted))" }}>
-                        <span style={{ color:"#f59e0b" }}>★</span> {t.rating} · {t.time}
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="#f59e0b" stroke="none" style={{display:"inline",verticalAlign:"middle",marginRight:2}}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>{t.rating} · {t.time}
                       </div>
                     </div>
                     <button className="rounded-xl px-3 py-1.5 text-xs font-bold text-white flex-shrink-0"
@@ -872,7 +878,10 @@ export default function HomePage() {
               <div className="mt-4">
                 <div className="flex items-center justify-between text-xs mb-1.5">
                   <span style={{ color:"rgb(var(--muted))" }}>Your study streak</span>
-                  <span className="font-semibold heartbeat inline-block" style={{ color:"rgb(var(--primary))" }}>🔥 5 days</span>
+                  <span className="font-semibold heartbeat inline-block flex items-center gap-1" style={{ color:"rgb(var(--primary))" }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C10 6 6 8 6 13a6 6 0 0 0 12 0c0-3-1.5-5-3-7-1 2-2 3-3 3s-1-1-1-3C9.5 4.5 11 3 12 2z"/></svg>
+                    5 days
+                  </span>
                 </div>
                 <div className="progress-bar"><div className="progress-fill" /></div>
                 <div className="flex justify-between text-[10px] mt-1" style={{ color:"rgb(var(--muted2))" }}>
@@ -933,7 +942,7 @@ export default function HomePage() {
                   background:"rgb(var(--card2)/.5)",
                   animation:`popIn .5s cubic-bezier(.22,1,.36,1) both ${0.2+si*0.08}s`,
                 }}>
-                <div className="icon-box" style={{ width:36,height:36,borderRadius:10,fontSize:17 }}>{s.icon}</div>
+                <div className="icon-box" style={{ width:36,height:36,borderRadius:10 }} dangerouslySetInnerHTML={{ __html:s.icon }} />
                 <div>
                   <div className="text-sm font-bold">{s.value}</div>
                   <div className="text-[11px] mt-0.5" style={{ color:"rgb(var(--muted2))" }}>{s.label}</div>
@@ -1018,14 +1027,16 @@ export default function HomePage() {
                         display:"inline-block",
                         animation:j<r.stars?`starTwinkle ${1.5+j*0.3}s ease-in-out infinite`:"none",
                         animationDelay:`${j*0.15}s`,
-                      }}>★</span>
+                      }}><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>
                     ))}
                   </div>
                   <p className="text-sm leading-[1.7] mb-5" style={{ color:"rgb(var(--fg))" }}>
                     &quot;{r.quote}&quot;
                   </p>
                   <div className="flex items-center gap-2.5 pt-4" style={{ borderTop:"1px solid rgb(var(--border))" }}>
-                    <div className="av text-xs">{r.initials}</div>
+                    <div style={{ width:36, height:36, borderRadius:"50%", overflow:"hidden", flexShrink:0, border:"2px solid rgb(var(--primary)/.2)" }}>
+                      <img src={r.avatar} alt={r.name} width={36} height={36} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                    </div>
                     <div>
                       <div className="text-xs font-semibold">{r.name}</div>
                       <div className="text-[11px] mt-0.5" style={{ color:"rgb(var(--muted2))" }}>{r.course}</div>
@@ -1057,7 +1068,7 @@ export default function HomePage() {
                   border:"1px solid rgb(var(--border))",
                   animation:`slideIn${ti%2===0?"Left":"Right"} .6s cubic-bezier(.22,1,.36,1) both ${0.1+ti*0.1}s`,
                 }}>
-                <div className="icon-box flex-shrink-0" style={{ fontSize:19 }}>{item.icon}</div>
+                <div className="icon-box flex-shrink-0" dangerouslySetInnerHTML={{ __html:item.icon }} />
                 <div>
                   <div className="text-sm font-bold">{item.title}</div>
                   <p className="mt-1.5 text-sm leading-relaxed" style={{ color:"rgb(var(--muted))" }}>{item.desc}</p>
@@ -1144,30 +1155,32 @@ export default function HomePage() {
             <div className="pointer-events-none absolute inset-0 cta-glow"
               style={{ background:"radial-gradient(ellipse 70% 55% at 50% -5%,rgb(var(--primary)/.2),transparent 68%)" }} />
 
-            {/* Floating sparkles in CTA */}
-            {["✦","✧","✦","✧","✦"].map((s,i)=>(
+            {/* Floating sparkles in CTA — SVG 4-point stars */}
+            {[0,1,2,3,4].map((i)=>(
               <div key={i} className="sparkle" style={{
                 top:`${10+i*15}%`, left:`${5+i*20}%`,
                 ["--dur" as string]:`${1.8+i*0.4}s`,
                 ["--delay" as string]:`${i*0.3}s`,
-                ["--sz" as string]:`${10+i%3*4}px`,
                 color:"rgb(var(--primary))",
-              }}>{s}</div>
+              }}>
+                <svg width={8+i%3*4} height={8+i%3*4} viewBox="0 0 16 16" fill="currentColor"><path d="M8 0l1.5 6.5L16 8l-6.5 1.5L8 16l-1.5-6.5L0 8l6.5-1.5z"/></svg>
+              </div>
             ))}
-            {["✧","✦","✧"].map((s,i)=>(
+            {[0,1,2].map((i)=>(
               <div key={i+5} className="sparkle" style={{
                 top:`${20+i*25}%`, right:`${8+i*12}%`,
                 ["--dur" as string]:`${2+i*0.5}s`,
                 ["--delay" as string]:`${0.6+i*0.4}s`,
-                ["--sz" as string]:`${12+i%2*6}px`,
                 color:"rgb(var(--primary2))",
-              }}>{s}</div>
+              }}>
+                <svg width={10+i%2*6} height={10+i%2*6} viewBox="0 0 16 16" fill="currentColor"><path d="M8 0l1.5 6.5L16 8l-6.5 1.5L8 16l-1.5-6.5L0 8l6.5-1.5z"/></svg>
+              </div>
             ))}
 
             <div className="relative">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl text-xl mb-4 book-bounce"
-                style={{ background:"linear-gradient(135deg,rgb(var(--primary)/.18),rgb(var(--primary2)/.14))", border:"1px solid rgb(var(--primary)/.25)" }}>
-                🎓
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4 book-bounce"
+                style={{ background:"linear-gradient(135deg,rgb(var(--primary)/.18),rgb(var(--primary2)/.14))", border:"1px solid rgb(var(--primary)/.25)", color:"rgb(var(--primary))" }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
               </div>
               <h3 style={{ fontSize:"1.5rem",fontWeight:800,letterSpacing:"-0.02em" }}>
                 Ready to make academic help feel easy?
