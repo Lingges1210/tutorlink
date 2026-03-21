@@ -129,7 +129,7 @@ function Icon({ name, size = 16, color = "currentColor", strokeWidth = 1.8 }: { 
     case "arrow-r":    return <svg {...s} viewBox="0 0 24 24"><line {...p} x1="5" y1="12" x2="19" y2="12" /><polyline {...p} points="12 5 19 12 12 19" /></svg>;
     case "chevron-r":  return <svg {...s} viewBox="0 0 24 24"><polyline {...p} points="9 18 15 12 9 6" /></svg>;
     case "cat":        return <svg {...s} viewBox="0 0 24 24"><path {...p} d="M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.84 6.42-2.26 1.4.58-.42 7-.42 7 .57 1.07 1 2.24 1 3.44C21 17.9 16.97 21 12 21s-9-3-9-7.56c0-1.25.5-2.4 1-3.44 0 0-1.89-6.42-.5-7 1.39-.58 4.72.23 6.5 2.26A9.06 9.06 0 0 1 12 5z" /><path {...p} d="M8 14v.5" /><path {...p} d="M16 14v.5" /><path {...p} d="M11.25 16.25h1.5L12 17l-.75-.75z" /></svg>;
-    case "dog":        return <svg {...s} viewBox="0 0 24 24"><path {...p} d="M3 7c0-1.1.4-2 1.5-2.5S7 4 7 4l1 3"/><path {...p} d="M21 7c0-1.1-.4-2-1.5-2.5S17 4 17 4l-1 3"/><path {...p} d="M5 10.5C5 7.5 7 5 12 5s7 2.5 7 5.5v2c0 3-2.5 5.5-7 5.5s-7-2.5-7-5.5z"/><path {...p} d="M9 13.5c.5.5 1.2.8 2 .8"/><path {...p} d="M15 13.5c-.5.5-1.2.8-2 .8"/><ellipse cx="9" cy="11" rx="1" ry="1.2" stroke="none" fill={color}/><ellipse cx="15" cy="11" rx="1" ry="1.2" stroke="none" fill={color}/><ellipse cx="12" cy="14" rx="1.5" ry="1" stroke="none" fill={color}/><path {...p} d="M10.5 17.5c0 1.1.7 2 1.5 2s1.5-.9 1.5-2"/></svg>;
+    case "dog":        return <svg {...s} viewBox="0 0 24 24"><path {...p} d="M4.5 7.5C4 5.5 5 4 7 4l1.5 3"/><path {...p} d="M19.5 7.5C20 5.5 19 4 17 4l-1.5 3"/><path {...p} d="M12 4c-4.5 0-7.5 2.5-7.5 6.5C4.5 15 7.5 18 12 18s7.5-3 7.5-7.5C19.5 6.5 16.5 4 12 4z"/><circle cx="9" cy="11" r="1" fill={color} stroke="none"/><circle cx="15" cy="11" r="1" fill={color} stroke="none"/><ellipse cx="12" cy="13.5" rx="1.8" ry="1.2" fill={color} stroke="none"/><path {...p} d="M10 15.5q2 1.5 4 0"/></svg>;
     case "paw":        return <svg {...s} viewBox="0 0 24 24"><circle {...p} cx="11" cy="4" r="2" /><circle {...p} cx="18" cy="8" r="2" /><circle {...p} cx="20" cy="16" r="2" /><path {...p} d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z" /></svg>;
     case "settings":   return <svg {...s} viewBox="0 0 24 24"><circle {...p} cx="12" cy="12" r="3" /><path {...p} d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>;
     case "lock":       return <svg {...s} viewBox="0 0 24 24"><rect {...p} x="3" y="11" width="18" height="11" rx="2" ry="2" /><path {...p} d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>;
@@ -189,7 +189,9 @@ const KF = `
   @keyframes sp-leg-f   { 0%,100%{transform:rotate(-22deg)} 50%{transform:rotate(26deg)} }
   @keyframes sp-leg-b   { 0%,100%{transform:rotate(22deg)} 50%{transform:rotate(-26deg)} }
   @keyframes sp-blink   { 0%,88%,100%{transform:scaleY(1)} 92%,95%{transform:scaleY(.05)} }
-  @keyframes sp-xp      { 0%{opacity:1;transform:translateY(0) scale(1)} 100%{opacity:0;transform:translateY(-52px) scale(1.15)} }
+  @keyframes sp-xp      { 0%{opacity:1;transform:translateY(0) scale(1.1)} 60%{opacity:1;transform:translateY(-38px) scale(1.18)} 100%{opacity:0;transform:translateY(-60px) scale(.9)} }
+  @keyframes sp-xp2     { 0%{opacity:0;transform:translateY(0) scale(.8)} 20%{opacity:1} 70%{opacity:1;transform:translateY(-30px) scale(1)} 100%{opacity:0;transform:translateY(-50px) scale(.7)} }
+  @keyframes sp-bar-flash { 0%{opacity:0;transform:scaleX(0)} 30%{opacity:1;transform:scaleX(1)} 70%{opacity:.6} 100%{opacity:0;transform:scaleX(1)} }
   @keyframes sp-burst   { 0%{opacity:1;transform:translate(0,0) scale(1)} 100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(0)} }
   @keyframes sp-treat   { 0%{opacity:0;transform:translateY(-38px) rotate(0) scale(1.2)} 40%{opacity:1} 80%{opacity:1;transform:translateY(0) rotate(200deg) scale(.9)} 100%{opacity:0;transform:translateY(10px) scale(1.4)} }
   @keyframes sp-speech  { from{opacity:0;transform:scale(.65) translateY(5px)} 60%{transform:scale(1.06)} to{opacity:1;transform:scale(1)} }
@@ -651,20 +653,20 @@ function ToastItem({ toast, petName, onFeed }: { toast: Toast; petName: string; 
 }
 
 /* ─── STAT BAR ───────────────────────────────────────────── */
-function StatBar({ label, val, pct, accent, icon }: { label: string; val: string; pct: number; accent: string; icon: string }) {
+function StatBar({ label, val, pct, accent, icon, flash }: { label: string; val: string; pct: number; accent: string; icon: string; flash?: boolean }) {
   return (
     <div style={{marginBottom:18}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <div style={{display:"flex",alignItems:"center",gap:7}}><Icon name={icon} size={15} color="var(--c-text3)"/><span style={{fontSize:13,fontWeight:500,color:"var(--c-text2)",letterSpacing:".02em"}}>{label}</span></div>
-        <span style={{fontSize:12,fontWeight:600,color:accent,background:`${accent}18`,padding:"3px 10px",borderRadius:20,border:`1px solid ${accent}28`}}>{val}</span>
+        <div style={{display:"flex",alignItems:"center",gap:7}}><Icon name={icon} size={15} color={flash?"var(--c-accent2)":  "var(--c-text3)"}/><span style={{fontSize:13,fontWeight:flash?600:500,color:flash?"var(--c-text)":"var(--c-text2)",letterSpacing:".02em",transition:"all .3s ease"}}>{label}</span></div>
+        <span style={{fontSize:12,fontWeight:700,color:flash?"#fff":accent,background:flash?accent:`${accent}18`,padding:"3px 10px",borderRadius:20,border:`1px solid ${accent}${flash?"88":"28"}`,transition:"all .3s ease",boxShadow:flash?`0 0 10px ${accent}60`:"none"}}>{val}</span>
       </div>
-      <div style={{height:9,background:"rgba(255,255,255,.06)",borderRadius:6,overflow:"hidden"}}>
-        <div style={{height:"100%",borderRadius:6,backgroundImage:`linear-gradient(90deg,${accent},${accent}99)`,backgroundSize:"200% auto",animation:"sp-shimmer 3s linear infinite",width:pct+"%",transition:"width .85s cubic-bezier(.34,1.56,.64,1)"}}/>
+      <div style={{height:9,background:"rgba(255,255,255,.06)",borderRadius:6,overflow:"hidden",position:"relative"}}>
+        <div style={{height:"100%",borderRadius:6,backgroundImage:`linear-gradient(90deg,${accent},${accent}99)`,backgroundSize:"200% auto",animation:flash?"sp-shimmer .6s linear infinite":"sp-shimmer 3s linear infinite",width:pct+"%",transition:"width .85s cubic-bezier(.34,1.56,.64,1)",boxShadow:flash?`0 0 8px ${accent}80`:"none"}}/>
+        {flash && <div style={{position:"absolute",inset:0,borderRadius:6,background:`linear-gradient(90deg,transparent,${accent}50,transparent)`,animation:"sp-bar-flash .8s ease-out forwards"}}/>}
       </div>
     </div>
   );
 }
-
 /* ─── ACCESSORY CARD ─────────────────────────────────────── */
 function AccessoryCard({ acc, owned, active, canBuy, accentColor, isNew, onClick }: {
   acc: typeof ACCS[0]; owned: boolean; active: boolean; canBuy: boolean; accentColor: string; isNew?: boolean; onClick: () => void;
@@ -704,15 +706,18 @@ function HungerBanner({ petName, onDismiss }: { petName: string; onDismiss: () =
 }
 
 /* ─── TREAT CAP BANNER ───────────────────────────────────── */
-function TreatCapBanner({ petName, onDismiss }: { petName: string; onDismiss: () => void }) {
+function TreatCapBanner({ petName, onBurn, onDismiss }: { petName: string; onBurn: () => void; onDismiss: () => void }) {
   return (
     <div style={{background:"rgba(196,121,0,.1)",border:"1px solid rgba(196,121,0,.28)",borderRadius:16,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,animation:"sp-hunger-banner .4s ease both"}}>
       <div style={{width:38,height:38,borderRadius:10,background:"rgba(196,121,0,.15)",border:"1px solid rgba(196,121,0,.25)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="cookie" size={17} color="var(--c-amber)"/></div>
       <div style={{flex:1}}>
-        <div style={{fontSize:14,fontWeight:600,color:"var(--c-amber)",display:"flex",alignItems:"center",gap:6}}><Icon name="cookie" size={13} color="var(--c-amber)"/>Treat bag is full</div>
-        <div style={{fontSize:12,color:"var(--c-text3)",marginTop:3}}>{petName} is full — feed them first before earning more treats!</div>
+        <div style={{fontSize:14,fontWeight:600,color:"var(--c-amber)",display:"flex",alignItems:"center",gap:6}}><Icon name="cookie" size={13} color="var(--c-amber)"/>Treat bar is full!</div>
+        <div style={{fontSize:12,color:"var(--c-text3)",marginTop:3}}>{petName} has 15/15 treats. Play to burn some, then earn more.</div>
       </div>
-      <button onClick={onDismiss} style={{background:"none",border:"none",cursor:"pointer",padding:4}}><Icon name="x" size={14} color="var(--c-text3)"/></button>
+      <div style={{display:"flex",flexDirection:"column" as const,gap:5,flexShrink:0}}>
+        <button onClick={onBurn} style={{background:"linear-gradient(135deg,var(--c-amber),#E07800)",color:"#fff",border:"none",borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"var(--font-body)",cursor:"pointer",whiteSpace:"nowrap" as const}}>Play! −3</button>
+        <button onClick={onDismiss} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"var(--c-text3)",fontFamily:"var(--font-body)"}}>Dismiss</button>
+      </div>
     </div>
   );
 }
@@ -1148,11 +1153,16 @@ export default function StudyPalPage() {
 
   function triggerActivity(id: string) {
     const a=ACTIVITIES.find(x=>x.id===id);if(!a)return;
-    // Only block if the pet's actual treat level is already maxed out.
-    // Pending treats haven't been consumed yet so they don't count toward the cap.
-    if (S.treats >= TREATS_MAX) {
+    // If treats already maxed out AND nothing pending to feed, block new rewards
+    if (S.treats >= TREATS_MAX && S.pending === 0) {
       setShowTreatCapBanner(true);
       triggerSpeech("I'm stuffed!");
+      return;
+    }
+    // If treats maxed but pending exists, just guide to feed — don't block XP
+    if (S.treats >= TREATS_MAX && S.pending > 0) {
+      triggerSpeech("Feed me first!");
+      setTab("feed");
       return;
     }
     const prevLevel = getLvl(S.xp);
@@ -1166,7 +1176,7 @@ export default function StudyPalPage() {
     upd({ xp:newXP, pending:S.pending+a.treats, points:S.points+a.xp, activityLog:newLog });
     triggerAnim("excited",1800);triggerSpeech(`+${a.xp} XP`);
     spawnParticles();popXP(a.xp);
-    setToasts(t=>[...t,{id:toastCnt.current++,treats:a.treats,actName:a.name}]);
+    setToasts([{id:toastCnt.current++,treats:a.treats,actName:a.name}]);
 
     // Level up?
     if (newLevel > prevLevel) {
@@ -1195,10 +1205,19 @@ export default function StudyPalPage() {
       const newTreats = Math.min(S.treats+n, TREATS_MAX);
       upd({treats:newTreats,pending:0,lastFedAt:Date.now(),lastDecayedAt:Date.now()});
       studypalMarkFed();
-      localStorage.removeItem("sp_hunger_notified"); // reset so next hunger cycle notifies again
+      localStorage.removeItem("sp_hunger_notified");
       setShowHungerBanner(false);setShowTreatCapBanner(false);
       spawnParticles();triggerAnim("happy",2400);triggerSpeech("Thank you!");
     },n*160+800);
+  }
+
+  function burnTreats() {
+    // "Play" action — pet burns 3 treats doing zoomies, making room to earn more
+    if (S.treats < 3) return;
+    upd({treats:S.treats-3});
+    triggerAnim("excited",2200);triggerSpeech("Zoomies!");
+    spawnParticles();
+    setShowTreatCapBanner(false);
   }
 
   if (!S.onboarded) return <Onboarding onDone={(t,n)=>{const ns={...def(),petType:t,petName:n,treats:8,onboarded:true,lastFedAt:Date.now(),lastDecayedAt:Date.now()};setS(ns);save(ns);}}/>;
@@ -1235,12 +1254,7 @@ export default function StudyPalPage() {
       {/* Decay pop */}
       {decayPopTicks > 0 && <DecayPop ticks={decayPopTicks}/>}
 
-      {/* Toast tray */}
-      <div style={{position:"fixed",top:68,left:"50%",transform:"translateX(-50%)",zIndex:200,display:"flex",flexDirection:"column",gap:8,width:448,maxWidth:"calc(100vw - 32px)",pointerEvents:"none"}}>
-        {toasts.map(t=><ToastItem key={t.id} toast={t} petName={S.petName} onFeed={feedNow}/>)}
-      </div>
-
-      {/* Header */}
+{/* Header */}
       <header style={{background:"color-mix(in srgb, var(--c-surface) 92%, transparent)",backdropFilter:"blur(20px)",borderBottom:"1px solid var(--c-border)",position:"sticky",top:0,zIndex:50}}>
         <div style={{maxWidth:650,margin:"0 auto",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -1273,7 +1287,7 @@ export default function StudyPalPage() {
         {(showHungerBanner || showTreatCapBanner) && (
           <div style={{padding:"14px 16px 0",display:"flex",flexDirection:"column",gap:8}}>
             {showHungerBanner && <HungerBanner petName={S.petName} onDismiss={()=>setShowHungerBanner(false)}/>}
-            {showTreatCapBanner && <TreatCapBanner petName={S.petName} onDismiss={()=>{setShowTreatCapBanner(false);studypalClearTreatCap();}}/>}
+            {showTreatCapBanner && <TreatCapBanner petName={S.petName} onBurn={burnTreats} onDismiss={()=>{setShowTreatCapBanner(false);studypalClearTreatCap();}}/>}
           </div>
         )}
 
@@ -1295,7 +1309,18 @@ export default function StudyPalPage() {
                 {speech && <div style={{position:"absolute",top:-14,right:-18,background:accentHex,color:"#fff",fontSize:12,fontWeight:600,padding:"7px 14px",borderRadius:"16px 16px 16px 3px",whiteSpace:"nowrap" as const,animation:"sp-speech .3s cubic-bezier(.34,1.56,.64,1)",zIndex:30,pointerEvents:"none",fontFamily:"var(--font-body)",boxShadow:`0 4px 16px ${accentHex}44`}}>{speech}</div>}
                 {anim==="sleep" && <div style={{position:"absolute",top:4,right:2,pointerEvents:"none"}}><div style={{position:"absolute",top:0,right:0,fontSize:13,fontWeight:700,color:accentHex,animation:"sp-zzz1 2.4s ease-out infinite",fontFamily:"var(--font-body)"}}>z</div><div style={{position:"absolute",top:-16,right:12,fontSize:18,fontWeight:700,color:accentHex,animation:"sp-zzz2 2.4s ease-out infinite",animationDelay:".8s",fontFamily:"var(--font-body)"}}>Z</div></div>}
                 {["happy","excited"].includes(anim) && <div style={{position:"absolute",inset:-12,borderRadius:"50%",border:`2px solid ${accentHex}40`,animation:"sp-glow 2s ease-in-out infinite",pointerEvents:"none"}}/>}
-                {xpPops.map(p=><div key={p.id} style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",fontSize:14,fontWeight:700,color:accentHex,textShadow:`0 2px 8px ${accentHex}60`,animation:"sp-xp 1.1s ease-out forwards",pointerEvents:"none",zIndex:50,fontFamily:"var(--font-body)",whiteSpace:"nowrap" as const}}>+{p.v} XP</div>)}
+                {xpPops.map(p=>(
+                  <div key={p.id} style={{position:"absolute",inset:0,pointerEvents:"none",zIndex:50}}>
+                    {/* Main XP pop */}
+                    <div style={{position:"absolute",top:-10,left:"50%",transform:"translateX(-50%)",fontSize:16,fontWeight:700,color:"#fff",background:accentHex,padding:"4px 11px",borderRadius:20,boxShadow:`0 2px 14px ${accentHex}80`,animation:"sp-xp 1.2s cubic-bezier(.2,1.4,.5,1) forwards",fontFamily:"var(--font-body)",whiteSpace:"nowrap" as const,display:"flex",alignItems:"center",gap:4}}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="white"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>+{p.v} XP
+                    </div>
+                    {/* Secondary left pop */}
+                    <div style={{position:"absolute",top:14,left:"calc(50% - 42px)",fontSize:11,fontWeight:700,color:accentHex,animation:"sp-xp2 1.3s ease-out .08s forwards",fontFamily:"var(--font-body)",opacity:0,whiteSpace:"nowrap" as const}}>+{p.v}</div>
+                    {/* Tertiary right pop */}
+                    <div style={{position:"absolute",top:18,left:"calc(50% + 26px)",fontSize:10,fontWeight:600,color:accentHex,animation:"sp-xp2 1.1s ease-out .18s forwards",fontFamily:"var(--font-body)",opacity:0,whiteSpace:"nowrap" as const}}>XP</div>
+                  </div>
+                ))}
                 <PetComp anim={anim} acc={S.acc} onClick={onPetClick}/>
                 {particles.map(p=><div key={p.id} style={{position:"absolute",left:`${p.x}%`,top:`${p.y}%`,width:p.s,height:p.s,borderRadius:"50%",background:p.c,pointerEvents:"none",//@ts-ignore
                 "--dx":`${(p.x-50)*1.1}px`,"--dy":`${(p.y-42)*.9}px`,animation:"sp-burst .7s ease-out forwards",zIndex:40}}/>)}
@@ -1308,8 +1333,8 @@ export default function StudyPalPage() {
 
           {/* Stats */}
           <div style={{padding:"18px 20px 0"}}>
-            <StatBar label="Experience" val={`${S.xp} XP${nxt?` / ${nxt.xp}`:" · Max"}`} pct={xpPct} accent={accentHex} icon="star"/>
-            <StatBar label="Treat level" val={`${S.treats} / ${TREATS_MAX}`} pct={tPct} accent={hungry?"#F87171":accentHex} icon="cookie"/>
+            <StatBar label="Experience" val={`${S.xp} XP${nxt?` / ${nxt.xp}`:" · Max"}`} pct={xpPct} accent={accentHex} icon="star" flash={xpPops.length>0}/>
+            <StatBar label="Treat level" val={`${S.treats} / ${TREATS_MAX}`} pct={tPct} accent={hungry?"#F87171":accentHex} icon="cookie" flash={false}/>
           </div>
 
           {/* Status pills */}
