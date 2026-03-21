@@ -43,16 +43,16 @@ const reviews = [
 ];
 
 const faqs = [
-  { q: "Who can join TutorLink?", a: "USM students using verified USM email authentication. Just sign up with your student email and you're in — no approval needed for learners." },
-  { q: "Is TutorLink paid?", a: "The MVP is completely free. Optional paid sessions or a token-based tipping system may be introduced later based on community feedback." },
-  { q: "Is this like tuition?", a: "Not exactly. It's peer support — short, focused help sessions between students. Think of it as a smarter version of asking a senior for help, but organized." },
-  { q: "Can I be a tutor?", a: "Yes. Apply as a tutor, submit for review, and once approved your profile goes live. You decide your own availability and which subjects you offer." },
-  { q: "How does smart matching work?", a: "We match you based on your course code, availability window, learning preference, and past session ratings to surface the most relevant tutors first." },
-  { q: "What is SOS Academic Help?", a: "SOS is for urgent requests. When you need help right now, it surfaces available tutors in real time and notifies them instantly so you get a response fast." },
-  { q: "Is my personal data private?", a: "Yes. We only collect what's strictly needed to run the service. Your data is never sold or shared with third parties." },
-  { q: "How are tutors verified?", a: "Tutors go through a manual review before approval. Their profiles display ratings, session counts, and feedback from past learners." },
-  { q: "Can I leave feedback after a session?", a: "Absolutely — every completed session prompts a rating and optional review. This keeps the community quality high." },
-  { q: "What subjects are covered?", a: "Any subject taught at USM. From engineering maths and physics to language electives — if it's on your timetable, there's likely a tutor for it." },
+  { q: "My exam is in 2 days and I'm stuck — can I get help tonight?", a: "Yes — that's exactly what SOS Academic Help is for. Hit the SOS button, describe what you're stuck on, and available tutors are notified instantly. Most requests get a response within minutes." },
+  { q: "How do I book a session with a specific tutor?", a: "Go to Find Tutor, filter by your subject or course code, pick a tutor whose availability matches yours, and hit Book. A confirmation is sent and a chat thread opens right away." },
+  { q: "I'm a new student and don't know any seniors — is that a problem?", a: "Not at all — that's exactly the gap TutorLink fills. You don't need connections to get help. Sign in with your USM email, search your subject, and book whoever fits your schedule." },
+  { q: "How does the smart matching actually work?", a: "When you search, tutors are ranked by how closely they match your course code, your preferred time slot, and their past session ratings. The best fit floats to the top automatically." },
+  { q: "Can I become a tutor if I'm only in Year 2?", a: "Yes — year doesn't disqualify you, your subject knowledge does. Apply via the tutor form, and our team reviews your profile. If you can explain the material well, you're in." },
+  { q: "What happens during a session — is it a call or chat?", a: "TutorLink provides a built-in chat thread for every booking. Voice or video can be arranged directly between you and your tutor — whatever works best for both of you." },
+  { q: "What are points and badges for?", a: "Every completed session earns you points — whether you're a learner or tutor. Points unlock badges that appear on your profile and track your consistency in the community." },
+  { q: "What if my tutor doesn't show up or the session goes badly?", a: "You can report a no-show or leave a low rating after the session. Tutors with repeated poor feedback are removed from active listings. Your time is protected." },
+  { q: "Does my study streak reset if I miss a day?", a: "Yes, streaks reset if you miss a day without a completed session. But your total session count and badges are permanent — one missed day doesn't erase your overall progress." },
+  { q: "Is TutorLink only for STEM subjects?", a: "No — any subject on your USM timetable is fair game. Language electives, management courses, lab-heavy modules, finals prep — if it's on your schedule, you can find help for it." },
 ];
 
 const trustItems = [
