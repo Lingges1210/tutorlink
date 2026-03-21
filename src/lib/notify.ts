@@ -195,6 +195,18 @@ export const notify = {
     });
   },
 
+  /** StudyPal hunger notification */
+studypalHungry: async (userId: string | null | undefined, petName: string) => {
+  await create({
+    userId,
+    viewer: "STUDENT",
+    type: "STUDYPAL_HUNGRY",
+    title: `${petName} is hungry! 🐾`,
+    body: "It's been 2 days since your last study session. Complete one to earn treats!",
+    data: { href: "/dashboard/student" },
+  });
+},
+
   /** Session rescheduled (tutor remains assigned) */
   sessionRescheduled: async (
     otherPartyId: string | null | undefined,

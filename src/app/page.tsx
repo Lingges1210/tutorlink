@@ -157,9 +157,10 @@ export default function HomePage() {
 
     let animId: number;
 
+    // Only check the site's own dark class — never fall back to OS preference,
+    // because the user may have OS dark but site toggled to light.
     const isDark = () =>
-      document.documentElement.classList.contains("dark") ||
-      window.matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.classList.contains("dark");
 
     const resize = () => {
       canvas.width = window.innerWidth;
@@ -170,11 +171,11 @@ export default function HomePage() {
 
     // ── Static star field (dots) ──
     interface Dot { x:number; y:number; r:number; alpha:number; twinkleSpeed:number; twinkleOffset:number; }
-    const dots: Dot[] = Array.from({ length: 120 }, () => ({
+    const dots: Dot[] = Array.from({ length: 80 }, () => ({
       x: Math.random(),
       y: Math.random(),
-      r: 0.4 + Math.random() * 1.4,
-      alpha: 0.2 + Math.random() * 0.55,
+      r: 0.5 + Math.random() * 1.0,
+      alpha: 0.35 + Math.random() * 0.35,
       twinkleSpeed: 0.008 + Math.random() * 0.018,
       twinkleOffset: Math.random() * Math.PI * 2,
     }));
@@ -211,10 +212,10 @@ export default function HomePage() {
         tailMax,
         progress: 0,
         totalFrames,
-        opacity: 0.55 + Math.random() * 0.35,
+        opacity: 0.85 + Math.random() * 0.15,
         delay: Math.round(Math.random() * 200),
         active: false,
-        size: 1.4 + Math.random() * 1.2,
+        size: 2.0 + Math.random() * 1.5,
       };
     };
 
@@ -225,17 +226,17 @@ export default function HomePage() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       frame++;
 
+      const dark = isDark();
+
       // draw static dots
       for (const d of dots) {
-        const tw = Math.sin(frame * d.twinkleSpeed + d.twinkleOffset) * 0.3;
-        const a = Math.max(0.05, d.alpha + tw);
+        const tw = Math.sin(frame * d.twinkleSpeed + d.twinkleOffset) * 0.2;
+        const a = Math.max(0.15, d.alpha + tw);
         ctx.beginPath();
         ctx.arc(d.x * canvas.width, d.y * canvas.height, d.r, 0, Math.PI * 2);
-        // dark mode: white/blue dots; light mode: vivid purple dots
-        const dotColor = isDark()
+        ctx.fillStyle = dark
           ? `rgba(255,255,255,${a})`
-          : `rgba(138,43,226,${a})`;
-        ctx.fillStyle = dotColor;
+          : `rgba(88,28,220,${a})`;
         ctx.fill();
       }
 
@@ -277,11 +278,10 @@ export default function HomePage() {
           ctx.beginPath();
           ctx.moveTo(x1, y1);
           ctx.lineTo(x2, y2);
-          // dark mode: white tail; light mode: vivid purple tail
-          const tailColor = isDark()
+          // dark mode: white tail; light mode: rich violet tail — linear falloff so it stays visible
+          ctx.strokeStyle = dark
             ? `rgba(255,255,255,${alpha * t * t})`
-            : `rgba(138,43,226,${alpha * t * t})`;
-          ctx.strokeStyle = tailColor;
+            : `rgba(88,28,220,${alpha * t})`;
           ctx.lineWidth = s.size * t;
           ctx.lineCap = "round";
           ctx.stroke();
@@ -290,15 +290,15 @@ export default function HomePage() {
         // glowing head
         const gx = s.x, gy = s.y;
         const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, s.size * 3.5);
-        if (isDark()) {
+        if (dark) {
           grad.addColorStop(0,   `rgba(255,255,255,${alpha})`);
           grad.addColorStop(0.3, `rgba(255,255,255,${alpha * 0.6})`);
           grad.addColorStop(1,   `rgba(255,255,255,0)`);
         } else {
-          // light mode: vivid purple glow
-          grad.addColorStop(0,   `rgba(138,43,226,${alpha})`);
-          grad.addColorStop(0.3, `rgba(138,43,226,${alpha * 0.6})`);
-          grad.addColorStop(1,   `rgba(138,43,226,0)`);
+          // light mode: rich violet glow
+          grad.addColorStop(0,   `rgba(88,28,220,${alpha})`);
+          grad.addColorStop(0.4, `rgba(109,40,217,${alpha * 0.6})`);
+          grad.addColorStop(1,   `rgba(88,28,220,0)`);
         }
         ctx.beginPath();
         ctx.arc(gx, gy, s.size * 3.5, 0, Math.PI * 2);
@@ -308,10 +308,10 @@ export default function HomePage() {
         // solid bright core
         ctx.beginPath();
         ctx.arc(gx, gy, s.size * 0.7, 0, Math.PI * 2);
-        // dark mode: white core; light mode: vivid purple core
-        ctx.fillStyle = isDark()
+        // dark mode: white core; light mode: deep violet core
+        ctx.fillStyle = dark
           ? `rgba(255,255,255,${alpha})`
-          : `rgba(138,43,226,${alpha})`;
+          : `rgba(88,28,220,${alpha})`;
         ctx.fill();
       }
 
@@ -641,7 +641,7 @@ export default function HomePage() {
           position:fixed; top:0; left:0;
           width:100vw; height:100vh;
           pointer-events:none; z-index:0;
-          opacity:0.85;
+          opacity:1;
         }
 
         /* star sparkles */

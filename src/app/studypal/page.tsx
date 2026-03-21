@@ -625,7 +625,7 @@ function LevelUpModal({ levelName, droppedAcc, accName, accentHex, onClose }: {
           <div style={{background:`${accentHex}10`,border:`1px solid ${accentHex}25`,borderRadius:16,padding:"14px 18px",marginBottom:20,display:"flex",alignItems:"center",gap:14}}>
             <div style={{width:48,height:36,flexShrink:0}}><AccPreview id={droppedAcc}/></div>
             <div style={{textAlign:"left"}}>
-              <div style={{fontSize:12,fontWeight:700,color:"var(--c-text)"}}>🎁 Free accessory drop!</div>
+              <div style={{fontSize:12,fontWeight:700,color:"var(--c-text)",display:"flex",alignItems:"center",gap:6}}><Icon name="gift" size={13} color="var(--c-green)"/>Free accessory drop!</div>
               <div style={{fontSize:11,color:"var(--c-text3)",marginTop:2}}><strong style={{color:accentHex}}>{accName}</strong> has been added to your wardrobe</div>
             </div>
           </div>
@@ -720,8 +720,8 @@ function TreatCapBanner({ petName, onDismiss }: { petName: string; onDismiss: ()
 /* ─── DECAY POP ──────────────────────────────────────────── */
 function DecayPop({ ticks }: { ticks: number }) {
   return (
-    <div style={{position:"fixed",top:80,left:"50%",transform:"translateX(-50%)",zIndex:300,background:"rgba(248,113,113,.9)",color:"#fff",fontSize:13,fontWeight:700,padding:"8px 18px",borderRadius:20,boxShadow:"0 4px 16px rgba(248,113,113,.4)",animation:"sp-decay-tick 2.2s ease-out forwards",pointerEvents:"none",fontFamily:"var(--font-body)",whiteSpace:"nowrap" as const}}>
-      −{ticks} treat{ticks > 1 ? "s" : ""} lost while away 🕐
+    <div style={{position:"fixed",top:80,left:"50%",transform:"translateX(-50%)",zIndex:300,background:"rgba(248,113,113,.9)",color:"#fff",fontSize:13,fontWeight:700,padding:"8px 18px",borderRadius:20,boxShadow:"0 4px 16px rgba(248,113,113,.4)",animation:"sp-decay-tick 2.2s ease-out forwards",pointerEvents:"none",fontFamily:"var(--font-body)",whiteSpace:"nowrap" as const,display:"flex",alignItems:"center",gap:6}}>
+      <Icon name="clock" size={14} color="white"/>−{ticks} treat{ticks > 1 ? "s" : ""} lost while away
     </div>
   );
 }
@@ -773,7 +773,7 @@ function PointsExplainer() {
               </div>
             ))}
           </div>
-          <div style={{marginTop:10,fontSize:11,color:"var(--c-text3)",lineHeight:1.5,padding:"8px 10px",background:"rgba(124,106,255,.06)",borderRadius:9,border:"1px solid rgba(124,106,255,.15)"}}>💡 Points mirror XP — the same activity gives the same number of points and XP simultaneously.</div>
+          <div style={{marginTop:10,fontSize:11,color:"var(--c-text3)",lineHeight:1.5,padding:"8px 10px",background:"rgba(124,106,255,.06)",borderRadius:9,border:"1px solid rgba(124,106,255,.15)",display:"flex",alignItems:"flex-start",gap:6}}><span style={{flexShrink:0,marginTop:1}}><Icon name="info" size={13} color="var(--c-accent3)"/></span>Points mirror XP — the same activity gives the same number of points and XP simultaneously.</div>
         </div>
       )}
     </div>
@@ -805,7 +805,7 @@ function ActivityLog({ log }: { log: SPLogEntry[] }) {
                 </div>
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}}>
                   <span style={{fontSize:10,fontWeight:700,color:"var(--c-accent2)",background:"rgba(124,106,255,.12)",padding:"1px 6px",borderRadius:5}}>+{e.xp} XP</span>
-                  <span style={{fontSize:10,fontWeight:600,color:"var(--c-text3)",background:"rgba(255,255,255,.05)",padding:"1px 6px",borderRadius:5}}>+{e.treats} 🍪</span>
+                  <span style={{fontSize:10,fontWeight:600,color:"var(--c-text3)",background:"rgba(255,255,255,.05)",padding:"1px 6px",borderRadius:5,display:"flex",alignItems:"center",gap:2}}><Icon name="cookie" size={9} color="var(--c-text3)"/>+{e.treats}</span>
                 </div>
               </div>
             ))}
@@ -1046,7 +1046,25 @@ export default function StudyPalPage() {
     // Hunger check (after decay is applied)
     const lastFed = loaded.lastFedAt;
     const isHungry = !lastFed || (Date.now() - lastFed > TWO_DAYS_MS);
-    if (isHungry) setShowHungerBanner(true);
+    if (isHungry) {
+      setShowHungerBanner(true);
+
+      // Fire bell notification once per 24h max
+      const notifyKey = "sp_hunger_notified";
+      const lastNotified = localStorage.getItem(notifyKey);
+      const alreadyNotified = lastNotified &&
+        Date.now() - Number(lastNotified) < 24 * 60 * 60 * 1000;
+
+      if (!alreadyNotified && loaded.onboarded) {
+        fetch("/api/studypal/hungry", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ petName: loaded.petName }),
+        }).then(r => {
+          if (r.ok) localStorage.setItem(notifyKey, String(Date.now()));
+        }).catch(() => {}); // silently ignore if offline
+      }
+    }
 
     // Treat cap check
     if (loaded.treatCapReached) {
@@ -1059,15 +1077,6 @@ export default function StudyPalPage() {
       setNewlyDroppedAcc(loaded.pendingDrop as AccId);
       setShowLevelUp(true);
       studypalClearPendingDrop();
-    }
-
-    // Notification API for hunger
-    if (isHungry && typeof window !== "undefined" && "Notification" in window) {
-      const fire = () => {
-        try { new Notification(`Hey! ${loaded.petName} is hungry, let's study! 🐾`, { body: `${loaded.petName} hasn't been fed in 2 days. Complete a session to earn treats!`, icon:"/favicon.ico" }); } catch {}
-      };
-      if (Notification.permission === "granted") fire();
-      else if (Notification.permission !== "denied") Notification.requestPermission().then(p => { if (p==="granted") fire(); });
     }
   }, []);
   // ────────────────────────────────────────────────────────────
@@ -1186,6 +1195,7 @@ export default function StudyPalPage() {
       const newTreats = Math.min(S.treats+n, TREATS_MAX);
       upd({treats:newTreats,pending:0,lastFedAt:Date.now(),lastDecayedAt:Date.now()});
       studypalMarkFed();
+      localStorage.removeItem("sp_hunger_notified"); // reset so next hunger cycle notifies again
       setShowHungerBanner(false);setShowTreatCapBanner(false);
       spawnParticles();triggerAnim("happy",2400);triggerSpeech("Thank you!");
     },n*160+800);
@@ -1311,7 +1321,7 @@ export default function StudyPalPage() {
               </div>
               <div style={{background:"rgba(255,255,255,.04)",border:"1px solid var(--c-border)",borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:9}}>
                 {(S.streakCount??0)>0 ? (
-                  <><Icon name="flame" size={18} color="var(--c-red)"/><div><div style={{fontSize:11,fontWeight:700,color:"var(--c-red)"}}>{S.streakCount}-day streak 🔥</div><div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>Keep it up!</div></div></>
+                  <><Icon name="flame" size={18} color="var(--c-red)"/><div><div style={{fontSize:11,fontWeight:700,color:"var(--c-red)",display:"flex",alignItems:"center",gap:4}}><Icon name="flame" size={10} color="var(--c-red)"/>{S.streakCount}-day streak</div><div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>Keep it up!</div></div></>
                 ) : (
                   <><Icon name="zap" size={18} color="var(--c-accent2)"/><div><div style={{fontSize:11,fontWeight:700,color:"var(--c-accent2)"}}>{S.xp} XP</div><div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>{lvl.name}{nxt?` → ${nxt.name}`:" · Max"}</div></div></>
                 )}
