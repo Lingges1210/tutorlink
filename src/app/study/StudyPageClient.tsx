@@ -726,7 +726,7 @@ function TypingDots() {
 }
 
 // ── AI Chat Widget ─────────────────────────────────────────────────────────
-function AIChatWidget() {
+function AIChatWidget({ canUse, authed }: { canUse: boolean; authed: boolean }) {
   const [messages, setMessages]               = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue]           = useState("");
   const [isTyping, setIsTyping]               = useState(false);
@@ -751,6 +751,7 @@ function AIChatWidget() {
   }, [messages, isTyping]);
 
   const handleSend = useCallback((text?: string) => {
+    if (!canUse) return;
     const msg = (text ?? inputValue).trim();
     if (!msg || isTyping) return;
     setInputValue("");
@@ -769,7 +770,7 @@ function AIChatWidget() {
       setIsTyping(false);
       setRobotThinking(false);
     }, delay);
-  }, [inputValue, isTyping]);
+  }, [inputValue, isTyping, canUse]);
 
   const CHIPS = [
     { label: "Exam in 3 days",      icon: AlertCircle,      msg: "I have an exam in 3 days and I'm really stressed" },
@@ -817,7 +818,6 @@ function AIChatWidget() {
       <div className="relative px-6 pt-6 pb-4 border-b border-[rgb(var(--border))] overflow-hidden"
         style={{ background: "rgb(var(--card)/0.25)" }}>
 
-        {/* Dotted ground path */}
         <div className="absolute bottom-5 left-1/2 -translate-x-1/2 w-72 flex justify-between items-center"
           style={{ animation: "pathDotIn 0.6s ease-out 0.8s both" }}>
           {Array.from({length:20}).map((_,i)=>(
@@ -830,7 +830,6 @@ function AIChatWidget() {
           ))}
         </div>
 
-        {/* Glow backdrop behind characters */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <div className="absolute bottom-0 left-1/4 w-32 h-24 rounded-full blur-3xl opacity-20"
             style={{ background: "#4A8FE8" }}/>
@@ -838,7 +837,6 @@ function AIChatWidget() {
             style={{ background: "#3B8BD4" }}/>
         </div>
 
-        {/* Characters row */}
         <div className="relative flex items-end justify-center gap-14 max-w-sm mx-auto">
 
           {/* Student */}
@@ -921,157 +919,182 @@ function AIChatWidget() {
         </div>
       </div>
 
-      {/* Chat log */}
-      <div ref={chatContainerRef} className="px-6 py-4 max-h-64 overflow-y-auto space-y-3">
-        {messages.length === 0 && (
-          <div className="text-center py-6">
-            <div className="flex items-center justify-center gap-1.5 mb-1">
-              <Sparkles className="h-3 w-3 text-amber-400" style={{ animation:"glowPulse 2s ease-in-out infinite" }}/>
-              <p className="text-xs leading-relaxed" style={{ color:"rgb(var(--muted2))" }}>
-                Tap a suggestion below or type your question
-              </p>
-            </div>
-            <p className="text-[11px]" style={{ color:"rgb(var(--muted2))", opacity:0.6 }}>
-            I&apos;ll point you to exactly the right tool
+      {/* ── Locked overlay over chat/chips/input when not verified ── */}
+      {!canUse ? (
+        <div className="px-6 py-10 text-center">
+          <div className="inline-flex items-center justify-center h-12 w-12 rounded-2xl mb-4"
+            style={{ background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.2)" }}>
+            <Bot className="h-5 w-5" style={{ color: "#6366f1" }}/>
+          </div>
+          <p className="text-sm font-semibold" style={{ color: "rgb(var(--fg))" }}>
+            {!authed ? "Login to chat with the AI Tutor" : "Verification required"}
           </p>
-          </div>
-        )}
-        {messages.map((msg,idx)=>(
-          <div key={msg.id}
-            className={`flex gap-2.5 ${msg.role==="user" ? "justify-end" : "justify-start"}`}
-            style={{ animation:`msgSlideIn 0.28s ease-out ${idx===0?0:0}ms both` }}>
-
-            {msg.role==="ai" && (
-              <div className="h-7 w-7 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                style={{ background: "linear-gradient(135deg,rgba(99,102,241,0.15),rgba(56,189,248,0.15))", border:"1px solid rgba(56,189,248,0.2)" }}>
-                <Bot className="h-3.5 w-3.5 text-sky-500"/>
-              </div>
-            )}
-
-            <div className="flex flex-col gap-1 max-w-[78%]">
-              <div className={[
-                "rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed font-medium",
-                msg.role==="user"
-                  ? "rounded-tr-sm text-[rgb(var(--bg))]"
-                  : "rounded-tl-sm text-[rgb(var(--fg))]",
-              ].join(" ")}
-              style={msg.role==="user"
-                ? { background:"rgb(var(--fg))" }
-                : { background:"rgba(56,189,248,0.07)", border:"1px solid rgba(56,189,248,0.15)" }}>
-                {msg.text}
-              </div>
-
-              {/* Action links for AI messages */}
-              {msg.role==="ai" && msg.links && msg.links.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {msg.links.map(link => (
-                    <Link key={link.href} href={link.href}
-                      className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
-                      style={{
-                        background: link.icon === "plan"
-                          ? "rgba(99,102,241,0.1)"
-                          : link.icon === "upload"
-                          ? "rgba(244,63,94,0.1)"
-                          : "rgba(56,189,248,0.1)",
-                        border: link.icon === "plan"
-                          ? "1px solid rgba(99,102,241,0.25)"
-                          : link.icon === "upload"
-                          ? "1px solid rgba(244,63,94,0.25)"
-                          : "1px solid rgba(56,189,248,0.25)",
-                        color: link.icon === "plan"
-                          ? "#6366f1"
-                          : link.icon === "upload"
-                          ? "#f43f5e"
-                          : "#38bdf8",
-                      }}>
-                      {link.icon === "plan"   && <CalendarClock className="h-3 w-3 flex-shrink-0"/>}
-                      {link.icon === "hub"    && <BookOpen       className="h-3 w-3 flex-shrink-0"/>}
-                      {link.icon === "upload" && <Upload         className="h-3 w-3 flex-shrink-0"/>}
-                      {link.label}
-                      <ArrowRight className="h-2.5 w-2.5 flex-shrink-0"/>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {msg.role==="user" && (
-              <div className="h-7 w-7 rounded-xl bg-[rgb(var(--card2))] border border-[rgb(var(--border))] flex items-center justify-center flex-shrink-0 mt-0.5">
-                <GraduationCap className="h-3.5 w-3.5 text-[rgb(var(--muted))]"/>
-              </div>
-            )}
-          </div>
-        ))}
-
-        {isTyping && (
-          <div className="flex gap-2.5 justify-start" style={{ animation:"msgSlideIn 0.2s ease-out both" }}>
-            <div className="h-7 w-7 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background:"rgba(56,189,248,0.12)", border:"1px solid rgba(56,189,248,0.2)" }}>
-              <Bot className="h-3.5 w-3.5 text-sky-500"/>
-            </div>
-            <div className="rounded-2xl rounded-tl-sm px-2"
-              style={{ background:"rgba(56,189,248,0.07)", border:"1px solid rgba(56,189,248,0.15)" }}>
-              <TypingDots/>
-            </div>
-          </div>
-        )}
-
-      </div>
-
-      {/* Chips */}
-      <div className="px-6 pb-3 flex flex-wrap gap-1.5">
-        {CHIPS.map((chip,i)=>(
-          <button key={chip.msg} onClick={()=>handleSend(chip.msg)} disabled={isTyping}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
-            style={{
-              border:"1px solid rgb(var(--border))",
-              background:"rgb(var(--card)/0.7)",
-              color:"rgb(var(--muted))",
-              animation:`chipPop 0.35s ease-out ${i*60}ms both`,
-            }}
-            onMouseEnter={e=>{
-              (e.currentTarget as HTMLButtonElement).style.background="rgb(var(--card))";
-              (e.currentTarget as HTMLButtonElement).style.color="rgb(var(--fg))";
-            }}
-            onMouseLeave={e=>{
-              (e.currentTarget as HTMLButtonElement).style.background="rgb(var(--card)/0.7)";
-              (e.currentTarget as HTMLButtonElement).style.color="rgb(var(--muted))";
-            }}>
-            <chip.icon className="h-3 w-3 flex-shrink-0"/>
-            {chip.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Input */}
-      <div className="px-6 pb-6">
-        <div className="flex gap-2.5 items-center rounded-2xl px-4 py-1 transition-all duration-200"
-          style={{
-            border: "1.5px solid rgb(var(--border))",
-            background: "rgb(var(--card)/0.8)",
-          }}
-          onFocus={e=>(e.currentTarget.style.borderColor="rgba(56,189,248,0.5)")}
-          onBlur={e=>(e.currentTarget.style.borderColor="rgb(var(--border))")}>
-          <input
-            type="text"
-            value={inputValue}
-            onChange={e=>setInputValue(e.target.value)}
-            onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); handleSend(); } }}
-            disabled={isTyping}
-            placeholder="Ask about studying, exam prep, or the tools…"
-            autoComplete="off"
-            className="flex-1 bg-transparent text-xs outline-none py-2.5 disabled:opacity-50"
-            style={{ color:"rgb(var(--fg))" }}
-          />
-          <button onClick={()=>handleSend()} disabled={isTyping||!inputValue.trim()}
-            className="h-7 w-7 rounded-xl flex items-center justify-center transition-all duration-150 flex-shrink-0 active:scale-95 disabled:cursor-not-allowed"
-            style={{
-              background: (isTyping||!inputValue.trim()) ? "rgb(var(--border))" : "linear-gradient(135deg,#6366f1,#38bdf8)",
-            }}>
-            <Send className="h-3.5 w-3.5 text-white"/>
-          </button>
+          <p className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
+            {!authed
+              ? "Login and verify your account to ask study questions."
+              : "The AI Tutor will unlock once your account is verified."}
+          </p>
+          {!authed && (
+            <Link href="/auth/login"
+              className="mt-4 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white"
+              style={{ background: "linear-gradient(135deg, #6366f1, #38bdf8)" }}>
+              Login to get started <ArrowRight className="h-3 w-3"/>
+            </Link>
+          )}
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Chat log */}
+          <div ref={chatContainerRef} className="px-6 py-4 max-h-64 overflow-y-auto space-y-3">
+            {messages.length === 0 && (
+              <div className="text-center py-6">
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <Sparkles className="h-3 w-3 text-amber-400" style={{ animation:"glowPulse 2s ease-in-out infinite" }}/>
+                  <p className="text-xs leading-relaxed" style={{ color:"rgb(var(--muted2))" }}>
+                    Tap a suggestion below or type your question
+                  </p>
+                </div>
+                <p className="text-[11px]" style={{ color:"rgb(var(--muted2))", opacity:0.6 }}>
+                  I&apos;ll point you to exactly the right tool
+                </p>
+              </div>
+            )}
+            {messages.map((msg,idx)=>(
+              <div key={msg.id}
+                className={`flex gap-2.5 ${msg.role==="user" ? "justify-end" : "justify-start"}`}
+                style={{ animation:`msgSlideIn 0.28s ease-out ${idx===0?0:0}ms both` }}>
+
+                {msg.role==="ai" && (
+                  <div className="h-7 w-7 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
+                    style={{ background: "linear-gradient(135deg,rgba(99,102,241,0.15),rgba(56,189,248,0.15))", border:"1px solid rgba(56,189,248,0.2)" }}>
+                    <Bot className="h-3.5 w-3.5 text-sky-500"/>
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-1 max-w-[78%]">
+                  <div className={[
+                    "rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed font-medium",
+                    msg.role==="user"
+                      ? "rounded-tr-sm text-[rgb(var(--bg))]"
+                      : "rounded-tl-sm text-[rgb(var(--fg))]",
+                  ].join(" ")}
+                  style={msg.role==="user"
+                    ? { background:"rgb(var(--fg))" }
+                    : { background:"rgba(56,189,248,0.07)", border:"1px solid rgba(56,189,248,0.15)" }}>
+                    {msg.text}
+                  </div>
+
+                  {msg.role==="ai" && msg.links && msg.links.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {msg.links.map(link => (
+                        <Link key={link.href} href={link.href}
+                          className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
+                          style={{
+                            background: link.icon === "plan"
+                              ? "rgba(99,102,241,0.1)"
+                              : link.icon === "upload"
+                              ? "rgba(244,63,94,0.1)"
+                              : "rgba(56,189,248,0.1)",
+                            border: link.icon === "plan"
+                              ? "1px solid rgba(99,102,241,0.25)"
+                              : link.icon === "upload"
+                              ? "1px solid rgba(244,63,94,0.25)"
+                              : "1px solid rgba(56,189,248,0.25)",
+                            color: link.icon === "plan"
+                              ? "#6366f1"
+                              : link.icon === "upload"
+                              ? "#f43f5e"
+                              : "#38bdf8",
+                          }}>
+                          {link.icon === "plan"   && <CalendarClock className="h-3 w-3 flex-shrink-0"/>}
+                          {link.icon === "hub"    && <BookOpen       className="h-3 w-3 flex-shrink-0"/>}
+                          {link.icon === "upload" && <Upload         className="h-3 w-3 flex-shrink-0"/>}
+                          {link.label}
+                          <ArrowRight className="h-2.5 w-2.5 flex-shrink-0"/>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {msg.role==="user" && (
+                  <div className="h-7 w-7 rounded-xl bg-[rgb(var(--card2))] border border-[rgb(var(--border))] flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <GraduationCap className="h-3.5 w-3.5 text-[rgb(var(--muted))]"/>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {isTyping && (
+              <div className="flex gap-2.5 justify-start" style={{ animation:"msgSlideIn 0.2s ease-out both" }}>
+                <div className="h-7 w-7 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background:"rgba(56,189,248,0.12)", border:"1px solid rgba(56,189,248,0.2)" }}>
+                  <Bot className="h-3.5 w-3.5 text-sky-500"/>
+                </div>
+                <div className="rounded-2xl rounded-tl-sm px-2"
+                  style={{ background:"rgba(56,189,248,0.07)", border:"1px solid rgba(56,189,248,0.15)" }}>
+                  <TypingDots/>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Chips */}
+          <div className="px-6 pb-3 flex flex-wrap gap-1.5">
+            {CHIPS.map((chip,i)=>(
+              <button key={chip.msg} onClick={()=>handleSend(chip.msg)} disabled={isTyping}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+                style={{
+                  border:"1px solid rgb(var(--border))",
+                  background:"rgb(var(--card)/0.7)",
+                  color:"rgb(var(--muted))",
+                  animation:`chipPop 0.35s ease-out ${i*60}ms both`,
+                }}
+                onMouseEnter={e=>{
+                  (e.currentTarget as HTMLButtonElement).style.background="rgb(var(--card))";
+                  (e.currentTarget as HTMLButtonElement).style.color="rgb(var(--fg))";
+                }}
+                onMouseLeave={e=>{
+                  (e.currentTarget as HTMLButtonElement).style.background="rgb(var(--card)/0.7)";
+                  (e.currentTarget as HTMLButtonElement).style.color="rgb(var(--muted))";
+                }}>
+                <chip.icon className="h-3 w-3 flex-shrink-0"/>
+                {chip.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Input */}
+          <div className="px-6 pb-6">
+            <div className="flex gap-2.5 items-center rounded-2xl px-4 py-1 transition-all duration-200"
+              style={{
+                border: "1.5px solid rgb(var(--border))",
+                background: "rgb(var(--card)/0.8)",
+              }}
+              onFocus={e=>(e.currentTarget.style.borderColor="rgba(56,189,248,0.5)")}
+              onBlur={e=>(e.currentTarget.style.borderColor="rgb(var(--border))")}>
+              <input
+                type="text"
+                value={inputValue}
+                onChange={e=>setInputValue(e.target.value)}
+                onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); handleSend(); } }}
+                disabled={isTyping}
+                placeholder="Ask about studying, exam prep, or the tools…"
+                autoComplete="off"
+                className="flex-1 bg-transparent text-xs outline-none py-2.5 disabled:opacity-50"
+                style={{ color:"rgb(var(--fg))" }}
+              />
+              <button onClick={()=>handleSend()} disabled={isTyping||!inputValue.trim()}
+                className="h-7 w-7 rounded-xl flex items-center justify-center transition-all duration-150 flex-shrink-0 active:scale-95 disabled:cursor-not-allowed"
+                style={{
+                  background: (isTyping||!inputValue.trim()) ? "rgb(var(--border))" : "linear-gradient(135deg,#6366f1,#38bdf8)",
+                }}>
+                <Send className="h-3.5 w-3.5 text-white"/>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -1117,12 +1140,10 @@ function StepCard({ num, title, desc, icon: Icon, accentClass, lineClass, gradFr
         (e.currentTarget as HTMLDivElement).style.background = "rgb(var(--card)/0.6)";
       }}>
 
-      {/* Top accent bar */}
       <div className="h-[2px] w-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"
         style={{ background: `linear-gradient(90deg, ${gradFrom}, ${gradTo})` }}/>
 
       <div className="p-5">
-        {/* Step badge */}
         <div className="flex items-center justify-between mb-4">
           <div className={["h-9 w-9 rounded-xl inline-flex items-center justify-center border border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.8)] transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6", accentClass].join(" ")}>
             <Icon className="h-4 w-4" />
@@ -1141,7 +1162,6 @@ function StepCard({ num, title, desc, icon: Icon, accentClass, lineClass, gradFr
         </div>
       </div>
 
-      {/* Ghost number */}
       <span className="absolute -right-1 -top-2 text-[5rem] font-black leading-none select-none pointer-events-none transition-colors duration-300"
         style={{ color:"rgb(var(--fg)/0.04)" }}>
         {num}
@@ -1151,18 +1171,45 @@ function StepCard({ num, title, desc, icon: Icon, accentClass, lineClass, gradFr
 }
 
 // ── Quick Card ─────────────────────────────────────────────────────────────
-function QuickCard({ title, desc, icon: Icon, href, tag, accentClass, tagBg, tagText, gradFrom, gradTo }: {
+function QuickCard({ title, desc, icon: Icon, href, tag, accentClass, tagBg, tagText, gradFrom, gradTo, disabled }: {
   title: string; desc: string; icon: any; href: string; tag: string;
   accentClass: string; tagBg: string; tagText: string; gradFrom: string; gradTo: string;
+  disabled?: boolean;
 }) {
+  const inner = (
+    <>
+      <div className="h-[2px] w-full opacity-60 group-hover:opacity-100 transition-opacity duration-300"
+        style={{ background:`linear-gradient(90deg,${gradFrom},${gradTo})` }}/>
+      <div className="p-5 flex flex-col flex-1">
+        <div className="flex items-start justify-between gap-3">
+          <div className={["h-9 w-9 rounded-xl inline-flex items-center justify-center shrink-0 border border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.8)] transition-all duration-300 group-hover:scale-110 group-hover:rotate-3", accentClass].join(" ")}>
+            <Icon className="h-4 w-4" />
+          </div>
+          <span className={["text-[10px] font-extrabold uppercase tracking-wider rounded-lg px-2 py-1", tagBg, tagText].join(" ")}>{tag}</span>
+        </div>
+        <div className="mt-4 text-sm font-bold leading-snug" style={{ color:"rgb(var(--fg))" }}>{title}</div>
+        <p className="mt-1.5 text-xs leading-relaxed flex-1" style={{ color:"rgb(var(--muted))" }}>{desc}</p>
+        <div className="mt-5 inline-flex items-center gap-1.5 text-xs font-bold" style={{ color:"rgb(var(--primary))" }}>
+          Get started
+          <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1.5 transition-transform duration-200" />
+        </div>
+      </div>
+    </>
+  );
+
+  if (disabled) {
+    return (
+      <div className="group relative rounded-2xl border flex flex-col overflow-hidden opacity-50 cursor-not-allowed"
+        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card)/0.6)", backdropFilter: "blur(12px)" }}>
+        {inner}
+      </div>
+    );
+  }
+
   return (
     <Link href={href}
       className="group relative rounded-2xl border flex flex-col overflow-hidden transition-all duration-300 ease-out hover:-translate-y-2"
-      style={{
-        borderColor: "rgb(var(--border))",
-        background: "rgb(var(--card)/0.6)",
-        backdropFilter: "blur(12px)",
-      }}
+      style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card)/0.6)", backdropFilter: "blur(12px)" }}
       onMouseEnter={e=>{
         (e.currentTarget as HTMLAnchorElement).style.boxShadow = `0 24px 56px rgb(var(--shadow)/0.22)`;
         (e.currentTarget as HTMLAnchorElement).style.background = "rgb(var(--card)/0.92)";
@@ -1171,33 +1218,13 @@ function QuickCard({ title, desc, icon: Icon, href, tag, accentClass, tagBg, tag
         (e.currentTarget as HTMLAnchorElement).style.boxShadow = "none";
         (e.currentTarget as HTMLAnchorElement).style.background = "rgb(var(--card)/0.6)";
       }}>
-
-      {/* Top gradient bar */}
-      <div className="h-[2px] w-full opacity-60 group-hover:opacity-100 transition-opacity duration-300"
-        style={{ background:`linear-gradient(90deg,${gradFrom},${gradTo})` }}/>
-
-      <div className="p-5 flex flex-col flex-1">
-        <div className="flex items-start justify-between gap-3">
-          <div className={["h-9 w-9 rounded-xl inline-flex items-center justify-center shrink-0 border border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.8)] transition-all duration-300 group-hover:scale-110 group-hover:rotate-3", accentClass].join(" ")}>
-            <Icon className="h-4 w-4" />
-          </div>
-          <span className={["text-[10px] font-extrabold uppercase tracking-wider rounded-lg px-2 py-1", tagBg, tagText].join(" ")}>{tag}</span>
-        </div>
-
-        <div className="mt-4 text-sm font-bold leading-snug" style={{ color:"rgb(var(--fg))" }}>{title}</div>
-        <p className="mt-1.5 text-xs leading-relaxed flex-1" style={{ color:"rgb(var(--muted))" }}>{desc}</p>
-
-        <div className="mt-5 inline-flex items-center gap-1.5 text-xs font-bold" style={{ color:"rgb(var(--primary))" }}>
-          Get started
-          <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1.5 transition-transform duration-200" />
-        </div>
-      </div>
+      {inner}
     </Link>
   );
 }
 
 // ── Stat Pill ──────────────────────────────────────────────────────────────
-function StatPill({ icon: Icon, label, value, color,}: {
+function StatPill({ icon: Icon, label, value, color }: {
   icon: any; label: string; value: string; color: string;
 }) {
   return (
@@ -1230,7 +1257,15 @@ const HOW_PLAN = [
 ];
 
 // ── Main Page ──────────────────────────────────────────────────────────────
-export default function StudyMain() {
+export default function StudyPageClient({
+  authed,
+  verified,
+}: {
+  authed: boolean;
+  verified: boolean;
+}) {
+  const canUse = authed && verified;
+
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -1255,7 +1290,6 @@ export default function StudyMain() {
 
       {/* Background atmosphere */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
-        {/* Animated orbs */}
         <div className="absolute -top-40 left-1/3 h-[420px] w-[420px] rounded-full blur-[120px] opacity-[0.08] dark:opacity-[0.12]"
           style={{ background:"#6366f1", animation:"orb1 18s ease-in-out infinite" }}/>
         <div className="absolute top-1/2 right-[-100px] h-[340px] w-[340px] rounded-full blur-[100px] opacity-[0.07] dark:opacity-[0.1]"
@@ -1264,15 +1298,11 @@ export default function StudyMain() {
           style={{ background:"#34d399", animation:"orb3 16s ease-in-out infinite" }}/>
         <div className="absolute top-1/4 left-1/4 h-[200px] w-[200px] rounded-full blur-[80px] opacity-[0.05] dark:opacity-[0.08]"
           style={{ background:"#f59e0b", animation:"orb1 25s ease-in-out 8s infinite" }}/>
-
-        {/* Grid */}
         <div className="absolute inset-0 opacity-[0.018] dark:opacity-[0.032]"
           style={{
             backgroundImage:`linear-gradient(rgb(var(--fg)) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--fg)) 1px, transparent 1px)`,
             backgroundSize:"56px 56px",
           }}/>
-
-        {/* Subtle noise overlay */}
         <div className="absolute inset-0 opacity-[0.015]"
           style={{
             backgroundImage:"url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
@@ -1288,7 +1318,6 @@ export default function StudyMain() {
           <header className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
 
-              {/* Badge */}
               <div className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-semibold"
                 style={{
                   border:"1px solid rgb(var(--border))",
@@ -1326,7 +1355,6 @@ export default function StudyMain() {
                 </span>
               </h1>
 
-              {/* Stat pills */}
               <div className="mt-4 flex flex-wrap gap-2" style={{ animation:"titleReveal 0.6s ease-out 0.2s both", opacity:0 }}>
                 <StatPill icon={Zap}          label="AI-powered"    value="Instant"  color="text-amber-400"/>
                 <StatPill icon={Brain}         label="Recall Engine" value="Active"   color="text-violet-500 dark:text-violet-400"/>
@@ -1335,23 +1363,47 @@ export default function StudyMain() {
 
             </div>
 
-            {/* CTA */}
-            <div style={{ animation:"heroBadgePop 0.5s cubic-bezier(0.175,0.885,0.32,1.275) 0.15s both", opacity:0 }}>
-              <Link href="/study/hub/upload"
-                className="shrink-0 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold text-white active:scale-95 transition-all duration-200"
-                style={{
-                  background:"linear-gradient(135deg,#6366f1,#38bdf8)",
-                  boxShadow:"0 8px 24px rgba(99,102,241,0.3), 0 2px 8px rgba(56,189,248,0.2)",
-                }}>
-                <Plus className="h-3.5 w-3.5"/>
-                Add Material
-              </Link>
+            {/* Auth badge + CTA */}
+            <div className="flex flex-col items-end gap-2" style={{ animation:"heroBadgePop 0.5s cubic-bezier(0.175,0.885,0.32,1.275) 0.15s both", opacity:0 }}>
+              {!authed ? (
+                <Link href="/auth/login"
+                  className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl text-white hover:opacity-90 transition-opacity shadow-[0_4px_16px_rgb(var(--primary)/0.3)]"
+                  style={{ background: "rgb(var(--primary))" }}>
+                  Login to use AI Hub
+                </Link>
+              ) : !verified ? (
+                <span className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  Pending verification
+                </span>
+              ) : (
+                <Link href="/study/hub/upload"
+                  className="shrink-0 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold text-white active:scale-95 transition-all duration-200"
+                  style={{
+                    background:"linear-gradient(135deg,#6366f1,#38bdf8)",
+                    boxShadow:"0 8px 24px rgba(99,102,241,0.3), 0 2px 8px rgba(56,189,248,0.2)",
+                  }}>
+                  <Plus className="h-3.5 w-3.5"/>
+                  Add Material
+                </Link>
+              )}
             </div>
           </header>
 
+          {/* ── Verification locked banner ── */}
+          {authed && !verified && (
+            <div className="rounded-2xl border border-amber-500/25 bg-amber-500/8 px-5 py-4"
+              style={{ animation:"cardPop 0.4s ease-out both" }}>
+              <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">⚠ Account pending verification</p>
+              <p className="mt-0.5 text-sm" style={{ color: "rgb(var(--muted))" }}>
+                AI Hub features will unlock once your account is verified.
+              </p>
+            </div>
+          )}
+
           {/* ── AI Chat Widget ── */}
           <div style={{ animation:"cardPop 0.5s ease-out 0.35s both", opacity:0 }}>
-            <AIChatWidget />
+            <AIChatWidget canUse={canUse} authed={authed} />
           </div>
 
           {/* ── Tabs ── */}
@@ -1387,7 +1439,6 @@ export default function StudyMain() {
                 backdropFilter:"blur(16px)",
               }}>
 
-              {/* Section header */}
               <div className="flex items-center justify-between gap-3 pb-5"
                 style={{ borderBottom:"1px solid rgb(var(--border))" }}>
                 <div key={`title-${tab}`}
@@ -1428,7 +1479,9 @@ export default function StudyMain() {
               <div className="flex items-center justify-between gap-3 pb-5"
                 style={{ borderBottom:"1px solid rgb(var(--border))" }}>
                 <div className="text-sm font-bold" style={{ color:"rgb(var(--fg))" }}>Quick Actions</div>
-                <div className="text-[11px] font-semibold" style={{ color:"rgb(var(--muted2))" }}>Pick a workflow</div>
+                <div className="text-[11px] font-semibold" style={{ color:"rgb(var(--muted2))" }}>
+                  {canUse ? "Pick a workflow" : "Unlock with verified account"}
+                </div>
               </div>
 
               <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1438,21 +1491,24 @@ export default function StudyMain() {
                   icon={BookOpen} href="/study/hub" tag="Essential"
                   accentClass="text-emerald-500 dark:text-emerald-400"
                   tagBg="bg-emerald-500/10" tagText="text-emerald-600 dark:text-emerald-400"
-                  gradFrom="#34d399" gradTo="#38bdf8"/>
+                  gradFrom="#34d399" gradTo="#38bdf8"
+                  disabled={!canUse}/>
                 <QuickCard
                   title="AI Study Plan Generator"
                   desc="Generate a weekly plan based on exam date + available time."
                   icon={CalendarClock} href="/study/plan" tag="New"
                   accentClass="text-sky-500 dark:text-sky-400"
                   tagBg="bg-sky-500/10" tagText="text-sky-600 dark:text-sky-400"
-                  gradFrom="#38bdf8" gradTo="#6366f1"/>
+                  gradFrom="#38bdf8" gradTo="#6366f1"
+                  disabled={!canUse}/>
                 <QuickCard
                   title="Upload New Material"
                   desc="Add lecture notes or a PDF to create a study pack instantly."
                   icon={Plus} href="/study/hub/upload" tag="Fast"
                   accentClass="text-rose-500 dark:text-rose-400"
                   tagBg="bg-rose-500/10" tagText="text-rose-600 dark:text-rose-400"
-                  gradFrom="#f43f5e" gradTo="#fb923c"/>
+                  gradFrom="#f43f5e" gradTo="#fb923c"
+                  disabled={!canUse}/>
               </div>
             </section>
           </div>
@@ -1466,13 +1522,11 @@ export default function StudyMain() {
                 backdropFilter:"blur(16px)",
               }}>
 
-              {/* Animated gradient bg */}
               <div className="absolute inset-0 pointer-events-none opacity-[0.35]"
                 style={{
                   backgroundImage:"radial-gradient(circle at 20% 50%,rgba(99,102,241,0.25) 0%,transparent 50%), radial-gradient(circle at 80% 50%,rgba(56,189,248,0.25) 0%,transparent 50%)",
                 }}/>
 
-              {/* Left stripe */}
               <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-3xl"
                 style={{
                   background:"linear-gradient(180deg,#6366f1,#38bdf8,#34d399)",

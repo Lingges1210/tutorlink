@@ -107,7 +107,15 @@ async function fetchTutorIncoming() {
 }
 
 // ─── Main page ─────────────────────────────────────────────────────────────
-export default function SOSPage() {
+export default function SosPageClient({
+  authed,
+  verified,
+}: {
+  authed: boolean;
+  verified: boolean;
+}) {
+  const canUse = authed && verified;
+
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -142,16 +150,20 @@ export default function SOSPage() {
   // Live elapsed tick
   const [, setTick] = useState(0);
 
-useEffect(() => {
-  const t = setInterval(() => setTick((n) => n + 1), 1000);
-  return () => clearInterval(t);
-}, []);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   function stopPolling() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   }
 
   useEffect(() => {
+    if (!canUse) {
+      setLoadingRoles(false);
+      return;
+    }
     let mounted = true;
     (async () => {
       try {
@@ -171,9 +183,10 @@ useEffect(() => {
       }
     })();
     return () => { mounted = false; };
-  }, [router, searchParams]);
+  }, [router, searchParams, canUse]);
 
   async function loadTutor(opts?: { silent?: boolean }) {
+    if (!canUse) return;
     const silent = !!opts?.silent;
     if (!silent) { setTutorErr(null); setLoadingTutor(true); }
     try {
@@ -189,91 +202,91 @@ useEffect(() => {
   }
 
   useEffect(() => {
-  if (!isTutor) { prevTutorIdsRef.current = []; setNewSOSIds([]); return; }
-  
-  const prevIds = prevTutorIdsRef.current;
-  const currentIds = tutorItems.map((item) => item.id);
+    if (!isTutor) { prevTutorIdsRef.current = []; setNewSOSIds([]); return; }
 
-  // ── First load: just seed the ref, don't mark anything as new ──
-  if (prevIds.length === 0 && currentIds.length > 0) {
-    prevTutorIdsRef.current = currentIds;
-    return;
-  }
+    const prevIds = prevTutorIdsRef.current;
+    const currentIds = tutorItems.map((item) => item.id);
 
-  const freshIds = currentIds.filter((id) => !prevIds.includes(id));
-  if (freshIds.length > 0) {
-    setNewSOSIds((prev) => [...new Set([...prev, ...freshIds])]);
-    freshIds.forEach((id) => {
-      window.setTimeout(() => setNewSOSIds((prev) => prev.filter((x) => x !== id)), 6000);
-    });
-  }
-  prevTutorIdsRef.current = currentIds;
-}, [tutorItems, isTutor]);
-
-  const loadStudent = useCallback(async (opts?: { silent?: boolean }) => {
-  const silent = !!opts?.silent;
-  if (!silent) {
-    setStudentErr(null);
-    setLoadingStudent(true);
-  }
-
-  try {
-    const res = await fetch("/api/sos", { cache: "no-store" });
-    const json = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(json?.error || "Failed to load SOS");
-
-    const acceptedWithChannel = (json?.requests || []).find(
-      (r: any) => r?.status === "ACCEPTED" && r?.channelId
-    );
-
-    if (acceptedWithChannel?.channelId) {
-      stopPolling();
-      router.push(`/messaging?channelId=${encodeURIComponent(acceptedWithChannel.channelId)}`);
+    if (prevIds.length === 0 && currentIds.length > 0) {
+      prevTutorIdsRef.current = currentIds;
       return;
     }
 
-    setStudentItems(json?.requests || []);
-  } catch (e: any) {
-    if (!silent) setStudentErr(e?.message || "Failed to load");
-  } finally {
-    if (!silent) setLoadingStudent(false);
-  }
-}, [router]);
-
-useEffect(() => {
-  if (!isStudent || tab !== "STUDENT") return;
-  const hasSearching = studentItems.some((s) => s.status === "SEARCHING");
-  if (!hasSearching) {
-    stopPolling();
-    return;
-  }
-  if (pollRef.current) return;
-
-  pollRef.current = setInterval(async () => {
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
-    try {
-      await loadStudent({ silent: true });
-    } finally {
-      inFlightRef.current = false;
+    const freshIds = currentIds.filter((id) => !prevIds.includes(id));
+    if (freshIds.length > 0) {
+      setNewSOSIds((prev) => [...new Set([...prev, ...freshIds])]);
+      freshIds.forEach((id) => {
+        window.setTimeout(() => setNewSOSIds((prev) => prev.filter((x) => x !== id)), 6000);
+      });
     }
-  }, 2500);
+    prevTutorIdsRef.current = currentIds;
+  }, [tutorItems, isTutor]);
 
-  return () => stopPolling();
-}, [studentItems, tab, isStudent, loadStudent]);
+  const loadStudent = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!canUse) return;
+    const silent = !!opts?.silent;
+    if (!silent) {
+      setStudentErr(null);
+      setLoadingStudent(true);
+    }
+
+    try {
+      const res = await fetch("/api/sos", { cache: "no-store" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error || "Failed to load SOS");
+
+      const acceptedWithChannel = (json?.requests || []).find(
+        (r: any) => r?.status === "ACCEPTED" && r?.channelId
+      );
+
+      if (acceptedWithChannel?.channelId) {
+        stopPolling();
+        router.push(`/messaging?channelId=${encodeURIComponent(acceptedWithChannel.channelId)}`);
+        return;
+      }
+
+      setStudentItems(json?.requests || []);
+    } catch (e: any) {
+      if (!silent) setStudentErr(e?.message || "Failed to load");
+    } finally {
+      if (!silent) setLoadingStudent(false);
+    }
+  }, [router, canUse]);
 
   useEffect(() => {
-  if (loadingRoles) return;
-  if (tab !== "STUDENT") stopPolling();
+    if (!isStudent || tab !== "STUDENT") return;
+    const hasSearching = studentItems.some((s) => s.status === "SEARCHING");
+    if (!hasSearching) {
+      stopPolling();
+      return;
+    }
+    if (pollRef.current) return;
 
-  // Only auto-load once per tab per mount
-  if (hasLoadedRef.current[tab]) return;
-  hasLoadedRef.current[tab] = true;
+    pollRef.current = setInterval(async () => {
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+      try {
+        await loadStudent({ silent: true });
+      } finally {
+        inFlightRef.current = false;
+      }
+    }, 2500);
 
-  if (tab === "STUDENT" && isStudent) loadStudent();
-  if (tab === "TUTOR" && isTutor) loadTutor();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [tab, loadingRoles, isStudent, isTutor]);
+    return () => stopPolling();
+  }, [studentItems, tab, isStudent, loadStudent]);
+
+  useEffect(() => {
+    if (loadingRoles) return;
+    if (!canUse) return;
+    if (tab !== "STUDENT") stopPolling();
+
+    if (hasLoadedRef.current[tab]) return;
+    hasLoadedRef.current[tab] = true;
+
+    if (tab === "STUDENT" && isStudent) loadStudent();
+    if (tab === "TUTOR" && isTutor) loadTutor();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, loadingRoles, isStudent, isTutor, canUse]);
 
   const tabs = useMemo(() => {
     const t: { key: Tab; label: string; icon: any; count?: number }[] = [];
@@ -283,6 +296,7 @@ useEffect(() => {
   }, [isStudent, isTutor, visibleStudentItems.length, tutorItems.length]);
 
   async function cancelSOS(id: string) {
+    if (!canUse) return;
     setBusyId(id);
     try {
       const res = await fetch(`/api/sos/${id}/cancel`, {
@@ -301,6 +315,7 @@ useEffect(() => {
   }
 
   async function respondSOS(id: string, decision: "ACCEPT" | "DECLINE") {
+    if (!canUse) return;
     setBusyId(id);
     setTutorErr(null);
     try {
@@ -330,107 +345,80 @@ useEffect(() => {
     return `${Math.floor(secs / 3600)}h ago`;
   }
 
-  if (loadingRoles) {
-  return (
-    <>
-      <style>{`
-        @keyframes shimmer { to { transform: translateX(200%); } }
-        @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
-      `}</style>
-      <div className="pt-10 pb-10">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 space-y-6">
-
-          {/* Header skeleton */}
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-3">
-              {/* Live chip */}
-              <div
-                className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
-                style={{ border: "1px solid rgb(var(--border))", background: "rgb(var(--card2))" }}
-              >
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-                </span>
-                <div className="h-3 w-32 rounded-full animate-pulse" style={{ background: "rgb(var(--border))" }} />
-              </div>
-              {/* Title */}
-              <div className="space-y-2">
-                <div className="h-9 w-44 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
-                <div className="h-4 w-72 rounded-lg animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.6 }} />
-              </div>
-            </div>
-            {/* Button skeleton */}
-            <div className="hidden sm:block h-10 w-28 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
-          </div>
-
-          {/* Main card skeleton */}
-          <div
-            className="rounded-3xl overflow-hidden"
-            style={{ border: "1px solid rgb(var(--border))", background: "rgb(var(--card))" }}
-          >
-            {/* Top accent */}
-            <div className="h-px w-full" style={{ background: "linear-gradient(90deg, transparent, rgba(139,92,246,0.5), transparent)" }} />
-
-            {/* Tabs row skeleton */}
-            <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4" style={{ borderBottom: "1px solid rgb(var(--border))" }}>
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-28 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
-                <div className="h-8 w-24 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.5 }} />
-              </div>
-              <div className="h-8 w-20 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
-            </div>
-
-            {/* Cards skeleton */}
-            <div className="p-5 space-y-3">
-              {Array.from({ length: 2 }).map((_, i) => (
+  // ── Loading skeleton (roles still loading) ─────────────────────────────
+  if (loadingRoles && canUse) {
+    return (
+      <>
+        <style>{`
+          @keyframes shimmer { to { transform: translateX(200%); } }
+          @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
+        `}</style>
+        <div className="pt-10 pb-10">
+          <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 space-y-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-3">
                 <div
-                  key={i}
-                  className="relative rounded-2xl p-5 overflow-hidden"
+                  className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
                   style={{ border: "1px solid rgb(var(--border))", background: "rgb(var(--card2))" }}
                 >
-                  {/* Shimmer sweep */}
-                  <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_infinite] bg-gradient-to-r from-transparent via-[rgba(128,128,128,0.06)] to-transparent" />
-                  {/* Left accent bar */}
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                  </span>
+                  <div className="h-3 w-32 rounded-full animate-pulse" style={{ background: "rgb(var(--border))" }} />
+                </div>
+                <div className="space-y-2">
+                  <div className="h-9 w-44 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
+                  <div className="h-4 w-72 rounded-lg animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.6 }} />
+                </div>
+              </div>
+              <div className="hidden sm:block h-10 w-28 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
+            </div>
+            <div
+              className="rounded-3xl overflow-hidden"
+              style={{ border: "1px solid rgb(var(--border))", background: "rgb(var(--card))" }}
+            >
+              <div className="h-px w-full" style={{ background: "linear-gradient(90deg, transparent, rgba(139,92,246,0.5), transparent)" }} />
+              <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4" style={{ borderBottom: "1px solid rgb(var(--border))" }}>
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-28 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
+                  <div className="h-8 w-24 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.5 }} />
+                </div>
+                <div className="h-8 w-20 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))" }} />
+              </div>
+              <div className="p-5 space-y-3">
+                {Array.from({ length: 2 }).map((_, i) => (
                   <div
-                    className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl opacity-40"
-                    style={{ background: "linear-gradient(to bottom, rgb(139,92,246), rgb(217,70,239))" }}
-                  />
-                  <div className="pl-3 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-2 flex-1">
-                        <div className="flex items-center gap-2">
-                          <div className="h-5 w-16 rounded-full animate-pulse" style={{ background: "rgb(var(--border))" }} />
-                          <div className="h-4 w-40 rounded-lg animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.7 }} />
+                    key={i}
+                    className="relative rounded-2xl p-5 overflow-hidden"
+                    style={{ border: "1px solid rgb(var(--border))", background: "rgb(var(--card2))" }}
+                  >
+                    <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_infinite] bg-gradient-to-r from-transparent via-[rgba(128,128,128,0.06)] to-transparent" />
+                    <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl opacity-40"
+                      style={{ background: "linear-gradient(to bottom, rgb(139,92,246), rgb(217,70,239))" }} />
+                    <div className="pl-3 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-2 flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="h-5 w-16 rounded-full animate-pulse" style={{ background: "rgb(var(--border))" }} />
+                            <div className="h-4 w-40 rounded-lg animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.7 }} />
+                          </div>
+                          <div className="h-3.5 w-full rounded animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.5 }} />
+                          <div className="h-3.5 w-4/5 rounded animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.4 }} />
                         </div>
-                        <div className="h-3.5 w-full rounded animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.5 }} />
-                        <div className="h-3.5 w-4/5 rounded animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.4 }} />
+                        <div className="h-6 w-24 rounded-full animate-pulse shrink-0" style={{ background: "rgb(var(--border))" }} />
                       </div>
-                      <div className="h-6 w-24 rounded-full animate-pulse shrink-0" style={{ background: "rgb(var(--border))" }} />
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="h-3 w-12 rounded animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.5 }} />
-                      <div className="h-3 w-16 rounded animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.4 }} />
-                      <div className="h-5 w-14 rounded-full animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.4 }} />
-                    </div>
-                    <div className="flex justify-end gap-2 mt-1">
-                      <div className="h-9 w-16 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.5 }} />
-                      <div className="h-9 w-20 rounded-xl animate-pulse" style={{ background: "rgb(var(--border))", opacity: 0.6 }} />
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+              <div className="h-px w-full" style={{ background: "linear-gradient(90deg, transparent, rgba(217,70,239,0.35), transparent)" }} />
             </div>
-
-            {/* Bottom accent */}
-            <div className="h-px w-full" style={{ background: "linear-gradient(90deg, transparent, rgba(217,70,239,0.35), transparent)" }} />
           </div>
-
         </div>
-      </div>
-    </>
-  );
-}
+      </>
+    );
+  }
 
   return (
     <>
@@ -480,518 +468,606 @@ useEffect(() => {
               </div>
             </div>
 
-            {isStudent && (
-              <Link
-                href="/sos/new"
-                className="group hidden sm:inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white transition-all duration-200 hover:scale-[1.03] hover:opacity-95"
-                style={{
-                  background: "linear-gradient(135deg, rgb(139,92,246), rgb(217,70,239))",
-                  boxShadow: "0 4px 20px rgba(139,92,246,0.4)",
-                }}
-              >
-                <Zap className="h-4 w-4 group-hover:animate-bounce" />
-                New SOS
-              </Link>
-            )}
-          </motion.header>
-
-          {/* ─── Main card ────────────────────────────────────────────────── */}
-          <motion.section
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.08 }}
-            className="rounded-3xl overflow-hidden"
-            style={{
-              border: "1px solid rgb(var(--border))",
-              background: "rgb(var(--card))",
-              boxShadow: "0 8px 40px rgba(0,0,0,0.08)",
-            }}
-          >
-            {/* Top accent line */}
-            <div
-              className="h-px w-full"
-              style={{ background: "linear-gradient(90deg, transparent, rgba(139,92,246,0.5), transparent)" }}
-            />
-
-            {/* ─── Tabs row ──────────────────────────────────────────────── */}
-            <div
-              className="flex items-center justify-between gap-3 px-5 pt-5 pb-4"
-              style={{ borderBottom: "1px solid rgb(var(--border))" }}
-            >
-              <div className="flex items-center gap-2">
-                {tabs.map((t) => {
-                  const Icon = t.icon;
-                  const active = tab === t.key;
-                  return (
-                    <motion.button
-                      key={t.key}
-                      type="button"
-                      onClick={() => setTab(t.key)}
-                      whileTap={{ scale: 0.95 }}
-                      className="relative inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all duration-200"
-                      style={
-                        active
-                          ? {
-                              background: "rgba(139,92,246,0.12)",
-                              color: "rgb(var(--primary))",
-                              border: "1px solid rgba(139,92,246,0.35)",
-                            }
-                          : {
-                              color: "rgb(var(--muted))",
-                              border: "1px solid transparent",
-                            }
-                      }
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                      {t.label}
-                      {typeof t.count === "number" && t.count > 0 && (
-                        <motion.span
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          className="ml-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-black"
-                          style={
-                            active
-                              ? { background: "rgba(139,92,246,0.2)", color: "rgb(var(--primary))" }
-                              : { background: "rgb(var(--card2))", color: "rgb(var(--muted))" }
-                          }
-                        >
-                          {t.count}
-                        </motion.span>
-                      )}
-                      {active && (
-                        <motion.div
-                          layoutId="tab-indicator"
-                          className="absolute inset-0 rounded-xl"
-                          style={{ boxShadow: "inset 0 0 0 1px rgba(139,92,246,0.35)" }}
-                        />
-                      )}
-                    </motion.button>
-                  );
-                })}
-              </div>
-
-              <div className="flex items-center gap-2">
-                {tab === "STUDENT" && isStudent && (
+            {/* Auth badge */}
+            <div>
+              {!authed ? (
+                <Link
+                  href="/auth/login"
+                  className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl text-white hover:opacity-90 transition-opacity shadow-[0_4px_16px_rgb(var(--primary)/0.3)]"
+                  style={{ background: "rgb(var(--primary))" }}
+                >
+                  Login to use SOS
+                </Link>
+              ) : !verified ? (
+                <span className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  Pending verification
+                </span>
+              ) : (
+                isStudent && (
                   <Link
                     href="/sos/new"
-                    className="sm:hidden inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-white"
-                    style={{ background: "linear-gradient(135deg, rgb(139,92,246), rgb(217,70,239))" }}
+                    className="group hidden sm:inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white transition-all duration-200 hover:scale-[1.03] hover:opacity-95"
+                    style={{
+                      background: "linear-gradient(135deg, rgb(139,92,246), rgb(217,70,239))",
+                      boxShadow: "0 4px 20px rgba(139,92,246,0.4)",
+                    }}
                   >
-                    <Plus className="h-3.5 w-3.5" />
-                    New
+                    <Zap className="h-4 w-4 group-hover:animate-bounce" />
+                    New SOS
                   </Link>
-                )}
-                <motion.button
-                  type="button"
-                  whileTap={{ rotate: 180, scale: 0.9 }}
-                  transition={{ duration: 0.35 }}
-                  onClick={() => (tab === "STUDENT" ? loadStudent() : loadTutor())}
-                  disabled={tab === "STUDENT" ? loadingStudent : loadingTutor}
-                  className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold disabled:opacity-40 transition-colors"
+                )
+              )}
+            </div>
+          </motion.header>
+
+          {/* ── Verification locked banner ── */}
+          <AnimatePresence>
+            {authed && !verified && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="rounded-2xl border border-amber-500/25 bg-amber-500/8 px-5 py-4">
+                  <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">⚠ Account pending verification</p>
+                  <p className="mt-0.5 text-sm" style={{ color: "rgb(var(--muted))" }}>
+                    SOS Help will unlock once your account is verified.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* ── Locked empty state (not authed or not verified) ── */}
+          {!canUse ? (
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.08 }}
+              className="rounded-3xl overflow-hidden"
+              style={{
+                border: "1px solid rgb(var(--border))",
+                background: "rgb(var(--card))",
+                boxShadow: "0 8px 40px rgba(0,0,0,0.08)",
+              }}
+            >
+              <div
+                className="h-px w-full"
+                style={{ background: "linear-gradient(90deg, transparent, rgba(139,92,246,0.5), transparent)" }}
+              />
+              <div className="p-12 text-center">
+                <div
+                  className="sos-float inline-flex items-center justify-center h-16 w-16 rounded-2xl mb-4"
                   style={{
-                    border: "1px solid rgb(var(--border))",
-                    background: "rgb(var(--card2))",
-                    color: "rgb(var(--fg))",
+                    background: "rgba(139,92,246,0.1)",
+                    border: "1px solid rgba(139,92,246,0.2)",
                   }}
                 >
-                  <RefreshCcw
-                    className={`h-3.5 w-3.5 ${
-                      (tab === "STUDENT" ? loadingStudent : loadingTutor) ? "animate-spin" : ""
-                    }`}
-                  />
-                  <span className="hidden sm:inline">Refresh</span>
-                </motion.button>
-              </div>
-            </div>
-
-            {/* ─── Content ───────────────────────────────────────────────── */}
-            <div className="p-5">
-              <AnimatePresence mode="wait">
-
-                {/* ══ STUDENT TAB ══ */}
-                {tab === "STUDENT" && isStudent && (
-                  <motion.div
-                    key="student"
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 10 }}
-                    transition={{ duration: 0.18 }}
+                  <LifeBuoy className="h-7 w-7" style={{ color: "rgb(var(--primary))" }} />
+                </div>
+                <p className="text-sm font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                  {!authed ? "Login to access SOS Help" : "Verification required"}
+                </p>
+                <p className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                  {!authed
+                    ? "Login and verify your account to get instant help from tutors."
+                    : "Your account is pending verification. SOS will appear here once verified."}
+                </p>
+                {!authed && (
+                  <Link
+                    href="/auth/login"
+                    className="mt-5 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white transition-all hover:scale-[1.03] hover:opacity-95"
+                    style={{
+                      background: "linear-gradient(135deg, rgb(139,92,246), rgb(217,70,239))",
+                      boxShadow: "0 4px 20px rgba(139,92,246,0.35)",
+                    }}
                   >
-                    {studentErr && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="mb-4 rounded-2xl p-3 text-sm flex items-center gap-2"
-                        style={{ border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "rgb(220,38,38)" }}
-                      >
-                        <AlertCircle className="h-4 w-4 shrink-0" />
-                        {studentErr}
-                      </motion.div>
-                    )}
-
-                    {loadingStudent ? (
-                      <div className="space-y-3"><SkeletonCard /><SkeletonCard /></div>
-                    ) : visibleStudentItems.length === 0 ? (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.97 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="rounded-2xl p-10 text-center"
-                        style={{
-                          border: "1px dashed rgb(var(--border))",
-                          background: "rgb(var(--card2))",
-                        }}
-                      >
-                        <div
-                          className="sos-float inline-flex items-center justify-center h-16 w-16 rounded-2xl mb-4"
-                          style={{
-                            background: "rgba(139,92,246,0.1)",
-                            border: "1px solid rgba(139,92,246,0.2)",
-                          }}
-                        >
-                          <LifeBuoy className="h-7 w-7" style={{ color: "rgb(var(--primary))" }} />
-                        </div>
-                        <p className="text-sm font-semibold" style={{ color: "rgb(var(--fg))" }}>
-                          No active requests
-                        </p>
-                        <p className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                          Tap below to get instant help from a tutor.
-                        </p>
-                        <Link
-                          href="/sos/new"
-                          className="mt-5 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white transition-all hover:scale-[1.03] hover:opacity-95"
-                          style={{
-                            background: "linear-gradient(135deg, rgb(139,92,246), rgb(217,70,239))",
-                            boxShadow: "0 4px 20px rgba(139,92,246,0.35)",
-                          }}
-                        >
-                          <Zap className="h-4 w-4" />
-                          Create SOS
-                          <ChevronRight className="h-4 w-4" />
-                        </Link>
-                      </motion.div>
-                    ) : (
-                      <div className="space-y-3">
-                        <AnimatePresence>
-                          {visibleStudentItems.map((s, i) => {
-                            const canCancel = s.status === "SEARCHING" || s.status === "ACCEPTED";
-                            const isBusy = busyId === s.id;
-                            return (
-                              <motion.div
-                                key={s.id}
-                                initial={{ opacity: 0, y: 14 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.96 }}
-                                transition={{ delay: i * 0.06 }}
-                                className="relative rounded-2xl p-5 overflow-hidden transition-all duration-200"
-                                style={{
-                                  border: "1px solid rgb(var(--border))",
-                                  background: "rgb(var(--card2))",
-                                }}
-                              >
-                                {/* Left accent bar */}
-                                <div
-                                  className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
-                                  style={{ background: "linear-gradient(to bottom, rgb(139,92,246), rgb(217,70,239))", opacity: 0.7 }}
-                                />
-
-                                <div className="pl-3">
-                                  <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span
-                                          className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full"
-                                          style={{
-                                            color: "rgb(var(--primary))",
-                                            background: "rgba(139,92,246,0.1)",
-                                            border: "1px solid rgba(139,92,246,0.25)",
-                                          }}
-                                        >
-                                          {s.subject.code}
-                                        </span>
-                                        <span className="font-semibold text-sm truncate" style={{ color: "rgb(var(--fg))" }}>
-                                          {s.subject.title}
-                                        </span>
-                                      </div>
-                                      <p className="mt-2 text-sm line-clamp-2" style={{ color: "rgb(var(--muted))" }}>
-                                        {s.description}
-                                      </p>
-                                      <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px]" style={{ color: "rgb(var(--muted2))" }}>
-                                        <span className="inline-flex items-center gap-1">
-                                          <Clock className="h-3 w-3" />
-                                          {elapsed(s.createdAt)}
-                                        </span>
-                                        {s.expiresAt && (
-                                          <span style={{ color: "rgb(217,119,6)" }}>
-                                            Expires {new Date(s.expiresAt).toLocaleTimeString()}
-                                          </span>
-                                        )}
-                                        <span
-                                          className="rounded-full px-2 py-0.5"
-                                          style={{
-                                            border: "1px solid rgb(var(--border))",
-                                            background: "rgb(var(--card))",
-                                            color: "rgb(var(--muted))",
-                                          }}
-                                        >
-                                          {s.mode}
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <StatusBadge status={s.status} />
-                                  </div>
-
-                                  <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-                                    <Link
-                                      href={`/sos/${s.id}`}
-                                      className="h-9 rounded-xl px-4 inline-flex items-center text-xs font-semibold transition-colors"
-                                      style={{
-                                        border: "1px solid rgb(var(--border))",
-                                        background: "rgb(var(--card))",
-                                        color: "rgb(var(--fg))",
-                                      }}
-                                    >
-                                      View
-                                    </Link>
-                                    <motion.button
-                                      type="button"
-                                      whileTap={{ scale: 0.96 }}
-                                      onClick={() => cancelSOS(s.id)}
-                                      disabled={!canCancel || isBusy}
-                                      className="h-9 rounded-xl px-4 inline-flex items-center gap-2 text-xs font-semibold disabled:opacity-40 transition-all"
-                                      style={{
-                                        background: "rgba(239,68,68,0.08)",
-                                        border: "1px solid rgba(239,68,68,0.25)",
-                                        color: "rgb(220,38,38)",
-                                      }}
-                                    >
-                                      <XCircle className="h-3.5 w-3.5" />
-                                      {isBusy ? "Cancelling…" : "Cancel"}
-                                    </motion.button>
-                                  </div>
-                                </div>
-                              </motion.div>
-                            );
-                          })}
-                        </AnimatePresence>
-                      </div>
-                    )}
-                  </motion.div>
+                    Login to get started
+                    <ChevronRight className="h-4 w-4" />
+                  </Link>
                 )}
+              </div>
+              <div
+                className="h-px w-full"
+                style={{ background: "linear-gradient(90deg, transparent, rgba(217,70,239,0.35), transparent)" }}
+              />
+            </motion.div>
+          ) : (
+            /* ─── Main card (verified users only) ─────────────────────────── */
+            <motion.section
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.08 }}
+              className="rounded-3xl overflow-hidden"
+              style={{
+                border: "1px solid rgb(var(--border))",
+                background: "rgb(var(--card))",
+                boxShadow: "0 8px 40px rgba(0,0,0,0.08)",
+              }}
+            >
+              {/* Top accent line */}
+              <div
+                className="h-px w-full"
+                style={{ background: "linear-gradient(90deg, transparent, rgba(139,92,246,0.5), transparent)" }}
+              />
 
-                {/* ══ TUTOR TAB ══ */}
-                {tab === "TUTOR" && isTutor && (
-                  <motion.div
-                    key="tutor"
-                    initial={{ opacity: 0, x: 10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -10 }}
-                    transition={{ duration: 0.18 }}
+              {/* ─── Tabs row ──────────────────────────────────────────────── */}
+              <div
+                className="flex items-center justify-between gap-3 px-5 pt-5 pb-4"
+                style={{ borderBottom: "1px solid rgb(var(--border))" }}
+              >
+                <div className="flex items-center gap-2">
+                  {tabs.map((t) => {
+                    const Icon = t.icon;
+                    const active = tab === t.key;
+                    return (
+                      <motion.button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setTab(t.key)}
+                        whileTap={{ scale: 0.95 }}
+                        className="relative inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all duration-200"
+                        style={
+                          active
+                            ? {
+                                background: "rgba(139,92,246,0.12)",
+                                color: "rgb(var(--primary))",
+                                border: "1px solid rgba(139,92,246,0.35)",
+                              }
+                            : {
+                                color: "rgb(var(--muted))",
+                                border: "1px solid transparent",
+                              }
+                        }
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {t.label}
+                        {typeof t.count === "number" && t.count > 0 && (
+                          <motion.span
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            className="ml-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-black"
+                            style={
+                              active
+                                ? { background: "rgba(139,92,246,0.2)", color: "rgb(var(--primary))" }
+                                : { background: "rgb(var(--card2))", color: "rgb(var(--muted))" }
+                            }
+                          >
+                            {t.count}
+                          </motion.span>
+                        )}
+                        {active && (
+                          <motion.div
+                            layoutId="tab-indicator"
+                            className="absolute inset-0 rounded-xl"
+                            style={{ boxShadow: "inset 0 0 0 1px rgba(139,92,246,0.35)" }}
+                          />
+                        )}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {tab === "STUDENT" && isStudent && (
+                    <Link
+                      href="/sos/new"
+                      className="sm:hidden inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-white"
+                      style={{ background: "linear-gradient(135deg, rgb(139,92,246), rgb(217,70,239))" }}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      New
+                    </Link>
+                  )}
+                  <motion.button
+                    type="button"
+                    whileTap={{ rotate: 180, scale: 0.9 }}
+                    transition={{ duration: 0.35 }}
+                    onClick={() => (tab === "STUDENT" ? loadStudent() : loadTutor())}
+                    disabled={tab === "STUDENT" ? loadingStudent : loadingTutor}
+                    className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold disabled:opacity-40 transition-colors"
+                    style={{
+                      border: "1px solid rgb(var(--border))",
+                      background: "rgb(var(--card2))",
+                      color: "rgb(var(--fg))",
+                    }}
                   >
-                    {tutorErr && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="mb-4 rounded-2xl p-3 text-sm flex items-center gap-2"
-                        style={{ border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "rgb(220,38,38)" }}
-                      >
-                        <AlertCircle className="h-4 w-4 shrink-0" />
-                        {tutorErr}
-                      </motion.div>
-                    )}
+                    <RefreshCcw
+                      className={`h-3.5 w-3.5 ${
+                        (tab === "STUDENT" ? loadingStudent : loadingTutor) ? "animate-spin" : ""
+                      }`}
+                    />
+                    <span className="hidden sm:inline">Refresh</span>
+                  </motion.button>
+                </div>
+              </div>
 
-                    {loadingTutor ? (
-                      <div className="space-y-3"><SkeletonCard /><SkeletonCard /></div>
-                    ) : tutorItems.length === 0 ? (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.97 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="rounded-2xl p-10 text-center"
-                        style={{ border: "1px dashed rgb(var(--border))", background: "rgb(var(--card2))" }}
-                      >
-                        <div
-                          className="sos-float inline-flex items-center justify-center h-16 w-16 rounded-2xl mb-4"
-                          style={{ background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.2)" }}
+              {/* ─── Content ───────────────────────────────────────────────── */}
+              <div className="p-5">
+                <AnimatePresence mode="wait">
+
+                  {/* ══ STUDENT TAB ══ */}
+                  {tab === "STUDENT" && isStudent && (
+                    <motion.div
+                      key="student"
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 10 }}
+                      transition={{ duration: 0.18 }}
+                    >
+                      {studentErr && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mb-4 rounded-2xl p-3 text-sm flex items-center gap-2"
+                          style={{ border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "rgb(220,38,38)" }}
                         >
-                          <Radio className="h-7 w-7 text-indigo-400" />
-                        </div>
-                        <p className="text-sm font-semibold" style={{ color: "rgb(var(--fg))" }}>
-                          No incoming requests
-                        </p>
-                        <p className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                          You&apos;ll see new SOS requests here in real-time.
-                        </p>
-                      </motion.div>
-                    ) : (
-                      <div className="space-y-3">
-                        <AnimatePresence initial={false}>
-                          {tutorItems.map((r, i) => {
-                            const isBusy = busyId === r.id;
-                            const isNew = newSOSIds.includes(r.id);
-                            const initials = (r.student.name ?? r.student.email).slice(0, 2).toUpperCase();
+                          <AlertCircle className="h-4 w-4 shrink-0" />
+                          {studentErr}
+                        </motion.div>
+                      )}
 
-                            return (
-                              <motion.div
-                                key={r.id}
-                                initial={{ opacity: 0, y: 18, scale: 0.97 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: -12, scale: 0.97 }}
-                                transition={{ duration: 0.25, delay: i * 0.05 }}
-                                className="relative rounded-2xl p-5 overflow-hidden transition-all duration-300"
-                                style={
-                                  isNew
-                                    ? {
-                                        border: "1px solid rgba(239,68,68,0.4)",
-                                        background: "rgba(239,68,68,0.04)",
-                                        boxShadow: "0 0 30px rgba(239,68,68,0.08)",
-                                      }
-                                    : {
-                                        border: "1px solid rgb(var(--border))",
-                                        background: "rgb(var(--card2))",
-                                      }
-                                }
-                              >
-                                <BurstRing active={isNew} />
-
-                                {/* Left accent bar */}
-                                <div
-                                  className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl opacity-70"
+                      {loadingStudent ? (
+                        <div className="space-y-3"><SkeletonCard /><SkeletonCard /></div>
+                      ) : visibleStudentItems.length === 0 ? (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.97 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="rounded-2xl p-10 text-center"
+                          style={{
+                            border: "1px dashed rgb(var(--border))",
+                            background: "rgb(var(--card2))",
+                          }}
+                        >
+                          <div
+                            className="sos-float inline-flex items-center justify-center h-16 w-16 rounded-2xl mb-4"
+                            style={{
+                              background: "rgba(139,92,246,0.1)",
+                              border: "1px solid rgba(139,92,246,0.2)",
+                            }}
+                          >
+                            <LifeBuoy className="h-7 w-7" style={{ color: "rgb(var(--primary))" }} />
+                          </div>
+                          <p className="text-sm font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                            No active requests
+                          </p>
+                          <p className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                            Tap below to get instant help from a tutor.
+                          </p>
+                          <Link
+                            href="/sos/new"
+                            className="mt-5 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white transition-all hover:scale-[1.03] hover:opacity-95"
+                            style={{
+                              background: "linear-gradient(135deg, rgb(139,92,246), rgb(217,70,239))",
+                              boxShadow: "0 4px 20px rgba(139,92,246,0.35)",
+                            }}
+                          >
+                            <Zap className="h-4 w-4" />
+                            Create SOS
+                            <ChevronRight className="h-4 w-4" />
+                          </Link>
+                        </motion.div>
+                      ) : (
+                        <div className="space-y-3">
+                          <AnimatePresence>
+                            {visibleStudentItems.map((s, i) => {
+                              const canCancel = s.status === "SEARCHING" || s.status === "ACCEPTED";
+                              const isBusy = busyId === s.id;
+                              return (
+                                <motion.div
+                                  key={s.id}
+                                  initial={{ opacity: 0, y: 14 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.96 }}
+                                  transition={{ delay: i * 0.06 }}
+                                  className="relative rounded-2xl p-5 overflow-hidden transition-all duration-200"
                                   style={{
-                                    background: isNew
-                                      ? "rgb(239,68,68)"
-                                      : "linear-gradient(to bottom, rgb(99,102,241), rgb(139,92,246))",
+                                    border: "1px solid rgb(var(--border))",
+                                    background: "rgb(var(--card2))",
                                   }}
-                                />
+                                >
+                                  <div
+                                    className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+                                    style={{ background: "linear-gradient(to bottom, rgb(139,92,246), rgb(217,70,239))", opacity: 0.7 }}
+                                  />
 
-                                <div className="pl-3">
-                                  <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span
-                                          className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full"
-                                          style={
-                                            isNew
-                                              ? { color: "rgb(220,38,38)", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)" }
-                                              : { color: "rgb(99,102,241)", background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.25)" }
-                                          }
-                                        >
-                                          {r.subject.code}
-                                        </span>
-                                        <span className="font-semibold text-sm truncate" style={{ color: "rgb(var(--fg))" }}>
-                                          {r.subject.title}
-                                        </span>
-                                        {isNew && (
-                                          <motion.span
-                                            animate={{ opacity: [1, 0.5, 1] }}
-                                            transition={{ repeat: Infinity, duration: 0.9 }}
-                                            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest"
+                                  <div className="pl-3">
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span
+                                            className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full"
                                             style={{
-                                              background: "rgba(239,68,68,0.12)",
-                                              border: "1px solid rgba(239,68,68,0.3)",
-                                              color: "rgb(220,38,38)",
+                                              color: "rgb(var(--primary))",
+                                              background: "rgba(139,92,246,0.1)",
+                                              border: "1px solid rgba(139,92,246,0.25)",
                                             }}
                                           >
-                                            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-ping" />
-                                            New
-                                          </motion.span>
-                                        )}
+                                            {s.subject.code}
+                                          </span>
+                                          <span className="font-semibold text-sm truncate" style={{ color: "rgb(var(--fg))" }}>
+                                            {s.subject.title}
+                                          </span>
+                                        </div>
+                                        <p className="mt-2 text-sm line-clamp-2" style={{ color: "rgb(var(--muted))" }}>
+                                          {s.description}
+                                        </p>
+                                        <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px]" style={{ color: "rgb(var(--muted2))" }}>
+                                          <span className="inline-flex items-center gap-1">
+                                            <Clock className="h-3 w-3" />
+                                            {elapsed(s.createdAt)}
+                                          </span>
+                                          {s.expiresAt && (
+                                            <span style={{ color: "rgb(217,119,6)" }}>
+                                              Expires {new Date(s.expiresAt).toLocaleTimeString()}
+                                            </span>
+                                          )}
+                                          <span
+                                            className="rounded-full px-2 py-0.5"
+                                            style={{
+                                              border: "1px solid rgb(var(--border))",
+                                              background: "rgb(var(--card))",
+                                              color: "rgb(var(--muted))",
+                                            }}
+                                          >
+                                            {s.mode}
+                                          </span>
+                                        </div>
                                       </div>
-                                      <p className="mt-2 text-sm line-clamp-2" style={{ color: "rgb(var(--muted))" }}>
-                                        {r.description}
-                                      </p>
+                                      <StatusBadge status={s.status} />
                                     </div>
-                                    <StatusBadge status={r.status} />
-                                  </div>
 
-                                  {/* Student info */}
-                                  <div className="mt-3 flex items-center gap-2 flex-wrap">
-                                    <div
-                                      className="h-6 w-6 rounded-full flex items-center justify-center text-[9px] font-black text-white shrink-0"
-                                      style={{ background: "linear-gradient(135deg, rgb(139,92,246), rgb(217,70,239))" }}
-                                    >
-                                      {initials}
+                                    <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                                      <Link
+                                        href={`/sos/${s.id}`}
+                                        className="h-9 rounded-xl px-4 inline-flex items-center text-xs font-semibold transition-colors"
+                                        style={{
+                                          border: "1px solid rgb(var(--border))",
+                                          background: "rgb(var(--card))",
+                                          color: "rgb(var(--fg))",
+                                        }}
+                                      >
+                                        View
+                                      </Link>
+                                      <motion.button
+                                        type="button"
+                                        whileTap={{ scale: 0.96 }}
+                                        onClick={() => cancelSOS(s.id)}
+                                        disabled={!canCancel || isBusy}
+                                        className="h-9 rounded-xl px-4 inline-flex items-center gap-2 text-xs font-semibold disabled:opacity-40 transition-all"
+                                        style={{
+                                          background: "rgba(239,68,68,0.08)",
+                                          border: "1px solid rgba(239,68,68,0.25)",
+                                          color: "rgb(220,38,38)",
+                                        }}
+                                      >
+                                        <XCircle className="h-3.5 w-3.5" />
+                                        {isBusy ? "Cancelling…" : "Cancel"}
+                                      </motion.button>
                                     </div>
-                                    <span className="text-[11px]" style={{ color: "rgb(var(--muted))" }}>
-                                      {r.student.name ?? r.student.email}
-                                    </span>
-                                    <span className="text-[11px]" style={{ color: "rgb(var(--muted2))" }}>·</span>
-                                    <span
-                                      className="rounded-full px-2 py-0.5 text-[10px]"
-                                      style={{
-                                        border: "1px solid rgb(var(--border))",
-                                        background: "rgb(var(--card))",
-                                        color: "rgb(var(--muted))",
-                                      }}
-                                    >
-                                      {r.mode}
-                                    </span>
-                                    <span className="text-[11px]" style={{ color: "rgb(var(--muted2))" }}>·</span>
-                                    <span className="text-[11px]" style={{ color: "rgb(var(--muted2))" }}>
-                                      {elapsed(r.createdAt)}
-                                    </span>
                                   </div>
+                                </motion.div>
+                              );
+                            })}
+                          </AnimatePresence>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
 
-                                  {/* New SOS sweep bar */}
-                                  {isNew && (
-                                    <div className="mt-3 h-1 rounded-full overflow-hidden" style={{ background: "rgba(239,68,68,0.1)" }}>
-                                      <motion.div
-                                        className="h-full w-16 rounded-full"
-                                        style={{ background: "linear-gradient(90deg, transparent, rgba(239,68,68,0.7), transparent)" }}
-                                        animate={{ x: ["-100%", "500%"] }}
-                                        transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                                      />
+                  {/* ══ TUTOR TAB ══ */}
+                  {tab === "TUTOR" && isTutor && (
+                    <motion.div
+                      key="tutor"
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -10 }}
+                      transition={{ duration: 0.18 }}
+                    >
+                      {tutorErr && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mb-4 rounded-2xl p-3 text-sm flex items-center gap-2"
+                          style={{ border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "rgb(220,38,38)" }}
+                        >
+                          <AlertCircle className="h-4 w-4 shrink-0" />
+                          {tutorErr}
+                        </motion.div>
+                      )}
+
+                      {loadingTutor ? (
+                        <div className="space-y-3"><SkeletonCard /><SkeletonCard /></div>
+                      ) : tutorItems.length === 0 ? (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.97 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="rounded-2xl p-10 text-center"
+                          style={{ border: "1px dashed rgb(var(--border))", background: "rgb(var(--card2))" }}
+                        >
+                          <div
+                            className="sos-float inline-flex items-center justify-center h-16 w-16 rounded-2xl mb-4"
+                            style={{ background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.2)" }}
+                          >
+                            <Radio className="h-7 w-7 text-indigo-400" />
+                          </div>
+                          <p className="text-sm font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                            No incoming requests
+                          </p>
+                          <p className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                            You&apos;ll see new SOS requests here in real-time.
+                          </p>
+                        </motion.div>
+                      ) : (
+                        <div className="space-y-3">
+                          <AnimatePresence initial={false}>
+                            {tutorItems.map((r, i) => {
+                              const isBusy = busyId === r.id;
+                              const isNew = newSOSIds.includes(r.id);
+                              const initials = (r.student.name ?? r.student.email).slice(0, 2).toUpperCase();
+
+                              return (
+                                <motion.div
+                                  key={r.id}
+                                  initial={{ opacity: 0, y: 18, scale: 0.97 }}
+                                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                                  exit={{ opacity: 0, y: -12, scale: 0.97 }}
+                                  transition={{ duration: 0.25, delay: i * 0.05 }}
+                                  className="relative rounded-2xl p-5 overflow-hidden transition-all duration-300"
+                                  style={
+                                    isNew
+                                      ? {
+                                          border: "1px solid rgba(239,68,68,0.4)",
+                                          background: "rgba(239,68,68,0.04)",
+                                          boxShadow: "0 0 30px rgba(239,68,68,0.08)",
+                                        }
+                                      : {
+                                          border: "1px solid rgb(var(--border))",
+                                          background: "rgb(var(--card2))",
+                                        }
+                                  }
+                                >
+                                  <BurstRing active={isNew} />
+
+                                  <div
+                                    className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl opacity-70"
+                                    style={{
+                                      background: isNew
+                                        ? "rgb(239,68,68)"
+                                        : "linear-gradient(to bottom, rgb(99,102,241), rgb(139,92,246))",
+                                    }}
+                                  />
+
+                                  <div className="pl-3">
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span
+                                            className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full"
+                                            style={
+                                              isNew
+                                                ? { color: "rgb(220,38,38)", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)" }
+                                                : { color: "rgb(99,102,241)", background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.25)" }
+                                            }
+                                          >
+                                            {r.subject.code}
+                                          </span>
+                                          <span className="font-semibold text-sm truncate" style={{ color: "rgb(var(--fg))" }}>
+                                            {r.subject.title}
+                                          </span>
+                                          {isNew && (
+                                            <motion.span
+                                              animate={{ opacity: [1, 0.5, 1] }}
+                                              transition={{ repeat: Infinity, duration: 0.9 }}
+                                              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest"
+                                              style={{
+                                                background: "rgba(239,68,68,0.12)",
+                                                border: "1px solid rgba(239,68,68,0.3)",
+                                                color: "rgb(220,38,38)",
+                                              }}
+                                            >
+                                              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-ping" />
+                                              New
+                                            </motion.span>
+                                          )}
+                                        </div>
+                                        <p className="mt-2 text-sm line-clamp-2" style={{ color: "rgb(var(--muted))" }}>
+                                          {r.description}
+                                        </p>
+                                      </div>
+                                      <StatusBadge status={r.status} />
                                     </div>
-                                  )}
 
-                                  {/* Actions */}
-                                  <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-                                    <motion.button
-                                      type="button"
-                                      whileTap={{ scale: 0.95 }}
-                                      onClick={() => respondSOS(r.id, "DECLINE")}
-                                      disabled={isBusy}
-                                      className="h-9 rounded-xl px-4 inline-flex items-center gap-2 text-xs font-semibold disabled:opacity-40 transition-all"
-                                      style={{
-                                        border: "1px solid rgb(var(--border))",
-                                        background: "rgb(var(--card))",
-                                        color: "rgb(var(--fg))",
-                                      }}
-                                    >
-                                      <XCircle className="h-3.5 w-3.5" />
-                                      {isBusy ? "Working…" : "Decline"}
-                                    </motion.button>
-                                    <motion.button
-                                      type="button"
-                                      whileTap={{ scale: 0.95 }}
-                                      onClick={() => respondSOS(r.id, "ACCEPT")}
-                                      disabled={isBusy}
-                                      className="h-9 rounded-xl px-4 inline-flex items-center gap-2 text-xs font-bold text-white disabled:opacity-40 transition-all hover:scale-[1.02]"
-                                      style={{
-                                        background: "linear-gradient(135deg, rgb(16,185,129), rgb(13,148,136))",
-                                        boxShadow: "0 4px 14px rgba(16,185,129,0.35)",
-                                      }}
-                                    >
-                                      <CheckCircle className="h-3.5 w-3.5" />
-                                      {isBusy ? "Accepting…" : "Accept"}
-                                    </motion.button>
+                                    <div className="mt-3 flex items-center gap-2 flex-wrap">
+                                      <div
+                                        className="h-6 w-6 rounded-full flex items-center justify-center text-[9px] font-black text-white shrink-0"
+                                        style={{ background: "linear-gradient(135deg, rgb(139,92,246), rgb(217,70,239))" }}
+                                      >
+                                        {initials}
+                                      </div>
+                                      <span className="text-[11px]" style={{ color: "rgb(var(--muted))" }}>
+                                        {r.student.name ?? r.student.email}
+                                      </span>
+                                      <span className="text-[11px]" style={{ color: "rgb(var(--muted2))" }}>·</span>
+                                      <span
+                                        className="rounded-full px-2 py-0.5 text-[10px]"
+                                        style={{
+                                          border: "1px solid rgb(var(--border))",
+                                          background: "rgb(var(--card))",
+                                          color: "rgb(var(--muted))",
+                                        }}
+                                      >
+                                        {r.mode}
+                                      </span>
+                                      <span className="text-[11px]" style={{ color: "rgb(var(--muted2))" }}>·</span>
+                                      <span className="text-[11px]" style={{ color: "rgb(var(--muted2))" }}>
+                                        {elapsed(r.createdAt)}
+                                      </span>
+                                    </div>
+
+                                    {isNew && (
+                                      <div className="mt-3 h-1 rounded-full overflow-hidden" style={{ background: "rgba(239,68,68,0.1)" }}>
+                                        <motion.div
+                                          className="h-full w-16 rounded-full"
+                                          style={{ background: "linear-gradient(90deg, transparent, rgba(239,68,68,0.7), transparent)" }}
+                                          animate={{ x: ["-100%", "500%"] }}
+                                          transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                                        />
+                                      </div>
+                                    )}
+
+                                    <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                                      <motion.button
+                                        type="button"
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => respondSOS(r.id, "DECLINE")}
+                                        disabled={isBusy}
+                                        className="h-9 rounded-xl px-4 inline-flex items-center gap-2 text-xs font-semibold disabled:opacity-40 transition-all"
+                                        style={{
+                                          border: "1px solid rgb(var(--border))",
+                                          background: "rgb(var(--card))",
+                                          color: "rgb(var(--fg))",
+                                        }}
+                                      >
+                                        <XCircle className="h-3.5 w-3.5" />
+                                        {isBusy ? "Working…" : "Decline"}
+                                      </motion.button>
+                                      <motion.button
+                                        type="button"
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => respondSOS(r.id, "ACCEPT")}
+                                        disabled={isBusy}
+                                        className="h-9 rounded-xl px-4 inline-flex items-center gap-2 text-xs font-bold text-white disabled:opacity-40 transition-all hover:scale-[1.02]"
+                                        style={{
+                                          background: "linear-gradient(135deg, rgb(16,185,129), rgb(13,148,136))",
+                                          boxShadow: "0 4px 14px rgba(16,185,129,0.35)",
+                                        }}
+                                      >
+                                        <CheckCircle className="h-3.5 w-3.5" />
+                                        {isBusy ? "Accepting…" : "Accept"}
+                                      </motion.button>
+                                    </div>
                                   </div>
-                                </div>
-                              </motion.div>
-                            );
-                          })}
-                        </AnimatePresence>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+                                </motion.div>
+                              );
+                            })}
+                          </AnimatePresence>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
-            {/* Bottom accent */}
-            <div
-              className="h-px w-full"
-              style={{ background: "linear-gradient(90deg, transparent, rgba(217,70,239,0.35), transparent)" }}
-            />
-          </motion.section>
+              {/* Bottom accent */}
+              <div
+                className="h-px w-full"
+                style={{ background: "linear-gradient(90deg, transparent, rgba(217,70,239,0.35), transparent)" }}
+              />
+            </motion.section>
+          )}
         </div>
       </div>
     </>

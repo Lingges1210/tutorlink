@@ -34,9 +34,6 @@ type Row = {
   proposedAt?: string | null;
   proposedNote?: string | null;
   proposalStatus?: "PENDING" | "ACCEPTED" | "REJECTED" | null;
-  // ✅ Added: who created the proposal.
-  // If proposedByUserId === tutor.id → tutor proposed → student sees Accept/Reject
-  // If proposedByUserId !== tutor.id → student proposed → student sees "Pending tutor response"
   proposedByUserId?: string | null;
   subject: { code: string; title: string };
   tutor: {
@@ -62,12 +59,14 @@ type RatingResp = {
   } | null;
 };
 
+// ── Slot type returned by /api/sessions/[id]/available-slots ─────────────────
+type AvailableSlot = { start: string; end: string; label: string };
+
 function formatLocalInputValue(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// ✅ Fixed: always renders in Malaysia time (UTC+8), not server UTC
 function prettyDate(iso: string) {
   return new Date(iso).toLocaleString("en-MY", {
     timeZone: "Asia/Kuala_Lumpur",
@@ -120,22 +119,22 @@ const STATUS_CONFIG: Record<string, { label: string; dot: string; badge: string 
   PENDING: {
     label: "Pending",
     dot: "bg-amber-400",
-    badge: "bg-amber-500/10 border-amber-400/60 text-amber-600 dark:text-amber-300",
+    badge: "bg-amber-400/20 border-amber-500/70 text-amber-600",
   },
   ACCEPTED: {
     label: "Accepted",
     dot: "bg-emerald-400",
-    badge: "bg-emerald-500/10 border-emerald-400/60 text-emerald-600 dark:text-emerald-300",
+    badge: "bg-emerald-400/20 border-emerald-500/70 text-emerald-600",
   },
   COMPLETED: {
     label: "Completed",
     dot: "bg-slate-400",
-    badge: "bg-slate-500/10 border-slate-400/40 text-slate-500 dark:text-slate-400",
+    badge: "bg-slate-400/20 border-slate-500/50 text-slate-600",
   },
   CANCELLED: {
     label: "Cancelled",
     dot: "bg-rose-400",
-    badge: "bg-rose-500/10 border-rose-400/60 text-rose-600 dark:text-rose-400",
+    badge: "bg-rose-400/20 border-rose-500/70 text-rose-600",
   },
 };
 
@@ -145,12 +144,19 @@ function StatusBadge({ status }: { status: string }) {
     dot: "bg-slate-400",
     badge: "bg-slate-500/10 border-slate-400/40 text-slate-500",
   };
+  const styleMap: Record<string, React.CSSProperties> = {
+    PENDING:   { backgroundColor: "rgb(251 191 36 / 0.20)",  borderColor: "rgb(245 158 11 / 0.70)" },
+    ACCEPTED:  { backgroundColor: "rgb(52 211 153 / 0.20)",  borderColor: "rgb(16 185 129 / 0.70)" },
+    COMPLETED: { backgroundColor: "rgb(148 163 184 / 0.20)", borderColor: "rgb(100 116 139 / 0.50)" },
+    CANCELLED: { backgroundColor: "rgb(251 113 133 / 0.20)", borderColor: "rgb(244 63 94 / 0.70)" },
+  };
   return (
     <span
       className={[
         "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase",
         cfg.badge,
       ].join(" ")}
+      style={styleMap[status] ?? {}}
     >
       <span className={["h-1.5 w-1.5 rounded-full", cfg.dot].join(" ")} />
       {cfg.label}
@@ -237,9 +243,6 @@ const BookingCard = memo(function BookingCard({
   const ongoing = isOngoing(s);
   const soon = isStartingSoon(s);
 
-  // ✅ Determine proposal direction using proposedByUserId
-  // tutorProposed = tutor sent this proposal → student should Accept/Reject
-  // studentProposed = student sent this proposal → waiting for tutor to respond
   const tutorProposed  = proposalPending && !!s.tutor && s.proposedByUserId === s.tutor.id;
   const studentProposed = proposalPending && !tutorProposed;
 
@@ -264,8 +267,7 @@ const BookingCard = memo(function BookingCard({
         closed ? "opacity-75" : "hover:shadow-[0_8px_32px_rgb(var(--shadow)/0.12)] hover:-translate-y-0.5",
         ongoing ? "ring-2 ring-[rgb(var(--primary))/0.6] shadow-[0_0_24px_rgb(var(--primary)/0.10)]" : "",
         soon && !ongoing ? "ring-2 ring-amber-400/70" : "",
-        // ✅ Violet ring when student's own proposal is pending
-        studentProposed ? "ring-2 ring-violet-400/60" : "",
+        studentProposed ? "ring-2 ring-[rgb(var(--primary)/0.5)]" : "",
         isFocused ? "ring-2 ring-[rgb(var(--primary))]" : "",
       ].join(" ")}
     >
@@ -273,10 +275,10 @@ const BookingCard = memo(function BookingCard({
         <div className="h-0.5 w-full bg-gradient-to-r from-[rgb(var(--primary)/0.4)] via-[rgb(var(--primary))] to-[rgb(var(--primary)/0.4)]" />
       )}
       {soon && !ongoing && (
-        <div className="h-0.5 w-full bg-gradient-to-r from-amber-400/40 via-amber-400 to-amber-400/40" />
+        <div className="h-0.5 w-full bg-gradient-to-r from-[rgb(var(--primary)/0.4)] via-[rgb(var(--primary))] to-[rgb(var(--primary)/0.4)]" />
       )}
       {studentProposed && (
-        <div className="h-0.5 w-full bg-gradient-to-r from-violet-400/40 via-violet-400 to-violet-400/40" />
+        <div className="h-0.5 w-full bg-gradient-to-r from-[rgb(var(--primary)/0.4)] via-[rgb(var(--primary))] to-[rgb(var(--primary)/0.4)]" />
       )}
 
       <div className="p-5">
@@ -448,11 +450,9 @@ const BookingCard = memo(function BookingCard({
               transition={{ duration: 0.18 }}
               className={[
                 "mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3",
-                // ✅ Tutor proposed → primary color (student needs to act)
-                // Student proposed → violet color (waiting for tutor)
                 tutorProposed
                   ? "border-[rgb(var(--primary)/0.3)] bg-[rgb(var(--primary)/0.06)]"
-                  : "border-violet-400/40 bg-violet-400/10",
+                  : "border-[rgb(var(--primary)/0.5)] bg-[rgb(var(--primary)/0.08)]",
               ].join(" ")}
             >
               <div className="min-w-0">
@@ -460,13 +460,12 @@ const BookingCard = memo(function BookingCard({
                   "text-[0.8rem] font-semibold flex items-center gap-1.5",
                   tutorProposed
                     ? "text-[rgb(var(--fg))]"
-                    : "text-violet-600 dark:text-violet-300",
+                    : "text-[rgb(var(--primary))]",
                 ].join(" ")}>
                   <Sparkles
                     size={13}
-                    className={tutorProposed ? "text-[rgb(var(--primary))]" : "text-violet-500"}
+                    className={tutorProposed ? "text-[rgb(var(--primary))]" : "text-[rgb(var(--primary))]"}
                   />
-                  {/* ✅ Correct label based on who proposed */}
                   {tutorProposed ? "Tutor proposed a new time" : "Awaiting tutor confirmation"}
                 </div>
                 <div className="mt-0.5 text-[0.75rem] text-[rgb(var(--muted2))] truncate">
@@ -475,7 +474,6 @@ const BookingCard = memo(function BookingCard({
                 </div>
               </div>
 
-              {/* ✅ Only show Accept/Reject when tutor proposed → student acts */}
               {tutorProposed && (
                 <div className="flex gap-2 shrink-0">
                   <motion.button
@@ -497,9 +495,8 @@ const BookingCard = memo(function BookingCard({
                 </div>
               )}
 
-              {/* ✅ Student proposed → just show waiting badge, no buttons */}
               {studentProposed && (
-                <span className="rounded-full px-2.5 py-1 text-[10px] font-semibold border border-violet-400/30 bg-violet-400/15 text-violet-600 dark:text-violet-300 shrink-0">
+                <span className="rounded-full px-2.5 py-1 text-[10px] font-semibold border border-[rgb(var(--primary)/0.5)] bg-[rgb(var(--primary)/0.08)] text-[rgb(var(--primary))] shrink-0">
                   Pending tutor response
                 </span>
               )}
@@ -533,9 +530,16 @@ export default function MyBookingsClient() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mode, setMode] = useState<"RESCHEDULE" | "CANCEL" | null>(null);
 
+  // ── Reschedule slot picker state ──────────────────────────────────────────
+  const [availSlots, setAvailSlots] = useState<AvailableSlot[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [hasTutor, setHasTutor] = useState(true);
+  // Fallback free-pick (used when no tutor or no slots returned)
   const [newTime, setNewTime] = useState(() =>
     formatLocalInputValue(new Date(Date.now() + 60 * 60 * 1000))
   );
+
   const [reason, setReason] = useState("");
 
   const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -611,6 +615,11 @@ export default function MyBookingsClient() {
     setMode(null);
     setActiveId(null);
     setReason("");
+    // reset slot picker state too
+    setAvailSlots([]);
+    setSelectedSlot(null);
+    setSlotsLoading(false);
+    setHasTutor(true);
   }
 
   function closeRate() {
@@ -765,18 +774,42 @@ export default function MyBookingsClient() {
     return () => { alive = false; };
   }, [focusId, loading, items.length, grouped.past.length, showPast]); // eslint-disable-line
 
+  // ── Reschedule: slot-aware submit ─────────────────────────────────────────
   async function doReschedule() {
     if (!activeId) return;
-    const chosen = new Date(newTime);
-    if (Number.isNaN(chosen.getTime())) { setMsg({ text: "Please choose a valid date/time.", type: "error" }); return; }
-    if (chosen.getTime() < Date.now() + 5 * 60 * 1000) { setMsg({ text: "Choose a time at least 5 minutes from now.", type: "error" }); return; }
+
+    // Determine which ISO to send:
+    // 1. If tutor assigned and slots were loaded and student picked one → use selectedSlot
+    // 2. If no tutor, or slots returned empty → use the free datetime picker (newTime)
+    let chosenISO: string | null = null;
+
+    if (hasTutor && availSlots.length > 0) {
+      if (!selectedSlot) {
+        setMsg({ text: "Please select an available time slot.", type: "error" });
+        return;
+      }
+      chosenISO = selectedSlot;
+    } else {
+      // fallback: free picker
+      const chosen = new Date(newTime);
+      if (Number.isNaN(chosen.getTime())) {
+        setMsg({ text: "Please choose a valid date/time.", type: "error" });
+        return;
+      }
+      if (chosen.getTime() < Date.now() + 5 * 60 * 1000) {
+        setMsg({ text: "Choose a time at least 5 minutes from now.", type: "error" });
+        return;
+      }
+      chosenISO = chosen.toISOString();
+    }
+
     setActionLoading(true);
     setMsg(null);
     try {
       const res = await fetch(`/api/sessions/${activeId}/reschedule`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scheduledAt: chosen.toISOString() }),
+        body: JSON.stringify({ scheduledAt: chosenISO }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -785,7 +818,6 @@ export default function MyBookingsClient() {
         closeModal();
         await refresh({ silent: true });
         await fetch("/api/reminders/pull", { cache: "no-store" });
-        // ✅ Show correct message based on whether it was saved as proposal or direct reschedule
         setMsg({
           text: data?.proposed
             ? "Reschedule request sent to your tutor. Waiting for their response."
@@ -912,11 +944,26 @@ export default function MyBookingsClient() {
     }
   }, [ratingBySession]);
 
+  // ── handleReschedule: fetch slots when opening modal ──────────────────────
   const handleReschedule = useCallback((s: Row) => {
     setActiveId(s.id);
     setMode("RESCHEDULE");
-    setNewTime(formatLocalInputValue(new Date(s.scheduledAt)));
     setMsg(null);
+    setSelectedSlot(null);
+    setAvailSlots([]);
+    setNewTime(formatLocalInputValue(new Date(s.scheduledAt)));
+
+    const sessionHasTutor = !!s.tutor;
+    setHasTutor(sessionHasTutor);
+
+    if (sessionHasTutor) {
+      setSlotsLoading(true);
+      fetch(`/api/sessions/${s.id}/available-slots`)
+        .then((r) => r.json())
+        .then((d) => setAvailSlots(Array.isArray(d.slots) ? d.slots : []))
+        .catch(() => setAvailSlots([]))
+        .finally(() => setSlotsLoading(false));
+    }
   }, []);
 
   const handleCancel = useCallback((s: Row) => {
@@ -980,6 +1027,11 @@ export default function MyBookingsClient() {
     }
   }
 
+  // ── Derived: should we show the confirm button as disabled? ───────────────
+  const rescheduleConfirmDisabled =
+    actionLoading ||
+    (hasTutor && availSlots.length > 0 && !selectedSlot);
+
   return (
     <div className="space-y-5">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -1009,22 +1061,31 @@ export default function MyBookingsClient() {
       <AnimatePresence>
         {msg && (
           <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.98 }}
+            initial={{ opacity: 0, y: -6, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            exit={{ opacity: 0, y: -6, scale: 0.97 }}
             transition={{ duration: 0.18 }}
-            className={[
-              "flex items-center gap-2.5 rounded-xl border px-4 py-3 text-sm font-medium",
-              msg.type === "success"
-                ? "border-emerald-400/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                : "border-rose-400/50 bg-rose-500/10 text-rose-700 dark:text-rose-300",
-            ].join(" ")}
+            className="flex justify-start"
           >
-            {msg.type === "success"
-              ? <CheckCircle size={15} className="shrink-0" />
-              : <XCircle size={15} className="shrink-0" />
-            }
-            {msg.text}
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[0.72rem] font-bold tracking-wide uppercase"
+              style={msg.type === "success"
+                ? { backgroundColor: "rgb(52 211 153 / 0.10)", borderColor: "rgb(52 211 153 / 0.60)", color: "rgb(4 120 87)" }
+                : { backgroundColor: "rgb(251 113 133 / 0.10)", borderColor: "rgb(251 113 133 / 0.60)", color: "rgb(190 18 60)" }
+              }
+            >
+              <span className="relative flex h-1.5 w-1.5 shrink-0">
+                <span
+                  className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60"
+                  style={{ backgroundColor: msg.type === "success" ? "rgb(52 211 153)" : "rgb(251 113 133)" }}
+                />
+                <span
+                  className="relative inline-flex h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: msg.type === "success" ? "rgb(52 211 153)" : "rgb(251 113 133)" }}
+                />
+              </span>
+              {msg.text}
+            </span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1274,36 +1335,98 @@ export default function MyBookingsClient() {
                   {mode === "RESCHEDULE" ? "Reschedule booking" : "Cancel booking"}
                 </span>
               </div>
-              <p className="text-xs text-[rgb(var(--muted2))] mb-5">
-                {mode === "RESCHEDULE"
-                  ? "Choose a new date and time for your session."
-                  : "Are you sure you want to cancel this session?"}
-              </p>
 
-              {mode === "RESCHEDULE" ? (
-                <div>
-                  <label className="block text-[0.7rem] font-semibold text-[rgb(var(--muted2))] mb-1.5 uppercase tracking-wide">
-                    New date & time
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={newTime}
-                    onChange={(e) => setNewTime(e.target.value)}
-                    className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary)/0.15)] transition-all"
-                  />
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-[0.7rem] font-semibold text-[rgb(var(--muted2))] mb-1.5 uppercase tracking-wide">
-                    Reason (optional)
-                  </label>
-                  <input
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    placeholder="e.g. timetable clash"
-                    className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary)/0.15)] transition-all"
-                  />
-                </div>
+              {/* ── RESCHEDULE content ──────────────────────────────────── */}
+              {mode === "RESCHEDULE" && (
+                <>
+                  <p className="text-xs text-[rgb(var(--muted2))] mb-4">
+                    {hasTutor
+                      ? "Pick one of your tutor's available time slots."
+                      : "Choose a new date and time for your session."}
+                  </p>
+
+                  {/* Tutor assigned → show slot picker */}
+                  {hasTutor && (
+                    <>
+                      {slotsLoading ? (
+                        // Loading skeleton
+                        <div className="flex items-center justify-center py-10">
+                          <div className="h-5 w-5 rounded-full border-2 border-[rgb(var(--primary))] border-t-transparent animate-spin" />
+                        </div>
+                      ) : availSlots.length > 0 ? (
+                        // Slot list
+                        <div className="max-h-60 overflow-y-auto pr-0.5 space-y-1.5 mb-4">
+                          {availSlots.map((slot) => (
+                            <button
+                              key={slot.start}
+                              onClick={() => setSelectedSlot(slot.start)}
+                              className={[
+                                "w-full text-left rounded-xl border px-4 py-3 text-xs font-semibold transition-all",
+                                selectedSlot === slot.start
+                                  ? "border-[rgb(var(--primary))] bg-[rgb(var(--primary)/0.10)] text-[rgb(var(--primary))]"
+                                  : "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:border-[rgb(var(--primary)/0.4)] hover:bg-[rgb(var(--primary)/0.04)]",
+                              ].join(" ")}
+                            >
+                              {slot.label}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        // No slots → fall back to free picker with a note
+                        <div className="mb-4">
+                          <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-400/40 bg-amber-500/8 px-3 py-2.5 text-xs text-amber-600 dark:text-amber-400">
+                            <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                            No available slots found in the next 14 days. You can still request a custom time and your tutor will confirm.
+                          </div>
+                          <label className="block text-[0.7rem] font-semibold text-[rgb(var(--muted2))] mb-1.5 uppercase tracking-wide">
+                            Custom date & time
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={newTime}
+                            onChange={(e) => setNewTime(e.target.value)}
+                            className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary)/0.15)] transition-all"
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* No tutor assigned → free datetime picker */}
+                  {!hasTutor && (
+                    <div className="mb-4">
+                      <label className="block text-[0.7rem] font-semibold text-[rgb(var(--muted2))] mb-1.5 uppercase tracking-wide">
+                        New date & time
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={newTime}
+                        onChange={(e) => setNewTime(e.target.value)}
+                        className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary)/0.15)] transition-all"
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ── CANCEL content ──────────────────────────────────────── */}
+              {mode === "CANCEL" && (
+                <>
+                  <p className="text-xs text-[rgb(var(--muted2))] mb-5">
+                    Are you sure you want to cancel this session?
+                  </p>
+                  <div>
+                    <label className="block text-[0.7rem] font-semibold text-[rgb(var(--muted2))] mb-1.5 uppercase tracking-wide">
+                      Reason (optional)
+                    </label>
+                    <input
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      placeholder="e.g. timetable clash"
+                      className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary)/0.15)] transition-all"
+                    />
+                  </div>
+                </>
               )}
 
               <div className="mt-5 flex gap-2">
@@ -1316,7 +1439,7 @@ export default function MyBookingsClient() {
                 </button>
                 <motion.button
                   whileTap={{ scale: 0.98 }}
-                  disabled={actionLoading}
+                  disabled={mode === "RESCHEDULE" ? rescheduleConfirmDisabled : actionLoading}
                   onClick={mode === "RESCHEDULE" ? doReschedule : doCancel}
                   className={[
                     "flex-1 rounded-xl px-3 py-2.5 text-xs font-bold text-white transition-all disabled:opacity-70",
@@ -1325,7 +1448,11 @@ export default function MyBookingsClient() {
                       : "bg-rose-600 shadow-[0_4px_14px_rgb(239,68,68,0.25)] hover:opacity-90",
                   ].join(" ")}
                 >
-                  {actionLoading ? "Working…" : mode === "RESCHEDULE" ? "Reschedule" : "Cancel booking"}
+                  {actionLoading
+                    ? "Working…"
+                    : mode === "RESCHEDULE"
+                    ? "Confirm"
+                    : "Cancel booking"}
                 </motion.button>
               </div>
             </motion.div>

@@ -4,6 +4,13 @@ import { FormEvent, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+const passwordRules = [
+  { label: "At least 6 characters",         test: (p: string) => p.length >= 6 },
+  { label: "One uppercase letter (A–Z)",    test: (p: string) => /[A-Z]/.test(p) },
+  { label: "One number (0–9)",              test: (p: string) => /[0-9]/.test(p) },
+  { label: "One special character (!@#…)",  test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+];
+
 function getPasswordStrength(password: string) {
   let score = 0;
   if (password.length >= 6) score++;
@@ -34,7 +41,7 @@ export default function RegisterPage() {
   const [status, setStatus] = useState<{ type: "error" | "success"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const submittingRef = useRef(false); // double-submit guard
+  const submittingRef = useRef(false);
 
   const strength = getPasswordStrength(password);
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
@@ -42,7 +49,6 @@ export default function RegisterPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
 
-    // Block if already submitting (double-click / fast retry guard)
     if (submittingRef.current) return;
 
     setStatus(null);
@@ -82,11 +88,9 @@ export default function RegisterPage() {
 
       if (!res.ok || !data.success) {
         setStatus({ type: "error", msg: data.message || "Registration failed" });
-        // Only re-enable on error so user can retry
         submittingRef.current = false;
         setLoading(false);
       } else {
-        // Keep loading state during redirect — no flicker
         router.push("/auth/login?registered=true");
       }
     } catch (err: any) {
@@ -202,6 +206,10 @@ export default function RegisterPage() {
         .divider-line {
           flex: 1; height: 1px;
           background: linear-gradient(to right, transparent, rgb(var(--border)), transparent);
+        }
+
+        .rule-item {
+          transition: color 0.2s;
         }
       `}</style>
 
@@ -388,27 +396,57 @@ export default function RegisterPage() {
                 )}
 
                 {password && (
-                  <div className="mt-2.5 strength-bar">
-                    <div className="flex gap-1.5">
-                      {[1, 2, 3].map((i) => (
-                        <div
-                          key={i}
-                          className="relative h-1.5 flex-1 overflow-hidden rounded-full"
-                          style={{ background: "rgb(var(--border))" }}
-                        >
-                          {strength.level >= i && (
-                            <span
-                              className={`absolute inset-y-0 left-0 rounded-full ${strength.color}`}
-                              style={{ animationDelay: `${(i - 1) * 0.08}s` }}
-                            />
-                          )}
-                        </div>
-                      ))}
+                  <>
+                    {/* Strength bar */}
+                    <div className="mt-2.5 strength-bar">
+                      <div className="flex gap-1.5">
+                        {[1, 2, 3].map((i) => (
+                          <div
+                            key={i}
+                            className="relative h-1.5 flex-1 overflow-hidden rounded-full"
+                            style={{ background: "rgb(var(--border))" }}
+                          >
+                            {strength.level >= i && (
+                              <span
+                                className={`absolute inset-y-0 left-0 rounded-full ${strength.color}`}
+                                style={{ animationDelay: `${(i - 1) * 0.08}s` }}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <p className={`mt-1 text-[0.7rem] font-medium ${strength.textColor}`}>
+                        {strength.label} password
+                      </p>
                     </div>
-                    <p className={`mt-1 text-[0.7rem] font-medium ${strength.textColor}`}>
-                      {strength.label} password
-                    </p>
-                  </div>
+
+                    {/* Password rules checklist */}
+                    <ul className="mt-2.5 space-y-1.5">
+                      {passwordRules.map((rule) => {
+                        const met = rule.test(password);
+                        return (
+                          <li
+                            key={rule.label}
+                            className={`rule-item flex items-center gap-2 text-[0.7rem] font-medium ${
+                              met ? "text-emerald-500" : "text-rose-400"
+                            }`}
+                          >
+                            {met ? (
+                              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-3 w-3 flex-shrink-0">
+                                <path d="M3 8l3.5 3.5L13 5" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            ) : (
+                              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-3 w-3 flex-shrink-0">
+                                <circle cx="8" cy="8" r="6"/>
+                                <path d="M8 5v2.5M8 9.5v1" strokeLinecap="round"/>
+                              </svg>
+                            )}
+                            {rule.label}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
                 )}
               </div>
 

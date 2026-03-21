@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { getSessionUser } from "@/lib/getSessionUser";
 import SosPageClient from "./SosPageClient";
 
 function SosPageFallback() {
@@ -64,10 +65,21 @@ function SosPageFallback() {
   );
 }
 
+async function SosPageInner() {
+  const dbUser = await getSessionUser();
+
+  if (!dbUser || dbUser.isDeactivated) {
+    return <SosPageClient authed={false} verified={false} />;
+  }
+
+  const verified = dbUser.verificationStatus === "AUTO_VERIFIED";
+  return <SosPageClient authed={true} verified={verified} />;
+}
+
 export default function SosPage() {
   return (
     <Suspense fallback={<SosPageFallback />}>
-      <SosPageClient />
+      <SosPageInner />
     </Suspense>
   );
 }

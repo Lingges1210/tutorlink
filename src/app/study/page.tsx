@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { getSessionUser } from "@/lib/getSessionUser";
 import StudyPageClient from "./StudyPageClient";
 
 function StudyPageFallback() {
@@ -13,10 +14,21 @@ function StudyPageFallback() {
   );
 }
 
+async function StudyPageInner() {
+  const dbUser = await getSessionUser();
+
+  if (!dbUser || dbUser.isDeactivated) {
+    return <StudyPageClient authed={false} verified={false} />;
+  }
+
+  const verified = dbUser.verificationStatus === "AUTO_VERIFIED";
+  return <StudyPageClient authed={true} verified={verified} />;
+}
+
 export default function StudyPage() {
   return (
     <Suspense fallback={<StudyPageFallback />}>
-      <StudyPageClient />
+      <StudyPageInner />
     </Suspense>
   );
 }

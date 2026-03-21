@@ -16,9 +16,6 @@ type Row = {
   proposedAt?: string | null;
   proposedNote?: string | null;
   proposalStatus?: "PENDING" | "ACCEPTED" | "REJECTED" | null;
-  // ✅ Added: identifies who created the proposal.
-  // If proposedByUserId === student.id → student wants to reschedule (tutor must accept/reject).
-  // If proposedByUserId !== student.id (or null) → tutor proposed (awaiting student confirmation).
   proposedByUserId?: string | null;
   subject: { code: string; title: string };
   student: {
@@ -123,18 +120,19 @@ function getInitials(name: string | null, email: string) {
   return email.slice(0, 2).toUpperCase();
 }
 
+// ── Fixed: solid colors, no dark: variant dilution, higher opacity ────────────
 function statusConfig(status: string) {
   switch (status) {
     case "PENDING":
-      return { label: "Pending", dotClass: "bg-amber-400", badgeClass: "border-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-300" };
+      return { label: "Pending",   dotClass: "bg-amber-400",   badgeClass: "text-amber-600",   badgeStyle: { backgroundColor: "rgb(251 191 36 / 0.20)", borderColor: "rgb(245 158 11 / 0.70)" } };
     case "ACCEPTED":
-      return { label: "Accepted", dotClass: "bg-emerald-400", badgeClass: "border-emerald-400/40 bg-emerald-400/10 text-emerald-600 dark:text-emerald-300" };
+      return { label: "Accepted",  dotClass: "bg-emerald-400", badgeClass: "text-emerald-600", badgeStyle: { backgroundColor: "rgb(52 211 153 / 0.20)", borderColor: "rgb(16 185 129 / 0.70)" } };
     case "COMPLETED":
-      return { label: "Completed", dotClass: "bg-slate-400", badgeClass: "border-slate-400/30 bg-slate-400/10 text-slate-500 dark:text-slate-400" };
+      return { label: "Completed", dotClass: "bg-slate-400",   badgeClass: "text-slate-600",   badgeStyle: { backgroundColor: "rgb(148 163 184 / 0.20)", borderColor: "rgb(100 116 139 / 0.50)" } };
     case "CANCELLED":
-      return { label: "Cancelled", dotClass: "bg-rose-400", badgeClass: "border-rose-400/40 bg-rose-400/10 text-rose-600 dark:text-rose-300" };
+      return { label: "Cancelled", dotClass: "bg-rose-400",    badgeClass: "text-rose-600",    badgeStyle: { backgroundColor: "rgb(251 113 133 / 0.20)", borderColor: "rgb(244 63 94 / 0.70)" } };
     default:
-      return { label: status, dotClass: "bg-[rgb(var(--muted2))]", badgeClass: "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))]" };
+      return { label: status,      dotClass: "bg-[rgb(var(--muted2))]", badgeClass: "text-[rgb(var(--fg))]", badgeStyle: { backgroundColor: "rgb(var(--card))", borderColor: "rgb(var(--border))" } };
   }
 }
 
@@ -190,7 +188,6 @@ type SessionCardProps = {
   onPropose: (s: Row) => void;
   onReport: (s: Row) => void;
   onCancel: (id: string) => void;
-  // ✅ New: tutor accepts/rejects a student-originated proposal
   onAcceptStudentProposal: (id: string) => void;
   onRejectStudentProposal: (id: string) => void;
 };
@@ -213,12 +210,10 @@ function SessionCard({
   const initials = getInitials(s.student.name, s.student.email);
   const soon = isStartingSoon(s) && !ongoing;
 
-  // ✅ Determine proposal direction
   const proposalPending = active && s.proposalStatus === "PENDING" && !!s.proposedAt;
   const isStudentProposal = proposalPending && s.proposedByUserId === s.student.id;
   const isTutorProposal   = proposalPending && !isStudentProposal;
 
-  // Don't show "complete" button if there's a student proposal pending
   const showEndedAmberBanner = showEndedAmber && !proposalPending;
 
   return (
@@ -233,21 +228,25 @@ function SessionCard({
         "group relative rounded-2xl border overflow-hidden transition-all duration-300",
         "border-[rgb(var(--border))] bg-[rgb(var(--card2))]",
         "hover:shadow-[0_8px_32px_rgb(var(--shadow)/0.12)] hover:-translate-y-0.5",
-        ongoing          ? "ring-2 ring-emerald-400/60 shadow-[0_0_0_4px_rgb(var(--shadow)/0.04)]" : "",
-        soon             ? "ring-2 ring-amber-400/60" : "",
+        ongoing              ? "ring-2 ring-emerald-400/60 shadow-[0_0_0_4px_rgb(var(--shadow)/0.04)]" : "",
+        soon                 ? "ring-2 ring-amber-400/60" : "",
         showEndedAmberBanner ? "ring-2 ring-amber-400/60" : "",
-        // ✅ Student proposal gets a distinct violet ring so it stands out
-        isStudentProposal ? "ring-2 ring-violet-400/60" : "",
-        isFocused        ? "ring-2 ring-[rgb(var(--primary)/0.7)]" : "",
+        isStudentProposal    ? "ring-2" : "",
+        isFocused            ? "ring-2" : "",
       ].join(" ")}
+      style={
+        isStudentProposal ? { "--tw-ring-color": "rgb(var(--primary) / 0.5)" } as React.CSSProperties :
+        isFocused ? { "--tw-ring-color": "rgb(var(--primary) / 0.7)" } as React.CSSProperties :
+        undefined
+      }
     >
       <div className={[
         "absolute top-0 left-0 right-0 h-[2px]",
-        ongoing           ? "bg-gradient-to-r from-emerald-400 via-emerald-300 to-transparent" :
+        ongoing              ? "bg-gradient-to-r from-emerald-400 via-emerald-300 to-transparent" :
         showEndedAmberBanner ? "bg-gradient-to-r from-amber-400 via-amber-300 to-transparent" :
-        isStudentProposal ? "bg-gradient-to-r from-violet-400 via-violet-300 to-transparent" :
-        pending           ? "bg-gradient-to-r from-amber-400/60 via-amber-300/40 to-transparent" :
-        accepted          ? "bg-gradient-to-r from-[rgb(var(--primary))] via-[rgb(var(--primary)/0.5)] to-transparent" :
+        isStudentProposal    ? "bg-gradient-to-r from-[rgb(var(--primary))] via-[rgb(var(--primary)/0.5)] to-transparent" :
+        pending              ? "bg-gradient-to-r from-amber-400/60 via-amber-300/40 to-transparent" :
+        accepted             ? "bg-gradient-to-r from-[rgb(var(--primary))] via-[rgb(var(--primary)/0.5)] to-transparent" :
         "bg-transparent"
       ].join(" ")} />
 
@@ -255,11 +254,12 @@ function SessionCard({
         <div className="flex items-start gap-3 sm:gap-4">
           <div className={[
             "relative flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center text-xs font-bold select-none ring-2",
-            ongoing  ? "ring-emerald-400/50 bg-emerald-400/15 text-emerald-600 dark:text-emerald-300" :
-            pending  ? "ring-amber-400/40 bg-amber-400/10 text-amber-600 dark:text-amber-300" :
+            ongoing  ? "ring-emerald-400/50 bg-emerald-400/15 text-emerald-600" :
+            pending  ? "ring-amber-400 text-amber-600" :
             accepted ? "ring-[rgb(var(--primary)/0.4)] bg-[rgb(var(--primary)/0.1)] text-[rgb(var(--primary))]" :
             "ring-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted2))]"
-          ].join(" ")}>
+          ].join(" ")}
+          style={pending ? { backgroundColor: "rgb(251 191 36 / 0.20)" } : undefined}>
             {s.student.avatarUrl ? (
               <Image
                 src={s.student.avatarUrl}
@@ -287,7 +287,7 @@ function SessionCard({
                   <span className="truncate opacity-75">{s.student.email}</span>
                 </div>
               </div>
-              <span className={["inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold border tracking-wide", sc.badgeClass].join(" ")}>
+              <span className={["inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold border tracking-wider uppercase", sc.badgeClass].join(" ")} style={sc.badgeStyle}>
                 <span className={["h-1.5 w-1.5 rounded-full flex-shrink-0", sc.dotClass].join(" ")} />
                 {sc.label}
               </span>
@@ -306,26 +306,26 @@ function SessionCard({
 
             {ongoing && (
               <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-400/15 border border-emerald-400/30 px-3 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-300">
+                className="mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold text-emerald-600" style={{ backgroundColor: "rgb(52 211 153 / 0.20)", borderColor: "rgb(16 185 129 / 0.60)" }}>
                 <Zap className="h-3 w-3" />
                 {countdownLabel(s)}
               </motion.div>
             )}
 
             {soon && (
-              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-400/15 border border-amber-400/30 px-3 py-1 text-[11px] font-semibold text-amber-600 dark:text-amber-300 animate-pulse">
+              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold text-amber-600 animate-pulse" style={{ backgroundColor: "rgb(251 191 36 / 0.20)", borderColor: "rgb(245 158 11 / 0.60)" }}>
                 <Clock className="h-3 w-3" />Starting soon
               </div>
             )}
 
             {showEndedAmberBanner && (
-              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-400/15 border border-amber-400/30 px-3 py-1 text-[11px] font-bold text-amber-600 dark:text-amber-300">
+              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold text-amber-600" style={{ backgroundColor: "rgb(251 191 36 / 0.20)", borderColor: "rgb(245 158 11 / 0.60)" }}>
                 <CheckCircle2 className="h-3 w-3" />Session ended — please complete review
               </div>
             )}
 
             {pending && conflict && (
-              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-rose-400/15 border border-rose-400/30 px-3 py-1 text-[11px] font-semibold text-rose-600 dark:text-rose-300">
+              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold text-rose-600" style={{ backgroundColor: "rgb(251 113 133 / 0.20)", borderColor: "rgb(244 63 94 / 0.60)" }}>
                 <AlertTriangle className="h-3 w-3" />Time conflict
               </div>
             )}
@@ -334,15 +334,15 @@ function SessionCard({
               <div className="mt-2 text-[0.7rem] text-[rgb(var(--muted2))] italic">Reason: {s.cancelReason}</div>
             )}
 
-            {/* ✅ STUDENT proposal banner — tutor must accept or reject */}
+            {/* Student proposal — tutor must accept or reject */}
             {isStudentProposal && (
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-400/40 bg-violet-400/10 px-4 py-3"
+                className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgb(var(--primary)/0.5)] bg-[rgb(var(--primary)/0.08)] px-4 py-3"
               >
                 <div className="min-w-0">
-                  <div className="text-[0.8rem] font-semibold text-violet-600 dark:text-violet-300 flex items-center gap-1.5">
+                  <div className="text-[0.8rem] font-semibold text-[rgb(var(--primary))] flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5" />
                     Student proposed a new time
                   </div>
@@ -372,21 +372,21 @@ function SessionCard({
               </motion.div>
             )}
 
-            {/* ✅ TUTOR proposal banner — awaiting student confirmation (unchanged) */}
+            {/* Tutor proposal — awaiting student confirmation */}
             {isTutorProposal && (
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-400/30 bg-indigo-400/10 px-3 py-2.5"
+                className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[rgb(var(--primary)/0.5)] bg-[rgb(var(--primary)/0.08)] px-3 py-2.5"
               >
                 <div className="min-w-0">
-                  <div className="text-[0.8rem] font-semibold text-indigo-600 dark:text-indigo-300">Proposed time sent to student</div>
+                  <div className="text-[0.8rem] font-semibold text-[rgb(var(--primary))]">Proposed time sent to student</div>
                   <div className="mt-0.5 text-[0.72rem] text-[rgb(var(--muted2))] truncate">
                     {prettyDate(s.proposedAt!)}
                     {s.proposedNote ? ` · ${s.proposedNote}` : ""}
                   </div>
                 </div>
-                <span className="rounded-full px-2.5 py-1 text-[10px] font-semibold border border-indigo-400/30 bg-indigo-400/15 text-indigo-600 dark:text-indigo-300">
+                <span className="rounded-full px-2.5 py-1 text-[10px] font-bold border border-[rgb(var(--primary)/0.5)] bg-[rgb(var(--primary)/0.08)] text-[rgb(var(--primary))] tracking-wider uppercase">
                   Awaiting confirmation
                 </span>
               </motion.div>
@@ -416,14 +416,12 @@ function SessionCard({
                   <MessageSquare className="h-3.5 w-3.5" />Chat
                 </button>
               )}
-              
               {canComplete(s) && !proposalPending && (
                 <button disabled={actionLoading} onClick={() => onComplete(s.id)}
                   className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-90 disabled:opacity-60 transition-opacity shadow-sm">
                   <CheckCircle2 className="h-3.5 w-3.5" />Complete
                 </button>
               )}
-              {/* ✅ Hide "Propose time" if there's already any pending proposal */}
               {active && !proposalPending && (
                 <button disabled={actionLoading} onClick={() => onPropose(s)}
                   className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60 transition-colors">
@@ -437,7 +435,7 @@ function SessionCard({
               </button>
               {active && (
                 <button disabled={actionLoading} onClick={() => onCancel(s.id)}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold border border-rose-400/40 text-rose-600 dark:text-rose-400 hover:bg-rose-400/10 disabled:opacity-60 transition-colors">
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold border text-rose-600 disabled:opacity-60 transition-colors" style={{ borderColor: "rgb(244 63 94 / 0.50)", backgroundColor: "rgb(251 113 133 / 0.10)" }}>
                   <XCircle className="h-3.5 w-3.5" />Cancel
                 </button>
               )}
@@ -514,7 +512,7 @@ export default function TutorSessionsClient() {
 
   const [items, setItems]               = useState<Row[]>([]);
   const [loading, setLoading]           = useState(true);
-  const [msg, setMsg]                   = useState<string | null>(null);
+  const [msg, setMsg]                   = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [modalMsg, setModalMsg]         = useState<string | null>(null);
   const [, setTick]                     = useState(0);
   const [actionLoading, setActionLoading] = useState(false);
@@ -599,35 +597,33 @@ export default function TutorSessionsClient() {
     try {
       const res = await fetch(`/api/tutor/sessions/${id}/accept`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) setMsg(data?.message ?? "Accept failed.");
+      if (!res.ok) setMsg({ text: data?.message ?? "Accept failed.", type: "error" });
       else { await refresh({ silent: true }); await fetch("/api/reminders/pull", { cache: "no-store" }); }
     } finally { setActionLoading(false); }
   }
 
-  // ✅ Tutor accepts a student-originated reschedule proposal
   async function acceptStudentProposal(id: string) {
     setActionLoading(true); setMsg(null);
     try {
       const res = await fetch(`/api/tutor/sessions/${id}/proposal/accept`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) setMsg(data?.message ?? "Could not accept proposal.");
+      if (!res.ok) setMsg({ text: data?.message ?? "Could not accept proposal.", type: "error" });
       else {
-        setMsg("Proposal accepted — session time updated.");
+        setMsg({ text: "Proposal accepted — session time updated.", type: "success" });
         await refresh({ silent: true });
         await fetch("/api/reminders/pull", { cache: "no-store" });
       }
     } finally { setActionLoading(false); }
   }
 
-  // ✅ Tutor rejects a student-originated reschedule proposal
   async function rejectStudentProposal(id: string) {
     setActionLoading(true); setMsg(null);
     try {
       const res = await fetch(`/api/tutor/sessions/${id}/proposal/reject`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) setMsg(data?.message ?? "Could not reject proposal.");
+      if (!res.ok) setMsg({ text: data?.message ?? "Could not reject proposal.", type: "error" });
       else {
-        setMsg("Proposal rejected. Session time unchanged.");
+        setMsg({ text: "Proposal rejected. Session time unchanged.", type: "success" });
         await refresh({ silent: true });
       }
     } finally { setActionLoading(false); }
@@ -641,8 +637,8 @@ export default function TutorSessionsClient() {
       });
       const j = await r.json();
       if (j?.ok && j.channelId) router.push(`/messaging?channelId=${j.channelId}&returnTo=/dashboard/tutor/sessions&focus=${sessionId}`);
-      else setMsg(j?.message ?? "Unable to start chat.");
-    } catch { setMsg("Unable to start chat."); }
+      else setMsg({ text: j?.message ?? "Unable to start chat.", type: "error" });
+    } catch { setMsg({ text: "Unable to start chat.", type: "error" }); }
   }
 
   function openReportForm(s: Row) {
@@ -674,7 +670,7 @@ export default function TutorSessionsClient() {
         closeModal();
         await refresh({ silent: true });
         await fetch("/api/reminders/pull", { cache: "no-store" });
-        setMsg("Session Completed and Progress Updated.");
+        setMsg({ text: "Session Completed and Progress Updated.", type: "success" });
       }
     } finally { setActionLoading(false); }
   }
@@ -690,7 +686,7 @@ export default function TutorSessionsClient() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) setModalMsg(data?.message ?? "Cancel failed.");
       else {
-        setMsg("Session cancelled."); closeModal();
+        setMsg({ text: "Session cancelled.", type: "success" }); closeModal();
         await refresh({ silent: true }); await fetch("/api/reminders/pull", { cache: "no-store" });
       }
     } finally { setActionLoading(false); }
@@ -711,7 +707,7 @@ export default function TutorSessionsClient() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) setModalMsg(data?.message ?? "Propose failed.");
       else {
-        setMsg("Proposed new time sent to student for confirmation."); closeModal();
+        setMsg({ text: "Proposed new time sent to student for confirmation.", type: "success" }); closeModal();
         await refresh({ silent: true }); await fetch("/api/reminders/pull", { cache: "no-store" });
       }
     } finally { setActionLoading(false); }
@@ -837,19 +833,19 @@ export default function TutorSessionsClient() {
             </div>
             <div className="hidden sm:flex items-center gap-3">
               {grouped.ongoing.length > 0 && (
-                <div className="flex items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5">
+                <div className="flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ backgroundColor: "rgb(52 211 153 / 0.20)", borderColor: "rgb(16 185 129 / 0.60)" }}>
                   <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-300">{grouped.ongoing.length} live</span>
+                  <span className="text-xs font-semibold text-emerald-600">{grouped.ongoing.length} live</span>
                 </div>
               )}
               {grouped.needsCompletion.length > 0 && (
-                <div className="flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1.5">
+                <div className="flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ backgroundColor: "rgb(251 191 36 / 0.20)", borderColor: "rgb(245 158 11 / 0.60)" }}>
                   <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-                  <span className="text-xs font-semibold text-amber-600 dark:text-amber-300">{grouped.needsCompletion.length} pending review</span>
+                  <span className="text-xs font-semibold text-amber-600">{grouped.needsCompletion.length} pending review</span>
                 </div>
               )}
               {grouped.upcoming.length > 0 && (
-                <div className="flex items-center gap-1.5 rounded-full border border-[rgb(var(--primary)/0.4)] bg-[rgb(var(--primary)/0.08)] px-3 py-1.5">
+                <div className="flex items-center gap-1.5 rounded-full border border-[rgb(var(--primary)/0.5)] bg-[rgb(var(--primary)/0.08)] px-3 py-1.5">
                   <span className="text-xs font-semibold text-[rgb(var(--primary))]">{grouped.upcoming.length} upcoming</span>
                 </div>
               )}
@@ -862,8 +858,16 @@ export default function TutorSessionsClient() {
       <AnimatePresence>
         {msg && (
           <motion.div initial={{ opacity: 0, y: -8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.98 }}
-            className="rounded-2xl border border-emerald-400/40 bg-emerald-400/10 px-4 py-3 flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-            <CheckCircle2 className="h-4 w-4 flex-shrink-0" />{msg}
+            className="rounded-2xl border px-4 py-3 flex items-center gap-2 text-sm font-medium"
+            style={msg.type === "success"
+              ? { backgroundColor: "rgb(52 211 153 / 0.10)", borderColor: "rgb(16 185 129 / 0.30)", color: "rgb(4 120 87)" }
+              : { backgroundColor: "rgb(251 113 133 / 0.10)", borderColor: "rgb(244 63 94 / 0.30)", color: "rgb(190 18 60)" }
+            }>
+            {msg.type === "success"
+              ? <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+              : <XCircle className="h-4 w-4 flex-shrink-0" />
+            }
+            {msg.text}
           </motion.div>
         )}
       </AnimatePresence>
@@ -977,7 +981,7 @@ export default function TutorSessionsClient() {
             <div className="p-6">
               <div className="flex items-center gap-3 mb-5">
                 <div className="h-9 w-9 rounded-xl bg-rose-400/15 border border-rose-400/30 flex items-center justify-center flex-shrink-0">
-                  <XCircle className="h-5 w-5 text-rose-500 dark:text-rose-400" />
+                  <XCircle className="h-5 w-5 text-rose-500" />
                 </div>
                 <div>
                   <div className="text-sm font-bold text-[rgb(var(--fg))]">Cancel session</div>
@@ -985,7 +989,7 @@ export default function TutorSessionsClient() {
                 </div>
               </div>
               {modalMsg && (
-                <div className="mb-4 rounded-xl border border-rose-400/40 bg-rose-400/10 px-3.5 py-2.5 text-xs font-medium text-rose-700 dark:text-rose-300">{modalMsg}</div>
+                <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs font-medium text-rose-700 dark:text-rose-300">{modalMsg}</div>
               )}
               <div>
                 <label className={labelClass}>Reason (optional)</label>
@@ -1021,7 +1025,7 @@ export default function TutorSessionsClient() {
                 </div>
               </div>
               {modalMsg && (
-                <div className="mb-4 rounded-xl border border-rose-400/40 bg-rose-400/10 px-3.5 py-2.5 text-xs font-medium text-rose-700 dark:text-rose-300">{modalMsg}</div>
+                <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs font-medium text-rose-700 dark:text-rose-300">{modalMsg}</div>
               )}
               <div className="space-y-4">
                 <div>
@@ -1080,7 +1084,7 @@ export default function TutorSessionsClient() {
               </div>
               <div className="p-6 space-y-4 max-h-[calc(100vh-180px)] overflow-y-auto">
                 {modalMsg && (
-                  <div className="rounded-xl border border-rose-400/40 bg-rose-400/10 px-3.5 py-2.5 text-xs font-medium text-rose-700 dark:text-rose-300">{modalMsg}</div>
+                  <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs font-medium text-rose-700 dark:text-rose-300">{modalMsg}</div>
                 )}
                 <div>
                   <label className={labelClass}>Session summary <span className="text-[rgb(var(--primary))]">*</span></label>
