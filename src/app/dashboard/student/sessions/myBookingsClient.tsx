@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { studypalReward } from "@/lib/studypalReward";
 
 type Row = {
   id: string;
@@ -963,6 +964,8 @@ export default function MyBookingsClient() {
         mutate("/api/achievements/recommendations"),
         mutate("/api/progress/dashboard?tab=overview"),
       ]);
+
+      studypalReward("session");
 
       const submittedSessionId = rateSessionId;
       closeRate();

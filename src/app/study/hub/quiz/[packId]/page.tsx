@@ -9,6 +9,7 @@ import {
   Trophy, Target,
 } from "lucide-react";
 import { StudyBackground } from "@/components/FloatingParticles";
+import { studypalReward } from "@/lib/studypalReward";
 
 type Q = {
   q: string;
@@ -75,6 +76,9 @@ export default function QuizPage({ params }: { params: Promise<{ packId: string 
     });
     const d = await r.json().catch(() => null);
     setResult(d);
+    if (d?.ok) {
+    studypalReward("quiz");
+    }
     setTab("QUIZ");
     setShowReview(true);
     window.scrollTo({ top: 0, behavior: "smooth" });

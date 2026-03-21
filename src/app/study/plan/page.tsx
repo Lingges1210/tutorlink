@@ -9,6 +9,7 @@ import {
   ChevronRight, Clock, BarChart2, 
 } from "lucide-react";
 import { StudyBackground } from "@/components/FloatingParticles";
+import { studypalReward } from "@/lib/studypalReward";
 
 /* ─── types ─── */
 type DayKey = "MON"|"TUE"|"WED"|"THU"|"FRI"|"SAT"|"SUN";
@@ -146,18 +147,27 @@ export default function StudyPlanPage() {
     finally{ setLoading(false); }
   }
 
-  async function toggleItem(item:PlanItem) {
-    const next=item.status==="DONE"?"PENDING":"DONE";
-    patchLocal(item.id,next); setBusy(item.id);
-    try {
-      const res=await fetch("/api/study/plans/item",{
-        method:"PATCH", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ itemId:item.id, nextStatus:next }),
-      });
-      if(!(await res.json())?.ok) throw new Error();
-    } catch{ patchLocal(item.id,item.status as any); setError("Failed to update task"); }
-    finally{ setBusy(null); }
+  async function toggleItem(item: PlanItem) {
+  const next = item.status === "DONE" ? "PENDING" : "DONE";
+  patchLocal(item.id, next); setBusy(item.id);
+
+  if (next === "DONE") {        // ← here, before the fetch
+    studypalReward("streak");
   }
+
+  try {
+    const res = await fetch("/api/study/plans/item", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId: item.id, nextStatus: next }),
+    });
+    if (!(await res.json())?.ok) throw new Error();
+  } catch {
+    patchLocal(item.id, item.status as any);
+    setError("Failed to update task");
+  } finally {
+    setBusy(null);
+  }
+}
 
   async function rebalance() {
     setLoading(true); setError("");
