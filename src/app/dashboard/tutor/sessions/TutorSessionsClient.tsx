@@ -416,7 +416,7 @@ function SessionCard({
                   <MessageSquare className="h-3.5 w-3.5" />Chat
                 </button>
               )}
-              {ongoing && !proposalPending && (
+              {(ongoing || canComplete(s)) && !proposalPending && (
   <button disabled={actionLoading} onClick={() => onComplete(s.id)}
     className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-90 disabled:opacity-60 transition-opacity shadow-sm">
     <CheckCircle2 className="h-3.5 w-3.5" />Complete

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { seedBadgesOnce } from "@/lib/gamification/badges";
 import { GAMIFICATION_RULES } from "@/lib/gamification/rules";
+import { notify } from "@/lib/notify";
 
 async function triggerAllocator() {
   const appUrl = process.env.APP_URL;
@@ -202,12 +203,12 @@ export async function POST(
     session.endsAt ??
     new Date(start.getTime() + (session.durationMin ?? 60) * 60_000);
 
-  if (new Date() < end) {
-    return NextResponse.json(
-      { message: "You can complete this after the session ends." },
-      { status: 409 }
-    );
-  }
+  if (new Date() < start) {
+  return NextResponse.json(
+    { message: "You can complete this after the session starts." },
+    { status: 409 }
+  );
+}
 
   try {
     await seedBadgesOnce();
@@ -252,6 +253,21 @@ export async function POST(
 }
 
   await triggerAllocator();
+
+  if (session.studentId) {
+  try {
+    await notify.user({
+      userId: session.studentId,
+      viewer: "STUDENT",
+      type: "RATE_SESSION",
+      title: "How was your session?",
+      body: "Your session has ended. Take a moment to rate your tutor.",
+      data: { sessionId: session.id },
+    });
+  } catch {
+    //ignore
+  }
+}
 
   return NextResponse.json({
     success: true,
