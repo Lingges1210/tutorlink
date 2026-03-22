@@ -379,7 +379,7 @@ export default function TutorProfilePage() {
             <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-[rgb(var(--border))] py-10 text-center">
               <Star size={28} className="text-[rgb(var(--muted2))] opacity-25" />
               <p className="text-xs text-[rgb(var(--muted2))]">No reviews yet</p>
-              <p className="text-[0.7rem] text-[rgb(var(--muted2))] opacity-60">Complete sessions to start receiving feedback</p>
+              <p className="text-[0.7rem] text-[rgb(var(--muted2))] opacity-60">Complete Sessions to Start Receiving Feedback</p>
             </div>
           ) : (
             reviews.map((r) => (

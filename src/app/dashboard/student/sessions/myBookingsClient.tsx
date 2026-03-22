@@ -395,8 +395,9 @@ const BookingCard = memo(function BookingCard({
                   className={[
                     "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border transition-all",
                     rated
-                      ? "border-slate-400/40 bg-slate-500/10 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                      : "border-amber-400/50 bg-amber-500/10 text-amber-600 dark:text-amber-300 hover:bg-amber-500/20",
+                    ? "border-slate-400/40 bg-slate-500/10 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                    : "bg-amber-400/20 border-amber-500/70 text-amber-600 hover:bg-amber-400/30",
+
                   ].join(" ")}
                   title={rated ? "Already rated" : "Rate tutor"}
                 >
@@ -669,7 +670,7 @@ export default function MyBookingsClient() {
       const data = await res.json().catch(() => ({}));
       const list = Array.isArray(data.items) ? data.items : [];
       setItems(list);
-      setRatingsHydrated(false);
+      if (!silent) setRatingsHydrated(false);
       await hydrateRatingsForCompleted(list);
       setRatingsHydrated(true);
     } finally {
@@ -1184,7 +1185,7 @@ export default function MyBookingsClient() {
                       title="Rate your tutor"
                       subtitle="Session ended"
                       count={grouped.needsRating.length}
-                      accent="border-amber-400/60 bg-amber-500/10 text-amber-600 dark:text-amber-300"
+                      accent="bg-amber-400/20 border-amber-500/70 text-amber-600"
                     />
                     <div className="space-y-3">
                       <AnimatePresence>

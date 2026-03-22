@@ -314,19 +314,19 @@ function SessionCard({
 
             {soon && (
               <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold text-amber-600 animate-pulse" style={{ backgroundColor: "rgb(251 191 36 / 0.20)", borderColor: "rgb(245 158 11 / 0.60)" }}>
-                <Clock className="h-3 w-3" />Starting soon
+                <Clock className="h-3 w-3" />Starting Soon
               </div>
             )}
 
             {showEndedAmberBanner && (
               <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold text-amber-600" style={{ backgroundColor: "rgb(251 191 36 / 0.20)", borderColor: "rgb(245 158 11 / 0.60)" }}>
-                <CheckCircle2 className="h-3 w-3" />Session ended — please complete review
+                <CheckCircle2 className="h-3 w-3" />Session Ended — Please Complete Review
               </div>
             )}
 
             {pending && conflict && (
               <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold text-rose-600" style={{ backgroundColor: "rgb(251 113 133 / 0.20)", borderColor: "rgb(244 63 94 / 0.60)" }}>
-                <AlertTriangle className="h-3 w-3" />Time conflict
+                <AlertTriangle className="h-3 w-3" />Time Conflict
               </div>
             )}
 
@@ -398,7 +398,7 @@ function SessionCard({
           {showEndedAmberBanner && (
             <button disabled={actionLoading} onClick={() => onComplete(s.id)}
               className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-90 disabled:opacity-60 transition-opacity shadow-sm">
-              <CheckCircle2 className="h-3.5 w-3.5" />Complete session
+              <CheckCircle2 className="h-3.5 w-3.5" />Complete Session
             </button>
           )}
 
@@ -835,18 +835,18 @@ export default function TutorSessionsClient() {
               {grouped.ongoing.length > 0 && (
                 <div className="flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ backgroundColor: "rgb(52 211 153 / 0.20)", borderColor: "rgb(16 185 129 / 0.60)" }}>
                   <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-xs font-semibold text-emerald-600">{grouped.ongoing.length} live</span>
+                  <span className="text-xs font-semibold text-emerald-600">{grouped.ongoing.length} Live</span>
                 </div>
               )}
               {grouped.needsCompletion.length > 0 && (
                 <div className="flex items-center gap-1.5 rounded-full border px-3 py-1.5" style={{ backgroundColor: "rgb(251 191 36 / 0.20)", borderColor: "rgb(245 158 11 / 0.60)" }}>
                   <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-                  <span className="text-xs font-semibold text-amber-600">{grouped.needsCompletion.length} pending review</span>
+                  <span className="text-xs font-semibold text-amber-600">{grouped.needsCompletion.length} Pending Review</span>
                 </div>
               )}
               {grouped.upcoming.length > 0 && (
                 <div className="flex items-center gap-1.5 rounded-full border border-[rgb(var(--primary)/0.5)] bg-[rgb(var(--primary)/0.08)] px-3 py-1.5">
-                  <span className="text-xs font-semibold text-[rgb(var(--primary))]">{grouped.upcoming.length} upcoming</span>
+                  <span className="text-xs font-semibold text-[rgb(var(--primary))]">{grouped.upcoming.length} Upcoming</span>
                 </div>
               )}
             </div>
@@ -901,7 +901,7 @@ export default function TutorSessionsClient() {
                 <button type="button"
                   onClick={() => setShowPast((p) => { const next = !p; setPastPage(1); if (!next) setPastFilter("ALL"); return next; })}
                   className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.5)] transition-colors">
-                  <span>{showPast ? "Hide past" : "Past sessions"}</span>
+                  <span>{showPast ? "Hide past" : "Past Sessions"}</span>
                   {!showPast && grouped.past.length > 0 && (
                     <span className="rounded-full bg-[rgb(var(--primary)/0.15)] text-[rgb(var(--primary))] px-1.5 py-0.5 text-[10px] font-bold">{grouped.past.length}</span>
                   )}
@@ -1070,7 +1070,7 @@ export default function TutorSessionsClient() {
                       <CheckCircle2 className="h-5 w-5 text-[rgb(var(--primary))]" />
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-[rgb(var(--fg))]">Complete session</div>
+                      <div className="text-sm font-bold text-[rgb(var(--fg))]">Complete Session</div>
                       {activeSession && (
                         <div className="mt-0.5 text-xs text-[rgb(var(--muted2))]">{activeSession.subject.code} · {activeSession.student.name ?? "Student"}</div>
                       )}
