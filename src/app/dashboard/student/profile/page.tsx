@@ -127,6 +127,16 @@ export default async function StudentProfilePage() {
                   />
                   {verificationLabel}
                 </span>
+
+                {/* Profile title — only shown if redeemed */}
+                {dbUser.profileTitle && (
+                <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[rgb(var(--primary)/0.3)] bg-[rgb(var(--primary)/0.08)] px-2.5 py-0.5 text-[0.65rem] font-bold text-[rgb(var(--primary))]">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                  {dbUser.profileTitle}
+                </span>
+              )}
               </div>
             </div>
 
@@ -260,6 +270,18 @@ export default async function StudentProfilePage() {
             </svg>
           }
         />
+        {dbUser.profileTitle && (
+          <Field
+            label="Profile Title"
+            value={dbUser.profileTitle}
+            highlight="success"
+            icon={
+              <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+            }
+          />
+        )}
       </div>
 
       {/* Locked notice */}

@@ -25,7 +25,6 @@ export async function GET(req: Request) {
 
   const limit = Math.min(Number(searchParams.get("limit") || "10"), 50);
 
-  // accept either mode= or scope= (so UI can use either)
   const raw =
     (searchParams.get("mode") || searchParams.get("scope") || "ALL").toUpperCase();
 

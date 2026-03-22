@@ -13,6 +13,8 @@ type Props = {
     verificationStatus: VerificationStatus | string;
   };
   isTutor: boolean;
+  streakCount: number;        // ← add
+  streakBrokenAt: Date | null; // ← add
 };
 
 function DashboardSwitcher({
@@ -198,14 +200,36 @@ function IconStar() {
     </svg>
   );
 }
-
-function StatPill({ label, value, icon }: { label: string; value: string; icon: ReactNode }) {
+function IconFlame() {
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2">
-      <span className="text-[rgb(var(--primary))] opacity-70">{icon}</span>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+    </svg>
+  );
+}
+
+function StatPill({ label, value, icon, highlight }: {
+  label: string;
+  value: string;
+  icon: ReactNode;
+  highlight?: boolean;
+}) {
+  return (
+    <div className={[
+      "flex items-center gap-2 rounded-xl border px-3 py-2",
+      highlight
+        ? "border-orange-400/40 bg-orange-500/10"
+        : "border-[rgb(var(--border))] bg-[rgb(var(--card2))]",
+    ].join(" ")}>
+      <span className={highlight ? "text-orange-500" : "text-[rgb(var(--primary))] opacity-70"}>
+        {icon}
+      </span>
       <div>
         <p className="text-[0.6rem] text-[rgb(var(--muted2))] leading-none uppercase tracking-wide">{label}</p>
-        <p className="text-xs font-semibold text-[rgb(var(--fg))] mt-0.5">{value}</p>
+        <p className={[
+          "text-xs font-semibold mt-0.5",
+          highlight ? "text-orange-500" : "text-[rgb(var(--fg))]",
+        ].join(" ")}>{value}</p>
       </div>
     </div>
   );
@@ -287,7 +311,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
-export default function StudentDashboardClient({ user, isTutor }: Props) {
+export default function StudentDashboardClient({ user, isTutor, streakCount, streakBrokenAt }: Props) {
   const isVerified = user.verificationStatus === "AUTO_VERIFIED";
   const firstName = user.name?.split(" ")[0] ?? "there";
 
@@ -295,7 +319,12 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
   const greeting =
     greetingHour < 12 ? "Good morning" : greetingHour < 17 ? "Good afternoon" : "Good evening";
 
-  // Prefetch common pages in background so they load instantly when visited
+  const streakLabel = streakCount > 0
+    ? `${streakCount} day${streakCount === 1 ? "" : "s"}`
+    : "Start today!";
+
+  const isBroken = !!streakBrokenAt;
+
   useEffect(() => {
     fetch("/api/achievements/me");
     fetch("/api/achievements/recommendations");
@@ -355,7 +384,31 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
             value={isVerified ? "Verified" : "Pending review"}
           />
           <StatPill icon={<IconStar />} label="Platform" value="TutorLink" />
+          <StatPill
+            icon={<IconFlame />}
+            label={isBroken ? "Streak (broken)" : "Login Streak"}
+            value={isBroken ? "Repair it!" : streakLabel}
+            highlight={isBroken || streakCount >= 3}
+          />
         </div>
+
+        {/* Broken streak nudge */}
+        {isBroken && (
+          <div className="relative mt-4 flex items-center justify-between gap-3 rounded-2xl border border-orange-400/30 bg-orange-500/8 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="text-orange-500"><IconFlame /></span>
+              <p className="text-xs font-semibold text-orange-600 dark:text-orange-400">
+                Your streak was broken — repair it within 48h in the Rewards Shop.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/student/rewards"
+              className="shrink-0 rounded-lg bg-orange-500 px-3 py-1.5 text-[0.7rem] font-bold text-white hover:opacity-90 transition-opacity"
+            >
+              Repair
+            </Link>
+          </div>
+        )}
       </div>
 
       {!isVerified && (

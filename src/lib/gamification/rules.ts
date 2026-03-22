@@ -1,12 +1,14 @@
 export const GAMIFICATION_RULES = {
   student: {
     sessionCompleted: 30,
+    sessionRated: 10,
     streakBonus: 10,
     firstSessionBonus: 20,
   },
 
   tutor: {
     sessionCompleted: 40,
+    sessionRated: 10,
     highRatingBonus: 15,
   },
 

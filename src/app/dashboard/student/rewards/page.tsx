@@ -1,3 +1,4 @@
+//src/app/dashboard/student/rewards/page.tsx
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
@@ -13,118 +14,123 @@ type Reward = {
   pointsCost: number;
   stock: number | null;
   durationHrs: number | null;
+  isActive: boolean;
 };
 
 function formatDuration(hours: number) {
   if (hours % 168 === 0) return `${hours / 168}w`;
-  if (hours % 24 === 0) return `${hours / 24}d`;
+  if (hours % 24 === 0)  return `${hours / 24}d`;
   return `${hours}h`;
 }
 
-function isFutureISO(iso: string | null) {
+function isFutureISO(iso: string | null | undefined): boolean {
   if (!iso) return false;
   const d = new Date(iso);
   return !Number.isNaN(d.getTime()) && d > new Date();
 }
 
-function formatRemaining(iso: string | null) {
+function formatRemaining(iso: string | null | undefined) {
   if (!iso) return null;
-  const now = new Date();
-  const end = new Date(iso);
-  const diff = end.getTime() - now.getTime();
-  if (Number.isNaN(end.getTime()) || diff <= 0) return null;
+  const diff = new Date(iso).getTime() - Date.now();
+  if (diff <= 0) return null;
   const totalSec = Math.floor(diff / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  return { h, m, s };
+  return {
+    h: Math.floor(totalSec / 3600),
+    m: Math.floor((totalSec % 3600) / 60),
+    s: totalSec % 60,
+  };
 }
 
 function getRewardIcon(key: string) {
-  if (key.includes("DOUBLE")) return <Zap className="h-[18px] w-[18px]" />;
-  if (key.includes("BOOST")) return <Crown className="h-[18px] w-[18px]" />;
-  if (key.includes("COSMETIC") || key.includes("BADGE")) return <Star className="h-[18px] w-[18px]" />;
+  if (key.includes("BOOST"))    return <Crown className="h-[18px] w-[18px]" />;
+  if (key.includes("SURGE") || key.includes("MULTIPLIER") || key.includes("COMBO") || key.includes("CATCHUP") || key.includes("WEEKEND") || key.includes("FIRST_ACTION"))
+                                 return <Zap className="h-[18px] w-[18px]" />;
+  if (key.includes("COSMETIC") || key.includes("BADGE") || key.includes("FRAME") || key.includes("BANNER") || key.includes("AVATAR") || key.includes("USERNAME") || key.includes("TITLE"))
+                                 return <Star className="h-[18px] w-[18px]" />;
   return <Package className="h-[18px] w-[18px]" />;
 }
 
 type Accent = "gold" | "violet" | "blue" | "teal";
 
 function getRewardAccent(key: string): Accent {
-  if (key.includes("DOUBLE")) return "gold";
+  if (key.includes("SURGE") || key.includes("COMBO") || key.includes("FIRST_ACTION") || key.includes("WEEKEND") || key.includes("CATCHUP"))
+    return "gold";
   if (key.includes("BOOST") && key.includes("7D")) return "violet";
-  if (key.includes("BOOST")) return "blue";
+  if (key.includes("BOOST"))  return "blue";
   return "teal";
 }
 
-type AccentStyle = {
-  icon: CSSProperties;
-  glow: CSSProperties;
-  activeCard: CSSProperties;
-};
+type AccentStyle = { icon: CSSProperties; glow: CSSProperties; activeCard: CSSProperties };
 
 const ACCENT_STYLES: Record<Accent, AccentStyle> = {
   gold: {
-    icon:       { color: "rgb(251 191 36)", background: "rgb(251 191 36 / .1)", borderColor: "rgb(251 191 36 / .25)" },
+    icon:       { color: "rgb(251 191 36)",   background: "rgb(251 191 36 / .1)",   borderColor: "rgb(251 191 36 / .25)" },
     glow:       { background: "rgb(251 191 36 / .22)" },
     activeCard: { borderColor: "rgb(251 191 36 / .4)", background: "rgb(251 191 36 / .04)" },
   },
   violet: {
-    icon:       { color: "rgb(167 139 250)", background: "rgb(167 139 250 / .1)", borderColor: "rgb(167 139 250 / .25)" },
+    icon:       { color: "rgb(167 139 250)",  background: "rgb(167 139 250 / .1)",  borderColor: "rgb(167 139 250 / .25)" },
     glow:       { background: "rgb(167 139 250 / .22)" },
     activeCard: { borderColor: "rgb(167 139 250 / .4)", background: "rgb(167 139 250 / .04)" },
   },
   blue: {
-    icon:       { color: "rgb(96 165 250)", background: "rgb(96 165 250 / .1)", borderColor: "rgb(96 165 250 / .25)" },
+    icon:       { color: "rgb(96 165 250)",   background: "rgb(96 165 250 / .1)",   borderColor: "rgb(96 165 250 / .25)" },
     glow:       { background: "rgb(96 165 250 / .22)" },
     activeCard: { borderColor: "rgb(96 165 250 / .4)", background: "rgb(96 165 250 / .04)" },
   },
   teal: {
-    icon:       { color: "rgb(45 212 191)", background: "rgb(45 212 191 / .1)", borderColor: "rgb(45 212 191 / .25)" },
+    icon:       { color: "rgb(45 212 191)",   background: "rgb(45 212 191 / .1)",   borderColor: "rgb(45 212 191 / .25)" },
     glow:       { background: "rgb(45 212 191 / .22)" },
     activeCard: { borderColor: "rgb(45 212 191 / .4)", background: "rgb(45 212 191 / .04)" },
   },
 };
 
+const BOOST_KEYS = new Set(["PRIORITY_BOOST_7D"]);
+const MULTIPLIER_KEYS = new Set([
+  "POINTS_SURGE_6H",
+  "COMBO_MULTIPLIER_24H",
+  "FIRST_ACTION_BONUS_7D",
+  "WEEKEND_BOOST",
+  "CATCHUP_BOOST_48H",
+]);
+
 function CountdownDigits({ remaining }: { remaining: { h: number; m: number; s: number } }) {
-  const { h, m, s } = remaining;
   const pad = (n: number) => String(n).padStart(2, "0");
   return (
     <span style={{ display: "flex", alignItems: "center", gap: 2, fontVariantNumeric: "tabular-nums" }}>
-      <span className="rw-cd-seg">{pad(h)}<span className="rw-cd-u">h</span></span>
+      <span className="rw-cd-seg">{pad(remaining.h)}<span className="rw-cd-u">h</span></span>
       <span className="rw-cd-sep">:</span>
-      <span className="rw-cd-seg">{pad(m)}<span className="rw-cd-u">m</span></span>
+      <span className="rw-cd-seg">{pad(remaining.m)}<span className="rw-cd-u">m</span></span>
       <span className="rw-cd-sep">:</span>
-      <span className="rw-cd-seg">{pad(s)}<span className="rw-cd-u">s</span></span>
+      <span className="rw-cd-seg">{pad(remaining.s)}<span className="rw-cd-u">s</span></span>
     </span>
   );
 }
 
 export default function RewardsShopPage() {
-  // SWR — cached, instant on revisit within 30s
   const { data, isLoading: loading, mutate } = useSWR(
     "/api/rewards/catalog",
     fetcher,
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 30_000,
-    }
+    { revalidateOnFocus: false, dedupingInterval: 30_000 }
   );
 
-  const rewards: Reward[] = data?.rewards ?? [];
-  const wallet: number = data?.wallet ?? 0;
-  const doubleUntil: string | null = data?.doubleUntil ?? null;
-  const boostUntil: string | null = data?.boostUntil ?? null;
+  const rewards: Reward[]       = data?.rewards ?? [];
+  const wallet: number          = data?.wallet ?? 0;
+  const boostUntil: string | null      = data?.boostUntil ?? null;
+  const multiplierUntil: string | null = data?.multiplierUntil ?? null;
+  const activeMultiplierKey: string | null = data?.activeMultiplierKey ?? null;
 
-  const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [busyKey, setBusyKey]       = useState<string | null>(null);
+  const [err, setErr]               = useState<string | null>(null);
   const [successKey, setSuccessKey] = useState<string | null>(null);
-  const [doubleLeft, setDoubleLeft] = useState<{ h: number; m: number; s: number } | null>(null);
-  const [boostLeft, setBoostLeft] = useState<{ h: number; m: number; s: number } | null>(null);
+
+  const [boostLeft,      setBoostLeft]      = useState<{ h: number; m: number; s: number } | null>(null);
+  const [multiplierLeft, setMultiplierLeft] = useState<{ h: number; m: number; s: number } | null>(null);
 
   async function redeem(rewardKey: string) {
     setBusyKey(rewardKey);
     setErr(null);
-    const res = await fetch("/api/rewards/redeem", {
+    const res  = await fetch("/api/rewards/redeem", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rewardKey }),
@@ -138,24 +144,39 @@ export default function RewardsShopPage() {
     setSuccessKey(rewardKey);
     setTimeout(() => setSuccessKey(null), 2200);
     setBusyKey(null);
-    await mutate(); // refetch after redeem
+    // mutate with the data already returned — no extra network round-trip
+    await mutate(
+      {
+        ...data,
+        wallet: json.wallet,
+        boostUntil: json.boostUntil,
+        multiplierUntil: json.multiplierUntil,
+        activeMultiplierKey: json.activeMultiplierKey,
+        effects: json.effects,
+        // re-mark isActive on the affected reward
+        rewards: rewards.map((r) =>
+          r.key === rewardKey ? { ...r, isActive: true } : r
+        ),
+      },
+      { revalidate: false }
+    );
   }
 
   // Countdown ticker
   useEffect(() => {
     const interval = window.setInterval(() => {
-      const dLeft = formatRemaining(doubleUntil);
       const bLeft = formatRemaining(boostUntil);
-      setDoubleLeft(dLeft);
+      const mLeft = formatRemaining(multiplierUntil);
       setBoostLeft(bLeft);
-      // use mutate() instead of load()
-      if (doubleUntil && !dLeft) mutate();
-      if (boostUntil && !bLeft) mutate();
+      setMultiplierLeft(mLeft);
+      // Expired — refetch so isActive flags update
+      if (boostUntil      && !bLeft) mutate();
+      if (multiplierUntil && !mLeft) mutate();
     }, 1000);
     return () => window.clearInterval(interval);
-  }, [doubleUntil, boostUntil, mutate]);
+  }, [boostUntil, multiplierUntil, mutate]);
 
-  const hasActiveBuff = !!(doubleLeft || boostLeft);
+  const hasActiveBuff = !!(boostLeft || multiplierLeft);
 
   return (
     <>
@@ -176,10 +197,6 @@ export default function RewardsShopPage() {
           0%   { transform:scale(.9); opacity:.6; }
           70%  { transform:scale(1.15); opacity:0; }
           100% { transform:scale(.9); opacity:0; }
-        }
-        @keyframes rw-glow-card {
-          0%,100% { opacity:.55; }
-          50%      { opacity:1; }
         }
         .rw-page { padding: 22px 24px 44px; display: flex; flex-direction: column; gap: 26px; font-family: inherit; }
         .rw-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; animation: rw-fade-up .4s ease both; }
@@ -230,7 +247,7 @@ export default function RewardsShopPage() {
         .rw-active-lbl { font-size: .72rem; font-weight: 700; color: rgb(var(--primary)); letter-spacing: .05em; text-transform: uppercase; position: relative; }
         .rw-btn { margin-top: 15px; width: 100%; border-radius: 13px; padding: 9px 14px; font-size: .8rem; font-weight: 600; font-family: inherit; border: none; cursor: pointer; transition: opacity .18s, transform .14s, box-shadow .18s; position: relative; overflow: hidden; letter-spacing: -.008em; }
         .rw-btn:not(:disabled):active { transform:scale(.97); }
-        .rw-btn--ready { background: rgb(var(--primary)); color: rgb(var(--primary-foreground)); box-shadow: 0 4px 14px rgb(var(--primary)/.32); }
+        .rw-btn--ready { background: rgb(var(--primary)); color: #ffffff; box-shadow: 0 4px 14px rgb(var(--primary)/.32); }
         .rw-btn--ready:hover { opacity:.92; box-shadow: 0 6px 20px rgb(var(--primary)/.42); transform: translateY(-1px); }
         .rw-btn-shine { position:absolute; top:0; left:-100%; width:55%; height:100%; background:linear-gradient(105deg, transparent 20%, rgb(255 255 255/.18) 50%, transparent 80%); transition:left .5s ease; }
         .rw-btn--ready:hover .rw-btn-shine { left:150%; }
@@ -264,27 +281,30 @@ export default function RewardsShopPage() {
 
         {err && <div className="rw-error">⚠ {err}</div>}
 
+        {/* Active buffs bar */}
         {hasActiveBuff && (
           <div className="rw-buffbar">
             <div className="rw-buffbar-bg" />
-            {doubleLeft && (
-              <div className="rw-buff-row">
-                <div className="rw-buff-name">
-                  <div className="rw-dot" />
-                  <Zap style={{ width:13, height:13, color:"rgb(251 191 36)" }} />
-                  Double Points active
-                </div>
-                <CountdownDigits remaining={doubleLeft} />
-              </div>
-            )}
             {boostLeft && (
               <div className="rw-buff-row">
                 <div className="rw-buff-name">
                   <div className="rw-dot" />
-                  <Crown style={{ width:13, height:13, color:"rgb(167 139 250)" }} />
+                  <Crown style={{ width: 13, height: 13, color: "rgb(167 139 250)" }} />
                   Priority Boost active
                 </div>
                 <CountdownDigits remaining={boostLeft} />
+              </div>
+            )}
+            {multiplierLeft && (
+              <div className="rw-buff-row">
+                <div className="rw-buff-name">
+                  <div className="rw-dot" />
+                  <Zap style={{ width: 13, height: 13, color: "rgb(251 191 36)" }} />
+                  {activeMultiplierKey
+                    ? activeMultiplierKey.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+                    : "Multiplier"} active
+                </div>
+                <CountdownDigits remaining={multiplierLeft} />
               </div>
             )}
           </div>
@@ -293,29 +313,32 @@ export default function RewardsShopPage() {
         {/* Cards */}
         <div className="rw-grid">
           {loading
-            ? [0,1,2].map(i => (
-                <div key={i} className="rw-card" style={{ minHeight:195 }}>
-                  <div className="rw-skel" style={{ height:14, width:"55%", marginBottom:12 }} />
-                  <div className="rw-skel" style={{ height:11, width:"88%", marginBottom:7 }} />
-                  <div className="rw-skel" style={{ height:11, width:"70%", marginBottom:20 }} />
-                  <div className="rw-skel" style={{ height:34, marginTop:"auto" }} />
+            ? [0, 1, 2].map((i) => (
+                <div key={i} className="rw-card" style={{ minHeight: 195 }}>
+                  <div className="rw-skel" style={{ height: 14, width: "55%", marginBottom: 12 }} />
+                  <div className="rw-skel" style={{ height: 11, width: "88%", marginBottom: 7 }} />
+                  <div className="rw-skel" style={{ height: 11, width: "70%", marginBottom: 20 }} />
+                  <div className="rw-skel" style={{ height: 34, marginTop: "auto" }} />
                 </div>
               ))
-            : rewards.map(r => {
-                const isBusy        = busyKey === r.key;
-                const outOfStock    = r.stock !== null && r.stock <= 0;
-                const notEnough     = wallet < r.pointsCost;
-                const isSuccess     = successKey === r.key;
-                const accent        = getRewardAccent(r.key);
-                const ac            = ACCENT_STYLES[accent];
-                const alreadyActive = Boolean(
-                  (r.key === "DOUBLE_POINTS_24H" && isFutureISO(doubleUntil)) ||
-                  ((r.key === "PRIORITY_BOOST_24H" || r.key === "PRIORITY_BOOST_7D") && isFutureISO(boostUntil))
-                );
+            : rewards.map((r) => {
+                const isBusy     = busyKey === r.key;
+                const outOfStock = r.stock !== null && r.stock <= 0;
+                const notEnough  = wallet < r.pointsCost;
+                const isSuccess  = successKey === r.key;
+                const accent     = getRewardAccent(r.key);
+                const ac         = ACCENT_STYLES[accent];
+
+                const alreadyActive =
+                  r.isActive ||
+                  (BOOST_KEYS.has(r.key)       && isFutureISO(boostUntil)) ||
+                  (MULTIPLIER_KEYS.has(r.key)  && isFutureISO(multiplierUntil));
+
                 const cardCountdown =
-                  r.key === "DOUBLE_POINTS_24H" ? doubleLeft
-                  : (r.key === "PRIORITY_BOOST_24H" || r.key === "PRIORITY_BOOST_7D") ? boostLeft
+                  BOOST_KEYS.has(r.key)      ? boostLeft
+                  : MULTIPLIER_KEYS.has(r.key) ? multiplierLeft
                   : null;
+
                 const disabled = isBusy || outOfStock || notEnough || alreadyActive;
 
                 let btnClass = "rw-btn ";
@@ -334,7 +357,7 @@ export default function RewardsShopPage() {
                 return (
                   <div
                     key={r.id}
-                    className={`rw-card ${alreadyActive ? "rw-card--active" : ""}`}
+                    className={`rw-card${alreadyActive ? " rw-card--active" : ""}`}
                     style={alreadyActive ? ac.activeCard : undefined}
                   >
                     <div className="rw-card-glow" style={ac.glow} />
@@ -353,7 +376,7 @@ export default function RewardsShopPage() {
                     <p className="rw-card-desc">{r.description}</p>
                     <div className="rw-meta">
                       <div className="rw-meta-left">
-                        <Timer style={{ width:11, height:11 }} />
+                        <Timer style={{ width: 11, height: 11 }} />
                         {r.durationHrs ? formatDuration(r.durationHrs) : "Instant"}
                       </div>
                       <div className="rw-stock">
@@ -377,8 +400,7 @@ export default function RewardsShopPage() {
                     </button>
                   </div>
                 );
-              })
-          }
+              })}
         </div>
       </div>
     </>

@@ -5,7 +5,7 @@ export type LeaderboardMode = "ALL" | "STUDENTS" | "TUTORS";
 
 function startOfWeek(d: Date) {
   const date = new Date(d);
-  const day = (date.getDay() + 6) % 7; // Mon=0 ... Sun=6
+  const day = (date.getDay() + 6) % 7;
   date.setDate(date.getDate() - day);
   date.setHours(0, 0, 0, 0);
   return date;
@@ -18,27 +18,19 @@ export function getWeekRange(now = new Date()) {
   return { start, end };
 }
 
-function isTutorUser(u: {
-  role?: string | null;
-  roleAssignments?: Array<{ role: string }>;
-}) {
+function isTutorUser(u: { role?: string | null; roleAssignments?: Array<{ role: string }> }) {
   const r = String(u.role ?? "").toUpperCase();
   if (r === "TUTOR") return true;
-  if (Array.isArray(u.roleAssignments)) {
+  if (Array.isArray(u.roleAssignments))
     return u.roleAssignments.some((a) => String(a.role).toUpperCase() === "TUTOR");
-  }
   return false;
 }
 
-function isStudentUser(u: {
-  role?: string | null;
-  roleAssignments?: Array<{ role: string }>;
-}) {
+function isStudentUser(u: { role?: string | null; roleAssignments?: Array<{ role: string }> }) {
   const r = String(u.role ?? "").toUpperCase();
   if (r === "STUDENT") return true;
-  if (Array.isArray(u.roleAssignments)) {
+  if (Array.isArray(u.roleAssignments))
     return u.roleAssignments.some((a) => String(a.role).toUpperCase() === "STUDENT");
-  }
   return false;
 }
 
@@ -50,6 +42,7 @@ export async function getWeeklyLeaderboard(args?: {
   const limit = Math.min(args?.limit ?? 10, 50);
   const mode: LeaderboardMode = args?.mode ?? "ALL";
   const { start, end } = getWeekRange(args?.now ?? new Date());
+  const now = args?.now ?? new Date();
 
   const preLimit = mode === "ALL" ? limit : Math.min(limit * 6, 300);
 
@@ -63,52 +56,48 @@ export async function getWeeklyLeaderboard(args?: {
 
   const userIds = grouped.map((g) => g.userId);
 
-  const users = await prisma.user.findMany({
-    where: { id: { in: userIds } },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      avatarUrl: true,
-      roleAssignments: { select: { role: true } },
-    },
-  });
+  const [users, spotlightedUsers] = await Promise.all([
+    prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        avatarUrl: true,
+        usernameColor: true,     // ← add
+        roleAssignments: { select: { role: true } },
+      },
+    }),
+    prisma.user.findMany({
+      where: {
+        id: { in: userIds },
+        leaderboardSpotlightUntil: { gt: now },
+      },
+      select: { id: true },
+    }),
+  ]);
 
   const userMap = new Map(users.map((u) => [u.id, u]));
+  const spotlightedIds = new Set(spotlightedUsers.map((u) => u.id));
 
   const filtered = grouped.filter((g) => {
     if (mode === "ALL") return true;
-
     const u = userMap.get(g.userId);
     if (!u) return false;
-
-    const tutor = isTutorUser(u);
-    const student = isStudentUser(u);
-
-    if (mode === "TUTORS") return tutor;
-    if (mode === "STUDENTS") return student;
-
+    if (mode === "TUTORS") return isTutorUser(u);
+    if (mode === "STUDENTS") return isStudentUser(u);
     return true;
   });
 
-  const sliced = filtered.slice(0, limit);
-
-  return sliced.map((g, idx) => {
+  return filtered.slice(0, limit).map((g, idx) => {
     const u = userMap.get(g.userId);
-
     return {
       rank: idx + 1,
       userId: g.userId,
       points: g._sum.amount ?? 0,
-      user:
-        u ??
-        ({
-          id: g.userId,
-          name: null,
-          email: "",
-          role: "UNKNOWN",
-        } as any),
+      isSpotlighted: spotlightedIds.has(g.userId),
+      user: u ?? ({ id: g.userId, name: null, email: "", role: "UNKNOWN", usernameColor: null } as any),
     };
   });
 }

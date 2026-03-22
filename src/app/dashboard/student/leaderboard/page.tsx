@@ -19,12 +19,14 @@ type LeaderboardRes = {
     rank: number;
     userId: string;
     points: number;
+    isSpotlighted: boolean; 
     user: {
       id: string;
       name: string | null;
       email: string;
       role: string;
       avatarUrl: string | null;
+      usernameColor?: string | null;
     };
   }>;
 };
@@ -172,9 +174,19 @@ function ChampionCard({ r, place }: { r: LeaderboardRes["rows"][number]; place: 
         `border-[rgb(var(--border))] ${cfg.border}`,
         "bg-[rgb(var(--card)/0.85)]",
         cfg.glow,
+        r.isSpotlighted ? "ring-2 ring-amber-400/50" : "",
       ].join(" ")}
     >
       <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${cfg.gradient} opacity-80`} />
+
+      {/* Spotlight indicator */}
+      {r.isSpotlighted && (
+        <div className="absolute top-3 right-3 z-10 inline-flex items-center gap-1 rounded-full bg-amber-400/20 border border-amber-400/40 px-2 py-0.5 text-[10px] font-extrabold text-amber-600 dark:text-amber-300">
+          <Star className="h-2.5 w-2.5" />
+          Spotlight
+        </div>
+      )}
+
       <div className="relative flex items-start justify-between gap-2">
         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-extrabold ${cfg.badge}`}>
           {cfg.icon}{cfg.label}
@@ -184,13 +196,20 @@ function ChampionCard({ r, place }: { r: LeaderboardRes["rows"][number]; place: 
           <div className="text-3xl font-black tabular-nums text-[rgb(var(--fg))] leading-none">{r.points.toLocaleString()}</div>
         </div>
       </div>
+
       <div className="relative mt-5 flex items-center gap-3">
-        <Avatar name={r.user?.name ?? null} email={r.user?.email ?? ""} src={r.user?.avatarUrl ?? null} size={50} ringClass={cfg.ringClass} />
+        <Avatar name={r.user?.name ?? null} email={r.user?.email ?? ""} src={r.user?.avatarUrl ?? null} size={50} ringClass={r.isSpotlighted ? "ring-2 ring-amber-400/60" : cfg.ringClass} />
         <div className="min-w-0">
-          <div className="truncate text-sm font-extrabold text-[rgb(var(--fg))]">{name}</div>
+          <div
+            className="truncate text-sm font-extrabold"
+            style={{ color: r.user?.usernameColor ?? "rgb(var(--fg))" }}
+          >
+            {name}
+          </div>
           <div className="text-[11px] text-[rgb(var(--muted2))] font-medium capitalize">{r.user?.role ?? ""}</div>
         </div>
       </div>
+
       <div className="relative mt-4 h-1.5 rounded-full overflow-hidden bg-[rgb(var(--border))]">
         <motion.div
           className={`h-full rounded-full bg-gradient-to-r ${cfg.barColor}`}
@@ -215,31 +234,49 @@ function RankRow({ r, meUserId, index }: {
       exit={{ opacity: 0 }}
       transition={{ delay: index * 0.025 }}
       className={[
-        "group grid grid-cols-12 border-t px-4 py-3 items-center transition-colors",
+        "group grid grid-cols-12 border-t px-4 py-3 items-center transition-colors relative overflow-hidden",
         isMe
           ? "border-[rgb(var(--primary)/0.22)] bg-[rgb(var(--primary)/0.06)]"
+          : r.isSpotlighted
+          ? "border-amber-400/20 bg-amber-400/5 hover:bg-amber-400/10"
           : "border-[rgb(var(--border))] bg-[rgb(var(--card))] hover:bg-[rgb(var(--card2))]",
       ].join(" ")}
     >
+      {/* Spotlight shimmer strip */}
+      {r.isSpotlighted && (
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-amber-400/8 to-transparent" />
+      )}
+
       <div className="col-span-2">
         <span className={`inline-block w-9 text-center rounded-lg py-0.5 text-xs font-black tabular-nums ${r.rank <= 10 ? "bg-[rgb(var(--primary)/0.1)] text-[rgb(var(--primary))]" : "text-[rgb(var(--muted2))]"}`}>
           #{r.rank}
         </span>
       </div>
+
       <div className="col-span-7 flex items-center gap-3 min-w-0">
         <Avatar name={r.user?.name ?? null} email={r.user?.email ?? ""} src={r.user?.avatarUrl ?? null} size={34} />
         <div className="min-w-0">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="truncate text-sm font-bold text-[rgb(var(--fg))]">
+            <span
+              className="truncate text-sm font-bold"
+              style={{ color: r.user?.usernameColor ?? "rgb(var(--fg))" }}
+            >
               {r.user?.name ?? r.user?.email ?? "Unknown"}
             </span>
             {isMe && (
               <span className="shrink-0 rounded-full bg-[rgb(var(--primary))] px-2 py-0.5 text-[10px] font-extrabold text-white">You</span>
             )}
+            {r.isSpotlighted && (
+              <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-400/20 border border-amber-400/40 px-2 py-0.5 text-[10px] font-extrabold text-amber-600 dark:text-amber-300">
+                <Star className="h-2.5 w-2.5" />
+                Spotlight
+              </span>
+            )}
           </div>
           <div className="text-[11px] font-medium text-[rgb(var(--muted2))] capitalize">{r.user?.role ?? ""}</div>
         </div>
       </div>
+
       <div className="col-span-3 text-right">
         <span className="text-sm font-black tabular-nums text-[rgb(var(--fg))]">{r.points.toLocaleString()}</span>
         <div className="text-[10px] font-semibold text-[rgb(var(--muted2))]">pts</div>

@@ -1,7 +1,9 @@
+// src/app/api/auth/login/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { recordLoginStreak } from "@/lib/gamification/streak";
 
 export async function POST(request: Request) {
   try {
@@ -15,8 +17,6 @@ export async function POST(request: Request) {
     }
 
     const cookieStore = await cookies();
-
-    // Collect cookies Supabase wants to set
     const cookiesToWrite: { name: string; value: string; options: object }[] = [];
 
     const supabase = createServerClient(
@@ -24,11 +24,8 @@ export async function POST(request: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
+          getAll() { return cookieStore.getAll(); },
           setAll(cookiesToSet) {
-            // Save them to write onto the response later
             cookiesToSet.forEach(({ name, value, options }) => {
               cookiesToWrite.push({ name, value, options });
             });
@@ -103,7 +100,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // Build final response and attach all Supabase cookies onto it
+    // ── Record login streak (fire-and-forget — never block login) ──
+    recordLoginStreak(user.id).catch((e) =>
+      console.error("streak record failed:", e)
+    );
+
     const response = NextResponse.json({
       success: true,
       message: "Login successful",
@@ -117,7 +118,6 @@ export async function POST(request: Request) {
       },
     });
 
-    // This is the key fix — write cookies onto the HTTP response
     cookiesToWrite.forEach(({ name, value, options }) => {
       response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
     });

@@ -1,150 +1,766 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
-
-  schemas  = ["public"]
-}
-
-enum UserRole {
-  STUDENT
-  TUTOR
-  ADMIN
-
-  @@schema("public")
+  schemas   = ["public"]
 }
 
 model User {
-  id            String  @id @default(uuid())
-  email         String  @unique
-  name          String?
-  programme     String?
-  matricNo      String? @unique
-  matricCardUrl String?
-  passwordHash  String?
-
-  role            UserRole             @default(STUDENT)
-  roleAssignments UserRoleAssignment[]
-
-  isTutorApproved Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  avatarUrl       String?
-
-  tutorApplications TutorApplication[]
-  studentSessions   Session[]          @relation("StudentSessions")
-  tutorSessions     Session[]          @relation("TutorSessions")
-
-  verificationStatus String  @default("PENDING_REVIEW")
-  ocrText            String?
-  ocrMatchedMatric   Boolean @default(false)
-  ocrMatchedName     Boolean @default(false)
-
-  isDeactivated           Boolean        @default(false)
-  deactivatedAt           DateTime?
-  deactivationReason      String?
-  deactivationReasonOther String?
-  tutorSubjects           TutorSubject[]
-
-  notifications Notification[]
-
-  avgRating   Float @default(0)
-  ratingCount Int   @default(0)
-
-  ratingsReceived SessionRating[] @relation("TutorRatings")
-  ratingsGiven    SessionRating[] @relation("StudentRatings")
-
-  chatChannelsAsStudent ChatChannel[] @relation("ChatStudent")
-  chatChannelsAsTutor   ChatChannel[] @relation("ChatTutor")
-  chatMessagesSent      ChatMessage[] @relation("ChatSender")
-  chatReads             ChatRead[]    @relation("ChatReader")
-
-  subjectProgress StudentSubjectProgress[]
-  topicProgress   StudentTopicProgress[]
-
-  pointsWallet       PointsWallet?
-  pointsTransactions PointsTransaction[]
-  userBadges         UserBadge[]
-  rewardRedemptions  RewardRedemption[]
-
-  boostUntil        DateTime?
-  doubleUntil       DateTime?
-  streakShieldCount Int       @default(0)
-  profileTitle      String?
-  badgeFrame        String?
-  multiplierUntil         DateTime?
-  activeMultiplierKey     String?
-  streakFreezeUntil       DateTime?
-  streakBrokenAt          DateTime?
-  profileBanner           String?
-  avatarBorder            String?
-  usernameColor           String?
-  earlyAccessUntil        DateTime?
+  id                        String                   @id @default(uuid())
+  email                     String                   @unique
+  name                      String?
+  programme                 String?
+  matricNo                  String?                  @unique
+  matricCardUrl             String?
+  passwordHash              String?
+  role                      UserRole                 @default(STUDENT)
+  isTutorApproved           Boolean                  @default(false)
+  createdAt                 DateTime                 @default(now())
+  avatarUrl                 String?
+  verificationStatus        String                   @default("PENDING_REVIEW")
+  ocrText                   String?
+  ocrMatchedMatric          Boolean                  @default(false)
+  ocrMatchedName            Boolean                  @default(false)
+  isDeactivated             Boolean                  @default(false)
+  deactivatedAt             DateTime?
+  deactivationReason        String?
+  deactivationReasonOther   String?
+  avgRating                 Float                    @default(0)
+  ratingCount               Int                      @default(0)
+  accountLockStatus         AccountLockStatus        @default(ACTIVE)
+  lockReason                String?
+  lockedAt                  DateTime?
+  lockedByAdminId           String?
+  activeMultiplierKey       String?
+  avatarBorder              String?
+  earlyAccessUntil          DateTime?
+  streakCount               Int                       @default(0)
+  streakLastSeen            DateTime?
   leaderboardSpotlightUntil DateTime?
-  vipSupportUntil         DateTime?
-
-  acceptedSosRequests  SOSRequest[]       @relation("SOSAcceptedTutor")
-  sosTutorResponses    SOSTutorResponse[] @relation("SOSTutor")
-  sosRequestsAsStudent SOSRequest[]       @relation("SOSStudent")
-
-  tutorPresence TutorPresence?
-
-  studyMaterials StudyMaterial[]
-  quizAttempts   QuizAttempt[]
-
-  studySubjects StudySubject[]
-  
-  studyPlans       StudyPlan[]
-  topicConfidences TopicConfidence[]
-
-  presence UserPresence?
-
-  accountLockStatus AccountLockStatus @default(ACTIVE)
-  lockedAt          DateTime?
-  lockReason        String?
-  lockedByAdminId   String?
-
-  adminAuditLogs        AdminAuditLog[] @relation("AdminActor")
-  adminAuditLogsTarget  AdminAuditLog[] @relation("AdminTargetUser")
-  moderatedSOSRequests SOSRequest[] @relation("SOSModeratedByAdmin")
-
-  reportsSubmitted      UserReport[] @relation("UserReportReporter")
-  reportsReceived       UserReport[] @relation("UserReportReported")
-  reportsReviewedAdmin  UserReport[] @relation("UserReportReviewedByAdmin")
-
-  surveyResponses SurveyResponse[]
+  multiplierUntil           DateTime?
+  profileBanner             String?
+  streakBrokenAt            DateTime?
+  streakFreezeUntil         DateTime?
+  usernameColor             String?
+  vipSupportUntil           DateTime?
+  badgeFrame                String?
+  boostUntil                DateTime?
+  doubleUntil               DateTime?
+  profileTitle              String?
+  streakShieldCount         Int                      @default(0)
+  adminAuditLogs            AdminAuditLog[]          @relation("AdminActor")
+  adminAuditLogsTarget      AdminAuditLog[]          @relation("AdminTargetUser")
+  chatChannelsAsStudent     ChatChannel[]            @relation("ChatStudent")
+  chatChannelsAsTutor       ChatChannel[]            @relation("ChatTutor")
+  chatMessagesSent          ChatMessage[]            @relation("ChatSender")
+  chatReads                 ChatRead[]               @relation("ChatReader")
+  notifications             Notification[]
+  pointsTransactions        PointsTransaction[]
+  pointsWallet              PointsWallet?
+  quizAttempts              QuizAttempt[]
+  rewardRedemptions         RewardRedemption[]
+  acceptedSosRequests       SOSRequest[]             @relation("SOSAcceptedTutor")
+  moderatedSOSRequests      SOSRequest[]             @relation("SOSModeratedByAdmin")
+  sosRequestsAsStudent      SOSRequest[]             @relation("SOSStudent")
+  sosTutorResponses         SOSTutorResponse[]       @relation("SOSTutor")
+  studentSessions           Session[]                @relation("StudentSessions")
+  tutorSessions             Session[]                @relation("TutorSessions")
+  ratingsGiven              SessionRating[]          @relation("StudentRatings")
+  ratingsReceived           SessionRating[]          @relation("TutorRatings")
+  subjectProgress           StudentSubjectProgress[]
+  topicProgress             StudentTopicProgress[]
+  studyMaterials            StudyMaterial[]
+  studyPlans                StudyPlan?
+  studySubjects             StudySubject[]
+  surveyResponses           SurveyResponse[]
+  topicConfidences          TopicConfidence[]
+  tutorApplications         TutorApplication[]
+  tutorPresence             TutorPresence?
+  tutorSubjects             TutorSubject[]
+  userBadges                UserBadge[]
+  presence                  UserPresence?
+  reportsReceived           UserReport[]             @relation("UserReportReported")
+  reportsSubmitted          UserReport[]             @relation("UserReportReporter")
+  reportsReviewedAdmin      UserReport[]             @relation("UserReportReviewedByAdmin")
+  roleAssignments           UserRoleAssignment[]
 
   @@schema("public")
 }
 
 model UserRoleAssignment {
   id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id])
   userId    String
   role      UserRole
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
 
-  @@unique([userId, role]) // prevents duplicates
+  @@unique([userId, role])
   @@schema("public")
 }
 
 model TutorApplication {
   id              String    @id @default(cuid())
-  user            User      @relation(fields: [userId], references: [id])
   userId          String
   subjects        String
   cgpa            Float?
   availability    String?
-  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  status          String    @default("PENDING")
   createdAt       DateTime  @default(now())
   reviewedAt      DateTime?
   rejectionReason String?
   transcriptPath  String?
+  user            User      @relation(fields: [userId], references: [id])
+
+  @@schema("public")
+}
+
+model Subject {
+  id                     String                   @id @default(cuid())
+  code                   String                   @unique
+  title                  String
+  aliases                String?
+  createdAt              DateTime                 @default(now())
+  sosrequests            SOSRequest[]
+  sessions               Session[]
+  progress               StudentSubjectProgress[]
+  studentTopicProgresses StudentTopicProgress[]
+  topics                 Topic[]
+  tutorLinks             TutorSubject[]
+
+  @@schema("public")
+}
+
+model TutorSubject {
+  id        String   @id @default(cuid())
+  tutorId   String
+  subjectId String
+  createdAt DateTime @default(now())
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  tutor     User     @relation(fields: [tutorId], references: [id])
+
+  @@unique([tutorId, subjectId])
+  @@schema("public")
+}
+
+model Session {
+  id                     String             @id @default(cuid())
+  studentId              String
+  tutorId                String?
+  subjectId              String
+  scheduledAt            DateTime
+  durationMin            Int                @default(60)
+  endsAt                 DateTime?
+  status                 SessionStatus      @default(PENDING)
+  notes                  String?
+  cancelledAt            DateTime?
+  cancelReason           String?
+  rescheduledAt          DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  proposedAt             DateTime?
+  proposedEndAt          DateTime?
+  proposedNote           String?
+  proposalStatus         ProposalStatus?
+  proposedByUserId       String?
+  studentReminderEmailId String?
+  tutorReminderEmailId   String?
+  calendarUid            String?            @unique
+  calendarSequence       Int                @default(0)
+  completedAt            DateTime?
+  dailyRoomCreatedAt     DateTime?
+  dailyRoomExpiresAt     DateTime?
+  dailyRoomName          String?            @unique
+  dailyRoomUrl           String?
+  chatChannel            ChatChannel?       @relation("SessionChatChannel")
+  student                User               @relation("StudentSessions", fields: [studentId], references: [id])
+  subject                Subject            @relation(fields: [subjectId], references: [id])
+  tutor                  User?              @relation("TutorSessions", fields: [tutorId], references: [id])
+  completion             SessionCompletion?
+  sessionRating          SessionRating?
+  review                 SessionReview?
+  surveyResponse         SurveyResponse?
+  userReports            UserReport[]
+
+  @@index([studentId, status])
+  @@index([tutorId, status])
+  @@index([scheduledAt])
+  @@schema("public")
+}
+
+model Notification {
+  id        String             @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  data      Json?
+  status    NotificationStatus @default(QUEUED)
+  createdAt DateTime           @default(now())
+  sentAt    DateTime?
+  readAt    DateTime?
+  dedupeKey String?            @db.VarChar(120)
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([userId, status])
+  @@schema("public")
+}
+
+model ChatChannel {
+  id            String        @id @default(uuid())
+  sessionId     String        @unique
+  studentId     String
+  tutorId       String
+  createdAt     DateTime      @default(now())
+  lastMessageAt DateTime      @default(now())
+  closeAt       DateTime?
+  closedAt      DateTime?
+  session       Session       @relation("SessionChatChannel", fields: [sessionId], references: [id], onDelete: Cascade)
+  student       User          @relation("ChatStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  tutor         User          @relation("ChatTutor", fields: [tutorId], references: [id], onDelete: Cascade)
+  messages      ChatMessage[]
+  reads         ChatRead[]
+  userReports   UserReport[]
+
+  @@index([studentId])
+  @@index([tutorId])
+  @@index([lastMessageAt])
+  @@schema("public")
+}
+
+model ChatMessage {
+  id          String           @id @default(uuid())
+  channelId   String
+  senderId    String
+  text        String
+  createdAt   DateTime         @default(now())
+  isDeleted   Boolean          @default(false)
+  deletedAt   DateTime?
+  deletedBy   String?
+  attachments ChatAttachment[]
+  channel     ChatChannel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  sender      User             @relation("ChatSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, createdAt])
+  @@index([senderId])
+  @@schema("public")
+}
+
+model ChatRead {
+  id         String      @id @default(uuid())
+  channelId  String
+  userId     String
+  lastReadAt DateTime    @default(now())
+  channel    ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user       User        @relation("ChatReader", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([userId])
+  @@index([channelId, userId])
+  @@schema("public")
+}
+
+model ChatAttachment {
+  id          String      @id @default(uuid())
+  messageId   String
+  bucket      String      @default("chat-attachments")
+  objectPath  String
+  fileName    String
+  contentType String
+  sizeBytes   Int
+  createdAt   DateTime    @default(now())
+  message     ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@schema("public")
+}
+
+model ChatTyping {
+  id        String   @id @default(uuid())
+  channelId String
+  userId    String
+  isTyping  Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  @@unique([channelId, userId])
+  @@schema("public")
+}
+
+model SessionRating {
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  studentId String
+  tutorId   String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  confirmed Boolean?
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student   User     @relation("StudentRatings", fields: [studentId], references: [id], onDelete: Cascade)
+  tutor     User     @relation("TutorRatings", fields: [tutorId], references: [id], onDelete: Cascade)
+
+  @@index([tutorId])
+  @@index([studentId])
+  @@schema("public")
+}
+
+model SessionCompletion {
+  id               String         @id @default(cuid())
+  sessionId        String         @unique
+  summary          String
+  confidenceBefore Int
+  confidenceAfter  Int
+  nextSteps        String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  session          Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  topics           SessionTopic[]
+
+  @@schema("public")
+}
+
+model Topic {
+  id              String                 @id @default(cuid())
+  subjectId       String
+  name            String
+  createdAt       DateTime               @default(now())
+  sessionTopics   SessionTopic[]
+  studentProgress StudentTopicProgress[]
+  subject         Subject                @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([subjectId, name])
+  @@index([subjectId])
+  @@schema("public")
+}
+
+model SessionTopic {
+  id           String            @id @default(cuid())
+  completionId String
+  topicId      String
+  completion   SessionCompletion @relation(fields: [completionId], references: [id], onDelete: Cascade)
+  topic        Topic             @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([completionId, topicId])
+  @@index([topicId])
+  @@schema("public")
+}
+
+model StudentSubjectProgress {
+  id            String    @id @default(cuid())
+  studentId     String
+  subjectId     String
+  totalSessions Int       @default(0)
+  totalMinutes  Int       @default(0)
+  lastSessionAt DateTime?
+  avgConfGain   Float     @default(0)
+  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime  @default(now())
+  student       User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject       Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, subjectId])
+  @@index([studentId])
+  @@index([subjectId])
+  @@schema("public")
+}
+
+model StudentTopicProgress {
+  id            String    @id @default(cuid())
+  studentId     String
+  subjectId     String
+  topicId       String
+  timesCovered  Int       @default(0)
+  lastCoveredAt DateTime?
+  student       User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject       Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  topic         Topic     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, topicId])
+  @@index([studentId, subjectId])
+  @@schema("public")
+}
+
+model SessionReview {
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  studentId String
+  tutorId   String
+  rating    Int
+  feedback  String?
+  confirmed Boolean?
+  createdAt DateTime @default(now())
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([tutorId])
+  @@schema("public")
+}
+
+model PointsWallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  total     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@schema("public")
+}
+
+model PointsTransaction {
+  id          String     @id @default(cuid())
+  userId      String
+  type        PointsType
+  amount      Int
+  description String
+  sessionId   String?
+  createdAt   DateTime   @default(now())
+  user        User       @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([sessionId])
+  @@schema("public")
+}
+
+model Badge {
+  id          String      @id @default(cuid())
+  key         String      @unique
+  name        String
+  description String
+  icon        String
+  createdAt   DateTime    @default(now())
+  userBadges  UserBadge[]
+
+  @@schema("public")
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  badgeId   String
+  awardedAt DateTime @default(now())
+  badge     Badge    @relation(fields: [badgeId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, badgeId])
+  @@schema("public")
+}
+
+model Reward {
+  id          String             @id @default(cuid())
+  name        String
+  description String
+  pointsCost  Int
+  stock       Int?
+  createdAt   DateTime           @default(now())
+  durationHrs Int?
+  key         String             @unique
+  redemptions RewardRedemption[]
+
+  @@schema("public")
+}
+
+model RewardRedemption {
+  id        String           @id @default(cuid())
+  userId    String
+  rewardId  String
+  createdAt DateTime         @default(now())
+  expiresAt DateTime?
+  status    RedemptionStatus @default(ACTIVE)
+  reward    Reward           @relation(fields: [rewardId], references: [id])
+  user      User             @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([userId, rewardId, status])
+  @@index([userId, status, expiresAt])
+  @@schema("public")
+}
+
+model Keepalive {
+  id        BigInt   @id
+  createdAt DateTime @map("created_at")
+
+  @@map("keepalive")
+  @@schema("public")
+}
+
+model SOSRequest {
+  id                 String              @id @default(cuid())
+  studentId          String
+  subjectId          String
+  mode               SOSMode
+  description        String
+  status             SOSStatus           @default(SEARCHING)
+  acceptedTutorId    String?
+  acceptedAt         DateTime?
+  cancelledAt        DateTime?
+  resolvedAt         DateTime?
+  expiresAt          DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  cancelReason       String?
+  lockedAt           DateTime?
+  startedAt          DateTime?
+  adminNotes         String?
+  isFlagged          Boolean             @default(false)
+  moderatedAt        DateTime?
+  moderatedByAdminId String?
+  moderationReason   String?
+  moderationStatus   SOSModerationStatus @default(VISIBLE)
+  acceptedTutor      User?               @relation("SOSAcceptedTutor", fields: [acceptedTutorId], references: [id])
+  moderatedByAdmin   User?               @relation("SOSModeratedByAdmin", fields: [moderatedByAdminId], references: [id])
+  student            User                @relation("SOSStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  subject            Subject             @relation(fields: [subjectId], references: [id])
+  tutorResponses     SOSTutorResponse[]
+
+  @@index([studentId, createdAt])
+  @@index([status, createdAt])
+  @@index([subjectId, status])
+  @@index([acceptedTutorId, status])
+  @@index([moderationStatus, createdAt])
+  @@index([isFlagged, createdAt])
+  @@index([moderatedByAdminId, createdAt])
+  @@schema("public")
+}
+
+model SOSTutorResponse {
+  id        String           @id @default(cuid())
+  sosId     String
+  tutorId   String
+  decision  SOSTutorDecision
+  reason    String?
+  createdAt DateTime         @default(now())
+  sos       SOSRequest       @relation(fields: [sosId], references: [id], onDelete: Cascade)
+  tutor     User             @relation("SOSTutor", fields: [tutorId], references: [id], onDelete: Cascade)
+
+  @@unique([sosId, tutorId])
+  @@index([tutorId, createdAt])
+  @@schema("public")
+}
+
+model TutorPresence {
+  id         String   @id @default(cuid())
+  tutorId    String   @unique
+  isOnline   Boolean  @default(false)
+  lastSeenAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  tutor      User     @relation(fields: [tutorId], references: [id], onDelete: Cascade)
+
+  @@index([isOnline, lastSeenAt])
+  @@schema("public")
+}
+
+model StudyMaterial {
+  id             String        @id @default(cuid())
+  userId         String
+  title          String
+  rawText        String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  fileName       String?
+  objectPath     String?
+  studySubjectId String?
+  studySubject   StudySubject? @relation(fields: [studySubjectId], references: [id])
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  packs          StudyPack[]
+
+  @@index([userId, createdAt])
+  @@index([userId, studySubjectId, updatedAt])
+  @@schema("public")
+}
+
+model StudyPack {
+  id         String        @id @default(cuid())
+  materialId String
+  createdAt  DateTime      @default(now())
+  summary    String
+  concepts   Json
+  flashcards Json
+  quiz       Json
+  attempts   QuizAttempt[]
+  material   StudyMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId, createdAt])
+  @@schema("public")
+}
+
+model QuizAttempt {
+  id        String    @id @default(cuid())
+  packId    String
+  userId    String
+  score     Int
+  total     Int
+  answers   Json
+  createdAt DateTime  @default(now())
+  pack      StudyPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([packId, createdAt])
+  @@schema("public")
+}
+
+model StudySubject {
+  id        String          @id @default(cuid())
+  userId    String
+  name      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  materials StudyMaterial[]
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId, updatedAt])
+  @@schema("public")
+}
+
+model StudyPlan {
+  id            String             @id @default(cuid())
+  userId        String             @unique
+  title         String
+  startDate     DateTime
+  endDate       DateTime
+  examDate      DateTime?
+  hoursPerWeek  Int
+  style         StudyPlanStyle     @default(SHORT_BURSTS)
+  subjects      Json
+  availability  Json
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  preferredTime PreferredStudyTime @default(NIGHT)
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items         StudyPlanItem[]
+
+  @@index([userId, createdAt])
+  @@schema("public")
+}
+
+model StudyPlanItem {
+  id          String            @id @default(cuid())
+  planId      String
+  date        DateTime
+  subjectName String
+  topic       String
+  task        String
+  durationMin Int
+  type        StudyPlanItemType @default(STUDY)
+  reason      String?
+  status      String            @default("PENDING")
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  timeBlock   String?
+  plan        StudyPlan         @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId, date])
+  @@index([planId, status])
+  @@schema("public")
+}
+
+model TopicConfidence {
+  id              String   @id @default(cuid())
+  userId          String
+  subjectName     String
+  topic           String
+  confidence0to10 Int      @default(5)
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subjectName, topic])
+  @@schema("public")
+}
+
+model UserPresence {
+  userId     String   @id
+  isOnline   Boolean  @default(false)
+  lastSeenAt DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model AdminAuditLog {
+  id           String          @id @default(cuid())
+  adminId      String
+  targetUserId String?
+  actionType   AdminActionType
+  entityType   String
+  entityId     String?
+  reason       String?
+  metadata     Json?
+  createdAt    DateTime        @default(now())
+  admin        User            @relation("AdminActor", fields: [adminId], references: [id], onDelete: Cascade)
+  targetUser   User?           @relation("AdminTargetUser", fields: [targetUserId], references: [id])
+
+  @@index([adminId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([actionType, createdAt])
+  @@schema("public")
+}
+
+model UserReport {
+  id                String             @id @default(cuid())
+  reporterUserId    String
+  reportedUserId    String?
+  sessionId         String?
+  chatChannelId     String?
+  category          UserReportCategory
+  status            UserReportStatus   @default(OPEN)
+  priority          UserReportPriority @default(MEDIUM)
+  subject           String
+  description       String
+  evidenceUrl       String?
+  adminNotes        String?
+  reviewedByAdminId String?
+  reviewedAt        DateTime?
+  resolvedAt        DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  chatChannel       ChatChannel?       @relation(fields: [chatChannelId], references: [id])
+  reportedUser      User?              @relation("UserReportReported", fields: [reportedUserId], references: [id])
+  reporterUser      User               @relation("UserReportReporter", fields: [reporterUserId], references: [id], onDelete: Cascade)
+  reviewedByAdmin   User?              @relation("UserReportReviewedByAdmin", fields: [reviewedByAdminId], references: [id])
+  session           Session?           @relation(fields: [sessionId], references: [id])
+
+  @@index([reporterUserId, createdAt])
+  @@index([reportedUserId, createdAt])
+  @@index([status, createdAt])
+  @@index([category, createdAt])
+  @@index([priority, createdAt])
+  @@index([sessionId])
+  @@index([chatChannelId])
+  @@schema("public")
+}
+
+model SurveyResponse {
+  id                    String   @id @default(cuid())
+  userId                String
+  sessionId             String?  @unique
+  rating                Int
+  easierToFindTutor     Boolean
+  improvedUnderstanding Boolean
+  wouldRecommend        Boolean
+  comment               String?
+  createdAt             DateTime @default(now())
+  session               Session? @relation(fields: [sessionId], references: [id])
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@schema("public")
+}
+
+enum UserRole {
+  STUDENT
+  TUTOR
+  ADMIN
 
   @@schema("public")
 }
@@ -166,97 +782,6 @@ enum ProposalStatus {
   @@schema("public")
 }
 
-model Subject {
-  id        String   @id @default(cuid())
-  code      String   @unique // e.g. WIA2003
-  title     String // e.g. Data Structures
-  aliases   String? // optional CSV: "DSA,Data Structure"
-  createdAt DateTime @default(now())
-
-  tutorLinks TutorSubject[]
-  sessions   Session[]
-
-  topics                 Topic[]
-  progress               StudentSubjectProgress[]
-  studentTopicProgresses StudentTopicProgress[]
-  sosrequests            SOSRequest[]
-
-  @@schema("public")
-}
-
-model TutorSubject {
-  id        String   @id @default(cuid())
-  tutor     User     @relation(fields: [tutorId], references: [id])
-  tutorId   String
-  subject   Subject  @relation(fields: [subjectId], references: [id])
-  subjectId String
-  createdAt DateTime @default(now())
-
-  @@unique([tutorId, subjectId])
-  @@schema("public")
-}
-
-model Session {
-  id String @id @default(cuid())
-
-  student   User   @relation("StudentSessions", fields: [studentId], references: [id])
-  studentId String
-
-  tutor   User?   @relation("TutorSessions", fields: [tutorId], references: [id])
-  tutorId String?
-
-  subject   Subject @relation(fields: [subjectId], references: [id])
-  subjectId String
-
-  scheduledAt DateTime
-  durationMin Int       @default(60)
-  endsAt      DateTime?
-
-  chatChannel ChatChannel? @relation("SessionChatChannel")
-
-  status SessionStatus @default(PENDING)
-
-  notes         String?
-  cancelledAt   DateTime?
-  cancelReason  String?
-  rescheduledAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // ---- reschedule proposal flow (tutor -> student confirm) ----
-  proposedAt       DateTime?
-  proposedEndAt    DateTime?
-  proposedNote     String?
-  proposalStatus   ProposalStatus?
-  proposedByUserId String?
-
-  studentReminderEmailId String?
-  tutorReminderEmailId   String?
-
-  calendarUid      String?        @unique
-  calendarSequence Int            @default(0)
-  sessionRating    SessionRating?
-
-  completion  SessionCompletion?
-  review      SessionReview?
-  completedAt DateTime?
-
-  dailyRoomName         String?         @unique
-  dailyRoomUrl          String?
-  dailyRoomCreatedAt    DateTime?
-  dailyRoomExpiresAt    DateTime?
-
-  userReports UserReport[]
-
-  surveyResponse SurveyResponse?
-
-  @@index([studentId, status])
-  @@index([tutorId, status])
-  @@index([scheduledAt])
-  @@schema("public")
-}
-
 enum NotificationStatus {
   QUEUED
   SENT
@@ -264,258 +789,6 @@ enum NotificationStatus {
   READ
   FAILED
 
-  @@schema("public")
-}
-
-model Notification {
-  id     String             @id @default(cuid())
-  userId String
-  type   String
-  title  String
-  body   String
-  data   Json?
-  status NotificationStatus @default(QUEUED)
-
-  createdAt DateTime  @default(now())
-  sentAt    DateTime?
-  readAt    DateTime?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  dedupeKey String? @db.VarChar(120)
-
-  @@unique([userId, dedupeKey])
-  @@index([userId, createdAt])
-  @@index([status, createdAt])
-  @@index([userId, status])
-  @@schema("public")
-}
-
-model ChatChannel {
-  id        String @id @default(uuid())
-  sessionId String @unique
-  studentId String
-  tutorId   String
-
-  createdAt     DateTime @default(now())
-  lastMessageAt DateTime @default(now())
-
-  session Session @relation("SessionChatChannel", fields: [sessionId], references: [id], onDelete: Cascade)
-  student User    @relation("ChatStudent", fields: [studentId], references: [id], onDelete: Cascade)
-  tutor   User    @relation("ChatTutor", fields: [tutorId], references: [id], onDelete: Cascade)
-
-  messages ChatMessage[]
-  reads    ChatRead[]
-
-  closeAt  DateTime? // when it should auto-close
-  closedAt DateTime? // when it actually closed
-
-  userReports UserReport[]
-
-  @@index([studentId])
-  @@index([tutorId])
-  @@index([lastMessageAt])
-  @@index([studentId, lastMessageAt])
-  @@index([tutorId, lastMessageAt])    
-  @@schema("public")
-}
-
-model ChatMessage {
-  id        String @id @default(uuid())
-  channelId String
-  senderId  String
-  text      String
-
-  createdAt DateTime @default(now())
-
-  channel ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  sender  User        @relation("ChatSender", fields: [senderId], references: [id], onDelete: Cascade)
-
-  attachments ChatAttachment[]
-
-  isDeleted Boolean   @default(false)
-  deletedAt DateTime?
-  deletedBy String?
-
-  @@index([channelId, createdAt])
-  @@index([senderId])
-  @@index([channelId, isDeleted, createdAt]) 
-  @@schema("public")
-}
-
-model ChatRead {
-  id         String   @id @default(uuid())
-  channelId  String
-  userId     String
-  lastReadAt DateTime @default(now())
-
-  channel ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  user    User        @relation("ChatReader", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([channelId, userId])
-  @@index([userId])
-  @@index([channelId, userId, lastReadAt])  
-  @@schema("public")
-}
-
-model ChatAttachment {
-  id        String @id @default(uuid())
-  messageId String
-
-  bucket     String @default("chat-attachments")
-  objectPath String
-
-  fileName    String
-  contentType String
-  sizeBytes   Int
-
-  createdAt DateTime @default(now())
-
-  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
-  @@index([messageId])
-  @@schema("public")
-}
-
-model ChatTyping {
-  id        String   @id @default(uuid())
-  channelId String
-  userId    String
-  isTyping  Boolean  @default(false)
-  updatedAt DateTime @updatedAt
-
-  @@unique([channelId, userId])
-  @@schema("public")
-}
-
-model SessionRating {
-  id String @id @default(cuid())
-
-  sessionId String @unique
-  studentId String
-  tutorId   String
-
-  rating  Int // 1..5
-  comment String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  confirmed Boolean?
-
-  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  tutor User @relation("TutorRatings", fields: [tutorId], references: [id], onDelete: Cascade)
-
-  student User @relation("StudentRatings", fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@index([tutorId])
-  @@index([studentId])
-  @@schema("public")
-}
-
-model SessionCompletion {
-  id        String  @id @default(cuid())
-  sessionId String  @unique
-  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  summary          String
-  confidenceBefore Int
-  confidenceAfter  Int
-
-  nextSteps String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  topics SessionTopic[]
-
-  @@schema("public")
-}
-
-model Topic {
-  id        String  @id @default(cuid())
-  subjectId String
-  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-
-  name      String
-  createdAt DateTime @default(now())
-
-  sessionTopics   SessionTopic[]
-  studentProgress StudentTopicProgress[]
-
-  @@unique([subjectId, name])
-  @@index([subjectId])
-  @@schema("public")
-}
-
-model SessionTopic {
-  id           String            @id @default(cuid())
-  completionId String
-  completion   SessionCompletion @relation(fields: [completionId], references: [id], onDelete: Cascade)
-
-  topicId String
-  topic   Topic  @relation(fields: [topicId], references: [id], onDelete: Cascade)
-
-  @@unique([completionId, topicId])
-  @@index([topicId])
-  @@schema("public")
-}
-
-model StudentSubjectProgress {
-  id        String @id @default(cuid())
-  studentId String
-  subjectId String
-
-  totalSessions Int       @default(0)
-  totalMinutes  Int       @default(0)
-  lastSessionAt DateTime?
-  avgConfGain   Float     @default(0)
-
-  updatedAt DateTime @updatedAt
-  createdAt DateTime @default(now())
-
-  student User    @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-
-  @@unique([studentId, subjectId])
-  @@index([studentId])
-  @@index([subjectId])
-  @@schema("public")
-}
-
-model StudentTopicProgress {
-  id        String @id @default(cuid())
-  studentId String
-  subjectId String
-  topicId   String
-
-  timesCovered  Int       @default(0)
-  lastCoveredAt DateTime?
-
-  student User    @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  topic   Topic   @relation(fields: [topicId], references: [id], onDelete: Cascade)
-
-  @@unique([studentId, topicId])
-  @@index([studentId, subjectId])
-  @@schema("public")
-}
-
-model SessionReview {
-  id        String @id @default(cuid())
-  sessionId String @unique
-  studentId String
-  tutorId   String
-
-  rating    Int // 1..5
-  feedback  String? // optional
-  confirmed Boolean? // optional: null = not answered, true/false = student confirmed/denied
-
-  createdAt DateTime @default(now())
-
-  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@index([studentId])
-  @@index([tutorId])
   @@schema("public")
 }
 
@@ -528,104 +801,11 @@ enum PointsType {
   @@schema("public")
 }
 
-model PointsWallet {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  total     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@schema("public")
-}
-
-model PointsTransaction {
-  id          String     @id @default(cuid())
-  userId      String
-  type        PointsType
-  amount      Int
-  description String
-  sessionId   String?
-  createdAt   DateTime   @default(now())
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@index([userId, createdAt])
-  @@index([sessionId])
-  @@schema("public")
-}
-
-model Badge {
-  id          String   @id @default(cuid())
-  key         String   @unique // e.g. "FIRST_SESSION"
-  name        String
-  description String
-  icon        String // e.g. "trophy"
-  createdAt   DateTime @default(now())
-
-  userBadges UserBadge[]
-
-  @@schema("public")
-}
-
-model UserBadge {
-  id        String   @id @default(cuid())
-  userId    String
-  badgeId   String
-  awardedAt DateTime @default(now())
-
-  user  User  @relation(fields: [userId], references: [id])
-  badge Badge @relation(fields: [badgeId], references: [id])
-
-  @@unique([userId, badgeId])
-  @@schema("public")
-}
-
-model Reward {
-  id          String   @id @default(cuid())
-  key         String   @unique //  add (BOOST_24H, DOUBLE_24H, etc.)
-  name        String
-  description String
-  pointsCost  Int
-  stock       Int?
-  durationHrs Int? //  for time-limited effects (24h, 7d, etc.)
-  createdAt   DateTime @default(now())
-
-  redemptions RewardRedemption[]
-
-  @@schema("public")
-}
-
 enum RedemptionStatus {
   ACTIVE
   USED
   EXPIRED
 
-  @@schema("public")
-}
-
-model RewardRedemption {
-  id        String   @id @default(cuid())
-  userId    String
-  rewardId  String
-  createdAt DateTime @default(now())
-
-  status    RedemptionStatus @default(ACTIVE)
-  expiresAt DateTime?
-
-  user   User   @relation(fields: [userId], references: [id])
-  reward Reward @relation(fields: [rewardId], references: [id])
-
-  @@index([userId, createdAt])
-  @@schema("public")
-}
-
-model Keepalive {
-  id        BigInt   @id
-  createdAt DateTime @map("created_at")
-
-  @@map("keepalive")
   @@schema("public")
 }
 
@@ -658,61 +838,6 @@ enum SOSTutorDecision {
   @@schema("public")
 }
 
-model SOSRequest {
-  id String @id @default(cuid())
-
-  student   User   @relation("SOSStudent", fields: [studentId], references: [id], onDelete: Cascade)
-  studentId String
-
-  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  subjectId String
-
-  description String
-  mode        SOSMode
-
-  status SOSStatus @default(SEARCHING)
-
-  acceptedTutor   User?   @relation("SOSAcceptedTutor", fields: [acceptedTutorId], references: [id], onDelete: SetNull)
-  acceptedTutorId String?
-
-  lockedAt    DateTime?
-  acceptedAt  DateTime?
-  startedAt   DateTime?
-  resolvedAt  DateTime?
-  cancelledAt DateTime?
-
-  cancelReason String?
-
-  expiresAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  tutorResponses SOSTutorResponse[]
-
-  // =========================
-  // Admin moderation fields
-  // =========================
-  isFlagged         Boolean   @default(false)
-  moderationStatus  SOSModerationStatus @default(VISIBLE)
-  moderationReason  String?
-  moderatedAt       DateTime?
-  moderatedByAdminId String?
-  adminNotes        String?
-
-  moderatedByAdmin User? @relation("SOSModeratedByAdmin", fields: [moderatedByAdminId], references: [id], onDelete: SetNull)
-
-  @@index([studentId, createdAt])
-  @@index([status, createdAt])
-  @@index([subjectId, status])
-  @@index([acceptedTutorId, status])
-
-  @@index([moderationStatus, createdAt])
-  @@index([isFlagged, createdAt])
-  @@index([moderatedByAdminId, createdAt])
-
-  @@schema("public")
-}
-
 enum SOSModerationStatus {
   VISIBLE
   FLAGGED
@@ -721,120 +846,10 @@ enum SOSModerationStatus {
   @@schema("public")
 }
 
-model SOSTutorResponse {
-  id String @id @default(cuid())
-
-  sos   SOSRequest @relation(fields: [sosId], references: [id], onDelete: Cascade)
-  sosId String
-
-  tutor   User   @relation("SOSTutor", fields: [tutorId], references: [id], onDelete: Cascade)
-  tutorId String
-
-  decision  SOSTutorDecision
-  reason    String? // optional “Busy now”, etc.
-  createdAt DateTime         @default(now())
-
-  @@unique([sosId, tutorId]) // tutor can respond once
-  @@index([tutorId, createdAt])
-  @@schema("public")
-}
-
-// OPTIONAL (recommended for “nearest/available”)
-// If you skip this, routing uses all matching tutors.
-model TutorPresence {
-  id      String @id @default(cuid())
-  tutor   User   @relation(fields: [tutorId], references: [id], onDelete: Cascade)
-  tutorId String @unique
-
-  isOnline   Boolean  @default(false)
-  lastSeenAt DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([isOnline, lastSeenAt])
-  @@schema("public")
-}
-
-
-model StudyMaterial {
-  id        String   @id @default(cuid())
-  userId    String
-  title     String
-  rawText   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // NEW (for subject-wise)
-  studySubjectId String?
-  studySubject   StudySubject? @relation(fields: [studySubjectId], references: [id], onDelete: SetNull)
-
-  // NEW (for PDF delete from storage)
-  objectPath String?
-  fileName   String?
-
-  user  User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  packs StudyPack[]
-
-  @@index([userId, createdAt])
-  @@index([userId, studySubjectId, updatedAt])
-  @@schema("public")
-}
-
-model StudyPack {
-  id         String   @id @default(cuid())
-  materialId String
-  createdAt  DateTime @default(now())
-
-  // store AI outputs as JSON (easy, flexible)
-  summary    String
-  concepts   Json
-  flashcards Json
-  quiz       Json
-
-  material StudyMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
-  attempts QuizAttempt[]
-
-  @@index([materialId, createdAt])
-  @@schema("public")
-}
-
-model QuizAttempt {
-  id        String   @id @default(cuid())
-  packId    String
-  userId    String
-  score     Int
-  total     Int
-  answers   Json
-  createdAt DateTime @default(now())
-
-  pack StudyPack @relation(fields: [packId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
-  @@index([packId, createdAt])
-  @@schema("public")
-}
-
-model StudySubject {
-  id        String   @id @default(cuid())
-  userId    String
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  materials StudyMaterial[]
-
-  @@index([userId, updatedAt])
-  @@unique([userId, name])
-  @@schema("public")
-}
-
-// ================================
-// Study Planner (TutorLink)
-// ================================
 enum StudyPlanStyle {
   SHORT_BURSTS
   DEEP_STUDY
+
   @@schema("public")
 }
 
@@ -843,70 +858,7 @@ enum StudyPlanItemType {
   PRACTICE
   REVIEW
   TUTOR
-  @@schema("public")
-}
 
-model StudyPlan {
-  id           String @id @default(cuid())
-  userId       String @unique
-  title        String
-  startDate    DateTime
-  endDate      DateTime
-  examDate     DateTime?
-  hoursPerWeek Int
-  style        StudyPlanStyle @default(SHORT_BURSTS)
-
-  // Store structured input as JSON so MVP is fast + flexible
-  subjects     Json           // [{ name, level0to10, weakTopics: string[] }]
-  availability Json           // { days: ["MON"...], hoursByDay: { MON: 2, ... } }
-
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items        StudyPlanItem[]
-
-  preferredTime PreferredStudyTime @default(NIGHT)
-
-  @@index([userId, createdAt])
-  @@schema("public")
-}
-
-model StudyPlanItem {
-  id          String           @id @default(cuid())
-  planId      String
-  date        DateTime
-  subjectName String
-  topic       String
-  task        String
-  durationMin Int
-  type        StudyPlanItemType @default(STUDY)
-  reason      String?          // why this task exists (priority/spaced repetition/tutor rec)
-  status      String           @default("PENDING") // PENDING | DONE | SKIPPED
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-
-  plan        StudyPlan        @relation(fields: [planId], references: [id], onDelete: Cascade)
-  timeBlock   String?  // e.g. "Night • 7:00–10:00 PM"
-
-  @@index([planId, date])
-  @@index([planId, status])
-  @@schema("public")
-}
-
-// Optional (enhancement): per-user topic confidence
-model TopicConfidence {
-  id          String   @id @default(cuid())
-  userId      String
-  subjectName String
-  topic       String
-  confidence0to10 Int  @default(5)
-  updatedAt   DateTime @updatedAt
-  createdAt   DateTime @default(now())
-
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, subjectName, topic])
   @@schema("public")
 }
 
@@ -914,6 +866,7 @@ enum StudyPlanItemStatus {
   PENDING
   DONE
   SKIPPED
+
   @@schema("public")
 }
 
@@ -921,16 +874,6 @@ enum PreferredStudyTime {
   MORNING
   AFTERNOON
   NIGHT
-
-  @@schema("public")
-}
-
-model UserPresence {
-  userId     String   @id
-  isOnline   Boolean  @default(false)
-  lastSeenAt DateTime @updatedAt
-
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@schema("public")
 }
@@ -954,26 +897,6 @@ enum AdminActionType {
   SOS_REMOVE
   SOS_RESTORE
 
-  @@schema("public")
-}
-
-model AdminAuditLog {
-  id           String          @id @default(cuid())
-  adminId      String
-  targetUserId String?
-  actionType   AdminActionType
-  entityType   String
-  entityId     String?
-  reason       String?
-  metadata     Json?
-  createdAt    DateTime        @default(now())
-
-  admin      User  @relation("AdminActor", fields: [adminId], references: [id], onDelete: Cascade)
-  targetUser User? @relation("AdminTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
-
-  @@index([adminId, createdAt])
-  @@index([targetUserId, createdAt])
-  @@index([actionType, createdAt])
   @@schema("public")
 }
 
@@ -1004,69 +927,5 @@ enum UserReportPriority {
   HIGH
   URGENT
 
-  @@schema("public")
-}
-
-model UserReport {
-  id String @id @default(cuid())
-
-  reporterUserId String
-  reportedUserId String?
-
-  sessionId     String?
-  chatChannelId String?
-
-  category    UserReportCategory
-  status      UserReportStatus   @default(OPEN)
-  priority    UserReportPriority @default(MEDIUM)
-
-  subject     String
-  description String
-
-  evidenceUrl String?
-  adminNotes  String?
-
-  reviewedByAdminId String?
-  reviewedAt        DateTime?
-  resolvedAt        DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  reporterUser User        @relation("UserReportReporter", fields: [reporterUserId], references: [id], onDelete: Cascade)
-  reportedUser User?       @relation("UserReportReported", fields: [reportedUserId], references: [id], onDelete: SetNull)
-  session      Session?    @relation(fields: [sessionId], references: [id], onDelete: SetNull)
-  chatChannel  ChatChannel? @relation(fields: [chatChannelId], references: [id], onDelete: SetNull)
-
-  reviewedByAdmin User?    @relation("UserReportReviewedByAdmin", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
-
-  @@index([reporterUserId, createdAt])
-  @@index([reportedUserId, createdAt])
-  @@index([status, createdAt])
-  @@index([category, createdAt])
-  @@index([priority, createdAt])
-  @@index([sessionId])
-  @@index([chatChannelId])
-  @@schema("public")
-}
-
-model SurveyResponse {
-  id        String   @id @default(cuid())
-  userId    String
-  sessionId String?  @unique  // one survey per session
-  
-  rating                Int      // 1–5
-  easierToFindTutor     Boolean
-  improvedUnderstanding Boolean
-  wouldRecommend        Boolean
-  comment               String?
-
-  createdAt DateTime @default(now())
-
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  session Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
-
-  @@index([userId, createdAt])
-  @@index([createdAt])
   @@schema("public")
 }

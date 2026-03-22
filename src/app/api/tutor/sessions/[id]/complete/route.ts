@@ -59,14 +59,12 @@ async function awardPointsInTx(
 
   const now = new Date();
 
-  // ensure wallet exists
   await tx.pointsWallet.upsert({
     where: { userId },
     create: { userId, total: 0 },
     update: {},
   });
 
-  // idempotency guard
   if (sessionId) {
     const existing = await tx.pointsTransaction.findFirst({
       where: { userId, sessionId, description, type },
@@ -77,18 +75,57 @@ async function awardPointsInTx(
     }
   }
 
-  // 🔥 DOUBLE POINTS LOGIC
   let multiplier = 1;
 
   if (applyDouble) {
     const u = await tx.user.findUnique({
       where: { id: userId },
-      select: { doubleUntil: true },
+      select: {
+        multiplierUntil: true,
+        activeMultiplierKey: true,
+        boostUntil: true,
+      },
     });
 
-    if (u?.doubleUntil && u.doubleUntil > now) {
-      multiplier = 2;
+    if (u?.multiplierUntil && u.multiplierUntil > now && u.activeMultiplierKey) {
+      switch (u.activeMultiplierKey) {
+        case "POINTS_SURGE_6H":
+          multiplier = 5;
+          break;
+        case "COMBO_MULTIPLIER_24H":
+          // Stacking +10% per action up to 3x — use 2x as a flat approximation
+          // Full combo tracking would need a separate counter per session
+          multiplier = 2;
+          break;
+        case "FIRST_ACTION_BONUS_7D":
+          // 4x only on first action of the day — check if already earned today
+          const todayStart = new Date(now);
+          todayStart.setHours(0, 0, 0, 0);
+          const earnedToday = await tx.pointsTransaction.findFirst({
+            where: {
+              userId,
+              type: "EARN",
+              createdAt: { gte: todayStart },
+            },
+            select: { id: true },
+          });
+          multiplier = earnedToday ? 1 : 4;
+          break;
+        case "WEEKEND_BOOST":
+          // 3x on Saturday (6) and Sunday (0)
+          const day = now.getDay();
+          multiplier = (day === 0 || day === 6) ? 3 : 1;
+          break;
+        case "CATCHUP_BOOST_48H":
+          multiplier = 2;
+          break;
+        default:
+          multiplier = 1;
+      }
     }
+
+    // Priority boost doesn't affect point amount — it affects matching only
+    // so boostUntil is intentionally not checked here
   }
 
   const finalAmount = amount * multiplier;
@@ -98,7 +135,9 @@ async function awardPointsInTx(
       userId,
       type,
       amount: finalAmount,
-      description,
+      description: multiplier > 1
+        ? `${description} (${multiplier}x multiplier)`
+        : description,
       sessionId: sessionId ?? null,
     },
   });

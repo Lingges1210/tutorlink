@@ -3,7 +3,7 @@ import { getSessionUser } from "@/lib/getSessionUser";
 import StudentDashboardClient from "./StudentDashboardClient";
 
 export default async function StudentDashboardPage() {
-  const dbUser = await getSessionUser(); // cached — reuses layout's fetch, no extra DB call
+  const dbUser = await getSessionUser();
 
   if (!dbUser) redirect("/auth/login");
 
@@ -12,5 +12,12 @@ export default async function StudentDashboardPage() {
     dbUser.role === "TUTOR" ||
     dbUser.roleAssignments.some((r) => r.role === "TUTOR");
 
-  return <StudentDashboardClient user={dbUser} isTutor={isTutor} />;
+  return (
+    <StudentDashboardClient
+      user={dbUser}
+      isTutor={isTutor}
+      streakCount={dbUser.streakCount ?? 0}
+      streakBrokenAt={dbUser.streakBrokenAt ?? null}
+    />
+  );
 }

@@ -24,6 +24,7 @@ type Props = {
   dashboardHref: string;
   avatarUrl: string | null;
   notifCount?: number;
+  profileTitle?: string | null;
 };
 
 function getInitials(name: string | null | undefined, email: string) {
@@ -116,6 +117,7 @@ export default function UserMenuClient({
   dashboardHref,
   avatarUrl,
   notifCount = 0,
+  profileTitle,
 }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -234,6 +236,15 @@ export default function UserMenuClient({
                 <p className="truncate text-xs text-[rgb(var(--muted2))]">
                   {email}
                 </p>
+
+              {profileTitle && (
+                 <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-[rgb(var(--primary)/0.3)] bg-[rgb(var(--primary)/0.08)] px-2 py-0.5 text-[10px] font-bold text-[rgb(var(--primary))]">
+                   <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                   </svg>
+                   {profileTitle}
+                 </span>
+               )}
               </div>
             </div>
 

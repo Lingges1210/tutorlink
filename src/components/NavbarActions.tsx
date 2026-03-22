@@ -95,6 +95,7 @@ export default async function NavbarActions() {
         email={dbUser.email}
         avatarUrl={dbUser.avatarUrl ?? null}
         dashboardHref={dashboardHref}
+        profileTitle={dbUser.profileTitle}
       />
     </div>
   );

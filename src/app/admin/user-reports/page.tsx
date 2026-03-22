@@ -14,11 +14,13 @@ type ReportRow = {
   createdAt: string;
   updatedAt?: string;
   resolvedAt?: string | null;
+  isVip?: boolean;
   reporterUser: {
     id: string;
     name: string | null;
     email: string;
     role: string;
+    vipSupportUntil?: string | null;
   };
   reportedUser: {
     id: string;
@@ -146,9 +148,7 @@ function niceLabel(v: string) {
 }
 function isPastReport(r: ReportRow) {
   const ms7 = 7 * 24 * 60 * 60 * 1000;
-  if (r.status === "RESOLVED" && r.resolvedAt) return Date.now() - new Date(r.resolvedAt).getTime() > ms7;
-  if (r.status === "DISMISSED") return Date.now() - new Date(r.updatedAt || r.createdAt).getTime() > ms7;
-  return false;
+  return r.status === "RESOLVED" || r.status === "DISMISSED";
 }
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -209,7 +209,8 @@ function StatCard({ label, value, accent, icon, trend }: {
 function StatusBadge({ value }: { value: string }) {
   const c = STATUS_CONFIG[value] ?? STATUS_CONFIG.DISMISSED;
   return (
-      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.67rem] font-semibold tracking-wide whitespace-nowrap ${c.pill}`}>      <span className={`relative flex h-1.5 w-1.5 rounded-full ${c.dot}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.67rem] font-semibold tracking-wide whitespace-nowrap ${c.pill}`}>
+      <span className={`relative flex h-1.5 w-1.5 rounded-full ${c.dot}`}>
         {value === "OPEN" && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />}
       </span>
       {c.label}
@@ -227,8 +228,19 @@ function PriorityBadge({ value }: { value: string }) {
 function PriorityAccent({ value }: { value: string }) {
   const c = PRIORITY_CONFIG[value];
   if (!c) return <div className="w-0.5 self-stretch bg-[rgb(var(--border))] rounded-full" />;
-  return (
-    <div className={`w-0.5 self-stretch rounded-full ${c.bar} ${c.pulse ? "animate-pulse" : ""}`} />
+  return <div className={`w-0.5 self-stretch rounded-full ${c.bar} ${c.pulse ? "animate-pulse" : ""}`} />;
+}
+
+/* ─── VIP badge ──────────────────────────────────────────────────────────── */
+function VipBadge({ size = "sm" }: { size?: "sm" | "md" }) {
+  return size === "md" ? (
+    <span className="inline-flex items-center gap-1 rounded-xl border border-amber-400/40 bg-amber-400/12 px-2.5 py-1 text-[0.68rem] font-bold text-amber-600 dark:text-amber-300">
+      ⚡ VIP Support active
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 rounded-md border border-amber-400/40 bg-amber-400/12 px-1.5 py-0.5 text-[0.6rem] font-bold text-amber-600 dark:text-amber-300">
+      ⚡ VIP
+    </span>
   );
 }
 
@@ -237,14 +249,9 @@ function Avatar({ name, email, size = "sm" }: { name: string | null; email?: str
   const label = name ?? email ?? "?";
   const initials = label.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || (email?.[0]?.toUpperCase() ?? "?");
   const gradients = [
-    "from-violet-500 to-purple-600",
-    "from-sky-500 to-blue-600",
-    "from-emerald-500 to-teal-600",
-    "from-amber-500 to-orange-600",
-    "from-rose-500 to-pink-600",
-    "from-fuchsia-500 to-violet-600",
-    "from-cyan-500 to-sky-600",
-    "from-lime-500 to-green-600",
+    "from-violet-500 to-purple-600","from-sky-500 to-blue-600","from-emerald-500 to-teal-600",
+    "from-amber-500 to-orange-600","from-rose-500 to-pink-600","from-fuchsia-500 to-violet-600",
+    "from-cyan-500 to-sky-600","from-lime-500 to-green-600",
   ];
   const idx = label.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % gradients.length;
   const sz = size === "lg" ? "h-11 w-11 text-sm" : size === "md" ? "h-8 w-8 text-xs" : "h-7 w-7 text-[0.6rem]";
@@ -259,11 +266,8 @@ function Avatar({ name, email, size = "sm" }: { name: string | null; email?: str
 function ViewTab({ active, label, count, onClick }: { active: boolean; label: string; count: number; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick}
-      className={[
-        "inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold tracking-wide transition-all duration-200",
-        active
-          ? "bg-[rgb(var(--fg))] text-[rgb(var(--bg))] shadow-md"
-          : "text-[rgb(var(--muted))] hover:bg-[rgb(var(--card2))] hover:text-[rgb(var(--fg))]",
+      className={["inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold tracking-wide transition-all duration-200",
+        active ? "bg-[rgb(var(--fg))] text-[rgb(var(--bg))] shadow-md" : "text-[rgb(var(--muted))] hover:bg-[rgb(var(--card2))] hover:text-[rgb(var(--fg))]",
       ].join(" ")}>
       {label}
       <span className={`min-w-[1.25rem] rounded-md px-1 py-0.5 text-center text-[0.6rem] font-black tabular-nums ${active ? "bg-white/25 dark:bg-black/25" : "bg-[rgb(var(--card2))] text-[rgb(var(--muted2))]"}`}>
@@ -336,13 +340,9 @@ export default function AdminUserReportsPage() {
 
   const PAGE_SIZE = 8;
 
-  // ── ref to track selectedReport without causing load() to re-create ──
   const selectedReportRef = useRef<ReportRow | null>(null);
-  useEffect(() => {
-    selectedReportRef.current = selectedReport;
-  }, [selectedReport]);
+  useEffect(() => { selectedReportRef.current = selectedReport; }, [selectedReport]);
 
-  // ── stable load function — no deps so it never re-creates ──
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -352,15 +352,12 @@ export default function AdminUserReportsPage() {
       setRows(nextRows);
       if (selectedReportRef.current) {
         const fresh = nextRows.find((r) => r.id === selectedReportRef.current!.id);
-        if (fresh) {
-          setSelectedReport(fresh);
-          setAdminNotes(fresh.adminNotes || "");
-        }
+        if (fresh) { setSelectedReport(fresh); setAdminNotes(fresh.adminNotes || ""); }
       }
     } finally {
       setLoading(false);
     }
-  }, []); // intentionally empty — uses ref for selectedReport
+  }, []);
 
   async function openEvidence(reportId: string) {
     try {
@@ -436,7 +433,6 @@ export default function AdminUserReportsPage() {
     }
   }
 
-  // ── effects ──
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setCurrentPage(1); }, [q, viewMode]);
   useEffect(() => {
@@ -445,7 +441,6 @@ export default function AdminUserReportsPage() {
     return () => clearTimeout(t);
   }, [notice]);
 
-  // ── derived counts ──
   const counts = useMemo(() => ({
     all: rows.length,
     active: rows.filter((r) => !isPastReport(r)).length,
@@ -480,25 +475,16 @@ export default function AdminUserReportsPage() {
   return (
     <div className="min-h-[calc(100vh-56px)] bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
       <style>{`
-        @keyframes fadeSlideUp {
-          from { opacity: 0; transform: translateY(16px) scale(0.985); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes slideInRight {
-          from { opacity: 0; transform: translateX(20px); }
-          to   { opacity: 1; transform: translateX(0); }
-        }
-        @keyframes rowIn {
-          from { opacity: 0; transform: translateX(-6px); }
-          to   { opacity: 1; transform: translateX(0); }
-        }
-        .report-row { animation: rowIn 0.2s ease forwards; }
-        .detail-panel { animation: fadeSlideUp 0.22s cubic-bezier(0.16,1,0.3,1) forwards; }
+        @keyframes fadeSlideUp { from{opacity:0;transform:translateY(16px) scale(0.985)}to{opacity:1;transform:translateY(0) scale(1)} }
+        @keyframes slideInRight { from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)} }
+        @keyframes rowIn { from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)} }
+        .report-row{animation:rowIn 0.2s ease forwards}
+        .detail-panel{animation:fadeSlideUp 0.22s cubic-bezier(0.16,1,0.3,1) forwards}
       `}</style>
 
       <div className="mx-auto max-w-7xl space-y-5 px-4 pb-16 pt-7 sm:px-6 lg:px-8">
 
-        {/* ── header ── */}
+        {/* header */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-rose-700 text-white shadow-lg shadow-rose-500/30">
@@ -515,22 +501,18 @@ export default function AdminUserReportsPage() {
             </div>
           </div>
           <div className="flex items-center gap-2.5">
-            <button onClick={load} type="button" disabled={loading}
-              className={`${softBtn} inline-flex items-center gap-2`}>
+            <button onClick={load} type="button" disabled={loading} className={`${softBtn} inline-flex items-center gap-2`}>
               <IconRefresh className="h-3.5 w-3.5" spinning={loading} />
               {loading ? "Refreshing…" : "Refresh"}
             </button>
-            <a
-              href="/admin"
-              className="group inline-flex items-center gap-1.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3.5 py-2 text-xs font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:border-[rgb(var(--primary)/0.4)] transition-all duration-200"
-            >
+            <a href="/admin" className="group inline-flex items-center gap-1.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3.5 py-2 text-xs font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:border-[rgb(var(--primary)/0.4)] transition-all duration-200">
               <ArrowLeft className="h-3 w-3 transition-transform duration-200 group-hover:-translate-x-0.5" />
               Admin
             </a>
           </div>
         </div>
 
-        {/* ── stats grid ── */}
+        {/* stats */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard icon={<IconShield className="h-4.5 w-4.5" />}      label="Total"    value={counts.all}      accent="slate"   />
           <StatCard icon={<IconClock className="h-4.5 w-4.5" />}       label="Active"   value={counts.active}   accent="amber"   />
@@ -538,13 +520,11 @@ export default function AdminUserReportsPage() {
           <StatCard icon={<IconFire className="h-4.5 w-4.5" />}        label="Urgent"   value={counts.urgent}   accent="rose"    />
         </div>
 
-        {/* ── notice ── */}
         {notice && <Notice notice={notice} onDismiss={() => setNotice(null)} />}
 
-        {/* ── main table card ── */}
+        {/* table card */}
         <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] dark:bg-[rgb(var(--card)/0.6)] shadow-xl shadow-[rgb(var(--shadow)/0.06)] overflow-hidden">
 
-          {/* card header */}
           <div className="flex flex-col gap-3 border-b border-[rgb(var(--border))] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-1 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-1">
               <ViewTab active={viewMode === "ACTIVE"} label="Active" count={counts.active} onClick={() => setViewMode("ACTIVE")} />
@@ -565,21 +545,19 @@ export default function AdminUserReportsPage() {
             </div>
           </div>
 
-          {/* loading state */}
           {loading && (
             <div className="flex flex-col items-center justify-center gap-3 py-20">
               <div className="flex gap-1">
-                {[0, 1, 2].map((i) => (
+                {[0,1,2].map((i) => (
                   <div key={i} className="h-2 w-2 rounded-full bg-[rgb(var(--primary))] opacity-70"
                     style={{ animation: `bounce 1s ease-in-out ${i * 0.15}s infinite` }} />
                 ))}
               </div>
               <p className="text-sm text-[rgb(var(--muted2))]">Loading reports…</p>
-              <style>{`@keyframes bounce { 0%,80%,100%{transform:scale(0.6)}40%{transform:scale(1)} }`}</style>
+              <style>{`@keyframes bounce{0%,80%,100%{transform:scale(0.6)}40%{transform:scale(1)}}`}</style>
             </div>
           )}
 
-          {/* empty state */}
           {!loading && filteredRows.length === 0 && (
             <div className="flex flex-col items-center justify-center gap-3 py-20">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted2))]">
@@ -590,21 +568,18 @@ export default function AdminUserReportsPage() {
               </p>
               <p className="text-sm text-[rgb(var(--muted2))]">{q ? `No results for "${q}"` : "Nothing here yet."}</p>
               {(q || viewMode !== "ALL") && (
-                <button onClick={() => { setQ(""); setViewMode("ALL"); }} className={`${softBtn} mt-1`}>
-                  Clear filters
-                </button>
+                <button onClick={() => { setQ(""); setViewMode("ALL"); }} className={`${softBtn} mt-1`}>Clear filters</button>
               )}
             </div>
           )}
 
-          {/* table */}
           {!loading && filteredRows.length > 0 && (
             <>
               <div className="overflow-x-auto">
                 <table className="min-w-[1060px] w-full text-left">
                   <thead>
                     <tr className="border-b border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.5)]">
-                      {["Report", "Category", "Reporter", "Reported user", "Priority", "Status", "Evidence", "When", "Actions"].map((h) => (
+                      {["Report","Category","Reporter","Reported user","Priority","Status","Evidence","When","Actions"].map((h) => (
                         <th key={h} className="px-5 py-3 text-[0.6rem] font-black uppercase tracking-widest text-[rgb(var(--muted2))]">{h}</th>
                       ))}
                     </tr>
@@ -616,7 +591,7 @@ export default function AdminUserReportsPage() {
                       return (
                         <tr key={row.id}
                           onClick={() => { setSelectedReport(row); setAdminNotes(row.adminNotes || ""); }}
-                          className={`report-row group cursor-pointer align-top transition-all duration-150 ${isSelected ? "bg-[rgb(var(--primary)/0.05)]" : "hover:bg-[rgb(var(--card2)/0.5)]"}`}
+                          className={`report-row group cursor-pointer align-top transition-all duration-150 ${isSelected ? "bg-[rgb(var(--primary)/0.05)]" : "hover:bg-[rgb(var(--card2)/0.5)]"} ${row.isVip ? "bg-amber-400/4" : ""}`}
                           style={{ animationDelay: `${idx * 30}ms` }}>
 
                           {/* subject */}
@@ -649,6 +624,7 @@ export default function AdminUserReportsPage() {
                               <div className="min-w-0">
                                 <p className="truncate text-xs font-bold text-[rgb(var(--fg))]">{row.reporterUser.name || "Unnamed"}</p>
                                 <p className="truncate text-[0.68rem] text-[rgb(var(--muted))]">{row.reporterUser.email}</p>
+                                {row.isVip && <VipBadge size="sm" />}
                               </div>
                             </div>
                           </td>
@@ -716,32 +692,24 @@ export default function AdminUserReportsPage() {
                 </table>
               </div>
 
-              {/* pagination footer */}
+              {/* pagination */}
               <div className="flex items-center justify-between border-t border-[rgb(var(--border))] px-5 py-3.5">
                 <span className="text-[0.68rem] text-[rgb(var(--muted2))]">
-                  Showing{" "}
-                  <span className="font-bold text-[rgb(var(--fg))]">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredRows.length)}</span>
-                  {" "}of{" "}
-                  <span className="font-bold text-[rgb(var(--fg))]">{filteredRows.length}</span> reports
+                  Showing <span className="font-bold text-[rgb(var(--fg))]">{(currentPage-1)*PAGE_SIZE+1}–{Math.min(currentPage*PAGE_SIZE,filteredRows.length)}</span>
+                  {" "}of <span className="font-bold text-[rgb(var(--fg))]">{filteredRows.length}</span> reports
                 </span>
                 {totalPages > 1 && (
                   <div className="flex items-center gap-1">
-                    <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}
-                      className={`${softBtn} flex h-7 w-7 items-center justify-center p-0`}>
+                    <button onClick={() => setCurrentPage((p) => Math.max(1,p-1))} disabled={currentPage===1} className={`${softBtn} flex h-7 w-7 items-center justify-center p-0`}>
                       <IconChevronLeft className="h-3.5 w-3.5" />
                     </button>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    {Array.from({length:totalPages},(_,i)=>i+1).map((page) => (
                       <button key={page} onClick={() => setCurrentPage(page)}
-                        className={`flex h-7 w-7 items-center justify-center rounded-xl border text-xs font-bold transition-all duration-150 ${
-                          currentPage === page
-                            ? "border-[rgb(var(--primary)/0.4)] bg-[rgb(var(--primary))] text-white shadow-md shadow-[rgb(var(--primary)/0.3)]"
-                            : softBtn
-                        }`}>
+                        className={`flex h-7 w-7 items-center justify-center rounded-xl border text-xs font-bold transition-all duration-150 ${currentPage===page ? "border-[rgb(var(--primary)/0.4)] bg-[rgb(var(--primary))] text-white shadow-md shadow-[rgb(var(--primary)/0.3)]" : softBtn}`}>
                         {page}
                       </button>
                     ))}
-                    <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                      className={`${softBtn} flex h-7 w-7 items-center justify-center p-0`}>
+                    <button onClick={() => setCurrentPage((p) => Math.min(totalPages,p+1))} disabled={currentPage===totalPages} className={`${softBtn} flex h-7 w-7 items-center justify-center p-0`}>
                       <IconChevronRight className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -751,21 +719,22 @@ export default function AdminUserReportsPage() {
           )}
         </div>
 
-        {/* ── detail panel ── */}
+        {/* detail panel */}
         {selectedReport && (
           <div className="detail-panel rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] dark:bg-[rgb(var(--card)/0.6)] shadow-2xl shadow-[rgb(var(--shadow)/0.1)] overflow-hidden">
 
-            {/* priority accent bar */}
             <div className={`h-1 w-full ${PRIORITY_CONFIG[selectedReport.priority]?.bar ?? "bg-[rgb(var(--border))]"}`} />
 
-            {/* panel header */}
             <div className="flex items-center justify-between border-b border-[rgb(var(--border))] px-6 py-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-500/12 dark:bg-rose-500/15 text-rose-600 dark:text-rose-400">
                   <IconShield className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="font-black text-[rgb(var(--fg))]">Report details</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-black text-[rgb(var(--fg))]">Report details</p>
+                    {selectedReport.isVip && <VipBadge size="sm" />}
+                  </div>
                   <p className="text-[0.7rem] text-[rgb(var(--muted))]">Review and take moderation action</p>
                 </div>
               </div>
@@ -780,10 +749,8 @@ export default function AdminUserReportsPage() {
             </div>
 
             <div className="grid gap-5 p-6 lg:grid-cols-2">
-              {/* ── LEFT column ── */}
+              {/* LEFT */}
               <div className="space-y-4">
-
-                {/* subject + meta */}
                 <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.4)] p-4">
                   <SectionLabel>Report info</SectionLabel>
                   <div className="mb-3 flex flex-wrap gap-2">
@@ -802,13 +769,11 @@ export default function AdminUserReportsPage() {
                   </p>
                 </div>
 
-                {/* description */}
                 <div className="rounded-2xl border border-[rgb(var(--border))] p-4">
                   <SectionLabel>Description</SectionLabel>
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-[rgb(var(--fg))]">{selectedReport.description}</p>
                 </div>
 
-                {/* reporter */}
                 <div className="rounded-2xl border border-[rgb(var(--border))] p-4">
                   <SectionLabel>Reporter</SectionLabel>
                   <div className="flex items-center gap-3">
@@ -816,6 +781,11 @@ export default function AdminUserReportsPage() {
                     <div>
                       <p className="font-bold text-[rgb(var(--fg))]">{selectedReport.reporterUser.name || "Unnamed"}</p>
                       <p className="text-[0.71rem] text-[rgb(var(--muted))]">{selectedReport.reporterUser.email}</p>
+                      {selectedReport.isVip && (
+                        <div className="mt-1">
+                          <VipBadge size="md" />
+                        </div>
+                      )}
                       <span className="mt-1 inline-block rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-0.5 text-[0.62rem] font-semibold text-[rgb(var(--muted))]">
                         {niceLabel(selectedReport.reporterUser.role)}
                       </span>
@@ -823,7 +793,6 @@ export default function AdminUserReportsPage() {
                   </div>
                 </div>
 
-                {/* evidence */}
                 <div className="rounded-2xl border border-[rgb(var(--border))] p-4">
                   <SectionLabel>Evidence</SectionLabel>
                   {selectedReport.evidenceUrl ? (
@@ -834,16 +803,12 @@ export default function AdminUserReportsPage() {
                         : <IconExternal className="h-4 w-4" />}
                       Open evidence
                     </button>
-                  ) : (
-                    <p className="text-sm text-[rgb(var(--muted2))]">No evidence uploaded.</p>
-                  )}
+                  ) : <p className="text-sm text-[rgb(var(--muted2))]">No evidence uploaded.</p>}
                 </div>
               </div>
 
-              {/* ── RIGHT column ── */}
+              {/* RIGHT */}
               <div className="space-y-4">
-
-                {/* reported user */}
                 <div className="rounded-2xl border border-[rgb(var(--border))] p-4">
                   <SectionLabel>Reported user</SectionLabel>
                   {selectedReport.reportedUser ? (
@@ -880,7 +845,6 @@ export default function AdminUserReportsPage() {
                   ) : <p className="text-sm text-[rgb(var(--muted2))]">No reported user linked.</p>}
                 </div>
 
-                {/* admin notes */}
                 <div className="rounded-2xl border border-[rgb(var(--border))] p-4">
                   <SectionLabel>Admin notes</SectionLabel>
                   <textarea value={adminNotes} onChange={(e) => setAdminNotes(e.target.value)} rows={4}
@@ -893,7 +857,6 @@ export default function AdminUserReportsPage() {
                   </button>
                 </div>
 
-                {/* actions */}
                 <div className="rounded-2xl border border-[rgb(var(--border))] p-4">
                   <SectionLabel>Actions</SectionLabel>
                   <div className="flex flex-wrap gap-2">
