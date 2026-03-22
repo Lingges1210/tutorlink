@@ -81,7 +81,7 @@ export async function GET(req: Request) {
 
   const subjectFilter = subjectId ? { subjectId } : {};
 
-  // ✅ All 5 independent queries fire simultaneously — saves ~500-900ms
+  // All 5 independent queries fire simultaneously — saves ~500-900ms
   const [
     subjectProgress,
     completedSessions,

@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
     const cookieStore = await cookies();
 
-    // ✅ Collect cookies Supabase wants to set
+    // Collect cookies Supabase wants to set
     const cookiesToWrite: { name: string; value: string; options: object }[] = [];
 
     const supabase = createServerClient(
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
             return cookieStore.getAll();
           },
           setAll(cookiesToSet) {
-            // ✅ Save them to write onto the response later
+            // Save them to write onto the response later
             cookiesToSet.forEach(({ name, value, options }) => {
               cookiesToWrite.push({ name, value, options });
             });
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // ✅ Build final response and attach all Supabase cookies onto it
+    // Build final response and attach all Supabase cookies onto it
     const response = NextResponse.json({
       success: true,
       message: "Login successful",
@@ -117,7 +117,7 @@ export async function POST(request: Request) {
       },
     });
 
-    // ✅ This is the key fix — write cookies onto the HTTP response
+    // This is the key fix — write cookies onto the HTTP response
     cookiesToWrite.forEach(({ name, value, options }) => {
       response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
     });

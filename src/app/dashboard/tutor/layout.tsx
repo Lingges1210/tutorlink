@@ -5,7 +5,7 @@ import RoleSwitcher from "@/components/RoleSwitcher";
 import { Star } from "lucide-react";
 
 export default async function TutorLayout({ children }: { children: React.ReactNode }) {
-  const dbUser = await getSessionUser(); // ✅ cached
+  const dbUser = await getSessionUser(); // cached
   if (!dbUser) redirect("/auth/login");
   if (dbUser.isDeactivated) redirect("/auth/deactivated");
 

@@ -95,7 +95,7 @@ export default function TutorProfilePage() {
   const [customCode, setCode] = useState("");
   const [customTitle, setTitle] = useState("");
 
-  // ✅ SWR — both fetches, instant on revisit
+  // SWR — both fetches, instant on revisit
   const { data: profileData, isLoading: loadingProfile, mutate: mutateProfile } = useSWR<ProfileResp>(
     "/api/tutor/profile",
     fetcher,
@@ -130,7 +130,7 @@ export default function TutorProfilePage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ text: data?.message ?? "Failed.", ok: false }); return; }
       setSelId("");
-      await mutateProfile(); // ✅ refetch profile after add
+      await mutateProfile(); // refetch profile after add
       setMsg({ text: "Subject added!", ok: true });
     } finally { setSaving(false); }
   }
@@ -148,7 +148,7 @@ export default function TutorProfilePage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ text: data?.message ?? "Failed.", ok: false }); return; }
       setCode(""); setTitle("");
-      await mutateProfile(); // ✅ refetch profile after custom add
+      await mutateProfile(); // refetch profile after custom add
       setMsg({ text: "Custom subject added!", ok: true });
     } finally { setSaving(false); }
   }
@@ -163,7 +163,7 @@ export default function TutorProfilePage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ text: data?.message ?? "Failed.", ok: false }); return; }
-      await mutateProfile(); // ✅ refetch profile after remove
+      await mutateProfile(); // refetch profile after remove
       setMsg({ text: "Subject removed.", ok: true });
     } finally { setSaving(false); }
   }

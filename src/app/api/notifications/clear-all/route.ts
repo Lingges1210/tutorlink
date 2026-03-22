@@ -6,7 +6,7 @@ import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 export async function POST() {
   const supabase = await supabaseServerComponent();
 
-  // ✅ getSession() — reads cookie locally, no network call (fast)
+  // getSession() — reads cookie locally, no network call (fast)
   const { data: { session } } = await supabase.auth.getSession();
 
   if (!session?.user?.email) {

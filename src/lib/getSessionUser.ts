@@ -23,7 +23,7 @@ export const getSessionUser = cache(async () => {
       isDeactivated: true,
       isTutorApproved: true,
       createdAt: true,      
-      avgRating: true,      // ✅ add
+      avgRating: true,      // add
   ratingCount: true,   
       programme: true,        
       matricNo: true,   

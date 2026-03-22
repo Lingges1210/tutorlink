@@ -6,6 +6,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Award, Trophy, History, Sparkles, RefreshCcw, Medal, Users,
   ChevronDown, Info, Star, Zap, TrendingUp, Crown,
+  Flame, Swords, Shield, Gem, Compass, Brain, Book,
+  Sun, Moon, Calendar, MessageCircle, Clock, Rocket, Key, Lock,
 } from "lucide-react";
 import { GAMIFICATION_RULES } from "@/lib/gamification/rules";
 import { LevelUpModal } from "@/lib/gamification/LevelUpModal";
@@ -69,22 +71,123 @@ function clampPct(n: number) {
   return Math.max(0, Math.min(100, n));
 }
 
-function renderBadgeIcon(icon: string, locked = false, size = "md") {
-  const isEmoji = /[\u{1F300}-\u{1FAFF}]/u.test(icon);
-  const sizeClass = size === "lg" ? "text-2xl" : "text-base";
-  if (isEmoji) {
-    return <span className={[sizeClass, "leading-none", locked ? "opacity-40" : ""].join(" ")} aria-hidden>{icon}</span>;
-  }
-  const key = (icon || "").toLowerCase();
-  const dim = size === "lg" ? "h-5 w-5" : "h-4 w-4";
-  const cls = [dim, locked ? "text-[rgb(var(--muted2))]" : "text-[rgb(var(--primary))]"].join(" ");
-  if (key.includes("trophy")) return <Trophy className={cls} />;
-  if (key.includes("award")) return <Award className={cls} />;
-  if (key.includes("medal")) return <Medal className={cls} />;
-  if (key.includes("spark")) return <Sparkles className={cls} />;
-  if (key.includes("star")) return <Star className={cls} />;
-  return <Star className={cls} />;
+/* =======================================================
+   BADGE ICON SYSTEM
+   ======================================================= */
+
+const ICONS: Record<string, any> = {
+  medal: Medal, sparkles: Sparkles, star: Star, trophy: Trophy,
+  crown: Crown, flame: Flame, fire: Flame, swords: Swords,
+  shield: Shield, gem: Gem, compass: Compass, brain: Brain,
+  book: Book, users: Users, award: Award, sun: Sun, moon: Moon,
+  calendar: Calendar, zap: Zap, "message-circle": MessageCircle,
+  messagecircle: MessageCircle, clock: Clock, rocket: Rocket, key: Key,
+};
+
+const ICON_ACCENTS: Record<string, string> = {
+  trophy:           "from-amber-400 to-yellow-500",
+  crown:            "from-yellow-400 to-amber-500",
+  flame:            "from-orange-400 to-red-500",
+  fire:             "from-orange-400 to-red-500",
+  rocket:           "from-blue-400 to-violet-500",
+  gem:              "from-cyan-400 to-blue-500",
+  star:             "from-yellow-300 to-amber-400",
+  zap:              "from-yellow-400 to-orange-400",
+  brain:            "from-purple-400 to-fuchsia-500",
+  shield:           "from-emerald-400 to-teal-500",
+  swords:           "from-red-400 to-rose-500",
+  sparkles:         "from-violet-400 to-purple-500",
+  medal:            "from-blue-400 to-blue-600",
+  compass:          "from-teal-400 to-cyan-500",
+  book:             "from-indigo-400 to-blue-500",
+  users:            "from-pink-400 to-rose-500",
+  award:            "from-amber-400 to-yellow-500",
+  sun:              "from-yellow-300 to-orange-400",
+  moon:             "from-indigo-400 to-violet-500",
+  calendar:         "from-sky-400 to-blue-500",
+  "message-circle": "from-green-400 to-emerald-500",
+  messagecircle:    "from-green-400 to-emerald-500",
+  clock:            "from-slate-400 to-gray-500",
+  key:              "from-amber-400 to-yellow-500",
+};
+
+const BADGE_KEY_COLORS: Record<string, string> = {
+  SESSIONS_1:         "from-violet-400 to-violet-600",
+  SESSIONS_5:         "from-orange-400 to-orange-600",
+  SESSIONS_10:        "from-red-400 to-red-700",
+  SESSIONS_25:        "from-emerald-400 to-emerald-600",
+  SESSIONS_50:        "from-amber-400 to-amber-600",
+  SESSIONS_100:       "from-fuchsia-400 to-purple-600",
+  POINTS_100:         "from-yellow-300 to-yellow-500",
+  POINTS_250:         "from-yellow-400 to-amber-500",
+  POINTS_500:         "from-blue-400 to-blue-600",
+  POINTS_1000:        "from-amber-500 to-amber-800",
+  POINTS_2500:        "from-cyan-400 to-cyan-600",
+  POINTS_5000:        "from-fuchsia-400 to-purple-700",
+  STREAK_3:           "from-orange-300 to-orange-500",
+  STREAK_7:           "from-orange-500 to-red-500",
+  STREAK_14:          "from-red-500 to-red-700",
+  STREAK_30:          "from-red-600 to-red-950",
+  TOPICS_5:           "from-teal-300 to-teal-600",
+  TOPICS_15:          "from-purple-400 to-purple-600",
+  TOPICS_30:          "from-indigo-400 to-indigo-700",
+  TUTOR_5:            "from-pink-300 to-pink-600",
+  TUTOR_25:           "from-yellow-300 to-yellow-600",
+  TUTOR_75:           "from-emerald-400 to-green-700",
+  TUTOR_150:          "from-indigo-400 to-indigo-700",
+  EARLY_BIRD:         "from-yellow-200 to-amber-500",
+  NIGHT_OWL:          "from-indigo-400 to-indigo-900",
+  WEEKEND_WARRIOR:    "from-sky-300 to-sky-600",
+  CONFIDENCE_BOOSTER: "from-yellow-300 to-orange-500",
+  FEEDBACK_GIVER:     "from-emerald-300 to-emerald-600",
+  FIRST_WEEK:         "from-cyan-300 to-cyan-600",
+  POWER_USER:         "from-violet-400 to-violet-700",
+  SECRET_MASTER:      "from-yellow-400 to-amber-800",
+};
+
+function getBadgeGradient(icon: string | null | undefined, badgeKey?: string) {
+  if (badgeKey && BADGE_KEY_COLORS[badgeKey]) return BADGE_KEY_COLORS[badgeKey];
+  const key = (icon ?? "medal").toLowerCase();
+  return ICON_ACCENTS[key] ?? "from-violet-400 to-purple-500";
 }
+
+function BadgeIconSmall({
+  icon,
+  badgeKey,
+  locked = false,
+  size = "md",
+}: {
+  icon: string;
+  badgeKey?: string;
+  locked?: boolean;
+  size?: "md" | "lg";
+}) {
+  const key = (icon || "").toLowerCase();
+  const I = ICONS[key] ?? Star;
+  const gradient = getBadgeGradient(icon, badgeKey);
+  const dim = size === "lg" ? "h-10 w-10" : "h-9 w-9";
+  const iconDim = size === "lg" ? "h-5 w-5" : "h-4 w-4";
+
+  if (locked) {
+    return (
+      <div className={`relative flex ${dim} shrink-0 items-center justify-center rounded-xl`}>
+        <div className={`flex h-full w-full items-center justify-center rounded-xl bg-gradient-to-br ${gradient} opacity-30`}>
+          <I className={`${iconDim} text-white`} />
+        </div>
+        <Lock className="absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full bg-[rgb(var(--card2))] p-0.5 text-[rgb(var(--muted2))] border border-[rgb(var(--border))]" />
+      </div>
+    );
+  }
+  return (
+    <div className={`flex ${dim} shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${gradient} shadow-sm`}>
+      <I className={`${iconDim} text-white drop-shadow`} />
+    </div>
+  );
+}
+
+/* =======================================================
+   OTHER COMPONENTS (unchanged)
+   ======================================================= */
 
 function AnimatedNumber({ value, loading }: { value: number; loading: boolean }) {
   const [display, setDisplay] = useState(0);
@@ -337,7 +440,6 @@ export default function AchievementsPage() {
   const prevBadgesRef = useRef<number>(0);
   const [confetti, setConfetti] = useState(false);
 
-  // ✅ SWR — instant on revisit, refetches when scope changes
   const { data: meData, isLoading: loadingMe, mutate: mutateMe } = useSWR<MeRes>(
     "/api/achievements/me",
     fetcher,
@@ -550,9 +652,7 @@ export default function AchievementsPage() {
             {recommendations.map((b, i) => (
               <motion.div key={b.key} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 + i * 0.06 }} className="group rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-4 transition-all hover:border-[rgb(var(--primary)/0.3)] hover:shadow-[0_4px_16px_rgb(var(--primary)/0.08)]">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] group-hover:border-[rgb(var(--primary)/0.3)] transition-colors">
-                    {renderBadgeIcon(b.icon, false, "lg")}
-                  </div>
+                  <BadgeIconSmall icon={b.icon} badgeKey={b.key} size="lg" />
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold text-[rgb(var(--fg))]">{b.name}</div>
                     <div className="mt-0.5 line-clamp-1 text-xs text-[rgb(var(--muted))]">{b.description}</div>
@@ -569,7 +669,7 @@ export default function AchievementsPage() {
             ))}
             {!loading && recommendations.length === 0 && (
               <div className="col-span-full rounded-xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-6 text-center text-sm text-[rgb(var(--muted))]">
-                <span className="text-2xl">🎉</span>
+                <Sparkles className="mx-auto h-6 w-6 text-[rgb(var(--muted2))]" />
                 <p className="mt-2">All recommended badges completed!</p>
               </div>
             )}
@@ -593,9 +693,7 @@ export default function AchievementsPage() {
               <AnimatePresence>
                 {(meData?.badges ?? []).slice(0, 8).map((b, i) => (
                   <motion.div key={b.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ delay: i * 0.04 }} className="group flex items-start gap-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-3 transition-all hover:border-[rgb(var(--primary)/0.3)]">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] group-hover:border-[rgb(var(--primary)/0.3)] transition-colors">
-                      {renderBadgeIcon(b.badge.icon, false)}
-                    </div>
+                    <BadgeIconSmall icon={b.badge.icon} badgeKey={b.badge.key} />
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-[rgb(var(--fg))]">{b.badge.name}</div>
                       <div className="mt-0.5 text-xs text-[rgb(var(--muted))] line-clamp-1">{b.badge.description}</div>
@@ -606,7 +704,7 @@ export default function AchievementsPage() {
               </AnimatePresence>
               {!loading && (meData?.badges?.length ?? 0) === 0 && (
                 <div className="col-span-full rounded-xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))] p-6 text-center text-sm text-[rgb(var(--muted))]">
-                  <span className="text-2xl">🏅</span>
+                  <Medal className="mx-auto h-6 w-6 text-[rgb(var(--muted2))]" />
                   <p className="mt-2">No badges yet — complete sessions to start unlocking achievements.</p>
                 </div>
               )}

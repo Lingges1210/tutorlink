@@ -3,7 +3,7 @@ import { getSessionUser } from "@/lib/getSessionUser";
 import TutorSessionsClient from "./TutorSessionsClient";
 
 export default async function TutorSessionsPage() {
-  const dbUser = await getSessionUser(); // ✅ cached
+  const dbUser = await getSessionUser(); // cached
   if (!dbUser) redirect("/auth/login");
   if (dbUser.isDeactivated) redirect("/auth/deactivated");
 

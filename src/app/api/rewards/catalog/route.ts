@@ -8,7 +8,7 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user?.email) return NextResponse.json({ ok: false }, { status: 401 });
 
-  // ✅ Run user lookup + seed in parallel
+  // Run user lookup + seed in parallel
   const [me] = await Promise.all([
     prisma.user.findUnique({
       where: { email: user.email.toLowerCase() },

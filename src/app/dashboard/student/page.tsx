@@ -3,7 +3,7 @@ import { getSessionUser } from "@/lib/getSessionUser";
 import StudentDashboardClient from "./StudentDashboardClient";
 
 export default async function StudentDashboardPage() {
-  const dbUser = await getSessionUser(); // ✅ cached — reuses layout's fetch, no extra DB call
+  const dbUser = await getSessionUser(); // cached — reuses layout's fetch, no extra DB call
 
   if (!dbUser) redirect("/auth/login");
 

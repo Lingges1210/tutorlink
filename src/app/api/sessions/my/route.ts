@@ -36,7 +36,7 @@ export async function GET() {
       proposedAt: true,
       proposedNote: true,
       proposalStatus: true,
-      proposedByUserId: true, // ✅ Added
+      proposedByUserId: true, // Added
       subject: { select: { code: true, title: true } },
       tutor: { select: { id: true, name: true, programme: true, avatarUrl: true, email: true } },
     },
@@ -55,7 +55,7 @@ export async function GET() {
     proposedAt: s.proposedAt ?? null,
     proposedNote: s.proposedNote ?? null,
     proposalStatus: s.proposalStatus ?? null,
-    proposedByUserId: s.proposedByUserId ?? null, // ✅ Added
+    proposedByUserId: s.proposedByUserId ?? null, // Added
   }));
 
   return NextResponse.json({ items });

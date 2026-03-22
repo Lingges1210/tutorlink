@@ -97,7 +97,7 @@ export const notify = {
     sessionId: string,
     whenISO: string
   ) => {
-    // ✅ Fixed: was new Date(whenISO).toLocaleString() — server UTC
+    // Fixed: was new Date(whenISO).toLocaleString() — server UTC
     const when = formatMYT(whenISO);
 
     await Promise.all([
@@ -127,7 +127,7 @@ export const notify = {
     sessionId: string,
     proposedAtISO: string
   ) => {
-    // ✅ Fixed: was new Date(proposedAtISO).toLocaleString() — server UTC
+    // Fixed: was new Date(proposedAtISO).toLocaleString() — server UTC
     const when = formatMYT(proposedAtISO);
 
     await create({
@@ -147,7 +147,7 @@ export const notify = {
     sessionId: string,
     newTimeISO: string
   ) => {
-    // ✅ Fixed: was new Date(newTimeISO).toLocaleString() — server UTC
+    // Fixed: was new Date(newTimeISO).toLocaleString() — server UTC
     const when = formatMYT(newTimeISO);
 
     await create({
@@ -214,7 +214,7 @@ studypalHungry: async (userId: string | null | undefined, petName: string) => {
     viewer: ViewerHint,
     newTimeISO: string
   ) => {
-    // ✅ Fixed: was new Date(newTimeISO).toLocaleString() — server UTC
+    // Fixed: was new Date(newTimeISO).toLocaleString() — server UTC
     const when = formatMYT(newTimeISO);
 
     await create({
@@ -233,7 +233,7 @@ studypalHungry: async (userId: string | null | undefined, petName: string) => {
     sessionId: string,
     newTimeISO: string
   ) => {
-    // ✅ Fixed: was new Date(newTimeISO).toLocaleString() — server UTC
+    // Fixed: was new Date(newTimeISO).toLocaleString() — server UTC
     const when = formatMYT(newTimeISO);
 
     await create({

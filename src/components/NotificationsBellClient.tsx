@@ -604,7 +604,7 @@ export default function NotificationsBellClient({
                   type="button"
                   whileHover={{ scale: 1.04 }}
                   whileTap={{ scale: 0.96 }}
-                  // ✅ FIXED — updates UI instantly, API runs in background
+                  // FIXED — updates UI instantly, API runs in background
 onClick={async () => {
   if (markingAll) return;
   setErr(null);

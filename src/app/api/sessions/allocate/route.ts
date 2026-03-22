@@ -37,14 +37,14 @@ type DayKey = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
 type TimeSlot = { start: string; end: string };
 type DayAvailability = { day: DayKey; off: boolean; slots: TimeSlot[] };
 
-// ✅ Fixed: uses Malaysia day, not UTC day
+// Fixed: uses Malaysia day, not UTC day
 function getDayKey(d: Date): DayKey {
   const map: DayKey[] = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
   return map[getMalaysiaParts(d).day];
 }
 
 /**
- * ✅ Fixed: uses Malaysia hours/minutes for startMin/endMin,
+ * Fixed: uses Malaysia hours/minutes for startMin/endMin,
  * and Malaysia calendar date for same-day check.
  * Previously used raw UTC getHours()/getDay() which caused wrong
  * availability results for any session scheduled in MYT morning (UTC night).
@@ -64,10 +64,10 @@ function isWithinAvailability(
   }
   if (!Array.isArray(parsed)) return false;
 
-  // ✅ Same-day check using Malaysia calendar date
+  // Same-day check using Malaysia calendar date
   if (!sameMalaysiaYMD(start, end)) return false;
 
-  // ✅ Day-of-week using Malaysia time
+  // Day-of-week using Malaysia time
   const startDay = getDayKey(start);
   const endDay = getDayKey(end);
   if (startDay !== endDay) return false;
@@ -76,7 +76,7 @@ function isWithinAvailability(
   if (!day || day.off) return false;
   if (!Array.isArray(day.slots) || day.slots.length === 0) return false;
 
-  // ✅ Hours/minutes in Malaysia time, not UTC
+  // Hours/minutes in Malaysia time, not UTC
   const sp = getMalaysiaParts(start);
   const ep = getMalaysiaParts(end);
   const startMin = sp.hours * 60 + sp.minutes;

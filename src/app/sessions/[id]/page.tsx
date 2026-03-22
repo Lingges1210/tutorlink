@@ -9,7 +9,7 @@ export default async function SessionRedirectPage({
 }) {
   const { id } = await params;
 
-  const dbUser = await getSessionUser(); // ✅ cached
+  const dbUser = await getSessionUser(); // cached
   if (!dbUser) redirect("/auth/login");
 
   const session = await prisma.session.findUnique({

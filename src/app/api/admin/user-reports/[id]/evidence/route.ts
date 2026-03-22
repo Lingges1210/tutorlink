@@ -14,7 +14,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    // ✅ Ensure requester is admin
+    // Ensure requester is admin
     await requireAdminUser();
 
     const { id } = await context.params;

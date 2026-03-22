@@ -47,7 +47,7 @@ export async function GET() {
         examDate: true,
         hoursPerWeek: true,
         style: true,
-        preferredTime: true, // ✅ NEW
+        preferredTime: true, // NEW
         createdAt: true,
         updatedAt: true,
         items: {
@@ -61,7 +61,7 @@ export async function GET() {
             type: true,
             reason: true,
             status: true,
-            timeBlock: true, // ✅ NEW
+            timeBlock: true, // NEW
           },
           orderBy: [{ date: "asc" }, { createdAt: "asc" }],
         },
@@ -74,7 +74,7 @@ export async function GET() {
     const done = plan.items.filter((x) => x.status === "DONE").length;
     const pct = total ? Math.round((done / total) * 100) : 0;
 
-    // ✅ plan-level AI explanation (rule-based but “AI-feel”)
+    // plan-level AI explanation (rule-based but “AI-feel”)
     const dte = daysUntil(plan.examDate);
     const pending = plan.items.filter((x) => x.status !== "DONE");
     const pendingBySubject = new Map<string, number>();
@@ -101,12 +101,12 @@ export async function GET() {
         examDate: plan.examDate,
         hoursPerWeek: plan.hoursPerWeek,
         style: plan.style,
-        preferredTime: plan.preferredTime, // ✅ NEW
+        preferredTime: plan.preferredTime, // NEW
         createdAt: plan.createdAt,
         updatedAt: plan.updatedAt,
         items: plan.items,
         progress: { done, total, pct },
-        aiExplanation, // ✅ NEW
+        aiExplanation, // NEW
       },
     });
   } catch (e: any) {

@@ -80,6 +80,36 @@ function pretty(iso?: string | null) {
   return new Date(iso).toLocaleString();
 }
 
+/* ─── streak icons (replace emoji) ─────────────────────── */
+// no streak
+const IconSleep = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+  </svg>
+);
+// small streak (1–2 days)
+const IconFlame = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+    <path d="M12 2C10 6 6 8 6 13a6 6 0 0 0 12 0c0-3-1.5-5-3-7-1 2-2 3-3 3s-1-1-1-3C9.5 4.5 11 3 12 2z"/>
+  </svg>
+);
+// mid streak (3–6 days)
+const IconBolt = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+  </svg>
+);
+// long streak (7+ days)
+const IconTrophy = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 9H4a2 2 0 0 1-2-2V5h4"/>
+    <path d="M18 9h2a2 2 0 0 0 2-2V5h-4"/>
+    <path d="M12 17v4"/>
+    <path d="M8 21h8"/>
+    <path d="M6 2h12v11a6 6 0 0 1-12 0V2z"/>
+  </svg>
+);
+
 function StatCard({ label, value, sub, accent }: {
   label: string; value: React.ReactNode; sub?: React.ReactNode; accent?: string;
 }) {
@@ -192,7 +222,7 @@ export default function StudentProgressPage() {
     router.replace(`${pathname}?${nextSp.toString()}`, { scroll: false });
   };
 
-  // ✅ SWR — instant on revisit within 15s, refetches when tab/subjectId changes
+  // SWR — instant on revisit within 15s, refetches when tab/subjectId changes
   const apiUrl =
     `/api/progress/dashboard?tab=${encodeURIComponent(tab)}` +
     (subjectId ? `&subjectId=${encodeURIComponent(subjectId)}` : "");
@@ -211,13 +241,18 @@ export default function StudentProgressPage() {
   const history = data?.history;
   const analytics = data?.analytics;
 
-  const streakEmoji = useMemo(() => {
-    if (!overview) return "";
+  /* streak icon — replaces emoji string with an actual icon component */
+  const streakIcon = useMemo((): React.ReactNode => {
+    if (!overview) return null;
     const c = overview.streak.current;
-    if (c === 0) return "💤";
-    if (c < 3) return "🔥";
-    if (c < 7) return "⚡";
-    return "🏆";
+    // no streak
+    if (c === 0) return <span className="text-[rgb(var(--muted2))]"><IconSleep /></span>;
+    // 1-2 days
+    if (c < 3)   return <span style={{ color: "#f97316" }}><IconFlame /></span>;
+    // 3-6 days
+    if (c < 7)   return <span style={{ color: "#eab308" }}><IconBolt /></span>;
+    // 7+ days
+    return           <span style={{ color: "#a855f7" }}><IconTrophy /></span>;
   }, [overview]);
 
   const streakLabel = useMemo(() => {
@@ -351,7 +386,12 @@ export default function StudentProgressPage() {
                   <StatCard label="Total Minutes" value={`${overview?.totals.totalMinutes ?? 0}`} sub="minutes of focused study" accent="rgb(14,165,233)" />
                   <StatCard
                     label="Study Streak"
-                    value={<span className="flex items-center gap-1.5">{streakEmoji} {streakLabel}</span>}
+                    value={
+                      <span className="flex items-center gap-1.5">
+                        {streakIcon}
+                        {streakLabel}
+                      </span>
+                    }
                     sub={`Last activity: ${overview?.streak.lastStudyKey ?? "—"} · Longest: ${overview?.streak.longest ?? 0} day(s)`}
                     accent="rgb(245,158,11)"
                   />

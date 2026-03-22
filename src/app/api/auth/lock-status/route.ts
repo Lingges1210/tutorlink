@@ -20,7 +20,7 @@ export async function GET() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user?.email) return NextResponse.json({ locked: false });
 
-    // ✅ Look up by email, not by user.id (which is Supabase UUID, not DB id)
+    // Look up by email, not by user.id (which is Supabase UUID, not DB id)
     const profile = await prisma.user.findUnique({
       where: { email: user.email.toLowerCase() },
       select: { accountLockStatus: true, isDeactivated: true },

@@ -52,7 +52,7 @@ export default async function NavbarActions() {
     );
   }
 
-  // ✅ Run both Prisma queries in parallel instead of sequentially
+  // Run both Prisma queries in parallel instead of sequentially
   const [initialUnread, chatUnreadResult] = await Promise.all([
     prisma.notification.count({
       where: { userId: dbUser.id, readAt: null },

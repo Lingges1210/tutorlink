@@ -149,7 +149,7 @@ function StarBar({ avg, max = 5 }: { avg: number; max?: number }) {
 }
 
 export default function TutorDashboardPage() {
-  // ✅ SWR — all 3 fetches, instant on revisit
+  // SWR — all 3 fetches, instant on revisit
   const { data: ratingData, isLoading: loadingRating } = useSWR<RatingSummary>(
     "/api/tutor/ratings/summary",
     fetcher,

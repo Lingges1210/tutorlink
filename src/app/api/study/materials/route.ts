@@ -29,7 +29,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const studySubjectId = (url.searchParams.get("studySubjectId") ?? "").trim();
 
-    // ✅ If subjectId provided, verify it belongs to the user
+    // If subjectId provided, verify it belongs to the user
     if (studySubjectId) {
       const ok = await prisma.studySubject.findFirst({
         where: { id: studySubjectId, userId: me.id },
@@ -98,7 +98,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Notes too short" }, { status: 400 });
     }
 
-    // ✅ Validate subject belongs to user (optional)
+    // Validate subject belongs to user (optional)
     if (studySubjectId) {
       const ok = await prisma.studySubject.findFirst({
         where: { id: studySubjectId, userId: me.id },

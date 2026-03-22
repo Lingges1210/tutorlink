@@ -43,7 +43,7 @@ export async function POST() {
     const me = await getMe();
     if (!me) return NextResponse.json({ ok: false }, { status: 401 });
 
-    // ✅ single plan per user: pick the plan for this user
+    // single plan per user: pick the plan for this user
     const plan = await prisma.studyPlan.findFirst({
       where: { userId: me.id },
       include: { items: true },

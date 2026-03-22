@@ -27,7 +27,7 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // ✅ Wrap in try/catch — if Supabase is unreachable, fail open
+  // Wrap in try/catch — if Supabase is unreachable, fail open
   let user = null;
   try {
     const { data } = await supabase.auth.getUser();
@@ -65,12 +65,12 @@ export async function middleware(request: NextRequest) {
     if (cachedStatus === "OK") {
       // Not locked, carry on
     } else {
-      // ✅ Wrap lock check in try/catch too
+      // Wrap lock check in try/catch too
       try {
         const lockCheckUrl = new URL("/api/auth/lock-status", request.url);
         const lockRes = await fetch(lockCheckUrl, {
           headers: { cookie: request.headers.get("cookie") ?? "" },
-          signal: AbortSignal.timeout(3000), // ✅ 3s timeout — don't hang forever
+          signal: AbortSignal.timeout(3000), // 3s timeout — don't hang forever
         });
         const { locked } = await lockRes.json().catch(() => ({ locked: false }));
 

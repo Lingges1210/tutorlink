@@ -100,7 +100,7 @@ function CountdownDigits({ remaining }: { remaining: { h: number; m: number; s: 
 }
 
 export default function RewardsShopPage() {
-  // ✅ SWR — cached, instant on revisit within 30s
+  // SWR — cached, instant on revisit within 30s
   const { data, isLoading: loading, mutate } = useSWR(
     "/api/rewards/catalog",
     fetcher,
@@ -138,7 +138,7 @@ export default function RewardsShopPage() {
     setSuccessKey(rewardKey);
     setTimeout(() => setSuccessKey(null), 2200);
     setBusyKey(null);
-    await mutate(); // ✅ refetch after redeem
+    await mutate(); // refetch after redeem
   }
 
   // Countdown ticker
@@ -148,7 +148,7 @@ export default function RewardsShopPage() {
       const bLeft = formatRemaining(boostUntil);
       setDoubleLeft(dLeft);
       setBoostLeft(bLeft);
-      // ✅ use mutate() instead of load()
+      // use mutate() instead of load()
       if (doubleUntil && !dLeft) mutate();
       if (boostUntil && !bLeft) mutate();
     }, 1000);

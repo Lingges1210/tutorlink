@@ -54,69 +54,163 @@ const ICONS: Record<string, any> = {
 };
 
 const ICON_ACCENTS: Record<string, string> = {
-  trophy: "from-amber-400 to-yellow-500", crown: "from-yellow-400 to-amber-500",
-  flame: "from-orange-400 to-red-500", fire: "from-orange-400 to-red-500",
-  rocket: "from-blue-400 to-violet-500", gem: "from-cyan-400 to-blue-500",
-  star: "from-yellow-300 to-amber-400", zap: "from-yellow-400 to-orange-400",
-  brain: "from-purple-400 to-fuchsia-500", shield: "from-emerald-400 to-teal-500",
-  swords: "from-red-400 to-rose-500", sparkles: "from-violet-400 to-purple-500",
-  medal: "from-[rgb(var(--primary))] to-[rgb(var(--primary))]",
-  compass: "from-teal-400 to-cyan-500", book: "from-indigo-400 to-blue-500",
-  users: "from-pink-400 to-rose-500", award: "from-amber-400 to-yellow-500",
-  sun: "from-yellow-300 to-orange-400", moon: "from-indigo-400 to-violet-500",
-  calendar: "from-sky-400 to-blue-500",
+  trophy:           "from-amber-400 to-yellow-500",
+  crown:            "from-yellow-400 to-amber-500",
+  flame:            "from-orange-400 to-red-500",
+  fire:             "from-orange-400 to-red-500",
+  rocket:           "from-blue-400 to-violet-500",
+  gem:              "from-cyan-400 to-blue-500",
+  star:             "from-yellow-300 to-amber-400",
+  zap:              "from-yellow-400 to-orange-400",
+  brain:            "from-purple-400 to-fuchsia-500",
+  shield:           "from-emerald-400 to-teal-500",
+  swords:           "from-red-400 to-rose-500",
+  sparkles:         "from-violet-400 to-purple-500",
+  medal:            "from-blue-400 to-blue-600",
+  compass:          "from-teal-400 to-cyan-500",
+  book:             "from-indigo-400 to-blue-500",
+  users:            "from-pink-400 to-rose-500",
+  award:            "from-amber-400 to-yellow-500",
+  sun:              "from-yellow-300 to-orange-400",
+  moon:             "from-indigo-400 to-violet-500",
+  calendar:         "from-sky-400 to-blue-500",
   "message-circle": "from-green-400 to-emerald-500",
-  messagecircle: "from-green-400 to-emerald-500",
-  clock: "from-slate-400 to-gray-500", key: "from-amber-400 to-yellow-500",
+  messagecircle:    "from-green-400 to-emerald-500",
+  clock:            "from-slate-400 to-gray-500",
+  key:              "from-amber-400 to-yellow-500",
 };
 
-function getBadgeGradient(icon: string | null | undefined) {
+const BADGE_KEY_COLORS: Record<string, string> = {
+  SESSIONS_1:         "from-violet-400 to-violet-600",
+  SESSIONS_5:         "from-orange-400 to-orange-600",
+  SESSIONS_10:        "from-red-400 to-red-700",
+  SESSIONS_25:        "from-emerald-400 to-emerald-600",
+  SESSIONS_50:        "from-amber-400 to-amber-600",
+  SESSIONS_100:       "from-fuchsia-400 to-purple-600",
+  POINTS_100:         "from-yellow-300 to-yellow-500",
+  POINTS_250:         "from-yellow-400 to-amber-500",
+  POINTS_500:         "from-blue-400 to-blue-600",
+  POINTS_1000:        "from-amber-500 to-amber-800",
+  POINTS_2500:        "from-cyan-400 to-cyan-600",
+  POINTS_5000:        "from-fuchsia-400 to-purple-700",
+  STREAK_3:           "from-orange-300 to-orange-500",
+  STREAK_7:           "from-orange-500 to-red-500",
+  STREAK_14:          "from-red-500 to-red-700",
+  STREAK_30:          "from-red-600 to-red-950",
+  TOPICS_5:           "from-teal-300 to-teal-600",
+  TOPICS_15:          "from-purple-400 to-purple-600",
+  TOPICS_30:          "from-indigo-400 to-indigo-700",
+  TUTOR_5:            "from-pink-300 to-pink-600",
+  TUTOR_25:           "from-yellow-300 to-yellow-600",
+  TUTOR_75:           "from-emerald-400 to-green-700",
+  TUTOR_150:          "from-indigo-400 to-indigo-700",
+  EARLY_BIRD:         "from-yellow-200 to-amber-500",
+  NIGHT_OWL:          "from-indigo-400 to-indigo-900",
+  WEEKEND_WARRIOR:    "from-sky-300 to-sky-600",
+  CONFIDENCE_BOOSTER: "from-yellow-300 to-orange-500",
+  FEEDBACK_GIVER:     "from-emerald-300 to-emerald-600",
+  FIRST_WEEK:         "from-cyan-300 to-cyan-600",
+  POWER_USER:         "from-violet-400 to-violet-700",
+  SECRET_MASTER:      "from-yellow-400 to-amber-800",
+};
+
+function getBadgeGradient(icon: string | null | undefined, badgeKey?: string) {
+  if (badgeKey && BADGE_KEY_COLORS[badgeKey]) return BADGE_KEY_COLORS[badgeKey];
   const key = (icon ?? "medal").toLowerCase();
   return ICON_ACCENTS[key] ?? "from-[rgb(var(--primary))] to-[rgb(var(--primary))]";
 }
 
-function BadgeIcon({ icon, earned }: { icon: string | null | undefined; earned: boolean }) {
+function BadgeIcon({
+  icon,
+  earned,
+  badgeKey,
+}: {
+  icon: string | null | undefined;
+  earned: boolean;
+  badgeKey?: string;
+}) {
   const I = (icon ? ICONS[icon.toLowerCase()] : null) ?? Medal;
-  const gradient = getBadgeGradient(icon);
+  const gradient = getBadgeGradient(icon, badgeKey);
+
   if (earned) {
     return (
-      <div className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${gradient} shadow-lg`} aria-hidden>
+      <div
+        className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${gradient} shadow-lg`}
+        aria-hidden
+      >
         <I className="h-7 w-7 text-white drop-shadow" />
-        <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${gradient} opacity-30 blur-md -z-10 scale-110`} />
+        <div
+          className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${gradient} opacity-30 blur-md -z-10 scale-110`}
+        />
       </div>
     );
   }
+
+  // Locked — same gradient but heavily faded, icon uses gradient color instead of white
   return (
-    <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-2 border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2))]" aria-hidden>
-      <I className="h-7 w-7 text-[rgb(var(--muted2))]" />
+    <div className="relative flex h-14 w-14 shrink-0" aria-hidden>
+      <div
+        className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${gradient} opacity-30`}
+      >
+        <I className="h-7 w-7 text-white" />
+      </div>
       <Lock className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-[rgb(var(--card2))] p-0.5 text-[rgb(var(--muted2))] border border-[rgb(var(--border))]" />
     </div>
   );
 }
 
-function StatCard({ icon: Icon, label, value, sub, accent, loading }: {
-  icon: any; label: string; value: string | number;
-  sub: string; accent: string; loading: boolean;
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  accent,
+  loading,
+}: {
+  icon: any;
+  label: string;
+  value: string | number;
+  sub: string;
+  accent: string;
+  loading: boolean;
 }) {
   return (
     <div className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.8)] p-5 shadow-[0_8px_32px_rgb(var(--shadow)/0.12)] backdrop-blur-sm transition-all hover:shadow-[0_12px_40px_rgb(var(--shadow)/0.18)] hover:-translate-y-0.5">
-      <div className={`absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient-to-br ${accent} opacity-10 blur-xl transition-all group-hover:opacity-20`} />
+      <div
+        className={`absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient-to-br ${accent} opacity-10 blur-xl transition-all group-hover:opacity-20`}
+      />
       <div className="relative flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-[rgb(var(--muted))]">
-        <div className={`flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br ${accent}`}>
+        <div
+          className={`flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br ${accent}`}
+        >
           <Icon className="h-3.5 w-3.5 text-white" />
         </div>
         {label}
       </div>
       <div className="relative mt-3 text-3xl font-bold tabular-nums text-[rgb(var(--fg))]">
-        {loading ? <div className="h-8 w-16 animate-pulse rounded-lg bg-[rgb(var(--card2))]" /> : value}
+        {loading ? (
+          <div className="h-8 w-16 animate-pulse rounded-lg bg-[rgb(var(--card2))]" />
+        ) : (
+          value
+        )}
       </div>
       <div className="relative mt-1 text-xs text-[rgb(var(--muted2))]">{sub}</div>
     </div>
   );
 }
 
-function TabButton({ active, label, count, loading, onClick }: {
-  active: boolean; label: string; count: number; loading: boolean; onClick: () => void;
+function TabButton({
+  active,
+  label,
+  count,
+  loading,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count: number;
+  loading: boolean;
+  onClick: () => void;
 }) {
   return (
     <button
@@ -131,7 +225,14 @@ function TabButton({ active, label, count, loading, onClick }: {
     >
       {label}
       {!loading && (
-        <span className={["inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold", active ? "bg-white/20 text-white" : "bg-[rgb(var(--card))] text-[rgb(var(--muted2))]"].join(" ")}>
+        <span
+          className={[
+            "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold",
+            active
+              ? "bg-white/20 text-white"
+              : "bg-[rgb(var(--card))] text-[rgb(var(--muted2))]",
+          ].join(" ")}
+        >
           {count}
         </span>
       )}
@@ -151,7 +252,6 @@ function ProgressBar({ pct, loading }: { pct: number; loading: boolean }) {
 }
 
 export default function AllBadgesPage() {
-  // ✅ SWR — instant on revisit within 30s
   const { data, isLoading: loading } = useSWR<AllBadgesRes>(
     "/api/achievements/badges/all",
     fetcher,
@@ -161,8 +261,14 @@ export default function AllBadgesPage() {
   const [tab, setTab] = useState<FilterTab>("ALL");
 
   const totalPoints = data?.totalPoints ?? 0;
-  const earnedCount = useMemo(() => (data?.badges ?? []).filter((b) => b.earned).length, [data]);
-  const lockedCount = useMemo(() => (data?.badges ?? []).filter((b) => !b.earned).length, [data]);
+  const earnedCount = useMemo(
+    () => (data?.badges ?? []).filter((b) => b.earned).length,
+    [data]
+  );
+  const lockedCount = useMemo(
+    () => (data?.badges ?? []).filter((b) => !b.earned).length,
+    [data]
+  );
 
   const sorted = useMemo(() => {
     const badges = data?.badges ?? [];
@@ -202,9 +308,13 @@ export default function AllBadgesPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[rgb(var(--primary))] to-[rgb(var(--primary)/0.6)] shadow-[0_4px_12px_rgb(var(--primary)/0.3)]">
               <Medal className="h-4 w-4 text-white" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-[rgb(var(--fg))]">Badge Collection</h1>
+            <h1 className="text-xl font-bold tracking-tight text-[rgb(var(--fg))]">
+              Badge Collection
+            </h1>
           </div>
-          <p className="mt-1.5 text-sm text-[rgb(var(--muted))]">Track your achievements and unlock new milestones.</p>
+          <p className="mt-1.5 text-sm text-[rgb(var(--muted))]">
+            Track your achievements and unlock new milestones.
+          </p>
         </div>
         <Link
           href="/dashboard/student/achievements"
@@ -222,11 +332,17 @@ export default function AllBadgesPage() {
             <div className="flex items-center gap-3">
               <Trophy className="h-5 w-5 text-[rgb(var(--primary))]" />
               <div>
-                <div className="text-sm font-semibold text-[rgb(var(--fg))]">Overall Progress</div>
-                <div className="text-xs text-[rgb(var(--muted))]">{earnedCount} of {data.badges.length} badges unlocked</div>
+                <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                  Overall Progress
+                </div>
+                <div className="text-xs text-[rgb(var(--muted))]">
+                  {earnedCount} of {data.badges.length} badges unlocked
+                </div>
               </div>
             </div>
-            <div className="text-2xl font-bold tabular-nums text-[rgb(var(--primary))]">{completionPct}%</div>
+            <div className="text-2xl font-bold tabular-nums text-[rgb(var(--primary))]">
+              {completionPct}%
+            </div>
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-[rgb(var(--card2))]">
             <div
@@ -239,29 +355,77 @@ export default function AllBadgesPage() {
 
       {/* Stat cards */}
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard icon={Sparkles} label="Total Points" value={totalPoints.toLocaleString()} sub="Accumulated across all activity" accent="from-violet-400 to-purple-500" loading={loading} />
-        <StatCard icon={Medal} label="Earned" value={earnedCount} sub="Badges unlocked so far" accent="from-emerald-400 to-teal-500" loading={loading} />
-        <StatCard icon={Lock} label="Remaining" value={lockedCount} sub="Still to be unlocked" accent="from-amber-400 to-orange-500" loading={loading} />
+        <StatCard
+          icon={Sparkles}
+          label="Total Points"
+          value={totalPoints.toLocaleString()}
+          sub="Accumulated across all activity"
+          accent="from-violet-400 to-purple-500"
+          loading={loading}
+        />
+        <StatCard
+          icon={Medal}
+          label="Earned"
+          value={earnedCount}
+          sub="Badges unlocked so far"
+          accent="from-emerald-400 to-teal-500"
+          loading={loading}
+        />
+        <StatCard
+          icon={Lock}
+          label="Remaining"
+          value={lockedCount}
+          sub="Still to be unlocked"
+          accent="from-amber-400 to-orange-500"
+          loading={loading}
+        />
       </div>
 
       {/* Tabs */}
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        <TabButton active={tab === "ALL"} label="All" count={data?.badges?.length ?? 0} loading={loading} onClick={() => setTab("ALL")} />
-        <TabButton active={tab === "EARNED"} label="Earned" count={earnedCount} loading={loading} onClick={() => setTab("EARNED")} />
-        <TabButton active={tab === "LOCKED"} label="Locked" count={lockedCount} loading={loading} onClick={() => setTab("LOCKED")} />
+        <TabButton
+          active={tab === "ALL"}
+          label="All"
+          count={data?.badges?.length ?? 0}
+          loading={loading}
+          onClick={() => setTab("ALL")}
+        />
+        <TabButton
+          active={tab === "EARNED"}
+          label="Earned"
+          count={earnedCount}
+          loading={loading}
+          onClick={() => setTab("EARNED")}
+        />
+        <TabButton
+          active={tab === "LOCKED"}
+          label="Locked"
+          count={lockedCount}
+          loading={loading}
+          onClick={() => setTab("LOCKED")}
+        />
       </div>
 
       {/* Badge grid */}
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {loading
           ? Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="animate-pulse rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-4 h-36" />
+              <div
+                key={i}
+                className="animate-pulse rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-4 h-36"
+              />
             ))
           : filtered.map((b) => {
               const target = parsePointsTarget(b.key);
-              const pct = target == null ? (b.earned ? 100 : 0) : b.earned ? 100 : clampPct((totalPoints / target) * 100);
-              const remaining = target == null ? null : Math.max(0, target - totalPoints);
-              const gradient = getBadgeGradient(b.icon);
+              const pct =
+                target == null
+                  ? b.earned ? 100 : 0
+                  : b.earned
+                  ? 100
+                  : clampPct((totalPoints / target) * 100);
+              const remaining =
+                target == null ? null : Math.max(0, target - totalPoints);
+              const gradient = getBadgeGradient(b.icon, b.key);
 
               return (
                 <div
@@ -276,14 +440,18 @@ export default function AllBadgesPage() {
                   ].join(" ")}
                 >
                   {b.earned && (
-                    <div className={`pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-gradient-to-br ${gradient} opacity-[0.07] blur-2xl transition-opacity group-hover:opacity-[0.12]`} />
+                    <div
+                      className={`pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-gradient-to-br ${gradient} opacity-[0.07] blur-2xl transition-opacity group-hover:opacity-[0.12]`}
+                    />
                   )}
 
                   <div className="relative flex items-start gap-3">
-                    <BadgeIcon icon={b.icon} earned={b.earned} />
+                    <BadgeIcon icon={b.icon} earned={b.earned} badgeKey={b.key} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="text-sm font-semibold leading-snug text-[rgb(var(--fg))]">{b.name}</div>
+                        <div className="text-sm font-semibold leading-snug text-[rgb(var(--fg))]">
+                          {b.name}
+                        </div>
                         {b.earned ? (
                           <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -295,7 +463,9 @@ export default function AllBadgesPage() {
                           </span>
                         )}
                       </div>
-                      <div className="mt-1 text-xs leading-relaxed text-[rgb(var(--muted))]">{b.description}</div>
+                      <div className="mt-1 text-xs leading-relaxed text-[rgb(var(--muted))]">
+                        {b.description}
+                      </div>
                       {b.earned && b.awardedAt && (
                         <div className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-[rgb(var(--muted2))]">
                           <Calendar className="h-3 w-3" />
@@ -308,10 +478,14 @@ export default function AllBadgesPage() {
                   <div className="relative mt-4 space-y-1.5">
                     <ProgressBar pct={pct} loading={loading} />
                     <div className="flex items-center justify-between text-[11px] text-[rgb(var(--muted2))]">
-                      <span className="font-medium tabular-nums">{Math.round(pct)}%</span>
+                      <span className="font-medium tabular-nums">
+                        {Math.round(pct)}%
+                      </span>
                       <span>
                         {target == null
-                          ? b.earned ? "Achievement unlocked" : "Criteria-based"
+                          ? b.earned
+                            ? "Achievement unlocked"
+                            : "Criteria-based"
                           : b.earned
                           ? `${target.toLocaleString()} pts reached`
                           : `${remaining?.toLocaleString()} pts to go`}
@@ -326,8 +500,12 @@ export default function AllBadgesPage() {
           <div className="col-span-full flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.5)] py-14 text-center">
             <Medal className="h-10 w-10 text-[rgb(var(--muted2))]" />
             <div>
-              <div className="text-sm font-semibold text-[rgb(var(--fg))]">No badges here</div>
-              <div className="mt-1 text-xs text-[rgb(var(--muted))]">Nothing matches this filter yet.</div>
+              <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                No badges here
+              </div>
+              <div className="mt-1 text-xs text-[rgb(var(--muted))]">
+                Nothing matches this filter yet.
+              </div>
             </div>
           </div>
         )}

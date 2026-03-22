@@ -52,7 +52,7 @@ export async function GET() {
       proposedAt: true,
       proposedNote: true,
       proposalStatus: true,
-      // ✅ Added: tells the tutor UI whether the proposal came from the
+      // Added: tells the tutor UI whether the proposal came from the
       // student (proposedByUserId === session.studentId) or from themselves.
       // The tutor dashboard uses this to show the correct banner label:
       // "Student proposed a new time" vs "You proposed a new time".

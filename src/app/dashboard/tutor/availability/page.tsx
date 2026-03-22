@@ -62,7 +62,7 @@ export default function TutorAvailabilityPage() {
   const [saved, setSaved] = useState(false);
   const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
-  // ✅ SWR — instant on revisit within 60s
+  // SWR — instant on revisit within 60s
   const { data, isLoading: loading, mutate } = useSWR(
     "/api/tutor/availability",
     fetcher,
@@ -104,7 +104,7 @@ export default function TutorAvailabilityPage() {
       setMsg({ text: "Availability saved successfully!", type: "success" });
       setSaved(true);
       setLocalAvailability(null); // reset local edits — server is now source of truth
-      await mutate(); // ✅ refetch from server
+      await mutate(); // refetch from server
       setTimeout(() => setSaved(false), 2000);
     } catch (e: any) {
       setMsg({ text: e?.message ?? "Something went wrong", type: "error" });

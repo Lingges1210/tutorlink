@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     const redirectTo = `${origin}/auth/reset-password`;
     console.log("RESET redirectTo:", redirectTo);
 
-    // ✅ Generate a recovery link (Supabase will NOT email it)
+    // Generate a recovery link (Supabase will NOT email it)
     const supabase = supabaseAdmin();
 
     const { data, error } = await supabase.auth.admin.generateLink({
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       options: { redirectTo },
     });
 
-    // ✅ Security: never reveal if user exists
+    // Security: never reveal if user exists
     if (error) {
       console.warn("generateLink(recovery) error:", error.message);
       return NextResponse.json({
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ✅ Send your branded email
+    // Send your branded email
     await sendPasswordResetEmail({
       toEmail: cleanedEmail,
       toName: null,

@@ -295,7 +295,7 @@ export default function StudentDashboardClient({ user, isTutor }: Props) {
   const greeting =
     greetingHour < 12 ? "Good morning" : greetingHour < 17 ? "Good afternoon" : "Good evening";
 
-  // ✅ Prefetch common pages in background so they load instantly when visited
+  // Prefetch common pages in background so they load instantly when visited
   useEffect(() => {
     fetch("/api/achievements/me");
     fetch("/api/achievements/recommendations");

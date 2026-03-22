@@ -11,5 +11,5 @@ export const prisma =
     log: ["error", "warn"],
   });
 
-// ✅ Always save the singleton, not just in development
+// Always save the singleton, not just in development
 globalForPrisma.prisma = prisma;

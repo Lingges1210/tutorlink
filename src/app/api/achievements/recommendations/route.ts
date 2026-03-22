@@ -32,10 +32,10 @@ export async function GET() {
   if (!me || me.isDeactivated)
     return NextResponse.json({ ok: false }, { status: 401 });
 
-  // ✅ Seed once per process — no count() check on every request
+  // Seed once per process — no count() check on every request
   await seedBadgesOnce();
 
-  // ✅ Wallet upsert + earned badges + all badges — all in parallel
+  // Wallet upsert + earned badges + all badges — all in parallel
   // upsert returns the record directly, so no second findUnique needed
   const [wallet, earned, allBadges] = await Promise.all([
     prisma.pointsWallet.upsert({

@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     const name = nameRaw.trim();
     if (!name) return NextResponse.json({ ok: false, error: "Name required" }, { status: 400 });
 
-    // ✅ optional: prevent duplicates (simple, user-friendly)
+    // optional: prevent duplicates (simple, user-friendly)
     const existing = await prisma.studySubject.findFirst({
       where: {
         userId: me.id,

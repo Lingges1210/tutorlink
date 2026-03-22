@@ -763,11 +763,11 @@ model StudyMaterial {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // ✅ NEW (for subject-wise)
+  // NEW (for subject-wise)
   studySubjectId String?
   studySubject   StudySubject? @relation(fields: [studySubjectId], references: [id], onDelete: SetNull)
 
-  // ✅ NEW (for PDF delete from storage)
+  // NEW (for PDF delete from storage)
   objectPath String?
   fileName   String?
 

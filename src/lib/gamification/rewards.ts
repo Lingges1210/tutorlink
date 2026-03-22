@@ -178,7 +178,7 @@ export const REWARD_CATALOG = [
   },
 ] as const;
 
-// ✅ Same global flag pattern as badges — no count() hit on every request
+// Same global flag pattern as badges — no count() hit on every request
 declare global {
   var __rewardsSeeded: boolean | undefined;
   var __rewardsSeedingPromise: Promise<void> | undefined;

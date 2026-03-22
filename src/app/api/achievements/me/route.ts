@@ -20,10 +20,10 @@ export async function GET() {
   if (!me || me.isDeactivated)
     return NextResponse.json({ ok: false }, { status: 401 });
 
-  // ✅ Seed once per process — global flag means no DB count() on every request
+  // Seed once per process — global flag means no DB count() on every request
   await Promise.all([seedBadgesOnce(), seedRewardsOnce()]);
 
-  // ✅ Upsert wallet + fetch history + fetch badges all in parallel
+  // Upsert wallet + fetch history + fetch badges all in parallel
   const [wallet, history, badges] = await Promise.all([
     prisma.pointsWallet.upsert({
       where: { userId: me.id },

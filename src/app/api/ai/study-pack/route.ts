@@ -39,7 +39,7 @@ function validatePack(pack: any): pack is StudyPack {
   return true;
 }
 
-// ✅ This prevents your browser from spamming 405
+// This prevents your browser from spamming 405
 export async function GET() {
   return NextResponse.json({
     ok: true,
@@ -117,7 +117,7 @@ CONTENT:
 ${text.slice(0, 16000)}
 `.trim();
 
-    // ✅ Add a timeout so you don’t wait forever
+    // Add a timeout so you don’t wait forever
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), 25_000);
 

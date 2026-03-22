@@ -41,7 +41,7 @@ async function callGemini(prompt: string): Promise<string> {
   return result.response.text();
 }
 
-// ✅ Single prompt — 1 API call instead of 4, avoids rate limits entirely
+// Single prompt — 1 API call instead of 4, avoids rate limits entirely
 async function generateAll(
   rawText: string,
   quizCount: number,
@@ -144,7 +144,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       );
     }
 
-    // ✅ Single API call — summary + concepts + flashcards + quiz in one shot
+    // Single API call — summary + concepts + flashcards + quiz in one shot
     const { summary, concepts, flashcards, quiz } = await generateAll(
       rawText,
       quizCount,
@@ -171,7 +171,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   } catch (e: any) {
     console.error("Generate failed:", e);
 
-    // ✅ Return a clear quota error to the frontend
+    // Return a clear quota error to the frontend
     if (e?.message?.includes("429") || e?.message?.includes("quota")) {
       return NextResponse.json(
         {

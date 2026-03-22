@@ -62,7 +62,7 @@ type GenerateBody = {
   examDate?: string; // ISO
   hoursPerWeek: number;
   style: "SHORT_BURSTS" | "DEEP_STUDY";
-  preferredTime?: PreferredTime; // ✅ NEW
+  preferredTime?: PreferredTime; // NEW
   availability: {
     days: DayKey[];
     hoursByDay: Partial<Record<DayKey, number>>;
@@ -314,7 +314,7 @@ export async function POST(req: Request) {
     scheduleBucket(practiceMins, "PRACTICE", "Priority: practice/past questions (30%).");
     scheduleBucket(recapMins, "REVIEW", "Priority: recap + retention (10%).");
 
-    // ✅ SINGLE-PLAN OVERWRITE (create if none, otherwise update + replace items)
+    // SINGLE-PLAN OVERWRITE (create if none, otherwise update + replace items)
     const result = await prisma.$transaction(async (tx) => {
       const existing = await tx.studyPlan.findFirst({
         where: { userId: me.id },
@@ -333,7 +333,7 @@ export async function POST(req: Request) {
             style,
             subjects: subjects as any,
             availability: { days: selectedDays, hoursByDay } as any,
-            preferredTime, // ✅ NEW
+            preferredTime, // NEW
             items: {
               create: items.map((it) => ({
                 date: it.date,
@@ -343,7 +343,7 @@ export async function POST(req: Request) {
                 durationMin: it.durationMin,
                 type: it.type,
                 reason: it.reason ?? null,
-                timeBlock: it.timeBlock ?? null, // ✅ NEW
+                timeBlock: it.timeBlock ?? null, // NEW
                 status: "PENDING",
               })),
             },
@@ -365,7 +365,7 @@ export async function POST(req: Request) {
           style,
           subjects: subjects as any,
           availability: { days: selectedDays, hoursByDay } as any,
-          preferredTime, // ✅ NEW
+          preferredTime, // NEW
         },
         select: { id: true },
       });
@@ -382,7 +382,7 @@ export async function POST(req: Request) {
           durationMin: it.durationMin,
           type: it.type,
           reason: it.reason ?? null,
-          timeBlock: it.timeBlock ?? null, // ✅ NEW
+          timeBlock: it.timeBlock ?? null, // NEW
           status: "PENDING",
         })),
       });

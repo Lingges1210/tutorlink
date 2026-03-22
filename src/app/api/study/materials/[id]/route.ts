@@ -72,10 +72,10 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
       return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
     }
 
-    // ✅ delete material row first
+    // delete material row first
     await prisma.studyMaterial.delete({ where: { id: material.id } });
 
-    // ✅ remove storage file if PDF
+    // remove storage file if PDF
     if (material.objectPath) {
       const admin = getAdminSupabase();
       if (admin) {
@@ -83,7 +83,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
       }
     }
 
-    // ✅ auto-delete empty subject
+    // auto-delete empty subject
     let subjectDeleted = false;
 
     if (material.studySubjectId) {

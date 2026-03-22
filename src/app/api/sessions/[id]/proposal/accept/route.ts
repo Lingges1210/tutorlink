@@ -31,7 +31,7 @@ function toMinutes(hhmm: string) {
   return h * 60 + m;
 }
 
-// ✅ Fixed: uses Malaysia time (UTC+8), not raw UTC
+// Fixed: uses Malaysia time (UTC+8), not raw UTC
 function dayKeyFromDate(d: Date): DayKey {
   const k: DayKey[] = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
   return k[getMalaysiaParts(d).day];
@@ -111,7 +111,7 @@ async function getTutorAvailability(
   return parseAvailability(raw);
 }
 
-// ✅ Fixed: computes startMin/endMin using Malaysia hours, not UTC hours
+// Fixed: computes startMin/endMin using Malaysia hours, not UTC hours
 async function tutorDeclaredAvailable(
   tutorId: string,
   start: Date,
@@ -127,7 +127,7 @@ async function tutorDeclaredAvailable(
   const day = avail.find((d) => d.day === dayKey);
   if (!day) return false;
 
-  // ✅ Use Malaysia hours/minutes, not UTC
+  // Use Malaysia hours/minutes, not UTC
   const sp = getMalaysiaParts(start);
   const ep = getMalaysiaParts(end);
   const startMin = sp.hours * 60 + sp.minutes;
@@ -253,7 +253,7 @@ export async function POST(
       newEndsAt
     );
 
-    // ✅ Only hard-reject if explicitly false (not null).
+    // Only hard-reject if explicitly false (not null).
     // null means availability data is missing — allow it through.
     if (declared === false) {
       return NextResponse.json(

@@ -297,7 +297,7 @@ function brandEmailLayout(opts: {
 
 /* ==========================================================================
    SESSION CARD
-   ✅ Fixed: all date/time formatting now uses Asia/Kuala_Lumpur (MYT, UTC+8)
+   Fixed: all date/time formatting now uses Asia/Kuala_Lumpur (MYT, UTC+8)
    Previously used toLocaleDateString()/toLocaleTimeString() without a timezone,
    which rendered in server UTC — showing times 8 hours behind MYT.
    ========================================================================== */
@@ -312,7 +312,7 @@ function sessionCardHtml(opts: {
 }) {
   const { subjectCode, subjectTitle, startISO, endISO, extraLines = [], highlight } = opts;
 
-  // ✅ Use MYT for all displayed date/time strings
+  // Use MYT for all displayed date/time strings
   const dateStr   = formatMYTDate(startISO);
   const startTime = formatMYTTime(startISO);
   const endTime   = endISO ? formatMYTTime(endISO) : null;
@@ -491,7 +491,7 @@ export async function scheduleSessionReminderEmail(opts: {
   const { sessionId, toEmail, toName, subjectCode, subjectTitle, scheduledAtISO } = opts;
   const subject = `Reminder: Your ${subjectCode} session starts in 1 hour`;
 
-  // ✅ Show MYT time in the reminder subject line preview
+  // Show MYT time in the reminder subject line preview
   const startTimeMYT = formatMYTTime(scheduledAtISO);
 
   const html = brandEmailLayout({
@@ -614,7 +614,7 @@ export async function sendSessionInviteEmail(opts: {
     footerNote: "You're receiving this because you have a session booked on TutorLink.",
   });
 
-  // ✅ Use MYT-formatted strings for ICS description (human-readable)
+  // Use MYT-formatted strings for ICS description (human-readable)
   const descriptionLines = [
     `Course: ${opts.subjectCode} — ${opts.subjectTitle}`,
     `Start: ${formatMYTFull(start)}`,

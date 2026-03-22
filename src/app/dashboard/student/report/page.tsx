@@ -178,7 +178,7 @@ export default function ReportsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("ACTIVE");
   const [currentPage, setCurrentPage] = useState(1);
 
-  // ✅ SWR — instant on revisit within 30s
+  // SWR — instant on revisit within 30s
   const { data: reportsData, isLoading: loading, error, mutate } = useSWR(
     "/api/reports/my",
     fetcher,
@@ -239,7 +239,7 @@ export default function ReportsPage() {
       setEvidenceFile(null);
       setCategory("GENERAL_COMPLAINT");
       setReportedUserId("");
-      await mutate(); // ✅ refetch reports after submit
+      await mutate(); // refetch reports after submit
       setTimeout(() => { setTab("list"); setSubmitMsg(null); }, 1800);
     } catch (e: any) {
       setSubmitErr(e?.message || "Something went wrong");
@@ -366,7 +366,7 @@ export default function ReportsPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => mutate()} // ✅ SWR mutate instead of loadReports
+                      onClick={() => mutate()} // SWR mutate instead of loadReports
                       disabled={loading}
                       className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 text-[11px] font-semibold text-[rgb(var(--muted))] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card2))] disabled:opacity-50 transition-all"
                     >

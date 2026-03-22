@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/getSessionUser";
 
 export default async function StudentProfilePage() {
-  const dbUser = await getSessionUser(); // ✅ cached, no extra DB call
+  const dbUser = await getSessionUser(); // cached, no extra DB call
   if (!dbUser) redirect("/auth/login");
 
   const initials =

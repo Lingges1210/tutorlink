@@ -1022,7 +1022,7 @@ async function main() {
     ],
   });
 
-  console.log("✅ Presentation seed complete.");
+  console.log("Presentation seed complete.");
   console.log("");
   console.log("Demo logins:");
   console.log("admin@student.usm.my    / Demo123!");

@@ -93,7 +93,7 @@ export default function ApplyTutorPage() {
   const [dropdownMounted, setDropdownMounted] = useState(false);
   const [dropdownShow, setDropdownShow] = useState(false);
 
-  // ✅ SWR for existing application
+  // SWR for existing application
   const { data: existingData, isLoading: initialLoading, mutate } = useSWR(
     "/api/tutor/application",
     fetcher,
@@ -239,7 +239,7 @@ export default function ApplyTutorPage() {
       setTranscriptFile(null);
       setTranscriptPath(null);
       setStatusMsg("Application submitted. Awaiting admin approval.");
-      await mutate(); // ✅ refetch status after submit
+      await mutate(); // refetch status after submit
     } catch (e: unknown) {
       setStatusMsg(e instanceof Error ? e.message : "Something went wrong");
     } finally {

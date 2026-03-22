@@ -253,7 +253,7 @@ export default function StudentLeaderboardPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // ✅ SWR — instant on revisit within 15s, refetches when scope changes
+  // SWR — instant on revisit within 15s, refetches when scope changes
   const { data, isLoading: loading, mutate } = useSWR<LeaderboardRes>(
     `/api/achievements/leaderboard/weekly?limit=50&mode=${encodeURIComponent(scope)}`,
     fetcher,

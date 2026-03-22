@@ -6,7 +6,7 @@ import { getSessionUser } from "@/lib/getSessionUser";
 export default async function StudentLayout({
   children,
 }: {
-  children: React.ReactNode; // ✅ fix the implicit any
+  children: React.ReactNode; // fix the implicit any
 }) {
   const dbUser = await getSessionUser(); 
   if (!dbUser) redirect("/auth/login");

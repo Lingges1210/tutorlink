@@ -144,9 +144,9 @@ function Icon({ name, size = 16, color = "currentColor", strokeWidth = 1.8 }: { 
   }
 }
 
-function ActivityIcon({ id, size = 18 }: { id: string; size?: number }) {
+function ActivityIcon({ id, size = 18, color }: { id: string; size?: number; color?: string }) {
   const map: Record<string, string> = { quiz: "book", streak: "flame", booking: "calendar", session: "sparkle", sos: "help", badge: "trophy" };
-  return <Icon name={map[id] || "zap"} size={size} />;
+  return <Icon name={map[id] || "zap"} size={size} color={color}/>;
 }
 function LevelIcon({ icon, size = 16 }: { icon: string; size?: number }) {
   const map: Record<string, string> = { seed: "seed", book: "book", grad: "grad", star: "star", crown: "crown" };
@@ -156,29 +156,75 @@ function LevelIcon({ icon, size = 16 }: { icon: string; size?: number }) {
 /* ─── GLOBAL STYLES ─────────────────────────────────────── */
 const KF = `
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap');
-  :root {
-    --c-bg:#F5F4FC;--c-surface:#FFFFFF;--c-surface2:#EEEAF8;--c-border:rgba(100,90,180,0.13);--c-border2:rgba(100,90,180,0.22);
-    --c-text:#1A1830;--c-text2:#5A5478;--c-text3:#9890B8;--c-accent:#6B58F0;--c-accent2:#8474F8;--c-accent3:#A99EFF;
-    --c-teal:#0DB8A4;--c-green:#16A97A;--c-amber:#C47900;--c-red:#E04040;--c-cat:#8474F8;--c-dog:#3A8FE0;
-    --r-sm:10px;--r-md:14px;--r-lg:20px;--r-xl:26px;
-    --font-body:'DM Sans',system-ui,sans-serif;--font-serif:'Instrument Serif',Georgia,serif;
-    --shadow-sm:0 1px 4px rgba(80,60,200,0.10),0 1px 2px rgba(80,60,200,0.06);
-    --shadow-md:0 4px 16px rgba(80,60,200,0.12),0 2px 6px rgba(80,60,200,0.07);
-    --shadow-lg:0 10px 40px rgba(80,60,200,0.15),0 4px 12px rgba(80,60,200,0.09);
-    --shadow-accent:0 4px 24px rgba(107,88,240,0.22);
-  }
-  .dark {
-    --c-bg:#0F0E17;--c-surface:#16151F;--c-surface2:#1C1A28;--c-border:rgba(255,255,255,0.07);--c-border2:rgba(255,255,255,0.12);
-    --c-text:#E8E4F4;--c-text2:#8B86A0;--c-text3:#5C5874;--c-accent:#7C6AFF;--c-accent2:#A594FE;--c-accent3:#C4BBFF;
-    --c-teal:#2DD4BF;--c-green:#34D399;--c-amber:#FBBF24;--c-red:#F87171;--c-cat:#A594FE;--c-dog:#60AEFF;
-    --shadow-sm:0 1px 3px rgba(0,0,0,0.4),0 1px 2px rgba(0,0,0,0.3);
-    --shadow-md:0 4px 16px rgba(0,0,0,0.5),0 2px 6px rgba(0,0,0,0.3);
-    --shadow-lg:0 10px 40px rgba(0,0,0,0.6),0 4px 12px rgba(0,0,0,0.4);
-    --shadow-accent:0 4px 24px rgba(124,106,255,0.3);
-  }
-  .sp { font-family:var(--font-body);background:var(--c-bg);color:var(--c-text); }
-  .sp-inner { max-width:650px;margin:0 auto;padding:0 0 40px; }
 
+  :root {
+    --c-bg:#F0EFF9;
+    --c-surface:#FFFFFF;
+    --c-surface2:#E8E6F6;
+    --c-surface3:#F7F6FE;
+    --c-border:rgba(108,92,212,0.11);
+    --c-border2:rgba(108,92,212,0.2);
+    --c-text:#18162E;
+    --c-text2:#4E4870;
+    --c-text3:#9B95C0;
+    --c-accent:#6C5CE7;
+    --c-accent2:#8B7FF8;
+    --c-accent3:#B8B0FF;
+    --c-teal:#00B4A0;
+    --c-green:#00A86B;
+    --c-amber:#D68000;
+    --c-red:#E53935;
+    --c-cat:#8B7FF8;
+    --c-dog:#3D9BE9;
+    --r-sm:10px;--r-md:14px;--r-lg:20px;--r-xl:28px;
+    --font-body:'DM Sans',system-ui,sans-serif;
+    --font-serif:'Instrument Serif',Georgia,serif;
+    --shadow-xs:0 1px 3px rgba(60,40,180,0.07);
+    --shadow-sm:0 2px 8px rgba(60,40,180,0.09),0 1px 3px rgba(60,40,180,0.06);
+    --shadow-md:0 6px 24px rgba(60,40,180,0.11),0 2px 8px rgba(60,40,180,0.07);
+    --shadow-lg:0 16px 48px rgba(60,40,180,0.13),0 4px 14px rgba(60,40,180,0.08);
+    --shadow-accent:0 4px 20px rgba(108,92,231,0.28);
+    --shadow-glow:0 0 0 3px rgba(108,92,231,0.14);
+  }
+
+  .dark {
+    --c-bg:#0D0C18;
+    --c-surface:#13121F;
+    --c-surface2:#1A1829;
+    --c-surface3:#201E30;
+    --c-border:rgba(255,255,255,0.07);
+    --c-border2:rgba(255,255,255,0.13);
+    --c-text:#EAE6FF;
+    --c-text2:#7E78A8;
+    --c-text3:#4A4670;
+    --c-accent:#7C6AFF;
+    --c-accent2:#A594FE;
+    --c-accent3:#C8C0FF;
+    --c-teal:#2DD4BF;
+    --c-green:#34D399;
+    --c-amber:#FBBF24;
+    --c-red:#F87171;
+    --c-cat:#A594FE;
+    --c-dog:#60AEFF;
+    --shadow-xs:0 1px 3px rgba(0,0,0,0.35);
+    --shadow-sm:0 2px 8px rgba(0,0,0,0.4),0 1px 3px rgba(0,0,0,0.3);
+    --shadow-md:0 6px 24px rgba(0,0,0,0.5),0 2px 8px rgba(0,0,0,0.3);
+    --shadow-lg:0 16px 48px rgba(0,0,0,0.6),0 4px 14px rgba(0,0,0,0.4);
+    --shadow-accent:0 4px 20px rgba(124,106,255,0.32);
+    --shadow-glow:0 0 0 3px rgba(124,106,255,0.18);
+  }
+
+  * { box-sizing:border-box; }
+
+  .sp {
+    font-family:var(--font-body);
+    background:var(--c-bg);
+    color:var(--c-text);
+    -webkit-font-smoothing:antialiased;
+  }
+  .sp-inner { max-width:650px;margin:0 auto;padding:0 0 48px; }
+
+  /* ── Animations ── */
   @keyframes sp-idle    { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
   @keyframes sp-walk-x  { 0%{left:-180px;transform:scaleX(1)} 47%{left:calc(100% + 20px);transform:scaleX(1)} 50%{left:calc(100% + 20px);transform:scaleX(-1)} 97%{left:-180px;transform:scaleX(-1)} 100%{left:-180px;transform:scaleX(1)} }
   @keyframes sp-jump    { 0%{transform:translateY(0) scaleY(1)} 20%{transform:translateY(0) scaleY(.9) scaleX(1.08)} 45%{transform:translateY(-60px) scaleY(1.04)} 75%{transform:translateY(-50px)} 90%{transform:translateY(-4px)} 100%{transform:translateY(0) scaleY(1)} }
@@ -195,24 +241,23 @@ const KF = `
   @keyframes sp-burst   { 0%{opacity:1;transform:translate(0,0) scale(1)} 100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(0)} }
   @keyframes sp-treat   { 0%{opacity:0;transform:translateY(-38px) rotate(0) scale(1.2)} 40%{opacity:1} 80%{opacity:1;transform:translateY(0) rotate(200deg) scale(.9)} 100%{opacity:0;transform:translateY(10px) scale(1.4)} }
   @keyframes sp-speech  { from{opacity:0;transform:scale(.65) translateY(5px)} 60%{transform:scale(1.06)} to{opacity:1;transform:scale(1)} }
-  @keyframes sp-glow    { 0%,100%{opacity:.25;transform:scale(1)} 50%{opacity:.65;transform:scale(1.08)} }
+  @keyframes sp-glow    { 0%,100%{opacity:.2;transform:scale(1)} 50%{opacity:.55;transform:scale(1.1)} }
   @keyframes sp-zzz1    { 0%,25%{opacity:0;transform:translate(0,0) scale(.6)} 55%{opacity:1} 100%{opacity:0;transform:translate(8px,-28px) scale(.9)} }
   @keyframes sp-zzz2    { 0%,35%{opacity:0;transform:translate(0,0) scale(.6)} 65%{opacity:1} 100%{opacity:0;transform:translate(14px,-42px) scale(1.1)} }
-  @keyframes sp-toast   { from{opacity:0;transform:translateY(-14px) scale(.9)} to{opacity:1;transform:translateY(0) scale(1)} }
-  @keyframes sp-toast-out { to{opacity:0;transform:translateY(-10px) scale(.94)} }
   @keyframes sp-shimmer { 0%{background-position:-300% center} 100%{background-position:300% center} }
-  @keyframes sp-pop     { from{opacity:0;transform:scale(.7) rotate(-12deg)} 80%{transform:scale(1.04)} to{opacity:1;transform:scale(1) rotate(0)} }
+  @keyframes sp-pop     { from{opacity:0;transform:scale(.72) translateY(6px)} 75%{transform:scale(1.03) translateY(-1px)} to{opacity:1;transform:scale(1) translateY(0)} }
   @keyframes sp-float   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
-  @keyframes sp-pulse-dot { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.3);opacity:.8} }
-  @keyframes sp-fade-up { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes sp-fade-up { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
   @keyframes sp-spin    { from{transform:rotate(0)} to{transform:rotate(360deg)} }
-  @keyframes sp-ring    { 0%{opacity:0;transform:scale(.85)} 50%{opacity:.5} 100%{opacity:0;transform:scale(1.15)} }
   @keyframes sp-heartbeat { 0%,100%{transform:scale(1)} 40%{transform:scale(1.14)} 70%{transform:scale(.96)} }
-  @keyframes sp-breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.015)} }
-  @keyframes sp-hunger-banner { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes sp-hunger-banner { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
   @keyframes sp-levelup { 0%{opacity:0;transform:scale(.6) rotate(-6deg)} 70%{transform:scale(1.06) rotate(1deg)} 100%{opacity:1;transform:scale(1) rotate(0)} }
   @keyframes sp-decay-tick { 0%{opacity:0;transform:translateY(0) scale(1)} 40%{opacity:1} 100%{opacity:0;transform:translateY(-40px) scale(.8)} }
+  @keyframes sp-slide-in { from{opacity:0;transform:translateX(10px)} to{opacity:1;transform:translateX(0)} }
+  @keyframes sp-tab-in  { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes sp-pulse-ring { 0%{transform:scale(1);opacity:.5} 100%{transform:scale(1.5);opacity:0} }
 
+  /* ── Pet classes ── */
   .sp-idle  { animation:sp-idle 3.2s ease-in-out infinite; }
   .sp-eat   { animation:sp-eat .4s ease-in-out infinite; }
   .sp-jump  { animation:sp-jump .65s cubic-bezier(.2,1.4,.5,1) forwards; }
@@ -227,6 +272,47 @@ const KF = `
   .sp-arc { display:none; }
   .sp-excited .sp-ear-l { animation:sp-wiggle .42s ease-in-out infinite; }
   .sp-excited .sp-ear-r { animation:sp-wiggle .42s ease-in-out infinite;animation-delay:.1s; }
+
+  /* ── Card hover ── */
+  .sp-card-hover { transition:transform .18s ease,box-shadow .18s ease; }
+  .sp-card-hover:hover { transform:translateY(-1px);box-shadow:var(--shadow-md); }
+
+  /* ── Tab button ── */
+  .sp-tab {
+    flex:1;padding:10px 0;border:none;cursor:pointer;
+    font-size:12px;font-family:var(--font-body);font-weight:500;
+    transition:all .2s cubic-bezier(.34,1.56,.64,1);
+    border-radius:11px;display:flex;align-items:center;justify-content:center;gap:5px;
+    position:relative;
+  }
+  .sp-tab.active {
+    background:var(--c-accent);
+    color:#fff;
+    box-shadow:var(--shadow-accent);
+    font-weight:600;
+  }
+  .sp-tab.inactive {
+    background:transparent;
+    color:var(--c-text3);
+  }
+  .sp-tab.inactive:hover { background:var(--c-surface2);color:var(--c-text2); }
+
+  /* ── Activity row ── */
+  .sp-act-row {
+    background:var(--c-surface);
+    border:1px solid var(--c-border);
+    border-radius:16px;
+    padding:13px 15px;
+    margin-bottom:7px;
+    display:flex;align-items:center;gap:12px;
+    transition:border-color .18s,transform .18s,box-shadow .18s;
+  }
+  .sp-act-row:hover { border-color:var(--c-border2);transform:translateY(-1px);box-shadow:var(--shadow-sm); }
+
+  /* ── Scrollbar ── */
+  .sp ::-webkit-scrollbar { width:4px; }
+  .sp ::-webkit-scrollbar-track { background:transparent; }
+  .sp ::-webkit-scrollbar-thumb { background:var(--c-border2);border-radius:4px; }
 `;
 
 /* ─── ACCESSORY SVG (cat) ───────────────────────────────── */
@@ -599,13 +685,48 @@ function DogSVG({ anim, acc, onClick }: { anim: AnimState; acc: AccId; onClick: 
 /* ─── SCENE BG ───────────────────────────────────────────── */
 function SceneBg({ petType }: { petType: PetType }) {
   const c = petType === "cat" ? "#7C6AFF" : "#60AEFF";
+  const c2 = petType === "cat" ? "#A594FE" : "#93C5FD";
   return (
-    <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",overflow:"hidden"}} viewBox="0 0 400 200" preserveAspectRatio="xMidYMid slice">
-      <defs><radialGradient id="scene-glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor={c} stopOpacity=".08"/><stop offset="100%" stopColor={c} stopOpacity="0"/></radialGradient></defs>
-      <rect width="400" height="200" fill="url(#scene-glow)"/>
-      <line x1="0" y1="178" x2="400" y2="178" stroke={c} strokeWidth=".8" strokeOpacity=".15"/>
-      {[[30,30],[370,25],[15,120],[385,110],[200,20]].map(([x,y],i)=>(
-        <circle key={i} cx={x} cy={y} r="1.5" fill={c} opacity=".2" style={{animation:`sp-float ${3+i*.5}s ease-in-out infinite`,animationDelay:`${i*.7}s`}}/>
+    <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",overflow:"hidden"}} viewBox="0 0 400 220" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <radialGradient id="scene-glow" cx="50%" cy="40%" r="55%">
+          <stop offset="0%" stopColor={c} stopOpacity=".12"/>
+          <stop offset="100%" stopColor={c} stopOpacity="0"/>
+        </radialGradient>
+        <radialGradient id="scene-floor" cx="50%" cy="100%" r="50%">
+          <stop offset="0%" stopColor={c} stopOpacity=".08"/>
+          <stop offset="100%" stopColor={c} stopOpacity="0"/>
+        </radialGradient>
+        <linearGradient id="scene-top" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={c} stopOpacity=".04"/>
+          <stop offset="100%" stopColor={c} stopOpacity="0"/>
+        </linearGradient>
+      </defs>
+      {/* Background fills */}
+      <rect width="400" height="220" fill="url(#scene-top)"/>
+      <rect width="400" height="220" fill="url(#scene-glow)"/>
+      {/* Floor grid */}
+      <g opacity=".12" stroke={c} strokeWidth=".6">
+        {[0,50,100,150,200,250,300,350,400].map(x=>(
+          <line key={x} x1={x} y1="185" x2={x+40} y2="220"/>
+        ))}
+        {[185,195,207,220].map(y=>(
+          <line key={y} x1="0" y1={y} x2="400" y2={y}/>
+        ))}
+      </g>
+      {/* Floor glow */}
+      <rect y="180" width="400" height="40" fill="url(#scene-floor)"/>
+      {/* Ground line */}
+      <line x1="0" y1="185" x2="400" y2="185" stroke={c} strokeWidth="1" strokeOpacity=".18"/>
+      {/* Ambient particles */}
+      {[[28,28,2.2,3.5],[372,22,1.8,2.8],[14,115,1.6,4],[386,108,2,3.2],[200,18,2.5,3],[80,70,1.4,2.5],[320,55,1.8,3.8],[150,140,1.2,2]].map(([x,y,r,dur],i)=>(
+        <circle key={i} cx={x} cy={y} r={r} fill={i%2===0?c:c2} opacity=".25"
+          style={{animation:`sp-float ${dur}s ease-in-out infinite`,animationDelay:`${i*.6}s`}}/>
+      ))}
+      {/* Stars */}
+      {[[60,18],[340,35],[180,10],[290,55]].map(([x,y],i)=>(
+        <circle key={`s${i}`} cx={x} cy={y} r=".8" fill={c2} opacity=".4"
+          style={{animation:`sp-float ${2.5+i*.4}s ease-in-out infinite`,animationDelay:`${i*.9}s`}}/>
       ))}
     </svg>
   );
@@ -616,53 +737,57 @@ function LevelUpModal({ levelName, droppedAcc, accName, accentHex, onClose }: {
   levelName: string; droppedAcc: AccId | null; accName: string; accentHex: string; onClose: () => void;
 }) {
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",backdropFilter:"blur(6px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-      <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border2)",borderRadius:28,padding:"36px 32px",maxWidth:360,width:"100%",textAlign:"center",boxShadow:"var(--shadow-lg)",animation:"sp-levelup .5s cubic-bezier(.34,1.56,.64,1) both",fontFamily:"var(--font-body)"}}>
-        <div style={{width:72,height:72,borderRadius:20,background:`${accentHex}20`,border:`1px solid ${accentHex}40`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",animation:"sp-heartbeat 1.6s ease-in-out infinite"}}>
-          <Icon name="sparkle" size={32} color={accentHex}/>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+      <div style={{background:"var(--c-surface)",border:`1px solid ${accentHex}30`,borderRadius:28,padding:"36px 28px 28px",maxWidth:340,width:"100%",textAlign:"center",boxShadow:`var(--shadow-xl),0 0 60px ${accentHex}20`,animation:"sp-levelup .5s cubic-bezier(.34,1.56,.64,1) both",fontFamily:"var(--font-body)",position:"relative",overflow:"hidden"}}>
+        {/* Background glow */}
+        <div style={{position:"absolute",top:"-20%",left:"50%",transform:"translateX(-50%)",width:200,height:200,borderRadius:"50%",background:`radial-gradient(circle,${accentHex}15 0%,transparent 70%)`,pointerEvents:"none"}}/>
+        {/* Stars ring */}
+        <div style={{position:"relative",margin:"0 auto 18px",width:80,height:80}}>
+          <div style={{position:"absolute",inset:-8,borderRadius:"50%",border:`2px solid ${accentHex}20`,animation:"sp-pulse-ring 2s ease-out infinite"}}/>
+          <div style={{width:80,height:80,borderRadius:22,background:`linear-gradient(135deg,${accentHex}25,${accentHex}10)`,border:`1.5px solid ${accentHex}40`,display:"flex",alignItems:"center",justifyContent:"center",animation:"sp-heartbeat 1.6s ease-in-out infinite",boxShadow:`0 4px 24px ${accentHex}30`}}>
+            <Icon name="sparkle" size={34} color={accentHex}/>
+          </div>
         </div>
-        <div style={{fontSize:"1.5rem",fontFamily:"var(--font-serif)",fontStyle:"italic",color:"var(--c-text)",marginBottom:8,fontWeight:400}}>Level Up!</div>
-        <div style={{fontSize:14,color:"var(--c-text2)",marginBottom:20}}>You've reached <strong style={{color:accentHex}}>{levelName}</strong></div>
+        <div style={{fontSize:"1.65rem",fontFamily:"var(--font-serif)",fontStyle:"italic",color:"var(--c-text)",marginBottom:6,fontWeight:400,lineHeight:1.1}}>Level Up!</div>
+        <div style={{fontSize:14,color:"var(--c-text2)",marginBottom:20,lineHeight:1.5}}>You've reached <strong style={{color:accentHex,fontWeight:700}}>{levelName}</strong></div>
         {droppedAcc && (
-          <div style={{background:`${accentHex}10`,border:`1px solid ${accentHex}25`,borderRadius:16,padding:"14px 18px",marginBottom:20,display:"flex",alignItems:"center",gap:14}}>
-            <div style={{width:48,height:36,flexShrink:0}}><AccPreview id={droppedAcc}/></div>
-            <div style={{textAlign:"left"}}>
-              <div style={{fontSize:12,fontWeight:700,color:"var(--c-text)",display:"flex",alignItems:"center",gap:6}}><Icon name="gift" size={13} color="var(--c-green)"/>Free accessory drop!</div>
-              <div style={{fontSize:11,color:"var(--c-text3)",marginTop:2}}><strong style={{color:accentHex}}>{accName}</strong> has been added to your wardrobe</div>
+          <div style={{background:`linear-gradient(135deg,${accentHex}10,${accentHex}06)`,border:`1px solid ${accentHex}28`,borderRadius:18,padding:"14px 16px",marginBottom:18,display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
+            <div style={{width:52,height:40,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:`${accentHex}12`,borderRadius:12,border:`1px solid ${accentHex}20`}}><AccPreview id={droppedAcc}/></div>
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:"var(--c-text)",display:"flex",alignItems:"center",gap:5,marginBottom:3}}><Icon name="gift" size={12} color="var(--c-green)"/>Free drop!</div>
+              <div style={{fontSize:12,color:accentHex,fontWeight:600}}>{accName}</div>
+              <div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>Added to your wardrobe</div>
             </div>
           </div>
         )}
-        <button onClick={onClose} style={{width:"100%",padding:"12px 0",border:"none",borderRadius:12,fontSize:14,fontWeight:600,cursor:"pointer",background:`linear-gradient(135deg,${accentHex},#5E4FD4)`,color:"#fff",fontFamily:"var(--font-body)",boxShadow:"var(--shadow-accent)"}}>Awesome!</button>
+        <button onClick={onClose} style={{width:"100%",padding:"13px 0",border:"none",borderRadius:14,fontSize:14,fontWeight:700,cursor:"pointer",background:`linear-gradient(135deg,${accentHex},${accentHex}CC)`,color:"#fff",fontFamily:"var(--font-body)",boxShadow:`0 4px 20px ${accentHex}50`,letterSpacing:".02em",transition:"transform .15s,box-shadow .15s"}}
+          onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="translateY(-1px)";}}
+          onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="";}}>
+          Awesome!
+        </button>
       </div>
     </div>
   );
 }
 
 /* ─── TOAST ──────────────────────────────────────────────── */
-interface Toast { id: number; treats: number; actName: string; }
-function ToastItem({ toast, petName, onFeed }: { toast: Toast; petName: string; onFeed: (n: number) => void }) {
-  const [out, setOut] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setOut(true), 5500); return () => clearTimeout(t); }, []);
-  return (
-    <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border2)",borderRadius:18,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,boxShadow:"var(--shadow-lg)",animation:out?"sp-toast-out .3s ease forwards":"sp-toast .38s cubic-bezier(.34,1.56,.64,1) forwards",pointerEvents:"auto",fontFamily:"var(--font-body)"}}>
-      <div style={{width:42,height:42,borderRadius:12,background:"rgba(124,106,255,.15)",border:"1px solid rgba(124,106,255,.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="cookie" size={18} color="var(--c-accent2)"/></div>
-      <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:"var(--c-text)"}}>{toast.treats} treats queued</div><div style={{fontSize:11,color:"var(--c-text3)",marginTop:2}}>{toast.actName} — tap to feed {petName}</div></div>
-      <button onClick={() => onFeed(toast.treats)} style={{background:"linear-gradient(135deg,var(--c-accent),#5E4FD4)",color:"#fff",border:"none",borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:600,fontFamily:"var(--font-body)",cursor:"pointer",flexShrink:0,boxShadow:"var(--shadow-accent)",whiteSpace:"nowrap" as const}}>Give Treat</button>
-    </div>
-  );
-}
 
 /* ─── STAT BAR ───────────────────────────────────────────── */
 function StatBar({ label, val, pct, accent, icon, flash }: { label: string; val: string; pct: number; accent: string; icon: string; flash?: boolean }) {
   return (
-    <div style={{marginBottom:18}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <div style={{display:"flex",alignItems:"center",gap:7}}><Icon name={icon} size={15} color={flash?"var(--c-accent2)":  "var(--c-text3)"}/><span style={{fontSize:13,fontWeight:flash?600:500,color:flash?"var(--c-text)":"var(--c-text2)",letterSpacing:".02em",transition:"all .3s ease"}}>{label}</span></div>
-        <span style={{fontSize:12,fontWeight:700,color:flash?"#fff":accent,background:flash?accent:`${accent}18`,padding:"3px 10px",borderRadius:20,border:`1px solid ${accent}${flash?"88":"28"}`,transition:"all .3s ease",boxShadow:flash?`0 0 10px ${accent}60`:"none"}}>{val}</span>
+    <div style={{marginBottom:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <div style={{width:24,height:24,borderRadius:7,background:flash?`${accent}25`:"var(--c-surface2)",display:"flex",alignItems:"center",justifyContent:"center",transition:"background .3s",border:`1px solid ${flash?accent+"40":"var(--c-border)"}`,flexShrink:0}}>
+            <Icon name={icon} size={12} color={flash?accent:"var(--c-text3)"}/>
+          </div>
+          <span style={{fontSize:12,fontWeight:600,color:flash?"var(--c-text)":"var(--c-text2)",letterSpacing:".01em",transition:"color .3s"}}>{label}</span>
+        </div>
+        <span style={{fontSize:11,fontWeight:700,color:flash?"#fff":accent,background:flash?accent:`${accent}18`,padding:"3px 10px",borderRadius:20,border:`1px solid ${accent}${flash?"":"28"}`,transition:"all .3s ease",boxShadow:flash?`0 2px 12px ${accent}50`:"none",letterSpacing:".02em"}}>{val}</span>
       </div>
-      <div style={{height:9,background:"rgba(255,255,255,.06)",borderRadius:6,overflow:"hidden",position:"relative"}}>
-        <div style={{height:"100%",borderRadius:6,backgroundImage:`linear-gradient(90deg,${accent},${accent}99)`,backgroundSize:"200% auto",animation:flash?"sp-shimmer .6s linear infinite":"sp-shimmer 3s linear infinite",width:pct+"%",transition:"width .85s cubic-bezier(.34,1.56,.64,1)",boxShadow:flash?`0 0 8px ${accent}80`:"none"}}/>
-        {flash && <div style={{position:"absolute",inset:0,borderRadius:6,background:`linear-gradient(90deg,transparent,${accent}50,transparent)`,animation:"sp-bar-flash .8s ease-out forwards"}}/>}
+      <div style={{height:8,background:"var(--c-surface2)",borderRadius:8,overflow:"hidden",position:"relative",border:"1px solid var(--c-border)"}}>
+        <div style={{height:"100%",borderRadius:8,backgroundImage:`linear-gradient(90deg,${accent}cc,${accent})`,backgroundSize:"200% auto",animation:flash?"sp-shimmer .5s linear infinite":"sp-shimmer 4s linear infinite",width:`${pct}%`,transition:"width .9s cubic-bezier(.34,1.56,.64,1)",boxShadow:flash?`0 0 10px ${accent}80,0 0 4px ${accent}60`:"none"}}/>
+        {flash && <div style={{position:"absolute",inset:0,borderRadius:8,background:`linear-gradient(90deg,transparent 0%,${accent}60 50%,transparent 100%)`,animation:"sp-bar-flash .7s ease-out forwards"}}/>}
       </div>
     </div>
   );
@@ -674,18 +799,36 @@ function AccessoryCard({ acc, owned, active, canBuy, accentColor, isNew, onClick
   const [hover, setHover] = useState(false);
   const locked = !owned && !canBuy;
   return (
-    <div onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{background:active?`rgba(124,106,255,.1)`:hover?"rgba(255,255,255,.05)":"rgba(255,255,255,.03)",border:`1.5px solid ${active?accentColor:hover?"rgba(255,255,255,.12)":"var(--c-border)"}`,borderRadius:16,padding:"16px 12px",textAlign:"center" as const,cursor:locked?"not-allowed":"pointer",opacity:locked?.45:1,transition:"all .2s ease",boxShadow:active?`0 4px 20px ${accentColor}20`:hover&&!locked?"var(--shadow-sm)":"none",position:"relative" as const}}>
-      {isNew && <div style={{position:"absolute",top:6,left:6,fontSize:9,fontWeight:700,background:"var(--c-green)",color:"#fff",padding:"2px 6px",borderRadius:6,letterSpacing:".04em"}}>NEW</div>}
-      {active && <div style={{position:"absolute",top:8,right:8,width:18,height:18,borderRadius:"50%",background:"var(--c-accent)",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="check" size={10} color="white" strokeWidth={2.5}/></div>}
-      <div style={{height:44,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10}}><AccPreview id={acc.id}/></div>
-      <div style={{fontSize:11,fontWeight:600,color:"var(--c-text)",marginBottom:6}}>{acc.name}</div>
-      <div style={{fontSize:10,fontWeight:500}}>
-        {acc.id==="none"?<span style={{color:"var(--c-text3)"}}>Default</span>
-          :active?<span style={{color:accentColor,display:"flex",alignItems:"center",justifyContent:"center",gap:3}}><Icon name="check" size={10} color={accentColor}/>Equipped</span>
-          :owned?<span style={{color:"var(--c-green)",display:"flex",alignItems:"center",justifyContent:"center",gap:3}}><Icon name="unlock" size={10} color="var(--c-green)"/>Owned</span>
-          :canBuy?<span style={{color:"var(--c-amber)",display:"flex",alignItems:"center",justifyContent:"center",gap:3}}><Icon name="coins" size={10} color="var(--c-amber)"/>{acc.cost}</span>
-          :<span style={{color:"var(--c-text3)",display:"flex",alignItems:"center",justifyContent:"center",gap:3}}><Icon name="lock" size={10} color="var(--c-text3)"/>{acc.cost}</span>}
+    <div onClick={onClick} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}
+      style={{
+        background: active ? `color-mix(in srgb,${accentColor} 10%,var(--c-surface))` : hover ? "var(--c-surface2)" : "var(--c-surface)",
+        border: `1.5px solid ${active ? accentColor : hover && !locked ? "var(--c-border2)" : "var(--c-border)"}`,
+        borderRadius:16, padding:"14px 10px", textAlign:"center" as const,
+        cursor: locked ? "not-allowed" : "pointer",
+        opacity: locked ? .4 : 1,
+        transition:"all .2s ease",
+        boxShadow: active ? `0 4px 18px ${accentColor}25` : hover && !locked ? "var(--shadow-sm)" : "none",
+        position:"relative" as const,
+      }}>
+      {isNew && <div style={{position:"absolute",top:5,left:5,fontSize:8,fontWeight:800,background:"var(--c-green)",color:"#fff",padding:"2px 5px",borderRadius:5,letterSpacing:".05em",textTransform:"uppercase" as const}}>NEW</div>}
+      {active && (
+        <div style={{position:"absolute",top:6,right:6,width:17,height:17,borderRadius:"50%",background:accentColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 2px 6px ${accentColor}50`}}>
+          <Icon name="check" size={9} color="white" strokeWidth={2.8}/>
+        </div>
+      )}
+      <div style={{height:42,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8}}><AccPreview id={acc.id}/></div>
+      <div style={{fontSize:11,fontWeight:600,color:"var(--c-text)",marginBottom:5}}>{acc.name}</div>
+      <div style={{fontSize:10,fontWeight:600}}>
+        {acc.id==="none"
+          ? <span style={{color:"var(--c-text3)"}}>Default</span>
+          : active
+            ? <span style={{color:accentColor,display:"flex",alignItems:"center",justifyContent:"center",gap:2}}><Icon name="check" size={9} color={accentColor}/>Equipped</span>
+            : owned
+              ? <span style={{color:"var(--c-green)",display:"flex",alignItems:"center",justifyContent:"center",gap:2}}><Icon name="unlock" size={9} color="var(--c-green)"/>Owned</span>
+              : canBuy
+                ? <span style={{color:"var(--c-amber)",display:"flex",alignItems:"center",justifyContent:"center",gap:2}}><Icon name="coins" size={9} color="var(--c-amber)"/>{acc.cost}</span>
+                : <span style={{color:"var(--c-text3)",display:"flex",alignItems:"center",justifyContent:"center",gap:2}}><Icon name="lock" size={9} color="var(--c-text3)"/>{acc.cost}</span>
+        }
       </div>
     </div>
   );
@@ -694,13 +837,19 @@ function AccessoryCard({ acc, owned, active, canBuy, accentColor, isNew, onClick
 /* ─── HUNGER BANNER ──────────────────────────────────────── */
 function HungerBanner({ petName, onDismiss }: { petName: string; onDismiss: () => void }) {
   return (
-    <div style={{background:"rgba(248,113,113,.1)",border:"1px solid rgba(248,113,113,.25)",borderRadius:16,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,animation:"sp-hunger-banner .4s ease both"}}>
-      <div style={{width:38,height:38,borderRadius:10,background:"rgba(248,113,113,.15)",border:"1px solid rgba(248,113,113,.25)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:"sp-heartbeat 1.6s ease-in-out infinite"}}><Icon name="help" size={17} color="var(--c-red)"/></div>
-      <div style={{flex:1}}>
-        <div style={{fontSize:14,fontWeight:600,color:"var(--c-red)",display:"flex",alignItems:"center",gap:6}}><Icon name="paw" size={13} color="var(--c-red)"/>Really hungry!</div>
-        <div style={{fontSize:12,color:"var(--c-text3)",marginTop:3}}>{petName} hasn't eaten in over 2 days — complete a study activity!</div>
+    <div style={{background:"color-mix(in srgb,var(--c-red) 8%,var(--c-surface))",border:"1px solid color-mix(in srgb,var(--c-red) 25%,transparent)",borderRadius:16,padding:"13px 14px",display:"flex",alignItems:"center",gap:12,animation:"sp-hunger-banner .4s ease both",boxShadow:"0 2px 12px color-mix(in srgb,var(--c-red) 12%,transparent)"}}>
+      <div style={{width:38,height:38,borderRadius:11,background:"color-mix(in srgb,var(--c-red) 15%,transparent)",border:"1px solid color-mix(in srgb,var(--c-red) 25%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:"sp-heartbeat 1.5s ease-in-out infinite"}}>
+        <Icon name="help" size={17} color="var(--c-red)"/>
       </div>
-      <button onClick={onDismiss} style={{background:"none",border:"none",cursor:"pointer",padding:4,color:"var(--c-text3)"}}><Icon name="x" size={14} color="var(--c-text3)"/></button>
+      <div style={{flex:1}}>
+        <div style={{fontSize:13,fontWeight:700,color:"var(--c-red)",display:"flex",alignItems:"center",gap:5,marginBottom:2}}><Icon name="paw" size={12} color="var(--c-red)"/>Really hungry!</div>
+        <div style={{fontSize:11,color:"var(--c-text2)",lineHeight:1.4}}>{petName} hasn't eaten in 2+ days — complete a study activity!</div>
+      </div>
+      <button onClick={onDismiss} style={{background:"none",border:"none",cursor:"pointer",padding:"4px",borderRadius:8,color:"var(--c-text3)",transition:"background .15s"}}
+        onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="var(--c-surface2)";}}
+        onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="none";}}>
+        <Icon name="x" size={14} color="var(--c-text3)"/>
+      </button>
     </div>
   );
 }
@@ -708,15 +857,17 @@ function HungerBanner({ petName, onDismiss }: { petName: string; onDismiss: () =
 /* ─── TREAT CAP BANNER ───────────────────────────────────── */
 function TreatCapBanner({ petName, onBurn, onDismiss }: { petName: string; onBurn: () => void; onDismiss: () => void }) {
   return (
-    <div style={{background:"rgba(196,121,0,.1)",border:"1px solid rgba(196,121,0,.28)",borderRadius:16,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,animation:"sp-hunger-banner .4s ease both"}}>
-      <div style={{width:38,height:38,borderRadius:10,background:"rgba(196,121,0,.15)",border:"1px solid rgba(196,121,0,.25)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="cookie" size={17} color="var(--c-amber)"/></div>
-      <div style={{flex:1}}>
-        <div style={{fontSize:14,fontWeight:600,color:"var(--c-amber)",display:"flex",alignItems:"center",gap:6}}><Icon name="cookie" size={13} color="var(--c-amber)"/>Treat bar is full!</div>
-        <div style={{fontSize:12,color:"var(--c-text3)",marginTop:3}}>{petName} has 15/15 treats. Play to burn some, then earn more.</div>
+    <div style={{background:"color-mix(in srgb,var(--c-amber) 8%,var(--c-surface))",border:"1px solid color-mix(in srgb,var(--c-amber) 28%,transparent)",borderRadius:16,padding:"13px 14px",display:"flex",alignItems:"center",gap:12,animation:"sp-hunger-banner .4s ease both",boxShadow:"0 2px 12px color-mix(in srgb,var(--c-amber) 10%,transparent)"}}>
+      <div style={{width:38,height:38,borderRadius:11,background:"color-mix(in srgb,var(--c-amber) 15%,transparent)",border:"1px solid color-mix(in srgb,var(--c-amber) 25%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <Icon name="cookie" size={17} color="var(--c-amber)"/>
       </div>
-      <div style={{display:"flex",flexDirection:"column" as const,gap:5,flexShrink:0}}>
-        <button onClick={onBurn} style={{background:"linear-gradient(135deg,var(--c-amber),#E07800)",color:"#fff",border:"none",borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:600,fontFamily:"var(--font-body)",cursor:"pointer",whiteSpace:"nowrap" as const}}>Play! −3</button>
-        <button onClick={onDismiss} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"var(--c-text3)",fontFamily:"var(--font-body)"}}>Dismiss</button>
+      <div style={{flex:1}}>
+        <div style={{fontSize:13,fontWeight:700,color:"var(--c-amber)",display:"flex",alignItems:"center",gap:5,marginBottom:2}}><Icon name="cookie" size={12} color="var(--c-amber)"/>Treat bar full!</div>
+        <div style={{fontSize:11,color:"var(--c-text2)",lineHeight:1.4}}>{petName} has 15/15 treats. Play to burn some!</div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column" as const,gap:4,flexShrink:0}}>
+        <button onClick={onBurn} style={{background:"linear-gradient(135deg,var(--c-amber),#E07800)",color:"#fff",border:"none",borderRadius:9,padding:"6px 11px",fontSize:11,fontWeight:700,fontFamily:"var(--font-body)",cursor:"pointer",whiteSpace:"nowrap" as const,boxShadow:"0 2px 8px rgba(196,121,0,.25)"}}>Play! −3</button>
+        <button onClick={onDismiss} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"var(--c-text3)",fontFamily:"var(--font-body)",padding:"2px 0"}}>Dismiss</button>
       </div>
     </div>
   );
@@ -725,8 +876,8 @@ function TreatCapBanner({ petName, onBurn, onDismiss }: { petName: string; onBur
 /* ─── DECAY POP ──────────────────────────────────────────── */
 function DecayPop({ ticks }: { ticks: number }) {
   return (
-    <div style={{position:"fixed",top:80,left:"50%",transform:"translateX(-50%)",zIndex:300,background:"rgba(248,113,113,.9)",color:"#fff",fontSize:13,fontWeight:700,padding:"8px 18px",borderRadius:20,boxShadow:"0 4px 16px rgba(248,113,113,.4)",animation:"sp-decay-tick 2.2s ease-out forwards",pointerEvents:"none",fontFamily:"var(--font-body)",whiteSpace:"nowrap" as const,display:"flex",alignItems:"center",gap:6}}>
-      <Icon name="clock" size={14} color="white"/>−{ticks} treat{ticks > 1 ? "s" : ""} lost while away
+    <div style={{position:"fixed",top:72,left:"50%",transform:"translateX(-50%)",zIndex:300,background:"var(--c-red)",color:"#fff",fontSize:12,fontWeight:700,padding:"8px 16px",borderRadius:20,boxShadow:"0 4px 18px rgba(224,64,64,.45)",animation:"sp-decay-tick 2.2s ease-out forwards",pointerEvents:"none",fontFamily:"var(--font-body)",whiteSpace:"nowrap" as const,display:"flex",alignItems:"center",gap:6}}>
+      <Icon name="clock" size={13} color="white"/>−{ticks} treat{ticks>1?"s":""} lost while away
     </div>
   );
 }
@@ -1013,7 +1164,6 @@ export default function StudyPalPage() {
   const [tab, setTab]                   = useState<TabId>("feed");
   const [showBowl, setShowBowl]         = useState(false);
   const [walking, setWalking]           = useState(false);
-  const [toasts, setToasts]             = useState<Toast[]>([]);
   const [particles, setParticles]       = useState<{id:number;x:number;y:number;c:string;s:number}[]>([]);
   const [treats, setTreats]             = useState<{id:number;x:number}[]>([]);
   const [xpPops, setXpPops]             = useState<{id:number;v:number}[]>([]);
@@ -1030,7 +1180,6 @@ export default function StudyPalPage() {
   const sleepT     = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pCnt       = useRef(0);
   const tCnt       = useRef(0);
-  const toastCnt   = useRef(0);
   const xpCnt      = useRef(0);
   const clickRot   = useRef(0);
 
@@ -1176,7 +1325,6 @@ export default function StudyPalPage() {
     upd({ xp:newXP, pending:S.pending+a.treats, points:S.points+a.xp, activityLog:newLog });
     triggerAnim("excited",1800);triggerSpeech(`+${a.xp} XP`);
     spawnParticles();popXP(a.xp);
-    setToasts([{id:toastCnt.current++,treats:a.treats,actName:a.name}]);
 
     // Level up?
     if (newLevel > prevLevel) {
@@ -1197,7 +1345,6 @@ export default function StudyPalPage() {
   }
 
   function feedNow(n: number) {
-    setToasts([]);
     triggerAnim("eat",n*150+800);triggerSpeech("Nom nom nom!");
     setShowBowl(true);dropTreats(n);
     setTimeout(()=>{
@@ -1255,27 +1402,40 @@ export default function StudyPalPage() {
       {decayPopTicks > 0 && <DecayPop ticks={decayPopTicks}/>}
 
 {/* Header */}
-      <header style={{background:"color-mix(in srgb, var(--c-surface) 92%, transparent)",backdropFilter:"blur(20px)",borderBottom:"1px solid var(--c-border)",position:"sticky",top:0,zIndex:50}}>
-        <div style={{maxWidth:650,margin:"0 auto",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
+      <header style={{background:"color-mix(in srgb,var(--c-surface) 88%,transparent)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",borderBottom:"1px solid var(--c-border)",position:"sticky",top:0,zIndex:50}}>
+        {/* accent top line */}
+        <div style={{height:2,background:`linear-gradient(90deg,${accentHex}00,${accentHex},${accentHex}00)`}}/>
+        <div style={{maxWidth:650,margin:"0 auto",padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:11}}>
+            {/* avatar */}
             <div style={{position:"relative",flexShrink:0}}>
-              <div style={{width:44,height:44,borderRadius:13,background:`linear-gradient(135deg,${accentHex},#5E4FD4)`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 2px 12px ${accentHex}44`}}><Icon name={S.petType} size={22} color="white" strokeWidth={1.5}/></div>
-              <div style={{position:"absolute",bottom:-2,right:-2,width:12,height:12,borderRadius:"50%",background:"var(--c-green)",border:"2px solid var(--c-bg)"}}/>
-            </div>
-            <div style={{minWidth:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:7}}>
-                <span style={{fontSize:16,fontWeight:700,color:"var(--c-text)",fontFamily:"var(--font-serif)",fontStyle:"italic",lineHeight:1}}>{S.petName}</span>
-                <span style={{fontSize:10,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase" as const,background:`${accentHex}20`,color:accentHex,padding:"2px 7px",borderRadius:5,border:`1px solid ${accentHex}30`}}>{lvl.name}</span>
-                {(S.streakCount??0) > 0 && <span style={{fontSize:10,fontWeight:700,background:"rgba(248,113,113,.15)",color:"var(--c-red)",padding:"2px 7px",borderRadius:5,border:"1px solid rgba(248,113,113,.25)",display:"flex",alignItems:"center",gap:3}}><Icon name="flame" size={10} color="var(--c-red)"/>{S.streakCount}d</span>}
+              <div style={{width:42,height:42,borderRadius:13,background:`linear-gradient(140deg,${accentHex} 0%,${S.petType==="cat"?"#5E4FD4":"#1A6FC4"} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${accentHex}55`}}>
+                <Icon name={S.petType} size={21} color="white" strokeWidth={1.6}/>
               </div>
-              <div style={{marginTop:6,display:"flex",alignItems:"center",gap:7}}>
-                <div style={{width:90,height:5,borderRadius:4,background:"rgba(255,255,255,.08)",overflow:"hidden",flexShrink:0}}><div style={{height:"100%",borderRadius:4,background:`linear-gradient(90deg,${accentHex},${accentHex}99)`,width:`${xpPct}%`,transition:"width .8s ease"}}/></div>
-                <span style={{fontSize:11,color:"var(--c-text3)",fontWeight:500}}>{S.xp}{nxt?`/${nxt.xp}`:""} XP</span>
+              <div style={{position:"absolute",bottom:-1,right:-1,width:11,height:11,borderRadius:"50%",background:"var(--c-green)",border:"2px solid var(--c-bg)",animation:"sp-heartbeat 3s ease-in-out infinite"}}/>
+            </div>
+            {/* name + xp */}
+            <div style={{minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" as const}}>
+                <span style={{fontSize:15,fontWeight:700,color:"var(--c-text)",fontFamily:"var(--font-serif)",fontStyle:"italic",lineHeight:1.1}}>{S.petName}</span>
+                <span style={{fontSize:10,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase" as const,background:`${accentHex}22`,color:accentHex,padding:"2px 8px",borderRadius:20,border:`1px solid ${accentHex}38`}}>{lvl.name}</span>
+                {(S.streakCount??0)>0 && (
+                  <span style={{fontSize:10,fontWeight:700,background:"rgba(229,57,53,.12)",color:"var(--c-red)",padding:"2px 8px",borderRadius:20,border:"1px solid rgba(229,57,53,.22)",display:"flex",alignItems:"center",gap:3}}>
+                    <Icon name="flame" size={10} color="var(--c-red)"/>{S.streakCount}d
+                  </span>
+                )}
+              </div>
+              <div style={{marginTop:5,display:"flex",alignItems:"center",gap:7}}>
+                <div style={{width:88,height:4,borderRadius:4,background:"var(--c-border2)",overflow:"hidden",flexShrink:0}}>
+                  <div style={{height:"100%",borderRadius:4,background:`linear-gradient(90deg,${accentHex},${accentHex}BB)`,width:`${xpPct}%`,transition:"width .9s cubic-bezier(.34,1.56,.64,1)"}}/>
+                </div>
+                <span style={{fontSize:10,color:"var(--c-text3)",fontWeight:500,whiteSpace:"nowrap" as const}}>{S.xp}{nxt?`/${nxt.xp}`:""} XP</span>
               </div>
             </div>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(251,191,36,.12)",color:"var(--c-amber)",fontSize:14,fontWeight:700,padding:"8px 15px",borderRadius:20,border:"1px solid rgba(251,191,36,.25)",flexShrink:0}}>
-            <Icon name="coins" size={15} color="var(--c-amber)"/>{S.points}
+          {/* points pill */}
+          <div style={{display:"flex",alignItems:"center",gap:5,background:"color-mix(in srgb,var(--c-amber) 12%,transparent)",color:"var(--c-amber)",fontSize:14,fontWeight:700,padding:"7px 14px",borderRadius:20,border:"1px solid color-mix(in srgb,var(--c-amber) 28%,transparent)",flexShrink:0,boxShadow:"0 2px 8px rgba(214,128,0,.12)"}}>
+            <Icon name="coins" size={14} color="var(--c-amber)"/>{S.points}
           </div>
         </div>
       </header>
@@ -1293,16 +1453,19 @@ export default function StudyPalPage() {
 
         {/* Persistent pending treats banner on mount */}
         {S.pending > 0 && !showBowl && tab !== "feed" && (
-          <div style={{margin:"14px 16px 0",background:"rgba(124,106,255,.1)",border:"1px solid rgba(124,106,255,.25)",borderRadius:16,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer"}} onClick={()=>setTab("feed")}>
-            <div style={{width:36,height:36,borderRadius:10,background:"rgba(124,106,255,.2)",border:"1px solid rgba(124,106,255,.3)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:"sp-float 1.8s ease-in-out infinite"}}><Icon name="cookie" size={16} color="var(--c-accent2)"/></div>
-            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:"var(--c-text)"}}>{S.pending} treats waiting</div><div style={{fontSize:11,color:"var(--c-text3)",marginTop:2}}>Tap to go to Rewards and feed {S.petName}</div></div>
+          <div style={{margin:"14px 16px 0",background:"color-mix(in srgb,var(--c-accent) 10%,var(--c-surface))",border:"1px solid color-mix(in srgb,var(--c-accent) 25%,transparent)",borderRadius:16,padding:"12px 15px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",boxShadow:"var(--shadow-sm)",transition:"transform .15s ease"}} onClick={()=>setTab("feed")} className="sp-card-hover">
+            <div style={{width:36,height:36,borderRadius:10,background:"color-mix(in srgb,var(--c-accent) 18%,transparent)",border:"1px solid color-mix(in srgb,var(--c-accent) 28%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:"sp-float 1.8s ease-in-out infinite"}}><Icon name="cookie" size={16} color="var(--c-accent2)"/></div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,fontWeight:600,color:"var(--c-text)"}}>{S.pending} treats waiting</div>
+              <div style={{fontSize:11,color:"var(--c-text3)",marginTop:2}}>Tap to feed {S.petName}</div>
+            </div>
             <Icon name="arrow-r" size={16} color="var(--c-text3)"/>
           </div>
         )}
 
         {/* Arena card */}
-        <div style={{margin:"14px 16px 0",background:"var(--c-surface)",borderRadius:22,border:"1px solid var(--c-border)",overflow:"hidden",boxShadow:"var(--shadow-md)"}}>
-          <div style={{height:220,position:"relative",overflow:"hidden",background:"linear-gradient(180deg,rgba(0,0,0,0) 0%,rgba(0,0,0,.12) 100%)"}}>
+        <div style={{margin:"14px 16px 0",background:"var(--c-surface)",borderRadius:24,border:"1px solid var(--c-border)",overflow:"hidden",boxShadow:"var(--shadow-md)"}}>
+          <div style={{height:224,position:"relative",overflow:"hidden",background:`linear-gradient(180deg,color-mix(in srgb,${accentHex} 8%,var(--c-surface)) 0%,var(--c-surface) 100%)`}}>
             <SceneBg petType={S.petType}/>
             <div style={{position:"absolute",bottom:16,...(walking?{animation:"sp-walk-x 9s linear forwards",left:-180,width:170}:{left:"50%",transform:"translateX(-50%)"})}}>
               <div style={{position:"relative",width:170,height:175}}>
@@ -1338,30 +1501,49 @@ export default function StudyPalPage() {
           </div>
 
           {/* Status pills */}
-          <div style={{padding:"12px 20px 20px"}}>
+          <div style={{padding:"10px 18px 18px"}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <div style={{background:"rgba(255,255,255,.04)",border:`1px solid ${hungry?"rgba(248,113,113,.2)":"rgba(52,211,153,.2)"}`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:9}}>
-                <Icon name={hungry?"help":"paw"} size={18} color={hungry?"var(--c-red)":"var(--c-green)"}/>
-                <div><div style={{fontSize:11,fontWeight:700,color:hungry?"var(--c-red)":"var(--c-green)"}}>{hungry?"Hungry":"Happy"}</div><div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>{hungry?"Give treats!":"All good"}</div></div>
+              <div style={{background:hungry?"color-mix(in srgb,var(--c-red) 8%,var(--c-surface2))":"color-mix(in srgb,var(--c-green) 8%,var(--c-surface2))",border:`1px solid ${hungry?"color-mix(in srgb,var(--c-red) 22%,transparent)":"color-mix(in srgb,var(--c-green) 22%,transparent)"}`,borderRadius:14,padding:"11px 14px",display:"flex",alignItems:"center",gap:9,transition:"all .3s ease"}}>
+                <div style={{width:30,height:30,borderRadius:9,background:hungry?"color-mix(in srgb,var(--c-red) 15%,transparent)":"color-mix(in srgb,var(--c-green) 15%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <Icon name={hungry?"help":"paw"} size={16} color={hungry?"var(--c-red)":"var(--c-green)"}/>
+                </div>
+                <div>
+                  <div style={{fontSize:12,fontWeight:700,color:hungry?"var(--c-red)":"var(--c-green)"}}>{hungry?"Hungry":"Happy"}</div>
+                  <div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>{hungry?"Give treats!":"All good"}</div>
+                </div>
               </div>
-              <div style={{background:"rgba(255,255,255,.04)",border:"1px solid var(--c-border)",borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:9}}>
-                {(S.streakCount??0)>0 ? (
-                  <><Icon name="flame" size={18} color="var(--c-red)"/><div><div style={{fontSize:11,fontWeight:700,color:"var(--c-red)",display:"flex",alignItems:"center",gap:4}}><Icon name="flame" size={10} color="var(--c-red)"/>{S.streakCount}-day streak</div><div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>Keep it up!</div></div></>
-                ) : (
-                  <><Icon name="zap" size={18} color="var(--c-accent2)"/><div><div style={{fontSize:11,fontWeight:700,color:"var(--c-accent2)"}}>{S.xp} XP</div><div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>{lvl.name}{nxt?` → ${nxt.name}`:" · Max"}</div></div></>
-                )}
+              <div style={{background:"var(--c-surface2)",border:"1px solid var(--c-border)",borderRadius:14,padding:"11px 14px",display:"flex",alignItems:"center",gap:9}}>
+                {(S.streakCount??0)>0 ? (<>
+                  <div style={{width:30,height:30,borderRadius:9,background:"color-mix(in srgb,var(--c-red) 12%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <Icon name="flame" size={16} color="var(--c-red)"/>
+                  </div>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:700,color:"var(--c-red)"}}>{S.streakCount}-day streak</div>
+                    <div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>Keep it up!</div>
+                  </div>
+                </>) : (<>
+                  <div style={{width:30,height:30,borderRadius:9,background:"color-mix(in srgb,var(--c-accent) 12%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <Icon name="zap" size={16} color="var(--c-accent2)"/>
+                  </div>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:700,color:"var(--c-accent2)"}}>{S.xp} XP</div>
+                    <div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>{lvl.name}{nxt?` → ${nxt.name}`:" · Max"}</div>
+                  </div>
+                </>)}
               </div>
             </div>
           </div>
         </div>
 
         {/* Tabs */}
-        <div style={{display:"flex",margin:"12px 16px 0",background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:14,padding:4,gap:3}}>
+        <div style={{display:"flex",margin:"12px 16px 0",background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:16,padding:4,gap:3,boxShadow:"var(--shadow-xs)"}}>
           {([["feed","Rewards","trophy"],["wardrobe","Wardrobe","shirt"],["about","Profile","user"]] as [TabId,string,string][]).map(([t,label,icon])=>(
-            <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:"9px 0",border:"none",cursor:"pointer",fontSize:12,fontFamily:"var(--font-body)",fontWeight:500,transition:"all .2s ease",borderRadius:10,background:tab===t?"rgba(255,255,255,.08)":"transparent",color:tab===t?"var(--c-text)":"var(--c-text3)",display:"flex",alignItems:"center",justifyContent:"center",gap:6,boxShadow:tab===t?"var(--shadow-sm)":"none",position:"relative" as const}}>
-              <Icon name={icon} size={13} color={tab===t?"var(--c-text)":"var(--c-text3)"}/>
+            <button key={t} onClick={()=>setTab(t)} className={`sp-tab ${tab===t?"active":"inactive"}`}>
+              <Icon name={icon} size={13} color={tab===t?"white":"var(--c-text3)"}/>
               {label}
-              {t==="wardrobe" && newlyDroppedAcc && !showLevelUp && <div style={{position:"absolute",top:4,right:8,width:7,height:7,borderRadius:"50%",background:"var(--c-green)",border:"1.5px solid var(--c-bg)"}}/>}
+              {t==="wardrobe" && newlyDroppedAcc && !showLevelUp && (
+                <div style={{position:"absolute",top:3,right:6,width:7,height:7,borderRadius:"50%",background:"var(--c-green)",border:"1.5px solid var(--c-surface)",animation:"sp-heartbeat 2s ease-in-out infinite"}}/>
+              )}
             </button>
           ))}
         </div>
@@ -1370,10 +1552,13 @@ export default function StudyPalPage() {
         {tab==="feed" && (
           <div style={{margin:"12px 16px 0"}}>
             {S.pending>0 && (
-              <div style={{background:"rgba(124,106,255,.1)",border:"1px solid rgba(124,106,255,.25)",borderRadius:18,padding:"14px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:14,boxShadow:"var(--shadow-sm)"}}>
-                <div style={{width:46,height:46,borderRadius:12,background:"rgba(124,106,255,.2)",border:"1px solid rgba(124,106,255,.3)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:"sp-float 1.8s ease-in-out infinite"}}><Icon name="cookie" size={20} color="var(--c-accent2)"/></div>
-                <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:"var(--c-text)"}}>{S.pending} treats pending</div><div style={{fontSize:11,color:"var(--c-text3)",marginTop:2}}>{S.petName} is waiting to be fed</div></div>
-                <button onClick={()=>feedNow(S.pending)} style={{background:"linear-gradient(135deg,var(--c-accent),#5E4FD4)",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontSize:12,fontWeight:600,fontFamily:"var(--font-body)",cursor:"pointer",flexShrink:0,boxShadow:"var(--shadow-accent)",whiteSpace:"nowrap" as const,display:"flex",alignItems:"center",gap:6}}><Icon name="cookie" size={13} color="white"/>Give Treat</button>
+              <div style={{background:"color-mix(in srgb,var(--c-accent) 9%,var(--c-surface))",border:"1px solid color-mix(in srgb,var(--c-accent) 24%,transparent)",borderRadius:18,padding:"14px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:14,boxShadow:"var(--shadow-sm)"}}>
+                <div style={{width:44,height:44,borderRadius:12,background:"color-mix(in srgb,var(--c-accent) 16%,transparent)",border:"1px solid color-mix(in srgb,var(--c-accent) 26%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:"sp-float 1.8s ease-in-out infinite"}}><Icon name="cookie" size={19} color="var(--c-accent2)"/></div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,fontWeight:700,color:"var(--c-text)"}}>{S.pending} treats pending</div>
+                  <div style={{fontSize:11,color:"var(--c-text3)",marginTop:2}}>{S.petName} is waiting to be fed</div>
+                </div>
+                <button onClick={()=>feedNow(S.pending)} style={{background:`linear-gradient(135deg,var(--c-accent),${S.petType==="cat"?"#5E4FD4":"#1A6FC4"})`,color:"#fff",border:"none",borderRadius:11,padding:"10px 16px",fontSize:12,fontWeight:700,fontFamily:"var(--font-body)",cursor:"pointer",flexShrink:0,boxShadow:"var(--shadow-accent)",whiteSpace:"nowrap" as const,display:"flex",alignItems:"center",gap:6}}><Icon name="cookie" size={13} color="white"/>Give Treat</button>
               </div>
             )}
 
@@ -1383,31 +1568,55 @@ export default function StudyPalPage() {
             <PointsExplainer/>
             <ActivityLog log={S.activityLog||[]}/>
 
-            {ACTIVITIES.map((a,i)=>(
-              <div key={a.id} style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:16,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12,animation:`sp-pop .35s ease both`,animationDelay:`${i*.05}s`}}>
-                <div style={{width:42,height:42,borderRadius:12,background:"rgba(255,255,255,.05)",border:"1px solid var(--c-border)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><ActivityIcon id={a.id} size={18}/></div>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:14,fontWeight:500,color:"var(--c-text)"}}>{a.name}</div>
-                  <div style={{fontSize:12,color:"var(--c-text3)",marginTop:5,display:"flex",gap:8}}>
-                    <span style={{background:"rgba(124,106,255,.12)",color:"var(--c-accent2)",padding:"2px 8px",borderRadius:6,fontWeight:600,display:"flex",alignItems:"center",gap:3}}><Icon name="zap" size={10} color="var(--c-accent2)"/>+{a.xp}</span>
-                    <span style={{background:"rgba(196,187,255,.08)",color:"var(--c-text2)",padding:"2px 8px",borderRadius:6,fontWeight:600,display:"flex",alignItems:"center",gap:3}}><Icon name="cookie" size={10} color="var(--c-text2)"/>+{a.treats}</span>
+            {ACTIVITIES.map((a,i)=>{
+              const colors: Record<string,{bg:string,icon:string,border:string}> = {
+                quiz:    {bg:"rgba(107,88,240,.12)",icon:"var(--c-accent2)",border:"rgba(107,88,240,.2)"},
+                streak:  {bg:"rgba(224,64,64,.10)",icon:"var(--c-red)",border:"rgba(224,64,64,.18)"},
+                booking: {bg:"rgba(13,184,164,.10)",icon:"var(--c-teal)",border:"rgba(13,184,164,.18)"},
+                session: {bg:"rgba(22,169,122,.10)",icon:"var(--c-green)",border:"rgba(22,169,122,.18)"},
+                sos:     {bg:"rgba(196,121,0,.10)",icon:"var(--c-amber)",border:"rgba(196,121,0,.18)"},
+                badge:   {bg:"rgba(251,191,36,.10)",icon:"var(--c-amber)",border:"rgba(251,191,36,.20)"},
+              };
+              const col = colors[a.id] || colors.quiz;
+              return (
+                <div key={a.id} style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:16,padding:"13px 15px",marginBottom:7,display:"flex",alignItems:"center",gap:12,animation:`sp-pop .35s ease both`,animationDelay:`${i*.05}s`,transition:"border-color .18s,transform .18s,box-shadow .18s"}}
+                  onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="translateY(-1px)";el.style.boxShadow="var(--shadow-sm)";el.style.borderColor="var(--c-border2)";}}
+                  onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="";el.style.boxShadow="";el.style.borderColor="";}}>
+
+                  <div style={{width:40,height:40,borderRadius:12,background:col.bg,border:`1px solid ${col.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <ActivityIcon id={a.id} size={17} color={col.icon}/>
                   </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:600,color:"var(--c-text)"}}>{a.name}</div>
+                    <div style={{fontSize:11,marginTop:4,display:"flex",gap:6}}>
+                      <span style={{background:"color-mix(in srgb,var(--c-accent) 13%,transparent)",color:"var(--c-accent2)",padding:"2px 8px",borderRadius:20,fontWeight:700,display:"flex",alignItems:"center",gap:3,border:"1px solid color-mix(in srgb,var(--c-accent) 22%,transparent)"}}><Icon name="zap" size={9} color="var(--c-accent2)"/>+{a.xp} XP</span>
+                      <span style={{background:`${col.bg}`,color:col.icon,padding:"2px 8px",borderRadius:20,fontWeight:600,display:"flex",alignItems:"center",gap:3,border:`1px solid ${col.border}`}}><Icon name="cookie" size={9} color={col.icon}/>+{a.treats}</span>
+                    </div>
+                  </div>
+                  <button onClick={()=>triggerActivity(a.id)} style={{background:`linear-gradient(135deg,${accentHex}18,${accentHex}08)`,color:accentHex,border:`1px solid ${accentHex}30`,borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,fontFamily:"var(--font-body)",cursor:"pointer",transition:"all .18s ease",whiteSpace:"nowrap" as const,letterSpacing:".01em"}}
+                    onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.background=accentHex;el.style.color="#fff";}}
+                    onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.background="";el.style.color=accentHex;}}>
+                    Test
+                  </button>
                 </div>
-                <button onClick={()=>triggerActivity(a.id)} style={{background:"rgba(255,255,255,.06)",color:"var(--c-text2)",border:"1px solid var(--c-border)",borderRadius:9,padding:"7px 13px",fontSize:12,fontWeight:500,fontFamily:"var(--font-body)",cursor:"pointer",transition:"all .2s ease",whiteSpace:"nowrap" as const}}>Test</button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
         {/* ── WARDROBE TAB ── */}
         {tab==="wardrobe" && (
           <div style={{margin:"12px 16px 0"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <div style={{fontSize:10,fontWeight:600,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const}}>Accessories ({ACCS.length-1} available)</div>
-              <div style={{background:"rgba(251,191,36,.1)",color:"var(--c-amber)",fontSize:12,fontWeight:600,padding:"5px 12px",borderRadius:20,border:"1px solid rgba(251,191,36,.2)",display:"flex",alignItems:"center",gap:5}}><Icon name="coins" size={12} color="var(--c-amber)"/>{S.points} pts</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div>
+                <div style={{fontSize:14,fontWeight:700,color:"var(--c-text)"}}>Wardrobe</div>
+                <div style={{fontSize:11,color:"var(--c-text3)",marginTop:1}}>{ACCS.length-1} accessories available</div>
+              </div>
+              <div style={{background:"color-mix(in srgb,var(--c-amber) 12%,var(--c-surface))",color:"var(--c-amber)",fontSize:13,fontWeight:700,padding:"7px 14px",borderRadius:20,border:"1px solid color-mix(in srgb,var(--c-amber) 28%,transparent)",display:"flex",alignItems:"center",gap:5,boxShadow:"0 2px 8px color-mix(in srgb,var(--c-amber) 12%,transparent)"}}><Icon name="coins" size={13} color="var(--c-amber)"/>{S.points}</div>
             </div>
-            <div style={{marginBottom:12,padding:"9px 12px",background:"rgba(255,255,255,.03)",border:"1px solid var(--c-border)",borderRadius:10,fontSize:11,color:"var(--c-text3)",lineHeight:1.5}}>
-              Earn points by completing sessions, quizzes &amp; tasks. Level up to get free accessory drops! Tap any item to equip or purchase.
+            <div style={{marginBottom:12,padding:"10px 13px",background:"color-mix(in srgb,var(--c-accent) 6%,var(--c-surface))",border:"1px solid var(--c-border)",borderRadius:12,fontSize:11,color:"var(--c-text2)",lineHeight:1.55,display:"flex",alignItems:"flex-start",gap:8}}>
+              <span style={{flexShrink:0,marginTop:1}}><Icon name="info" size={13} color="var(--c-accent3)"/></span>
+              Earn points from sessions, quizzes &amp; tasks. Level up for free drops! Tap to equip or buy.
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
               {ACCS.map(a=>(
@@ -1419,38 +1628,49 @@ export default function StudyPalPage() {
 
         {/* ── ABOUT TAB ── */}
         {tab==="about" && (
-          <div style={{margin:"12px 16px 0",display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{margin:"12px 16px 0",display:"flex",flexDirection:"column",gap:10}}>
+
             {/* Companion switcher */}
-            <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:20,padding:"18px 18px",boxShadow:"var(--shadow-sm)"}}>
-              <div style={{fontSize:11,fontWeight:600,color:"var(--c-text3)",letterSpacing:".06em",textTransform:"uppercase" as const,marginBottom:14}}>Companion</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                {(["cat","dog"] as PetType[]).map(t=>(
-                  <div key={t} onClick={()=>{upd({petType:t});triggerSpeech(t==="cat"?"Meow!":"Woof!");triggerAnim("happy",2000);spawnParticles();}} style={{border:`1.5px solid ${S.petType===t?accentHex:"var(--c-border)"}`,background:S.petType===t?`${accentHex}12`:"rgba(255,255,255,.03)",borderRadius:14,padding:"20px 16px",textAlign:"center" as const,cursor:"pointer",transition:"all .22s ease"}}>
-                    <div style={{display:"flex",justifyContent:"center",marginBottom:10}}>
-                      <Icon name={t} size={32} color={S.petType===t?accentHex:"var(--c-text3)"} strokeWidth={1.4}/>
+            <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:20,padding:"16px",boxShadow:"var(--shadow-sm)"}}>
+              <div style={{fontSize:10,fontWeight:700,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const,marginBottom:12}}>Companion</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {(["cat","dog"] as PetType[]).map(t=>{
+                  const sel = S.petType===t;
+                  const tHex = t==="cat"?"#8474F8":"#3A8FE0";
+                  return (
+                    <div key={t} onClick={()=>{upd({petType:t});triggerSpeech(t==="cat"?"Meow!":"Woof!");triggerAnim("happy",2000);spawnParticles();}}
+                      style={{border:`1.5px solid ${sel?tHex:"var(--c-border)"}`,background:sel?`color-mix(in srgb,${tHex} 10%,var(--c-surface2))`:"var(--c-surface2)",borderRadius:14,padding:"16px 12px",textAlign:"center" as const,cursor:"pointer",transition:"all .22s cubic-bezier(.34,1.56,.64,1)",boxShadow:sel?`0 4px 16px ${tHex}25`:"none"}}>
+                      <div style={{display:"flex",justifyContent:"center",marginBottom:8}}>
+                        <div style={{width:44,height:44,borderRadius:13,background:sel?`color-mix(in srgb,${tHex} 18%,transparent)`:"var(--c-surface3)",border:`1px solid ${sel?tHex+"40":"var(--c-border)"}`,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .22s ease"}}>
+                          <Icon name={t} size={22} color={sel?tHex:"var(--c-text3)"} strokeWidth={1.5}/>
+                        </div>
+                      </div>
+                      <div style={{fontSize:13,fontWeight:700,color:sel?"var(--c-text)":"var(--c-text3)",textTransform:"capitalize" as const}}>{t}</div>
+                      {sel && <div style={{fontSize:10,color:tHex,fontWeight:600,marginTop:2}}>Selected</div>}
                     </div>
-                    <div style={{fontSize:13,fontWeight:600,color:S.petType===t?"var(--c-text)":"var(--c-text3)",textTransform:"capitalize" as const}}>{t}{S.petType===t&&<span style={{color:accentHex,marginLeft:5}}>·</span>}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
-            {/* Stats */}
-            <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:20,padding:"18px 18px"}}>
-              <div style={{fontSize:11,fontWeight:600,color:"var(--c-text3)",letterSpacing:".06em",textTransform:"uppercase" as const,marginBottom:14}}>Stats</div>
+            {/* Stats grid */}
+            <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:20,padding:"16px",boxShadow:"var(--shadow-sm)"}}>
+              <div style={{fontSize:10,fontWeight:700,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const,marginBottom:12}}>Stats</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                 {[
-                  {v:S.xp,l:"Total XP",icon:"zap",c:accentHex},
-                  {v:S.treats,l:"Treats",icon:"cookie",c:"var(--c-text2)"},
-                  {v:S.points,l:"Points",icon:"coins",c:"var(--c-amber)"},
-                  {v:S.owned.length-1,l:"Accessories",icon:"shirt",c:"var(--c-green)"},
-                  {v:S.streakCount??0,l:"Day streak",icon:"flame",c:"var(--c-red)"},
-                  {v:S.activityLog?.length??0,l:"Activities",icon:"history",c:"var(--c-text2)"},
+                  {v:S.xp,       l:"Total XP",    icon:"zap",     c:accentHex,          bg:`${accentHex}12`},
+                  {v:S.treats,   l:"Treats",       icon:"cookie",  c:"var(--c-teal)",    bg:"rgba(13,184,164,.10)"},
+                  {v:S.points,   l:"Points",       icon:"coins",   c:"var(--c-amber)",   bg:"rgba(196,121,0,.10)"},
+                  {v:S.owned.length-1, l:"Accessories", icon:"shirt", c:"var(--c-green)", bg:"rgba(22,169,122,.10)"},
+                  {v:S.streakCount??0, l:"Day streak",  icon:"flame", c:"var(--c-red)",   bg:"rgba(224,64,64,.10)"},
+                  {v:S.activityLog?.length??0, l:"Activities", icon:"history", c:"var(--c-accent2)", bg:`${accentHex}10`},
                 ].map(x=>(
-                  <div key={x.l} style={{background:"rgba(255,255,255,.03)",border:"1px solid var(--c-border)",borderRadius:12,padding:"12px 14px"}}>
-                    <Icon name={x.icon} size={15} color={x.c}/>
-                    <div style={{fontSize:22,fontWeight:700,color:x.c,marginTop:6,fontFamily:"var(--font-serif)",fontStyle:"italic"}}>{x.v}</div>
-                    <div style={{fontSize:10,fontWeight:500,color:"var(--c-text3)",marginTop:3,textTransform:"uppercase" as const,letterSpacing:".05em"}}>{x.l}</div>
+                  <div key={x.l} style={{background:x.bg,border:"1px solid var(--c-border)",borderRadius:14,padding:"12px 13px"}}>
+                    <div style={{width:26,height:26,borderRadius:8,background:"rgba(255,255,255,.08)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:7,border:"1px solid rgba(255,255,255,.06)"}}>
+                      <Icon name={x.icon} size={13} color={x.c}/>
+                    </div>
+                    <div style={{fontSize:24,fontWeight:700,color:x.c,fontFamily:"var(--font-serif)",fontStyle:"italic",lineHeight:1}}>{x.v}</div>
+                    <div style={{fontSize:9,fontWeight:700,color:"var(--c-text3)",marginTop:4,textTransform:"uppercase" as const,letterSpacing:".06em"}}>{x.l}</div>
                   </div>
                 ))}
               </div>
@@ -1458,33 +1678,51 @@ export default function StudyPalPage() {
 
             {/* Last fed */}
             {S.lastFedAt && (
-              <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:16,padding:"14px 18px",display:"flex",alignItems:"center",gap:12}}>
-                <Icon name="clock" size={16} color="var(--c-text3)"/>
-                <div><div style={{fontSize:12,fontWeight:600,color:"var(--c-text2)"}}>Last fed</div><div style={{fontSize:11,color:"var(--c-text3)",marginTop:2}}>{fmtRelTime(Date.now()-S.lastFedAt)}</div></div>
+              <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:14,padding:"13px 16px",display:"flex",alignItems:"center",gap:11}}>
+                <div style={{width:34,height:34,borderRadius:10,background:"var(--c-surface2)",border:"1px solid var(--c-border)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <Icon name="clock" size={15} color="var(--c-text3)"/>
+                </div>
+                <div>
+                  <div style={{fontSize:11,fontWeight:700,color:"var(--c-text2)"}}>Last fed</div>
+                  <div style={{fontSize:11,color:"var(--c-text3)",marginTop:1}}>{fmtRelTime(Date.now()-S.lastFedAt)}</div>
+                </div>
               </div>
             )}
 
             {/* Level progression */}
-            <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:20,padding:"18px 18px"}}>
-              <div style={{fontSize:11,fontWeight:600,color:"var(--c-text3)",letterSpacing:".06em",textTransform:"uppercase" as const,marginBottom:14}}>Level Progression</div>
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:20,padding:"16px",boxShadow:"var(--shadow-sm)"}}>
+              <div style={{fontSize:10,fontWeight:700,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const,marginBottom:12}}>Level Progression</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
                 {LEVELS.map((l,i)=>{
-                  const done=S.xp>=l.xp,curr=i===li;
+                  const done=S.xp>=l.xp, curr=i===li;
                   return (
-                    <div key={l.name} style={{display:"flex",alignItems:"center",gap:12,opacity:done||curr?1:.35}}>
-                      <div style={{width:32,height:32,borderRadius:9,background:curr?`${accentHex}20`:done?"rgba(52,211,153,.1)":"rgba(255,255,255,.04)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:`1px solid ${curr?accentHex:done?"rgba(52,211,153,.2)":"var(--c-border)"}`}}><LevelIcon icon={l.icon} size={14}/></div>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:13,fontWeight:curr?600:500,color:curr?"var(--c-text)":"var(--c-text2)",display:"flex",alignItems:"center",gap:6}}>{l.name}{curr&&<span style={{fontSize:10,background:`${accentHex}18`,color:accentHex,padding:"2px 7px",borderRadius:5,fontWeight:600}}>current</span>}</div>
-                        <div style={{fontSize:12,color:"var(--c-text3)",marginTop:2}}>{l.xp} XP required{i>0&&i<LEVELS.length-1?<span style={{display:"inline-flex",alignItems:"center",gap:3,marginLeft:4}}> · <Icon name="gift" size={11} color="var(--c-text3)"/> free drop</span>:""}</div>
+                    <div key={l.name} style={{display:"flex",alignItems:"center",gap:11,padding:"9px 12px",borderRadius:12,background:curr?`color-mix(in srgb,${accentHex} 8%,var(--c-surface2))`:done?"color-mix(in srgb,var(--c-green) 5%,var(--c-surface2))":"transparent",border:`1px solid ${curr?accentHex+"30":done?"color-mix(in srgb,var(--c-green) 15%,transparent)":"transparent"}`,transition:"all .2s ease",opacity:done||curr?1:.35}}>
+                      <div style={{width:30,height:30,borderRadius:9,background:curr?`${accentHex}20`:done?"color-mix(in srgb,var(--c-green) 12%,transparent)":"var(--c-surface3)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:`1px solid ${curr?accentHex:done?"color-mix(in srgb,var(--c-green) 25%,transparent)":"var(--c-border)"}`}}>
+                        <LevelIcon icon={l.icon} size={13}/>
                       </div>
-                      {done&&!curr&&<Icon name="check" size={14} color="var(--c-green)"/>}
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:13,fontWeight:curr?700:500,color:curr?"var(--c-text)":"var(--c-text2)",display:"flex",alignItems:"center",gap:6}}>
+                          {l.name}
+                          {curr && <span style={{fontSize:9,background:accentHex,color:"#fff",padding:"2px 7px",borderRadius:20,fontWeight:700,letterSpacing:".04em"}}>NOW</span>}
+                        </div>
+                        <div style={{fontSize:11,color:"var(--c-text3)",marginTop:1}}>{l.xp} XP{i>0&&i<LEVELS.length-1&&<span style={{display:"inline-flex",alignItems:"center",gap:2,marginLeft:4,opacity:.7}}> · <Icon name="gift" size={10} color="var(--c-text3)"/>drop</span>}</div>
+                      </div>
+                      {done&&!curr && (
+                        <div style={{width:22,height:22,borderRadius:"50%",background:"color-mix(in srgb,var(--c-green) 15%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid color-mix(in srgb,var(--c-green) 25%,transparent)"}}>
+                          <Icon name="check" size={12} color="var(--c-green)"/>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
             </div>
 
-            <button onClick={()=>{if(confirm("Reset all progress?")){const n=def();n.onboarded=false;setS(n);save(n);}}} style={{background:"rgba(255,255,255,.04)",color:"var(--c-text3)",border:"1px solid var(--c-border)",borderRadius:12,padding:"12px",fontSize:12,fontWeight:500,fontFamily:"var(--font-body)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+            {/* Reset */}
+            <button onClick={()=>{if(confirm("Reset all progress?")){const n=def();n.onboarded=false;setS(n);save(n);}}}
+              style={{background:"var(--c-surface)",color:"var(--c-text3)",border:"1px solid var(--c-border)",borderRadius:14,padding:"13px",fontSize:12,fontWeight:600,fontFamily:"var(--font-body)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .18s ease",marginBottom:4}}
+              onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.background="var(--c-surface2)";el.style.borderColor="var(--c-border2)";}}
+              onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.background="var(--c-surface)";el.style.borderColor="var(--c-border)";}}>
               <Icon name="refresh" size={13} color="var(--c-text3)"/>Reset all progress
             </button>
           </div>
