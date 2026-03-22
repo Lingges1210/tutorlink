@@ -145,14 +145,6 @@ export const REWARD_CATALOG = [
 
   // ── Exclusive Access ─────────────────────────────────────────────────────
   {
-    key: "EARLY_ACCESS_FEATURES",
-    name: "Early Access Pass",
-    description: "Get early access to beta features before they roll out.",
-    pointsCost: 1000,
-    durationHrs: 24 * 30,
-    stock: null as number | null,
-  },
-  {
     key: "CUSTOM_USERNAME_COLOR",
     name: "Custom Username Color",
     description: "Set a custom color for your display name across the platform.",
