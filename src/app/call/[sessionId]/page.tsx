@@ -1,18 +1,31 @@
+"use client";
+
+import { use } from "react";
 import SessionCallEmbed from "@/components/session/SessionCallEmbed";
-import BackButton from "@/components/ui/BackButton";
+import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 
 type Props = {
   params: Promise<{ sessionId: string }>;
 };
 
-export default async function CallPage({ params }: Props) {
-  const { sessionId } = await params;
+export default function CallPage({ params }: Props) {
+  const router = useRouter();
+  const { sessionId } = use(params);
+
   return (
     <div className="relative min-h-screen bg-[rgb(var(--bg))] text-[rgb(var(--fg))] transition-colors duration-300">
       <div className="relative z-10 mx-auto max-w-6xl px-6 py-8">
         {/* Top bar */}
         <div className="mb-6 flex items-center gap-3">
-          <BackButton />
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-2 rounded-xl border border-[rgb(var(--border))] px-3 py-2 text-sm hover:bg-[rgb(var(--card)/0.8)]"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
+
           <div className="flex items-center gap-3">
             <span className="relative flex h-2.5 w-2.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />

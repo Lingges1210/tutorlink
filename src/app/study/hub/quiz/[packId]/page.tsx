@@ -308,7 +308,8 @@ export default function QuizPage({ params }: { params: Promise<{ packId: string 
                       {mistakes.length === 0 ? (
                         <div className="mt-3 pl-3 flex items-center gap-2 text-sm text-emerald-400">
                           <CheckCircle className="h-4 w-4" />
-                          Perfect score — nothing to review 🎉
+                          <Trophy className="h-4 w-4" />
+                          Perfect score — nothing to review
                         </div>
                       ) : (
                         <div className="mt-3 space-y-2">
@@ -552,7 +553,7 @@ function FlashcardGrid({ flashcards }: { flashcards: { q: string; a: string }[] 
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs text-[rgb(var(--muted))]">
             {revealed.size === flashcards.length && flashcards.length > 0
-              ? "🎉 All cards reviewed!"
+              ? <span className="inline-flex items-center gap-1.5"><Trophy className="h-3 w-3 text-amber-400" />All cards reviewed!</span>
               : `${revealed.size} of ${flashcards.length} revealed`}
           </span>
           {revealed.size > 0 && (

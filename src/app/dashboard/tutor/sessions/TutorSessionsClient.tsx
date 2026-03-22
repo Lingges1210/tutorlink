@@ -416,12 +416,12 @@ function SessionCard({
                   <MessageSquare className="h-3.5 w-3.5" />Chat
                 </button>
               )}
-              {canComplete(s) && !proposalPending && (
-                <button disabled={actionLoading} onClick={() => onComplete(s.id)}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-90 disabled:opacity-60 transition-opacity shadow-sm">
-                  <CheckCircle2 className="h-3.5 w-3.5" />Complete
-                </button>
-              )}
+              {ongoing && !proposalPending && (
+  <button disabled={actionLoading} onClick={() => onComplete(s.id)}
+    className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold text-white bg-[rgb(var(--primary))] hover:opacity-90 disabled:opacity-60 transition-opacity shadow-sm">
+    <CheckCircle2 className="h-3.5 w-3.5" />Complete
+  </button>
+)}
               {active && !proposalPending && (
                 <button disabled={actionLoading} onClick={() => onPropose(s)}
                   className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.6)] disabled:opacity-60 transition-colors">
