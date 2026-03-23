@@ -404,6 +404,16 @@ function SessionCard({
 
           {!showEndedAmberBanner && (
             <>
+            {/* ── Accept button for new pending bookings ── */}
+    {pending && !conflict && !proposalPending && (
+      <button
+        disabled={actionLoading}
+        onClick={() => onAccept(s.id)}
+        className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold text-white bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 transition-colors shadow-sm"
+      >
+        <CheckCircle2 className="h-3.5 w-3.5" />Accept
+      </button>
+    )}
               {accepted && ongoing && (
                 <button disabled={actionLoading} onClick={() => onJoinCall(s.id)}
                   className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold text-white bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 transition-colors shadow-sm">
