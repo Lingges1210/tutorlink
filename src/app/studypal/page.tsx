@@ -1345,6 +1345,7 @@ export default function StudyPalPage() {
   }
 
   function feedNow(n: number) {
+    window.dispatchEvent(new CustomEvent("sp:scroll-to-pet"));
     triggerAnim("eat",n*150+800);triggerSpeech("Nom nom nom!");
     setShowBowl(true);dropTreats(n);
     setTimeout(()=>{
