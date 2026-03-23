@@ -24,6 +24,13 @@ type AllBadgesRes = {
   }>;
 };
 
+type CatalogRes = {
+  ok: boolean;
+  effects?: {
+    badgeFrame?: string | null;
+  };
+};
+
 type FilterTab = "ALL" | "EARNED" | "LOCKED";
 
 function clampPct(n: number) {
@@ -38,8 +45,7 @@ function parsePointsTarget(badgeKey: string): number | null {
 }
 
 function formatDateTime(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString(undefined, {
+  return new Date(iso).toLocaleDateString(undefined, {
     year: "numeric", month: "short", day: "2-digit",
   });
 }
@@ -120,38 +126,102 @@ function getBadgeGradient(icon: string | null | undefined, badgeKey?: string) {
   return ICON_ACCENTS[key] ?? "from-[rgb(var(--primary))] to-[rgb(var(--primary))]";
 }
 
+/* ── Badge Frame styles ── */
+const FRAME_STYLES: Record<string, React.CSSProperties> = {
+  NEON: {
+    boxShadow: "0 0 0 2px #a855f7, 0 0 8px 2px #a855f7, 0 0 18px 4px #7c3aed55",
+  },
+  GOLD: {
+    boxShadow: "0 0 0 2.5px #f59e0b, 0 0 8px 2px #f59e0b88",
+  },
+  HOLOGRAPHIC: {
+    // animated via inline keyframes injected once
+    outline: "2.5px solid transparent",
+  },
+};
+
+const FRAME_LABEL: Record<string, string> = {
+  NEON:         "Neon",
+  GOLD:         "Gold",
+  HOLOGRAPHIC:  "Holo",
+};
+
+const FRAME_BADGE_COLOR: Record<string, string> = {
+  NEON:        "bg-purple-500/15 text-purple-400 border-purple-500/30",
+  GOLD:        "bg-amber-400/15  text-amber-500  border-amber-400/30",
+  HOLOGRAPHIC: "bg-cyan-400/15   text-cyan-400   border-cyan-400/30",
+};
+
 function BadgeIcon({
   icon,
   earned,
   badgeKey,
+  frame,
 }: {
   icon: string | null | undefined;
   earned: boolean;
   badgeKey?: string;
+  frame?: string | null;
 }) {
   const I = (icon ? ICONS[icon.toLowerCase()] : null) ?? Medal;
   const gradient = getBadgeGradient(icon, badgeKey);
+  const activeFrame = earned && frame ? frame : null;
 
   if (earned) {
+    const frameStyle = activeFrame ? FRAME_STYLES[activeFrame] ?? {} : {};
+    const isHolo = activeFrame === "HOLOGRAPHIC";
+
     return (
-      <div
-        className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${gradient} shadow-lg`}
-        aria-hidden
-      >
-        <I className="h-7 w-7 text-white drop-shadow" />
-        <div
-          className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${gradient} opacity-30 blur-md -z-10 scale-110`}
-        />
-      </div>
+      <>
+        {isHolo && (
+          <style>{`
+            @keyframes holo-spin {
+              0%   { background-position: 0%   50%; }
+              50%  { background-position: 100% 50%; }
+              100% { background-position: 0%   50%; }
+            }
+            .badge-holo-frame {
+              background: linear-gradient(
+                135deg, #f43f5e, #a855f7, #06b6d4, #10b981, #f59e0b, #f43f5e
+              );
+              background-size: 300% 300%;
+              animation: holo-spin 3s linear infinite;
+              padding: 2.5px;
+            }
+            .badge-holo-inner {
+              border-radius: 14px;
+              overflow: hidden;
+            }
+          `}</style>
+        )}
+
+        {isHolo ? (
+          /* Holographic: gradient wrapper div → inner div → icon div */
+          <div className="badge-holo-frame relative flex shrink-0 rounded-2xl" style={{ width: 56, height: 56 }}>
+            <div className="badge-holo-inner flex flex-1 items-center justify-center">
+              <div className={`flex h-full w-full items-center justify-center rounded-2xl bg-gradient-to-br ${gradient}`}>
+                <I className="h-7 w-7 text-white drop-shadow" />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div
+            className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${gradient} shadow-lg`}
+            style={frameStyle}
+            aria-hidden
+          >
+            <I className="h-7 w-7 text-white drop-shadow" />
+            <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${gradient} opacity-30 blur-md -z-10 scale-110`} />
+          </div>
+        )}
+      </>
     );
   }
 
-  // Locked — same gradient but heavily faded, icon uses gradient color instead of white
+  /* Locked */
   return (
     <div className="relative flex h-14 w-14 shrink-0" aria-hidden>
-      <div
-        className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${gradient} opacity-30`}
-      >
+      <div className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${gradient} opacity-30`}>
         <I className="h-7 w-7 text-white" />
       </div>
       <Lock className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-[rgb(var(--card2))] p-0.5 text-[rgb(var(--muted2))] border border-[rgb(var(--border))]" />
@@ -159,65 +229,32 @@ function BadgeIcon({
   );
 }
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  sub,
-  accent,
-  loading,
-}: {
-  icon: any;
-  label: string;
-  value: string | number;
-  sub: string;
-  accent: string;
-  loading: boolean;
+function StatCard({ icon: Icon, label, value, sub, accent, loading }: {
+  icon: any; label: string; value: string | number; sub: string; accent: string; loading: boolean;
 }) {
   return (
     <div className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.8)] p-5 shadow-[0_8px_32px_rgb(var(--shadow)/0.12)] backdrop-blur-sm transition-all hover:shadow-[0_12px_40px_rgb(var(--shadow)/0.18)] hover:-translate-y-0.5">
-      <div
-        className={`absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient-to-br ${accent} opacity-10 blur-xl transition-all group-hover:opacity-20`}
-      />
+      <div className={`absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient-to-br ${accent} opacity-10 blur-xl transition-all group-hover:opacity-20`} />
       <div className="relative flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-[rgb(var(--muted))]">
-        <div
-          className={`flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br ${accent}`}
-        >
+        <div className={`flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br ${accent}`}>
           <Icon className="h-3.5 w-3.5 text-white" />
         </div>
         {label}
       </div>
       <div className="relative mt-3 text-3xl font-bold tabular-nums text-[rgb(var(--fg))]">
-        {loading ? (
-          <div className="h-8 w-16 animate-pulse rounded-lg bg-[rgb(var(--card2))]" />
-        ) : (
-          value
-        )}
+        {loading ? <div className="h-8 w-16 animate-pulse rounded-lg bg-[rgb(var(--card2))]" /> : value}
       </div>
       <div className="relative mt-1 text-xs text-[rgb(var(--muted2))]">{sub}</div>
     </div>
   );
 }
 
-function TabButton({
-  active,
-  label,
-  count,
-  loading,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  count: number;
-  loading: boolean;
-  onClick: () => void;
+function TabButton({ active, label, count, loading, onClick }: {
+  active: boolean; label: string; count: number; loading: boolean; onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "group inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-200 border",
+    <button type="button" onClick={onClick}
+      className={["group inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-200 border",
         active
           ? "border-[rgb(var(--primary)/0.4)] bg-[rgb(var(--primary))] text-white shadow-[0_4px_14px_rgb(var(--primary)/0.35)]"
           : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted))] hover:border-[rgb(var(--primary)/0.3)] hover:text-[rgb(var(--fg))] hover:bg-[rgb(var(--card)/0.8)]",
@@ -225,16 +262,9 @@ function TabButton({
     >
       {label}
       {!loading && (
-        <span
-          className={[
-            "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold",
-            active
-              ? "bg-white/20 text-white"
-              : "bg-[rgb(var(--card))] text-[rgb(var(--muted2))]",
-          ].join(" ")}
-        >
-          {count}
-        </span>
+        <span className={["inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold",
+          active ? "bg-white/20 text-white" : "bg-[rgb(var(--card))] text-[rgb(var(--muted2))]"].join(" ")}
+        >{count}</span>
       )}
     </button>
   );
@@ -258,17 +288,19 @@ export default function AllBadgesPage() {
     { revalidateOnFocus: false, dedupingInterval: 30_000 }
   );
 
+  /* Fetch active frame from rewards catalog */
+  const { data: catalogData } = useSWR<CatalogRes>(
+    "/api/rewards/catalog",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 30_000 }
+  );
+  const badgeFrame = catalogData?.effects?.badgeFrame ?? null;
+
   const [tab, setTab] = useState<FilterTab>("ALL");
 
   const totalPoints = data?.totalPoints ?? 0;
-  const earnedCount = useMemo(
-    () => (data?.badges ?? []).filter((b) => b.earned).length,
-    [data]
-  );
-  const lockedCount = useMemo(
-    () => (data?.badges ?? []).filter((b) => !b.earned).length,
-    [data]
-  );
+  const earnedCount = useMemo(() => (data?.badges ?? []).filter((b) => b.earned).length, [data]);
+  const lockedCount = useMemo(() => (data?.badges ?? []).filter((b) => !b.earned).length, [data]);
 
   const sorted = useMemo(() => {
     const badges = data?.badges ?? [];
@@ -308,21 +340,25 @@ export default function AllBadgesPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[rgb(var(--primary))] to-[rgb(var(--primary)/0.6)] shadow-[0_4px_12px_rgb(var(--primary)/0.3)]">
               <Medal className="h-4 w-4 text-white" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-[rgb(var(--fg))]">
-              Badge Collection
-            </h1>
+            <h1 className="text-xl font-bold tracking-tight text-[rgb(var(--fg))]">Badge Collection</h1>
           </div>
-          <p className="mt-1.5 text-sm text-[rgb(var(--muted))]">
-            Track your achievements and unlock new milestones.
-          </p>
+          <p className="mt-1.5 text-sm text-[rgb(var(--muted))]">Track your achievements and unlock new milestones.</p>
         </div>
-        <Link
-          href="/dashboard/student/achievements"
-          className="inline-flex items-center gap-1.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] transition hover:bg-[rgb(var(--card)/0.8)] hover:border-[rgb(var(--primary)/0.3)]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back
-        </Link>
+        <div className="flex items-center gap-2">
+          {/* Active frame badge */}
+          {badgeFrame && FRAME_LABEL[badgeFrame] && (
+            <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold ${FRAME_BADGE_COLOR[badgeFrame] ?? ""}`}>
+              <span className="h-1.5 w-1.5 rounded-full bg-current" />
+              {FRAME_LABEL[badgeFrame]} Frame Active
+            </span>
+          )}
+          <Link
+            href="/dashboard/student/achievements"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-3 py-2 text-xs font-semibold text-[rgb(var(--fg))] transition hover:bg-[rgb(var(--card)/0.8)] hover:border-[rgb(var(--primary)/0.3)]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />Back
+          </Link>
+        </div>
       </div>
 
       {/* Overall completion banner */}
@@ -332,99 +368,42 @@ export default function AllBadgesPage() {
             <div className="flex items-center gap-3">
               <Trophy className="h-5 w-5 text-[rgb(var(--primary))]" />
               <div>
-                <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                  Overall Progress
-                </div>
-                <div className="text-xs text-[rgb(var(--muted))]">
-                  {earnedCount} of {data.badges.length} badges unlocked
-                </div>
+                <div className="text-sm font-semibold text-[rgb(var(--fg))]">Overall Progress</div>
+                <div className="text-xs text-[rgb(var(--muted))]">{earnedCount} of {data.badges.length} badges unlocked</div>
               </div>
             </div>
-            <div className="text-2xl font-bold tabular-nums text-[rgb(var(--primary))]">
-              {completionPct}%
-            </div>
+            <div className="text-2xl font-bold tabular-nums text-[rgb(var(--primary))]">{completionPct}%</div>
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-[rgb(var(--card2))]">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary)/0.65)] transition-all duration-1000"
-              style={{ width: `${completionPct}%` }}
-            />
+            <div className="h-full rounded-full bg-gradient-to-r from-[rgb(var(--primary))] to-[rgb(var(--primary)/0.65)] transition-all duration-1000" style={{ width: `${completionPct}%` }} />
           </div>
         </div>
       )}
 
       {/* Stat cards */}
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard
-          icon={Sparkles}
-          label="Total Points"
-          value={totalPoints.toLocaleString()}
-          sub="Accumulated across all activity"
-          accent="from-violet-400 to-purple-500"
-          loading={loading}
-        />
-        <StatCard
-          icon={Medal}
-          label="Earned"
-          value={earnedCount}
-          sub="Badges unlocked so far"
-          accent="from-emerald-400 to-teal-500"
-          loading={loading}
-        />
-        <StatCard
-          icon={Lock}
-          label="Remaining"
-          value={lockedCount}
-          sub="Still to be unlocked"
-          accent="from-amber-400 to-orange-500"
-          loading={loading}
-        />
+        <StatCard icon={Sparkles} label="Total Points" value={totalPoints.toLocaleString()} sub="Accumulated across all activity" accent="from-violet-400 to-purple-500" loading={loading} />
+        <StatCard icon={Medal}    label="Earned"       value={earnedCount}                  sub="Badges unlocked so far"          accent="from-emerald-400 to-teal-500"  loading={loading} />
+        <StatCard icon={Lock}     label="Remaining"    value={lockedCount}                  sub="Still to be unlocked"            accent="from-amber-400 to-orange-500"  loading={loading} />
       </div>
 
       {/* Tabs */}
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        <TabButton
-          active={tab === "ALL"}
-          label="All"
-          count={data?.badges?.length ?? 0}
-          loading={loading}
-          onClick={() => setTab("ALL")}
-        />
-        <TabButton
-          active={tab === "EARNED"}
-          label="Earned"
-          count={earnedCount}
-          loading={loading}
-          onClick={() => setTab("EARNED")}
-        />
-        <TabButton
-          active={tab === "LOCKED"}
-          label="Locked"
-          count={lockedCount}
-          loading={loading}
-          onClick={() => setTab("LOCKED")}
-        />
+        <TabButton active={tab === "ALL"}    label="All"    count={data?.badges?.length ?? 0} loading={loading} onClick={() => setTab("ALL")} />
+        <TabButton active={tab === "EARNED"} label="Earned" count={earnedCount}               loading={loading} onClick={() => setTab("EARNED")} />
+        <TabButton active={tab === "LOCKED"} label="Locked" count={lockedCount}               loading={loading} onClick={() => setTab("LOCKED")} />
       </div>
 
       {/* Badge grid */}
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {loading
           ? Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="animate-pulse rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-4 h-36"
-              />
+              <div key={i} className="animate-pulse rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-4 h-36" />
             ))
           : filtered.map((b) => {
               const target = parsePointsTarget(b.key);
-              const pct =
-                target == null
-                  ? b.earned ? 100 : 0
-                  : b.earned
-                  ? 100
-                  : clampPct((totalPoints / target) * 100);
-              const remaining =
-                target == null ? null : Math.max(0, target - totalPoints);
+              const pct = target == null ? (b.earned ? 100 : 0) : b.earned ? 100 : clampPct((totalPoints / target) * 100);
+              const remaining = target == null ? null : Math.max(0, target - totalPoints);
               const gradient = getBadgeGradient(b.icon, b.key);
 
               return (
@@ -440,36 +419,27 @@ export default function AllBadgesPage() {
                   ].join(" ")}
                 >
                   {b.earned && (
-                    <div
-                      className={`pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-gradient-to-br ${gradient} opacity-[0.07] blur-2xl transition-opacity group-hover:opacity-[0.12]`}
-                    />
+                    <div className={`pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-gradient-to-br ${gradient} opacity-[0.07] blur-2xl transition-opacity group-hover:opacity-[0.12]`} />
                   )}
 
                   <div className="relative flex items-start gap-3">
-                    <BadgeIcon icon={b.icon} earned={b.earned} badgeKey={b.key} />
+                    <BadgeIcon icon={b.icon} earned={b.earned} badgeKey={b.key} frame={badgeFrame} />
+
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="text-sm font-semibold leading-snug text-[rgb(var(--fg))]">
-                          {b.name}
-                        </div>
+                        <div className="text-sm font-semibold leading-snug text-[rgb(var(--fg))]">{b.name}</div>
                         {b.earned ? (
                           <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            Unlocked
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />Unlocked
                           </span>
                         ) : (
-                          <span className="shrink-0 inline-flex items-center rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[rgb(var(--muted2))]">
-                            Locked
-                          </span>
+                          <span className="shrink-0 inline-flex items-center rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[rgb(var(--muted2))]">Locked</span>
                         )}
                       </div>
-                      <div className="mt-1 text-xs leading-relaxed text-[rgb(var(--muted))]">
-                        {b.description}
-                      </div>
+                      <div className="mt-1 text-xs leading-relaxed text-[rgb(var(--muted))]">{b.description}</div>
                       {b.earned && b.awardedAt && (
                         <div className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-[rgb(var(--muted2))]">
-                          <Calendar className="h-3 w-3" />
-                          {formatDateTime(b.awardedAt)}
+                          <Calendar className="h-3 w-3" />{formatDateTime(b.awardedAt)}
                         </div>
                       )}
                     </div>
@@ -478,14 +448,10 @@ export default function AllBadgesPage() {
                   <div className="relative mt-4 space-y-1.5">
                     <ProgressBar pct={pct} loading={loading} />
                     <div className="flex items-center justify-between text-[11px] text-[rgb(var(--muted2))]">
-                      <span className="font-medium tabular-nums">
-                        {Math.round(pct)}%
-                      </span>
+                      <span className="font-medium tabular-nums">{Math.round(pct)}%</span>
                       <span>
                         {target == null
-                          ? b.earned
-                            ? "Achievement unlocked"
-                            : "Criteria-based"
+                          ? b.earned ? "Achievement unlocked" : "Criteria-based"
                           : b.earned
                           ? `${target.toLocaleString()} pts reached`
                           : `${remaining?.toLocaleString()} pts to go`}
@@ -500,12 +466,8 @@ export default function AllBadgesPage() {
           <div className="col-span-full flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--card2)/0.5)] py-14 text-center">
             <Medal className="h-10 w-10 text-[rgb(var(--muted2))]" />
             <div>
-              <div className="text-sm font-semibold text-[rgb(var(--fg))]">
-                No badges here
-              </div>
-              <div className="mt-1 text-xs text-[rgb(var(--muted))]">
-                Nothing matches this filter yet.
-              </div>
+              <div className="text-sm font-semibold text-[rgb(var(--fg))]">No badges here</div>
+              <div className="mt-1 text-xs text-[rgb(var(--muted))]">Nothing matches this filter yet.</div>
             </div>
           </div>
         )}
