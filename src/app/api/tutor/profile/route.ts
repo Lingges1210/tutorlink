@@ -16,10 +16,7 @@ function isTutorUser(u: {
 
 export async function GET() {
   const supabase = await supabaseServerComponent();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user?.email) return NextResponse.json({ ok: false }, { status: 401 });
 
   const tutor = await prisma.user.findUnique({
@@ -30,6 +27,7 @@ export async function GET() {
       email: true,
       programme: true,
       avatarUrl: true,
+      avatarBorder: true,       // ← added
       createdAt: true,
       isDeactivated: true,
       verificationStatus: true,
@@ -51,22 +49,15 @@ export async function GET() {
   if (!tutor || tutor.isDeactivated) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
-
   if (!isTutorUser(tutor) || tutor.verificationStatus !== "AUTO_VERIFIED") {
     return NextResponse.json({ ok: false }, { status: 403 });
   }
 
-  //  Stats
   const [completedCount, upcomingCount] = await Promise.all([
-    prisma.session.count({
-      where: { tutorId: tutor.id, status: "COMPLETED" },
-    }),
-    prisma.session.count({
-      where: { tutorId: tutor.id, status: "ACCEPTED" },
-    }),
+    prisma.session.count({ where: { tutorId: tutor.id, status: "COMPLETED" } }),
+    prisma.session.count({ where: { tutorId: tutor.id, status: "ACCEPTED" } }),
   ]);
 
-  //  Last 3 reviews (ratings)
   const recentReviews = await prisma.sessionRating.findMany({
     where: { tutorId: tutor.id },
     orderBy: { createdAt: "desc" },
@@ -88,6 +79,7 @@ export async function GET() {
       email: tutor.email,
       programme: tutor.programme,
       avatarUrl: tutor.avatarUrl,
+      avatarBorder: tutor.avatarBorder,  // ← added
       createdAt: tutor.createdAt,
       avgRating: tutor.avgRating ?? 0,
       ratingCount: tutor.ratingCount ?? 0,

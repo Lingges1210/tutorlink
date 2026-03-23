@@ -7,13 +7,14 @@ import {
 } from "lucide-react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
+import AvatarWithBorder from "@/components/AvatarWithBorder";
 
 type Subject = { id: string; code: string; title: string };
 type ProfileResp = {
   ok: boolean;
   tutor?: {
     id: string; name: string | null; email: string; programme: string | null;
-    avatarUrl: string | null; createdAt: string;
+    avatarUrl: string | null; avatarBorder: string | null; createdAt: string;
     avgRating: number; ratingCount: number; subjects: Subject[];
   };
   stats?: { completedCount: number; upcomingCount: number; joinedSince: string };
@@ -139,7 +140,6 @@ export default function TutorProfilePage() {
       }
     } finally {
       setAvatarUploading(false);
-      // Reset input so same file can be re-selected
       e.target.value = "";
     }
   }
@@ -207,9 +207,10 @@ export default function TutorProfilePage() {
     );
   }
 
-  const tutor = profileData?.tutor;
-  const stats = profileData?.stats;
+  const tutor  = profileData?.tutor;
+  const stats  = profileData?.stats;
   const reviews = profileData?.reviews ?? [];
+  const tutorInitials = tutor?.name?.[0]?.toUpperCase() ?? "T";
 
   return (
     <div className="space-y-5">
@@ -222,30 +223,29 @@ export default function TutorProfilePage() {
         <div className="relative flex flex-wrap items-center justify-between gap-5">
           <div className="flex items-center gap-4">
 
-            {/* ── Avatar with upload ── */}
+            {/* ── Avatar with upload + animated border ── */}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => avatarInputRef.current?.click()}
                 disabled={avatarUploading}
-                className="group relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl shadow-lg focus:outline-none"
+                className="group relative flex shrink-0 items-center justify-center focus:outline-none"
                 title="Change profile picture"
+                style={{ borderRadius: "50%" }}
               >
-                {tutor?.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={tutor.avatarUrl}
-                    alt="Avatar"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[rgb(var(--primary))] to-violet-500 text-lg font-bold text-white">
-                    {tutor?.name?.[0]?.toUpperCase() ?? "T"}
-                  </div>
-                )}
+                <AvatarWithBorder
+                  avatarUrl={tutor?.avatarUrl}
+                  initials={tutorInitials}
+                  size={56}
+                  avatarBorder={tutor?.avatarBorder ?? null}
+                  showOnlineDot
+                />
 
-                {/* Hover overlay */}
-                <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                {/* Hover overlay — sits on top of AvatarWithBorder */}
+                <div
+                  className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
+                  style={{ zIndex: 10 }}
+                >
                   {avatarUploading ? (
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                   ) : (
@@ -262,11 +262,6 @@ export default function TutorProfilePage() {
                 className="hidden"
                 onChange={handleAvatarChange}
               />
-
-              {/* Online dot */}
-              <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 shadow-sm ring-2 ring-[rgb(var(--card))]">
-                <div className="h-2 w-2 rounded-full bg-white" />
-              </div>
             </div>
 
             <div>
@@ -290,7 +285,6 @@ export default function TutorProfilePage() {
                 )}
               </p>
 
-              {/* Avatar feedback message */}
               {avatarMsg && (
                 <p className={`mt-1 text-[0.7rem] font-medium ${avatarMsg.ok ? "text-emerald-500" : "text-rose-400"}`}>
                   {avatarMsg.ok ? "✓" : "⚠"} {avatarMsg.text}
@@ -321,8 +315,6 @@ export default function TutorProfilePage() {
 
       {/* SUBJECTS + ADD */}
       <div className="grid gap-4 md:grid-cols-[1fr_340px] md:items-start">
-
-        {/* Subjects list */}
         <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-5">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-[rgb(var(--primary))/0.1]">
@@ -330,18 +322,14 @@ export default function TutorProfilePage() {
             </div>
             <h2 className="text-sm font-bold text-[rgb(var(--fg))]">Subjects I Teach</h2>
             {mySubjects.length > 0 && (
-              <span className="rounded-full bg-[rgb(var(--primary))/0.1] px-2 py-0.5 text-[0.65rem] font-bold text-[rgb(var(--primary))]">
-                {mySubjects.length}
-              </span>
+              <span className="rounded-full bg-[rgb(var(--primary))/0.1] px-2 py-0.5 text-[0.65rem] font-bold text-[rgb(var(--primary))]">{mySubjects.length}</span>
             )}
           </div>
-
           {msg && (
             <div className={`mt-3 flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-medium ${msg.ok ? "bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/20" : "bg-rose-500/10 text-rose-500 ring-1 ring-rose-500/20"}`}>
               {msg.ok ? "✓" : "⚠"} {msg.text}
             </div>
           )}
-
           <div className="mt-4 space-y-2">
             {mySubjects.length === 0 ? (
               <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-[rgb(var(--border))] py-10 text-center">
@@ -357,79 +345,47 @@ export default function TutorProfilePage() {
           </div>
         </div>
 
-        {/* Add panels */}
         <div className="space-y-3">
-
-          {/* Quick add */}
           <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-5">
             <div className="mb-4 flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-blue-500/10">
-                <Plus size={13} className="text-blue-500" />
-              </div>
+              <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-blue-500/10"><Plus size={13} className="text-blue-500" /></div>
               <h2 className="text-sm font-bold text-[rgb(var(--fg))]">Quick Add</h2>
             </div>
             <div className="flex gap-2">
-              <select
-                value={selId}
-                onChange={(e) => setSelId(e.target.value)}
-                disabled={saving || availableAdd.length === 0}
-                className="h-9 flex-1 min-w-0 rounded-xl border px-3 text-xs outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] transition-all focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] disabled:opacity-50"
-              >
+              <select value={selId} onChange={(e) => setSelId(e.target.value)} disabled={saving || availableAdd.length === 0}
+                className="h-9 flex-1 min-w-0 rounded-xl border px-3 text-xs outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] transition-all focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] disabled:opacity-50">
                 <option value="">{availableAdd.length === 0 ? "All subjects added" : "Choose subject…"}</option>
-                {availableAdd.map((s) => (
-                  <option key={s.id} value={s.id}>{s.code} — {s.title}</option>
-                ))}
+                {availableAdd.map((s) => <option key={s.id} value={s.id}>{s.code} — {s.title}</option>)}
               </select>
-              <button
-                onClick={addSubject}
-                disabled={saving || !selId}
-                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-[rgb(var(--primary))] px-4 text-xs font-bold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md active:scale-95 disabled:opacity-50"
-              >
+              <button onClick={addSubject} disabled={saving || !selId}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-[rgb(var(--primary))] px-4 text-xs font-bold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md active:scale-95 disabled:opacity-50">
                 <Plus size={13} /> Add
               </button>
             </div>
           </div>
 
-          {/* Custom subject */}
           <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-5">
             <div className="mb-1 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-violet-500/10">
-                  <Sparkles size={13} className="text-violet-500" />
-                </div>
+                <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-violet-500/10"><Sparkles size={13} className="text-violet-500" /></div>
                 <h2 className="text-sm font-bold text-[rgb(var(--fg))]">New Subject</h2>
               </div>
               <span className="text-[0.65rem] text-[rgb(var(--muted2))]">Code auto-standardized</span>
             </div>
             <p className="mb-4 text-[0.72rem] text-[rgb(var(--muted2))]">Can&apos;t find yours? Add a custom one.</p>
             <div className="space-y-2">
-              <input
-                value={customCode}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="Subject code (e.g. CPT112)"
-                disabled={saving}
-                className="h-9 w-full rounded-xl border px-3 text-xs outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] transition-all focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] disabled:opacity-50"
-              />
-              <input
-                value={customTitle}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Subject title (e.g. Discrete Structures)"
-                disabled={saving}
-                className="h-9 w-full rounded-xl border px-3 text-xs outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] transition-all focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] disabled:opacity-50"
-              />
-              <button
-                onClick={addCustomSubject}
-                disabled={saving || !customCode.trim() || !customTitle.trim()}
-                className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[rgb(var(--primary))] to-violet-500 text-xs font-bold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.99] disabled:opacity-50"
-              >
+              <input value={customCode} onChange={(e) => setCode(e.target.value)} placeholder="Subject code (e.g. CPT112)" disabled={saving}
+                className="h-9 w-full rounded-xl border px-3 text-xs outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] transition-all focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] disabled:opacity-50" />
+              <input value={customTitle} onChange={(e) => setTitle(e.target.value)} placeholder="Subject title (e.g. Discrete Structures)" disabled={saving}
+                className="h-9 w-full rounded-xl border px-3 text-xs outline-none border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted2))] transition-all focus:border-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--primary))/0.15] disabled:opacity-50" />
+              <button onClick={addCustomSubject} disabled={saving || !customCode.trim() || !customTitle.trim()}
+                className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[rgb(var(--primary))] to-violet-500 text-xs font-bold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.99] disabled:opacity-50">
                 <Sparkles size={12} /> Add custom subject
               </button>
             </div>
             <div className="mt-3 flex items-center gap-1.5 rounded-xl bg-[rgb(var(--card2))] px-3 py-2">
               <ChevronRight size={11} className="shrink-0 text-[rgb(var(--muted2))]" />
-              <span className="text-[0.68rem] text-[rgb(var(--muted2))]">
-                e.g. <span className="font-semibold text-[rgb(var(--fg))]">CPT112</span> — Discrete Structures
-              </span>
+              <span className="text-[0.68rem] text-[rgb(var(--muted2))]">e.g. <span className="font-semibold text-[rgb(var(--fg))]">CPT112</span> — Discrete Structures</span>
             </div>
           </div>
         </div>
@@ -439,14 +395,11 @@ export default function TutorProfilePage() {
       <div className="rounded-3xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.7)] p-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-400/10">
-              <Star size={13} className="text-amber-500" />
-            </div>
+            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-400/10"><Star size={13} className="text-amber-500" /></div>
             <h2 className="text-sm font-bold text-[rgb(var(--fg))]">Recent Reviews</h2>
           </div>
           <span className="rounded-full bg-[rgb(var(--card2))] px-2.5 py-1 text-[0.65rem] text-[rgb(var(--muted2))]">Last 3</span>
         </div>
-
         <div className="mt-4 space-y-3">
           {reviews.length === 0 ? (
             <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-[rgb(var(--border))] py-10 text-center">
@@ -456,8 +409,7 @@ export default function TutorProfilePage() {
             </div>
           ) : (
             reviews.map((r) => (
-              <div key={r.id}
-                className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-5 py-4 transition-all duration-300 hover:-translate-y-px hover:shadow-[0_8px_24px_rgb(var(--shadow)/0.12)]">
+              <div key={r.id} className="group relative overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-5 py-4 transition-all duration-300 hover:-translate-y-px hover:shadow-[0_8px_24px_rgb(var(--shadow)/0.12)]">
                 <div className="pointer-events-none absolute top-0 right-0 h-24 w-24 rounded-full bg-amber-400 opacity-0 blur-2xl transition-opacity group-hover:opacity-[0.04]" />
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
@@ -483,7 +435,6 @@ export default function TutorProfilePage() {
           )}
         </div>
       </div>
-
     </div>
   );
 }

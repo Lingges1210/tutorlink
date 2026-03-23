@@ -30,7 +30,8 @@ export const getSessionUser = cache(async () => {
       streakCount: true,
       streakLastSeen: true,
       streakBrokenAt: true,
-      usernameColor: true,        // ← add
+      usernameColor: true,        
+      avatarBorder: true,        
       roleAssignments: { select: { role: true } },
     },
   });

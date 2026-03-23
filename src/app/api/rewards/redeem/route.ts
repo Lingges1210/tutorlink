@@ -174,13 +174,16 @@ export async function POST(req: Request) {
     }
 
     await tx.rewardRedemption.create({
-      data: {
-        userId: me.id,
-        rewardId: reward.id,
-        status: reward.durationHrs ? "ACTIVE" : "USED",
-        expiresAt,
-      },
-    });
+  data: {
+    userId: me.id,
+    rewardId: reward.id,
+    // Use ACTIVE for one-time cosmetics so catalog can detect them
+    status: (reward.durationHrs || ONE_TIME_ACTIVE_KEYS.has(reward.key))
+      ? "ACTIVE"
+      : "USED",
+    expiresAt,
+  },
+});
 
     // Build user patch
     const userPatch: Record<string, any> = {};

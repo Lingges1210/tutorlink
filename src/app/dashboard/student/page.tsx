@@ -19,6 +19,7 @@ export default async function StudentDashboardPage() {
         role: dbUser.role,
         verificationStatus: dbUser.verificationStatus,
         avatarUrl: dbUser.avatarUrl ?? null,
+        avatarBorder: dbUser.avatarBorder ?? null,
       }}
       isTutor={isTutor}
       streakCount={dbUser.streakCount ?? 0}
