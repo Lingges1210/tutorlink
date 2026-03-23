@@ -11,10 +11,11 @@ type Props = {
     name: string | null;
     role: string;
     verificationStatus: VerificationStatus | string;
+    avatarUrl?: string | null;
   };
   isTutor: boolean;
-  streakCount: number;        // ← add
-  streakBrokenAt: Date | null; // ← add
+  streakCount: number;
+  streakBrokenAt: Date | null;
 };
 
 function DashboardSwitcher({
@@ -348,8 +349,22 @@ export default function StudentDashboardClient({ user, isTutor, streakCount, str
 
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-[rgb(var(--primary)/0.12)] border border-[rgb(var(--primary)/0.22)] text-[rgb(var(--primary))] font-bold text-lg shrink-0 select-none">
-              {(user.name ?? "S").charAt(0).toUpperCase()}
+
+            {/* ── Avatar ── */}
+            <div className="relative w-12 h-12 shrink-0">
+              {user.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={user.avatarUrl}
+                  alt="Avatar"
+                  className="w-12 h-12 rounded-2xl object-cover ring-2 ring-[rgb(var(--primary)/0.25)]"
+                />
+              ) : (
+                <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-[rgb(var(--primary)/0.12)] border border-[rgb(var(--primary)/0.22)] text-[rgb(var(--primary))] font-bold text-lg select-none">
+                  {(user.name ?? "S").charAt(0).toUpperCase()}
+                </div>
+              )}
+              {/* Verified dot */}
               {isVerified && (
                 <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[rgb(var(--card))] flex items-center justify-center">
                   <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -358,6 +373,7 @@ export default function StudentDashboardClient({ user, isTutor, streakCount, str
                 </span>
               )}
             </div>
+
             <div>
               <p className="text-xs text-[rgb(var(--muted))] font-medium">{greeting}</p>
               <h1 className="text-xl font-bold text-[rgb(var(--fg))] leading-tight">{firstName}</h1>

@@ -4,7 +4,6 @@ import StudentDashboardClient from "./StudentDashboardClient";
 
 export default async function StudentDashboardPage() {
   const dbUser = await getSessionUser();
-
   if (!dbUser) redirect("/auth/login");
 
   const isTutor =
@@ -14,7 +13,13 @@ export default async function StudentDashboardPage() {
 
   return (
     <StudentDashboardClient
-      user={dbUser}
+      user={{
+        email: dbUser.email,
+        name: dbUser.name,
+        role: dbUser.role,
+        verificationStatus: dbUser.verificationStatus,
+        avatarUrl: dbUser.avatarUrl ?? null,
+      }}
       isTutor={isTutor}
       streakCount={dbUser.streakCount ?? 0}
       streakBrokenAt={dbUser.streakBrokenAt ?? null}

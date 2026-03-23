@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Star, Plus, Trash2, BookOpen,
-  TrendingUp, Calendar, Award, Sparkles, ChevronRight,
+  TrendingUp, Calendar, Award, Sparkles, ChevronRight, Camera,
 } from "lucide-react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
@@ -94,8 +94,10 @@ export default function TutorProfilePage() {
   const [selId, setSelId] = useState("");
   const [customCode, setCode] = useState("");
   const [customTitle, setTitle] = useState("");
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarMsg, setAvatarMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  // SWR — both fetches, instant on revisit
   const { data: profileData, isLoading: loadingProfile, mutate: mutateProfile } = useSWR<ProfileResp>(
     "/api/tutor/profile",
     fetcher,
@@ -118,6 +120,30 @@ export default function TutorProfilePage() {
     return allSubjects.filter((x) => !set.has(x.id));
   }, [allSubjects, mySubjects]);
 
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    setAvatarMsg(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/student/profile/avatar", { method: "POST", body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAvatarMsg({ text: data?.error ?? "Upload failed.", ok: false });
+      } else {
+        await mutateProfile();
+        setAvatarMsg({ text: "Profile picture updated!", ok: true });
+        setTimeout(() => setAvatarMsg(null), 3000);
+      }
+    } finally {
+      setAvatarUploading(false);
+      // Reset input so same file can be re-selected
+      e.target.value = "";
+    }
+  }
+
   async function addSubject() {
     if (!selId) return;
     setSaving(true); setMsg(null);
@@ -130,7 +156,7 @@ export default function TutorProfilePage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ text: data?.message ?? "Failed.", ok: false }); return; }
       setSelId("");
-      await mutateProfile(); // refetch profile after add
+      await mutateProfile();
       setMsg({ text: "Subject added!", ok: true });
     } finally { setSaving(false); }
   }
@@ -148,7 +174,7 @@ export default function TutorProfilePage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ text: data?.message ?? "Failed.", ok: false }); return; }
       setCode(""); setTitle("");
-      await mutateProfile(); // refetch profile after custom add
+      await mutateProfile();
       setMsg({ text: "Custom subject added!", ok: true });
     } finally { setSaving(false); }
   }
@@ -163,7 +189,7 @@ export default function TutorProfilePage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ text: data?.message ?? "Failed.", ok: false }); return; }
-      await mutateProfile(); // refetch profile after remove
+      await mutateProfile();
       setMsg({ text: "Subject removed.", ok: true });
     } finally { setSaving(false); }
   }
@@ -195,14 +221,54 @@ export default function TutorProfilePage() {
 
         <div className="relative flex flex-wrap items-center justify-between gap-5">
           <div className="flex items-center gap-4">
+
+            {/* ── Avatar with upload ── */}
             <div className="relative">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[rgb(var(--primary))] to-violet-500 text-lg font-bold text-white shadow-lg">
-                {tutor?.name?.[0]?.toUpperCase() ?? "T"}
-              </div>
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={avatarUploading}
+                className="group relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl shadow-lg focus:outline-none"
+                title="Change profile picture"
+              >
+                {tutor?.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={tutor.avatarUrl}
+                    alt="Avatar"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[rgb(var(--primary))] to-violet-500 text-lg font-bold text-white">
+                    {tutor?.name?.[0]?.toUpperCase() ?? "T"}
+                  </div>
+                )}
+
+                {/* Hover overlay */}
+                <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                  {avatarUploading ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  ) : (
+                    <Camera size={16} className="text-white" />
+                  )}
+                </div>
+              </button>
+
+              {/* Hidden file input */}
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
+
+              {/* Online dot */}
               <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 shadow-sm ring-2 ring-[rgb(var(--card))]">
                 <div className="h-2 w-2 rounded-full bg-white" />
               </div>
             </div>
+
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-xl font-bold tracking-tight text-[rgb(var(--fg))]">
@@ -223,6 +289,13 @@ export default function TutorProfilePage() {
                   </span>
                 )}
               </p>
+
+              {/* Avatar feedback message */}
+              {avatarMsg && (
+                <p className={`mt-1 text-[0.7rem] font-medium ${avatarMsg.ok ? "text-emerald-500" : "text-rose-400"}`}>
+                  {avatarMsg.ok ? "✓" : "⚠"} {avatarMsg.text}
+                </p>
+              )}
             </div>
           </div>
 
