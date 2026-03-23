@@ -5,6 +5,7 @@ import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { notify } from "@/lib/notify";
 import { awardPointsInTx } from "@/lib/gamification/awardPoints";
 import { GAMIFICATION_RULES } from "@/lib/gamification/rules";
+import { queueStudypalReward } from "@/lib/studypalServerReward"; // ← NEW
 
 export async function GET(
   _req: Request,
@@ -103,7 +104,6 @@ export async function POST(
   }
 
   const created = await prisma.$transaction(async (tx) => {
-    // Create the rating
     const newRating = await tx.sessionRating.create({
       data: {
         sessionId,
@@ -123,7 +123,7 @@ export async function POST(
       },
     });
 
-    // Award points to student for rating — multiplier applies
+    // Award gamification points to student for rating
     await awardPointsInTx(tx, {
       userId: me.id,
       amount: GAMIFICATION_RULES.student.sessionRated ?? 10,
@@ -149,7 +149,11 @@ export async function POST(
     return { newRating, avg, ratingCount: agg._count.rating };
   });
 
-  // Notify tutor outside transaction
+  // ── StudyPal: queue session reward for rating ── NEW
+  // Using "session" activity — rating = completing the feedback loop
+  await queueStudypalReward(me.id, "session");
+
+  // Notify tutor
   try {
     await notify.user({
       userId: session.tutorId,

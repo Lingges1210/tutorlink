@@ -5,6 +5,7 @@ import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { seedBadgesOnce } from "@/lib/gamification/badges";
 import { GAMIFICATION_RULES } from "@/lib/gamification/rules";
 import { notify } from "@/lib/notify";
+import { queueStudypalReward } from "@/lib/studypalServerReward"; // ← NEW
 
 async function triggerAllocator() {
   const appUrl = process.env.APP_URL;
@@ -28,10 +29,6 @@ function normalizeTopicLabel(s: string) {
     .replace(/\s+/g, " ")
     .replace(/[^\p{L}\p{N}\s\-+.#/()]/gu, "");
 }
-
-/* =====================================================
-   UPDATED: awardPointsInTx (Double Points integrated)
-===================================================== */
 
 async function awardPointsInTx(
   tx: any,
@@ -93,29 +90,23 @@ async function awardPointsInTx(
           multiplier = 5;
           break;
         case "COMBO_MULTIPLIER_24H":
-          // Stacking +10% per action up to 3x — use 2x as a flat approximation
-          // Full combo tracking would need a separate counter per session
           multiplier = 2;
           break;
-        case "FIRST_ACTION_BONUS_7D":
-          // 4x only on first action of the day — check if already earned today
+        case "FIRST_ACTION_BONUS_7D": {
           const todayStart = new Date(now);
           todayStart.setHours(0, 0, 0, 0);
           const earnedToday = await tx.pointsTransaction.findFirst({
-            where: {
-              userId,
-              type: "EARN",
-              createdAt: { gte: todayStart },
-            },
+            where: { userId, type: "EARN", createdAt: { gte: todayStart } },
             select: { id: true },
           });
           multiplier = earnedToday ? 1 : 4;
           break;
-        case "WEEKEND_BOOST":
-          // 3x on Saturday (6) and Sunday (0)
+        }
+        case "WEEKEND_BOOST": {
           const day = now.getDay();
           multiplier = (day === 0 || day === 6) ? 3 : 1;
           break;
+        }
         case "CATCHUP_BOOST_48H":
           multiplier = 2;
           break;
@@ -123,9 +114,6 @@ async function awardPointsInTx(
           multiplier = 1;
       }
     }
-
-    // Priority boost doesn't affect point amount — it affects matching only
-    // so boostUntil is intentionally not checked here
   }
 
   const finalAmount = amount * multiplier;
@@ -238,75 +226,76 @@ export async function POST(
   }
 
   const start = new Date(session.scheduledAt);
-  const end =
-    session.endsAt ??
-    new Date(start.getTime() + (session.durationMin ?? 60) * 60_000);
 
   if (new Date() < start) {
-  return NextResponse.json(
-    { message: "You can complete this after the session starts." },
-    { status: 409 }
-  );
-}
+    return NextResponse.json(
+      { message: "You can complete this after the session starts." },
+      { status: 409 }
+    );
+  }
 
   try {
     await seedBadgesOnce();
   } catch {}
 
   try {
-  await prisma.$transaction(async (tx) => {
-    await tx.session.update({
-      where: { id: session.id },
-      data: { status: "COMPLETED", completedAt: new Date() },
-    });
+    await prisma.$transaction(async (tx) => {
+      await tx.session.update({
+        where: { id: session.id },
+        data: { status: "COMPLETED", completedAt: new Date() },
+      });
 
-    const studentId = session.studentId ?? null;
+      const studentId = session.studentId ?? null;
 
-    if (studentId) {
+      if (studentId) {
+        await awardPointsInTx(tx, {
+          userId: studentId,
+          amount: GAMIFICATION_RULES.student.sessionCompleted,
+          description: "Session completed",
+          sessionId: session.id,
+          type: "EARN",
+        });
+      }
+
+      const tutorId = session.tutorId ?? null;
+      if (!tutorId) throw new Error("Missing tutorId");
+
       await awardPointsInTx(tx, {
-        userId: studentId,
-        amount: GAMIFICATION_RULES.student.sessionCompleted,
-        description: "Session completed",
+        userId: tutorId,
+        amount: GAMIFICATION_RULES.tutor.sessionCompleted,
+        description: "Tutored a session",
         sessionId: session.id,
         type: "EARN",
       });
-    }
-
-    const tutorId = session.tutorId ?? null;
-
-    if (!tutorId) throw new Error("Missing tutorId");
-
-    await awardPointsInTx(tx, {
-      userId: tutorId,
-      amount: GAMIFICATION_RULES.tutor.sessionCompleted,
-      description: "Tutored a session",
-      sessionId: session.id,
-      type: "EARN",
     });
-  });
-} catch {
-  return NextResponse.json(
-    { message: "Unable to save completion details." },
-    { status: 500 }
-  );
-}
+  } catch {
+    return NextResponse.json(
+      { message: "Unable to save completion details." },
+      { status: 500 }
+    );
+  }
 
   await triggerAllocator();
 
+  // ── StudyPal: queue session reward for student ── NEW
   if (session.studentId) {
-  try {
-    await notify.user({
-      userId: session.studentId,
-      viewer: "STUDENT",
-      type: "RATE_SESSION",
-      title: "How was your session?",
-      body: "Your session has ended. Take a moment to rate your tutor.",
-      data: { sessionId: session.id },
-    });
-  } catch {
-    //ignore
+    await queueStudypalReward(session.studentId, "session");
   }
-}
+
+  if (session.studentId) {
+    try {
+      await notify.user({
+        userId: session.studentId,
+        viewer: "STUDENT",
+        type: "RATE_SESSION",
+        title: "How was your session?",
+        body: "Your session has ended. Take a moment to rate your tutor.",
+        data: { sessionId: session.id },
+      });
+    } catch {
+      // ignore
+    }
+  }
 
   return NextResponse.json({
     success: true,

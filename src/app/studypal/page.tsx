@@ -5,8 +5,11 @@ import {
   studypalMarkFed,
   studypalClearPendingDrop,
   studypalClearTreatCap,
+  studypalLoadFromServer,
+  studypalScheduleSync,
   type SPLogEntry,
 } from "@/lib/studypalReward";
+import MiniGamesModal from "@/components/MiniGamesModal";
 
 /* ─── TYPES ─────────────────────────────────────────────── */
 type PetType  = "cat" | "dog";
@@ -89,6 +92,65 @@ function load(): SPState {
 function save(s: SPState) { try { localStorage.setItem(LS_KEY, JSON.stringify(s)); } catch { } }
 function getLvl(xp: number) { for (let i = LEVELS.length - 1; i >= 0; i--) if (xp >= LEVELS[i].xp) return i; return 0; }
 
+
+/* ─── MOOD SYSTEM ────────────────────────────────────────── */
+type MoodTier = "ecstatic" | "happy" | "neutral" | "hungry" | "starving";
+interface MoodInfo {
+  tier: MoodTier; label: string; emoji: string;
+  color: string; bg: string; border: string;
+  dialogue: { cat: string[]; dog: string[] };
+}
+const MOODS: Record<MoodTier, MoodInfo> = {
+  ecstatic: {
+    tier:"ecstatic", label:"Ecstatic", emoji:"🌟",
+    color:"#D68000", bg:"rgba(214,128,0,.10)", border:"rgba(214,128,0,.28)",
+    dialogue:{
+      cat:["Best day ever! 🌟","I love studying!","You're amazing!","Pure happiness!"],
+      dog:["BEST DAY EVER! 🌟","I love you!","Woof woof woof!","SO HAPPY!"],
+    },
+  },
+  happy: {
+    tier:"happy", label:"Happy", emoji:"😊",
+    color:"#00A86B", bg:"rgba(0,168,107,.10)", border:"rgba(0,168,107,.25)",
+    dialogue:{
+      cat:["All good~","Ready to learn!","Feeling great!","Let's study!"],
+      dog:["All good!","Ready to go!","Feeling great!","Let's do this!"],
+    },
+  },
+  neutral: {
+    tier:"neutral", label:"Neutral", emoji:"😐",
+    color:"#6C5CE7", bg:"rgba(108,92,231,.08)", border:"rgba(108,92,231,.22)",
+    dialogue:{
+      cat:["How's studying?","Feed me soon~","Just chilling.","Feeling okay."],
+      dog:["What's up?","A treat soon?","Just hanging.","Doing okay."],
+    },
+  },
+  hungry: {
+    tier:"hungry", label:"Hungry", emoji:"😕",
+    color:"#D68000", bg:"rgba(214,128,0,.08)", border:"rgba(214,128,0,.22)",
+    dialogue:{
+      cat:["Getting hungry…","A treat would be nice.","My tummy's empty.","Study soon?"],
+      dog:["Getting hungry…","A treat please?","Belly is rumbling.","Study please!"],
+    },
+  },
+  starving: {
+    tier:"starving", label:"Starving", emoji:"😢",
+    color:"#E53935", bg:"rgba(229,57,53,.08)", border:"rgba(229,57,53,.22)",
+    dialogue:{
+      cat:["Please feed me…","So hungry…","I need a treat…","Help me…"],
+      dog:["Please feed me…","So hungry…","Need a treat…","Please…"],
+    },
+  },
+};
+function computeMood(s: SPState): MoodInfo {
+  const overhungry = !s.lastFedAt || (Date.now() - (s.lastFedAt ?? 0) > 2*24*60*60*1000);
+  if (s.treats <= 1 || overhungry) return MOODS.starving;
+  if (s.treats <= 4) return MOODS.hungry;
+  if (s.treats <= 7) return MOODS.neutral;
+  if (s.treats >= 12 && (s.streakCount ?? 0) >= 3) return MOODS.ecstatic;
+  return MOODS.happy;
+}
+
 function fmtRelTime(ms: number): string {
   const s = Math.floor(ms / 1000);
   if (s < 60)   return "just now";
@@ -140,6 +202,7 @@ function Icon({ name, size = 16, color = "currentColor", strokeWidth = 1.8 }: { 
     case "clock":      return <svg {...s} viewBox="0 0 24 24"><circle {...p} cx="12" cy="12" r="10" /><polyline {...p} points="12 6 12 12 16 14" /></svg>;
     case "history":    return <svg {...s} viewBox="0 0 24 24"><polyline {...p} points="1 4 1 10 7 10" /><path {...p} d="M3.51 15a9 9 0 1 0 .49-3.14" /></svg>;
     case "drop":       return <svg {...s} viewBox="0 0 24 24"><path {...p} d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" /></svg>;
+    case "gamepad":    return <svg {...s} viewBox="0 0 24 24"><rect {...p} x="2" y="6" width="20" height="12" rx="2"/><path {...p} d="M6 12h4m-2-2v4"/><circle cx="17" cy="10" r="1" fill={color} stroke="none"/><circle cx="19" cy="12" r="1" fill={color} stroke="none"/></svg>;
     default:           return <svg {...s} viewBox="0 0 24 24"><circle {...p} cx="12" cy="12" r="3" /></svg>;
   }
 }
@@ -158,27 +221,14 @@ const KF = `
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap');
 
   :root {
-    --c-bg:#F0EFF9;
-    --c-surface:#FFFFFF;
-    --c-surface2:#E8E6F6;
-    --c-surface3:#F7F6FE;
-    --c-border:rgba(108,92,212,0.11);
-    --c-border2:rgba(108,92,212,0.2);
-    --c-text:#18162E;
-    --c-text2:#4E4870;
-    --c-text3:#9B95C0;
-    --c-accent:#6C5CE7;
-    --c-accent2:#8B7FF8;
-    --c-accent3:#B8B0FF;
-    --c-teal:#00B4A0;
-    --c-green:#00A86B;
-    --c-amber:#D68000;
-    --c-red:#E53935;
-    --c-cat:#8B7FF8;
-    --c-dog:#3D9BE9;
+    --c-bg:#F0EFF9;--c-surface:#FFFFFF;--c-surface2:#E8E6F6;--c-surface3:#F7F6FE;
+    --c-border:rgba(108,92,212,0.11);--c-border2:rgba(108,92,212,0.2);
+    --c-text:#18162E;--c-text2:#4E4870;--c-text3:#9B95C0;
+    --c-accent:#6C5CE7;--c-accent2:#8B7FF8;--c-accent3:#B8B0FF;
+    --c-teal:#00B4A0;--c-green:#00A86B;--c-amber:#D68000;--c-red:#E53935;
+    --c-cat:#8B7FF8;--c-dog:#3D9BE9;
     --r-sm:10px;--r-md:14px;--r-lg:20px;--r-xl:28px;
-    --font-body:'DM Sans',system-ui,sans-serif;
-    --font-serif:'Instrument Serif',Georgia,serif;
+    --font-body:'DM Sans',system-ui,sans-serif;--font-serif:'Instrument Serif',Georgia,serif;
     --shadow-xs:0 1px 3px rgba(60,40,180,0.07);
     --shadow-sm:0 2px 8px rgba(60,40,180,0.09),0 1px 3px rgba(60,40,180,0.06);
     --shadow-md:0 6px 24px rgba(60,40,180,0.11),0 2px 8px rgba(60,40,180,0.07);
@@ -186,26 +236,13 @@ const KF = `
     --shadow-accent:0 4px 20px rgba(108,92,231,0.28);
     --shadow-glow:0 0 0 3px rgba(108,92,231,0.14);
   }
-
   .dark {
-    --c-bg:#0D0C18;
-    --c-surface:#13121F;
-    --c-surface2:#1A1829;
-    --c-surface3:#201E30;
-    --c-border:rgba(255,255,255,0.07);
-    --c-border2:rgba(255,255,255,0.13);
-    --c-text:#EAE6FF;
-    --c-text2:#7E78A8;
-    --c-text3:#4A4670;
-    --c-accent:#7C6AFF;
-    --c-accent2:#A594FE;
-    --c-accent3:#C8C0FF;
-    --c-teal:#2DD4BF;
-    --c-green:#34D399;
-    --c-amber:#FBBF24;
-    --c-red:#F87171;
-    --c-cat:#A594FE;
-    --c-dog:#60AEFF;
+    --c-bg:#0D0C18;--c-surface:#13121F;--c-surface2:#1A1829;--c-surface3:#201E30;
+    --c-border:rgba(255,255,255,0.07);--c-border2:rgba(255,255,255,0.13);
+    --c-text:#EAE6FF;--c-text2:#7E78A8;--c-text3:#4A4670;
+    --c-accent:#7C6AFF;--c-accent2:#A594FE;--c-accent3:#C8C0FF;
+    --c-teal:#2DD4BF;--c-green:#34D399;--c-amber:#FBBF24;--c-red:#F87171;
+    --c-cat:#A594FE;--c-dog:#60AEFF;
     --shadow-xs:0 1px 3px rgba(0,0,0,0.35);
     --shadow-sm:0 2px 8px rgba(0,0,0,0.4),0 1px 3px rgba(0,0,0,0.3);
     --shadow-md:0 6px 24px rgba(0,0,0,0.5),0 2px 8px rgba(0,0,0,0.3);
@@ -213,18 +250,9 @@ const KF = `
     --shadow-accent:0 4px 20px rgba(124,106,255,0.32);
     --shadow-glow:0 0 0 3px rgba(124,106,255,0.18);
   }
-
   * { box-sizing:border-box; }
-
-  .sp {
-    font-family:var(--font-body);
-    background:var(--c-bg);
-    color:var(--c-text);
-    -webkit-font-smoothing:antialiased;
-  }
+  .sp { font-family:var(--font-body);background:var(--c-bg);color:var(--c-text);-webkit-font-smoothing:antialiased; }
   .sp-inner { max-width:650px;margin:0 auto;padding:0 0 48px; }
-
-  /* ── Animations ── */
   @keyframes sp-idle    { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
   @keyframes sp-walk-x  { 0%{left:-180px;transform:scaleX(1)} 47%{left:calc(100% + 20px);transform:scaleX(1)} 50%{left:calc(100% + 20px);transform:scaleX(-1)} 97%{left:-180px;transform:scaleX(-1)} 100%{left:-180px;transform:scaleX(1)} }
   @keyframes sp-jump    { 0%{transform:translateY(0) scaleY(1)} 20%{transform:translateY(0) scaleY(.9) scaleX(1.08)} 45%{transform:translateY(-60px) scaleY(1.04)} 75%{transform:translateY(-50px)} 90%{transform:translateY(-4px)} 100%{transform:translateY(0) scaleY(1)} }
@@ -256,8 +284,6 @@ const KF = `
   @keyframes sp-slide-in { from{opacity:0;transform:translateX(10px)} to{opacity:1;transform:translateX(0)} }
   @keyframes sp-tab-in  { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
   @keyframes sp-pulse-ring { 0%{transform:scale(1);opacity:.5} 100%{transform:scale(1.5);opacity:0} }
-
-  /* ── Pet classes ── */
   .sp-idle  { animation:sp-idle 3.2s ease-in-out infinite; }
   .sp-eat   { animation:sp-eat .4s ease-in-out infinite; }
   .sp-jump  { animation:sp-jump .65s cubic-bezier(.2,1.4,.5,1) forwards; }
@@ -272,305 +298,63 @@ const KF = `
   .sp-arc { display:none; }
   .sp-excited .sp-ear-l { animation:sp-wiggle .42s ease-in-out infinite; }
   .sp-excited .sp-ear-r { animation:sp-wiggle .42s ease-in-out infinite;animation-delay:.1s; }
-
-  /* ── Card hover ── */
   .sp-card-hover { transition:transform .18s ease,box-shadow .18s ease; }
   .sp-card-hover:hover { transform:translateY(-1px);box-shadow:var(--shadow-md); }
-
-  /* ── Tab button ── */
   .sp-tab {
-    flex:1;padding:10px 0;border:none;cursor:pointer;
-    font-size:12px;font-family:var(--font-body);font-weight:500;
+    flex:1;padding:10px 0;border:none;cursor:pointer;font-size:12px;
+    font-family:var(--font-body);font-weight:500;
     transition:all .2s cubic-bezier(.34,1.56,.64,1);
-    border-radius:11px;display:flex;align-items:center;justify-content:center;gap:5px;
-    position:relative;
+    border-radius:11px;display:flex;align-items:center;justify-content:center;gap:5px;position:relative;
   }
-  .sp-tab.active {
-    background:var(--c-accent);
-    color:#fff;
-    box-shadow:var(--shadow-accent);
-    font-weight:600;
-  }
-  .sp-tab.inactive {
-    background:transparent;
-    color:var(--c-text3);
-  }
+  .sp-tab.active { background:var(--c-accent);color:#fff;box-shadow:var(--shadow-accent);font-weight:600; }
+  .sp-tab.inactive { background:transparent;color:var(--c-text3); }
   .sp-tab.inactive:hover { background:var(--c-surface2);color:var(--c-text2); }
-
-  /* ── Activity row ── */
   .sp-act-row {
-    background:var(--c-surface);
-    border:1px solid var(--c-border);
-    border-radius:16px;
-    padding:13px 15px;
-    margin-bottom:7px;
-    display:flex;align-items:center;gap:12px;
+    background:var(--c-surface);border:1px solid var(--c-border);border-radius:16px;
+    padding:13px 15px;margin-bottom:7px;display:flex;align-items:center;gap:12px;
     transition:border-color .18s,transform .18s,box-shadow .18s;
   }
   .sp-act-row:hover { border-color:var(--c-border2);transform:translateY(-1px);box-shadow:var(--shadow-sm); }
-
-  /* ── Scrollbar ── */
   .sp ::-webkit-scrollbar { width:4px; }
   .sp ::-webkit-scrollbar-track { background:transparent; }
   .sp ::-webkit-scrollbar-thumb { background:var(--c-border2);border-radius:4px; }
 `;
 
 /* ─── ACCESSORY SVG (cat) ───────────────────────────────── */
-// Cat anatomy (viewBox 0 0 170 175):
-//   Head circle: cx=84 cy=70 r=51  top=y19  bottom=y121
-//   Eyes: cx=59 cy=70  /  cx=109 cy=70
-//   Ear tips: left≈(15,10)  right≈(153,10)
-//   Collar bell: cx=84 cy=108   Neck width ~88px centred x=84
 function CatAcc({ id }: { id: AccId }) {
-
-  // grad cap — flat mortarboard: wide stiff brim rect + square top, distinct from cone hats
-  if (id === "cap") return (<>
-    <rect x="50" y="28" width="68" height="9" rx="3" fill="#7C6AFF"/>
-    <rect x="64" y="10" width="40" height="20" rx="3" fill="#5E4FD4"/>
-    <rect x="63" y="28" width="42" height="3" rx="1" fill="#4A3EC0"/>
-    <line x1="116" y1="28" x2="122" y2="46" stroke="#A594FE" strokeWidth="3.5" strokeLinecap="round"/>
-    <circle cx="122" cy="49" r="5" fill="#A594FE"/>
-  </>);
-
-  // glasses — lenses centred exactly on eyes cy=70
-  if (id === "glasses") return (<>
-    <circle cx="59" cy="70" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)" opacity=".9"/>
-    <circle cx="109" cy="70" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)" opacity=".9"/>
-    <line x1="74" y1="70" x2="94" y2="70" stroke="#7C6AFF" strokeWidth="2.5"/>
-    <line x1="22" y1="68" x2="44" y2="70" stroke="#7C6AFF" strokeWidth="2"/>
-    <line x1="146" y1="68" x2="124" y2="70" stroke="#7C6AFF" strokeWidth="2"/>
-  </>);
-
-  // sunglasses — wide lenses, each centred on eye (cx=59 and cx=109), cy=70
-  if (id === "sunglasses") return (<>
-    <rect x="41" y="63" width="36" height="18" rx="7" fill="#1A1040" opacity=".93"/>
-    <rect x="91" y="63" width="36" height="18" rx="7" fill="#1A1040" opacity=".93"/>
-    <line x1="77" y1="72" x2="91" y2="72" stroke="#7C6AFF" strokeWidth="2.5"/>
-    <line x1="22" y1="69" x2="41" y2="72" stroke="#7C6AFF" strokeWidth="2"/>
-    <line x1="146" y1="69" x2="127" y2="72" stroke="#7C6AFF" strokeWidth="2"/>
-    <rect x="46" y="66" width="11" height="7" rx="2" fill="rgba(124,106,255,.28)"/>
-    <rect x="96" y="66" width="11" height="7" rx="2" fill="rgba(124,106,255,.28)"/>
-  </>);
-
-  // crown — higher: base y=26, points reach y=8, floats clearly above head
-  if (id === "crown") return (<>
-    <path d="M58,26 L69,8 L84,22 L99,8 L110,26 L107,38 H61 Z" fill="#FBBF24"/>
-    <circle cx="84" cy="22" r="5" fill="#FDE68A"/>
-    <circle cx="58" cy="26" r="4" fill="#FDE68A"/>
-    <circle cx="110" cy="26" r="4" fill="#FDE68A"/>
-    <rect x="61" y="36" width="46" height="4" rx="2" fill="#D97706"/>
-  </>);
-
-  // bow tie — sits right on collar bell cy=108
-  if (id === "bow") return (<>
-    <ellipse cx="65" cy="108" rx="17" ry="10" fill="#7C6AFF"/>
-    <ellipse cx="103" cy="108" rx="17" ry="10" fill="#7C6AFF"/>
-    <ellipse cx="65" cy="108" rx="9" ry="5" fill="#A594FE" opacity=".45"/>
-    <ellipse cx="103" cy="108" rx="9" ry="5" fill="#A594FE" opacity=".45"/>
-    <circle cx="84" cy="108" r="8" fill="#C4BBFF"/>
-  </>);
-
-  // ribbon — raised: arc at y=46, bow knot at cy=34 (high on forehead)
-  if (id === "ribbon") return (<>
-    <path d="M50,46 Q84,30 118,46" stroke="#FF80B0" strokeWidth="13" strokeLinecap="round" fill="none"/>
-    <circle cx="84" cy="34" r="12" fill="#FF80B0"/>
-    <circle cx="84" cy="34" r="6" fill="#FFB8D4"/>
-    <path d="M52,46 Q84,34 116,46" stroke="rgba(255,255,255,.3)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="5 4"/>
-  </>);
-
-  // scarf — sits below collar: band at y=112-126, tail drapes left-front
-  if (id === "scarf") return (<>
-    <path d="M38,112 Q84,126 130,112 Q132,121 130,126 Q84,140 38,126 Z" fill="#2DD4BF"/>
-    <path d="M38,112 Q84,120 130,112" stroke="rgba(255,255,255,.28)" strokeWidth="2" fill="none"/>
-    <path d="M50,125 Q44,138 48,152 Q51,162 60,157" stroke="#2DD4BF" strokeWidth="12" strokeLinecap="round" fill="none"/>
-    <path d="M50,125 Q44,138 48,152" stroke="rgba(255,255,255,.22)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="6 5"/>
-  </>);
-
-  // party hat — colourful stripes, pink base, clearly different from wizard (dark) and cap (flat)
-  if (id === "hat") return (<>
-    <ellipse cx="84" cy="28" rx="42" ry="10" fill="#FF80B0"/>
-    <polygon points="84,0 42,28 126,28" fill="#FF5FA0"/>
-    <line x1="60" y1="21" x2="70" y2="5" stroke="#FFD060" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/>
-    <line x1="76" y1="26" x2="82" y2="8" stroke="#7C6AFF" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/>
-    <line x1="90" y1="26" x2="96" y2="8" stroke="#2DD4BF" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/>
-    <line x1="103" y1="21" x2="110" y2="7" stroke="#FFD060" strokeWidth="3" strokeLinecap="round" opacity=".9"/>
-    <circle cx="84" cy="0" r="6" fill="#FFD060"/>
-  </>);
-
-  // headband — arc from ear-to-ear, gem centred on forehead at cy=36
-  if (id === "headband") return (<>
-    <path d="M26,56 Q84,30 142,56" stroke="#7C6AFF" strokeWidth="10" strokeLinecap="round" fill="none"/>
-    <circle cx="84" cy="36" r="14" fill="#7C6AFF"/>
-    <circle cx="84" cy="36" r="7" fill="#C4BBFF"/>
-  </>);
-
-  // monocle — ring around right eye cx=109 cy=70
-  if (id === "monocle") return (<>
-    <circle cx="109" cy="70" r="17" stroke="#8B7355" strokeWidth="3.5" fill="rgba(251,191,36,.1)"/>
-    <line x1="124" y1="83" x2="135" y2="96" stroke="#8B7355" strokeWidth="2.5" strokeLinecap="round"/>
-  </>);
-
-  // halo — floats 6px above head top y=19, so cy=13, rx=34 to span head width
-  if (id === "halo") return (<>
-    <ellipse cx="84" cy="13" rx="34" ry="9" fill="none" stroke="#FFD060" strokeWidth="4"/>
-    <ellipse cx="84" cy="13" rx="34" ry="9" fill="none" stroke="#FFE898" strokeWidth="2" opacity=".6"/>
-  </>);
-
-  // earring — left side of head. At y=88 head edge x≈84-47=37. Earring at x=31.
-  if (id === "earring") return (<>
-    <circle cx="31" cy="88" r="5" fill="none" stroke="#FFD060" strokeWidth="2.5"/>
-    <circle cx="31" cy="100" r="5.5" fill="#FFB820"/>
-  </>);
-
-  // wizard hat — tall narrow dark cone with starry details, clearly taller+narrower than party hat
-  if (id === "wizard") return (<>
-    <ellipse cx="84" cy="30" rx="30" ry="8" fill="#5E4FD4"/>
-    <polygon points="84,-8 54,30 114,30" fill="#4A3BB8"/>
-    <polygon points="84,-8 54,30 114,30" fill="none" stroke="#A594FE" strokeWidth="1.5" opacity=".6"/>
-    <circle cx="84" cy="-8" r="4" fill="#C4BBFF"/>
-    <circle cx="70" cy="10" r="3.5" fill="#C4BBFF" opacity=".85"/>
-    <circle cx="96" cy="4" r="2.5" fill="#C4BBFF" opacity=".7"/>
-    <circle cx="76" cy="20" r="2" fill="#A594FE" opacity=".6"/>
-    <circle cx="100" cy="16" r="2" fill="#A594FE" opacity=".5"/>
-  </>);
-
-  // bandana — sits below collar: top at y=108, peak drapes to y=130
-  if (id === "bandana") return (<>
-    <path d="M41,108 Q84,122 127,108 Q127,122 84,140 Q41,122 41,108 Z" fill="#2DD4BF"/>
-    <path d="M41,108 Q84,118 127,108" stroke="rgba(255,255,255,.3)" strokeWidth="2" fill="none"/>
-    <path d="M64,134 L72,152 Q78,161 82,159" stroke="#2DD4BF" strokeWidth="9" strokeLinecap="round" fill="none"/>
-  </>);
-
+  if (id === "cap") return (<><rect x="50" y="28" width="68" height="9" rx="3" fill="#7C6AFF"/><rect x="64" y="10" width="40" height="20" rx="3" fill="#5E4FD4"/><rect x="63" y="28" width="42" height="3" rx="1" fill="#4A3EC0"/><line x1="116" y1="28" x2="122" y2="46" stroke="#A594FE" strokeWidth="3.5" strokeLinecap="round"/><circle cx="122" cy="49" r="5" fill="#A594FE"/></>);
+  if (id === "glasses") return (<><circle cx="59" cy="70" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)" opacity=".9"/><circle cx="109" cy="70" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)" opacity=".9"/><line x1="74" y1="70" x2="94" y2="70" stroke="#7C6AFF" strokeWidth="2.5"/><line x1="22" y1="68" x2="44" y2="70" stroke="#7C6AFF" strokeWidth="2"/><line x1="146" y1="68" x2="124" y2="70" stroke="#7C6AFF" strokeWidth="2"/></>);
+  if (id === "sunglasses") return (<><rect x="41" y="63" width="36" height="18" rx="7" fill="#1A1040" opacity=".93"/><rect x="91" y="63" width="36" height="18" rx="7" fill="#1A1040" opacity=".93"/><line x1="77" y1="72" x2="91" y2="72" stroke="#7C6AFF" strokeWidth="2.5"/><line x1="22" y1="69" x2="41" y2="72" stroke="#7C6AFF" strokeWidth="2"/><line x1="146" y1="69" x2="127" y2="72" stroke="#7C6AFF" strokeWidth="2"/><rect x="46" y="66" width="11" height="7" rx="2" fill="rgba(124,106,255,.28)"/><rect x="96" y="66" width="11" height="7" rx="2" fill="rgba(124,106,255,.28)"/></>);
+  if (id === "crown") return (<><path d="M58,26 L69,8 L84,22 L99,8 L110,26 L107,38 H61 Z" fill="#FBBF24"/><circle cx="84" cy="22" r="5" fill="#FDE68A"/><circle cx="58" cy="26" r="4" fill="#FDE68A"/><circle cx="110" cy="26" r="4" fill="#FDE68A"/><rect x="61" y="36" width="46" height="4" rx="2" fill="#D97706"/></>);
+  if (id === "bow") return (<><ellipse cx="65" cy="108" rx="17" ry="10" fill="#7C6AFF"/><ellipse cx="103" cy="108" rx="17" ry="10" fill="#7C6AFF"/><ellipse cx="65" cy="108" rx="9" ry="5" fill="#A594FE" opacity=".45"/><ellipse cx="103" cy="108" rx="9" ry="5" fill="#A594FE" opacity=".45"/><circle cx="84" cy="108" r="8" fill="#C4BBFF"/></>);
+  if (id === "ribbon") return (<><path d="M50,46 Q84,30 118,46" stroke="#FF80B0" strokeWidth="13" strokeLinecap="round" fill="none"/><circle cx="84" cy="34" r="12" fill="#FF80B0"/><circle cx="84" cy="34" r="6" fill="#FFB8D4"/><path d="M52,46 Q84,34 116,46" stroke="rgba(255,255,255,.3)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="5 4"/></>);
+  if (id === "scarf") return (<><path d="M38,112 Q84,126 130,112 Q132,121 130,126 Q84,140 38,126 Z" fill="#2DD4BF"/><path d="M38,112 Q84,120 130,112" stroke="rgba(255,255,255,.28)" strokeWidth="2" fill="none"/><path d="M50,125 Q44,138 48,152 Q51,162 60,157" stroke="#2DD4BF" strokeWidth="12" strokeLinecap="round" fill="none"/><path d="M50,125 Q44,138 48,152" stroke="rgba(255,255,255,.22)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="6 5"/></>);
+  if (id === "hat") return (<><ellipse cx="84" cy="28" rx="42" ry="10" fill="#FF80B0"/><polygon points="84,0 42,28 126,28" fill="#FF5FA0"/><line x1="60" y1="21" x2="70" y2="5" stroke="#FFD060" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/><line x1="76" y1="26" x2="82" y2="8" stroke="#7C6AFF" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/><line x1="90" y1="26" x2="96" y2="8" stroke="#2DD4BF" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/><line x1="103" y1="21" x2="110" y2="7" stroke="#FFD060" strokeWidth="3" strokeLinecap="round" opacity=".9"/><circle cx="84" cy="0" r="6" fill="#FFD060"/></>);
+  if (id === "headband") return (<><path d="M26,56 Q84,30 142,56" stroke="#7C6AFF" strokeWidth="10" strokeLinecap="round" fill="none"/><circle cx="84" cy="36" r="14" fill="#7C6AFF"/><circle cx="84" cy="36" r="7" fill="#C4BBFF"/></>);
+  if (id === "monocle") return (<><circle cx="109" cy="70" r="17" stroke="#8B7355" strokeWidth="3.5" fill="rgba(251,191,36,.1)"/><line x1="124" y1="83" x2="135" y2="96" stroke="#8B7355" strokeWidth="2.5" strokeLinecap="round"/></>);
+  if (id === "halo") return (<><ellipse cx="84" cy="13" rx="34" ry="9" fill="none" stroke="#FFD060" strokeWidth="4"/><ellipse cx="84" cy="13" rx="34" ry="9" fill="none" stroke="#FFE898" strokeWidth="2" opacity=".6"/></>);
+  if (id === "earring") return (<><circle cx="31" cy="88" r="5" fill="none" stroke="#FFD060" strokeWidth="2.5"/><circle cx="31" cy="100" r="5.5" fill="#FFB820"/></>);
+  if (id === "wizard") return (<><ellipse cx="84" cy="30" rx="30" ry="8" fill="#5E4FD4"/><polygon points="84,-8 54,30 114,30" fill="#4A3BB8"/><polygon points="84,-8 54,30 114,30" fill="none" stroke="#A594FE" strokeWidth="1.5" opacity=".6"/><circle cx="84" cy="-8" r="4" fill="#C4BBFF"/><circle cx="70" cy="10" r="3.5" fill="#C4BBFF" opacity=".85"/><circle cx="96" cy="4" r="2.5" fill="#C4BBFF" opacity=".7"/><circle cx="76" cy="20" r="2" fill="#A594FE" opacity=".6"/><circle cx="100" cy="16" r="2" fill="#A594FE" opacity=".5"/></>);
+  if (id === "bandana") return (<><path d="M41,108 Q84,122 127,108 Q127,122 84,140 Q41,122 41,108 Z" fill="#2DD4BF"/><path d="M41,108 Q84,118 127,108" stroke="rgba(255,255,255,.3)" strokeWidth="2" fill="none"/><path d="M64,134 L72,152 Q78,161 82,159" stroke="#2DD4BF" strokeWidth="9" strokeLinecap="round" fill="none"/></>);
   return null;
 }
 
 /* ─── ACCESSORY SVG (dog) ───────────────────────────────── */
-// Dog anatomy (viewBox 0 0 170 175):
-//   Head circle: cx=84 cy=66 r=50  top=y16  bottom=y116
-//   Eyes: cx=59 cy=64  /  cx=109 cy=64
-//   Floppy ears: left x≈5–52 hangs to y=97  /  right x≈116–163
-//   Snout: cx=84 cy=84 rx=28 ry=22   Nose: cy=79
-//   Body top: cy=82   Neck zone: y=82–116
 function DogAcc({ id }: { id: AccId }) {
-
-  // grad cap — flat mortarboard: stiff wide brim rect + square top block
-  if (id === "cap") return (<>
-    <rect x="50" y="24" width="68" height="9" rx="3" fill="#7C6AFF"/>
-    <rect x="64" y="6" width="40" height="20" rx="3" fill="#5E4FD4"/>
-    <rect x="63" y="24" width="42" height="3" rx="1" fill="#4A3EC0"/>
-    <line x1="116" y1="24" x2="122" y2="42" stroke="#A594FE" strokeWidth="3.5" strokeLinecap="round"/>
-    <circle cx="122" cy="45" r="5" fill="#A594FE"/>
-  </>);
-
-  // glasses — lenses centred on eyes cy=64
-  if (id === "glasses") return (<>
-    <circle cx="59" cy="64" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)" opacity=".9"/>
-    <circle cx="109" cy="64" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)" opacity=".9"/>
-    <line x1="74" y1="64" x2="94" y2="64" stroke="#7C6AFF" strokeWidth="2.5"/>
-    <line x1="22" y1="62" x2="44" y2="64" stroke="#7C6AFF" strokeWidth="2"/>
-    <line x1="146" y1="62" x2="124" y2="64" stroke="#7C6AFF" strokeWidth="2"/>
-  </>);
-
-  // sunglasses — wide lenses centred on eyes cy=64
-  if (id === "sunglasses") return (<>
-    <rect x="41" y="55" width="36" height="18" rx="7" fill="#1A1040" opacity=".93"/>
-    <rect x="91" y="55" width="36" height="18" rx="7" fill="#1A1040" opacity=".93"/>
-    <line x1="77" y1="64" x2="91" y2="64" stroke="#60AEFF" strokeWidth="2.5"/>
-    <line x1="22" y1="61" x2="41" y2="64" stroke="#60AEFF" strokeWidth="2"/>
-    <line x1="146" y1="61" x2="127" y2="64" stroke="#60AEFF" strokeWidth="2"/>
-    <rect x="46" y="58" width="11" height="7" rx="2" fill="rgba(96,174,255,.28)"/>
-    <rect x="96" y="58" width="11" height="7" rx="2" fill="rgba(96,174,255,.28)"/>
-  </>);
-
-  // crown — higher: base y=22, points reach y=4, above head top y=16
-  if (id === "crown") return (<>
-    <path d="M58,22 L69,4 L84,18 L99,4 L110,22 L107,34 H61 Z" fill="#FBBF24"/>
-    <circle cx="84" cy="18" r="5" fill="#FDE68A"/>
-    <circle cx="58" cy="22" r="4" fill="#FDE68A"/>
-    <circle cx="110" cy="22" r="4" fill="#FDE68A"/>
-    <rect x="61" y="32" width="46" height="4" rx="2" fill="#D97706"/>
-  </>);
-
-  // bow tie — sits on neck at cy=104
-  if (id === "bow") return (<>
-    <ellipse cx="65" cy="104" rx="17" ry="10" fill="#7C6AFF"/>
-    <ellipse cx="103" cy="104" rx="17" ry="10" fill="#7C6AFF"/>
-    <ellipse cx="65" cy="104" rx="9" ry="5" fill="#A594FE" opacity=".45"/>
-    <ellipse cx="103" cy="104" rx="9" ry="5" fill="#A594FE" opacity=".45"/>
-    <circle cx="84" cy="104" r="8" fill="#C4BBFF"/>
-  </>);
-
-  // ribbon — raised: arc at y=42, bow knot at cy=30 (high on forehead)
-  if (id === "ribbon") return (<>
-    <path d="M50,42 Q84,26 118,42" stroke="#FF80B0" strokeWidth="13" strokeLinecap="round" fill="none"/>
-    <circle cx="84" cy="30" r="12" fill="#FF80B0"/>
-    <circle cx="84" cy="30" r="6" fill="#FFB8D4"/>
-    <path d="M52,42 Q84,30 116,42" stroke="rgba(255,255,255,.3)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="5 4"/>
-  </>);
-
-  // scarf — sits below head: band at y=108-122, tail drapes left-front
-  if (id === "scarf") return (<>
-    <path d="M34,108 Q84,122 134,108 Q136,117 134,122 Q84,136 34,122 Z" fill="#2DD4BF"/>
-    <path d="M34,108 Q84,116 134,108" stroke="rgba(255,255,255,.28)" strokeWidth="2" fill="none"/>
-    <path d="M48,121 Q42,134 46,148 Q49,159 58,154" stroke="#2DD4BF" strokeWidth="12" strokeLinecap="round" fill="none"/>
-    <path d="M48,121 Q42,134 46,148" stroke="rgba(255,255,255,.22)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="6 5"/>
-  </>);
-
-  // party hat — colourful stripes, pink, clearly different from wizard (dark) and cap (flat)
-  if (id === "hat") return (<>
-    <ellipse cx="84" cy="22" rx="42" ry="10" fill="#FF80B0"/>
-    <polygon points="84,0 42,22 126,22" fill="#FF5FA0"/>
-    <line x1="60" y1="16" x2="70" y2="2" stroke="#FFD060" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/>
-    <line x1="76" y1="20" x2="82" y2="4" stroke="#7C6AFF" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/>
-    <line x1="90" y1="20" x2="96" y2="4" stroke="#2DD4BF" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/>
-    <line x1="103" y1="16" x2="110" y2="4" stroke="#FFD060" strokeWidth="3" strokeLinecap="round" opacity=".9"/>
-    <circle cx="84" cy="0" r="6" fill="#FFD060"/>
-  </>);
-
-  // headband — arc ear-to-ear, gem at cy=32
-  if (id === "headband") return (<>
-    <path d="M38,50 Q84,26 130,50" stroke="#7C6AFF" strokeWidth="10" strokeLinecap="round" fill="none"/>
-    <circle cx="84" cy="32" r="14" fill="#7C6AFF"/>
-    <circle cx="84" cy="32" r="7" fill="#C4BBFF"/>
-  </>);
-
-  // monocle — ring around right eye cx=109 cy=64
-  if (id === "monocle") return (<>
-    <circle cx="109" cy="64" r="17" stroke="#8B7355" strokeWidth="3.5" fill="rgba(251,191,36,.1)"/>
-    <line x1="124" y1="77" x2="135" y2="90" stroke="#8B7355" strokeWidth="2.5" strokeLinecap="round"/>
-  </>);
-
-  // halo — floats 6px above head top y=16, so cy=10, rx=34
-  if (id === "halo") return (<>
-    <ellipse cx="84" cy="10" rx="34" ry="9" fill="none" stroke="#FFD060" strokeWidth="4"/>
-    <ellipse cx="84" cy="10" rx="34" ry="9" fill="none" stroke="#FFE898" strokeWidth="2" opacity=".6"/>
-  </>);
-
-  // earring — on front face of left floppy ear
-  if (id === "earring") return (<>
-    <circle cx="24" cy="78" r="5" fill="none" stroke="#FFD060" strokeWidth="2.5"/>
-    <circle cx="24" cy="90" r="5.5" fill="#FFB820"/>
-  </>);
-
-  // wizard hat — tall narrow dark cone, clearly taller+narrower than party hat
-  if (id === "wizard") return (<>
-    <ellipse cx="84" cy="24" rx="30" ry="8" fill="#5E4FD4"/>
-    <polygon points="84,-8 54,24 114,24" fill="#4A3BB8"/>
-    <polygon points="84,-8 54,24 114,24" fill="none" stroke="#A594FE" strokeWidth="1.5" opacity=".6"/>
-    <circle cx="84" cy="-8" r="4" fill="#C4BBFF"/>
-    <circle cx="70" cy="6" r="3.5" fill="#C4BBFF" opacity=".85"/>
-    <circle cx="96" cy="0" r="2.5" fill="#C4BBFF" opacity=".7"/>
-    <circle cx="76" cy="16" r="2" fill="#A594FE" opacity=".6"/>
-    <circle cx="100" cy="12" r="2" fill="#A594FE" opacity=".5"/>
-  </>);
-
-  // bandana — sits below head circle: top at y=104, peak at y=126
-  if (id === "bandana") return (<>
-    <path d="M41,104 Q84,118 127,104 Q127,118 84,136 Q41,118 41,104 Z" fill="#2DD4BF"/>
-    <path d="M41,104 Q84,114 127,104" stroke="rgba(255,255,255,.3)" strokeWidth="2" fill="none"/>
-    <path d="M64,130 L72,148 Q78,157 82,155" stroke="#2DD4BF" strokeWidth="9" strokeLinecap="round" fill="none"/>
-  </>);
-
+  if (id === "cap") return (<><rect x="50" y="24" width="68" height="9" rx="3" fill="#7C6AFF"/><rect x="64" y="6" width="40" height="20" rx="3" fill="#5E4FD4"/><rect x="63" y="24" width="42" height="3" rx="1" fill="#4A3EC0"/><line x1="116" y1="24" x2="122" y2="42" stroke="#A594FE" strokeWidth="3.5" strokeLinecap="round"/><circle cx="122" cy="45" r="5" fill="#A594FE"/></>);
+  if (id === "glasses") return (<><circle cx="59" cy="64" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)" opacity=".9"/><circle cx="109" cy="64" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)" opacity=".9"/><line x1="74" y1="64" x2="94" y2="64" stroke="#7C6AFF" strokeWidth="2.5"/><line x1="22" y1="62" x2="44" y2="64" stroke="#7C6AFF" strokeWidth="2"/><line x1="146" y1="62" x2="124" y2="64" stroke="#7C6AFF" strokeWidth="2"/></>);
+  if (id === "sunglasses") return (<><rect x="41" y="55" width="36" height="18" rx="7" fill="#1A1040" opacity=".93"/><rect x="91" y="55" width="36" height="18" rx="7" fill="#1A1040" opacity=".93"/><line x1="77" y1="64" x2="91" y2="64" stroke="#60AEFF" strokeWidth="2.5"/><line x1="22" y1="61" x2="41" y2="64" stroke="#60AEFF" strokeWidth="2"/><line x1="146" y1="61" x2="127" y2="64" stroke="#60AEFF" strokeWidth="2"/><rect x="46" y="58" width="11" height="7" rx="2" fill="rgba(96,174,255,.28)"/><rect x="96" y="58" width="11" height="7" rx="2" fill="rgba(96,174,255,.28)"/></>);
+  if (id === "crown") return (<><path d="M58,22 L69,4 L84,18 L99,4 L110,22 L107,34 H61 Z" fill="#FBBF24"/><circle cx="84" cy="18" r="5" fill="#FDE68A"/><circle cx="58" cy="22" r="4" fill="#FDE68A"/><circle cx="110" cy="22" r="4" fill="#FDE68A"/><rect x="61" y="32" width="46" height="4" rx="2" fill="#D97706"/></>);
+  if (id === "bow") return (<><ellipse cx="65" cy="104" rx="17" ry="10" fill="#7C6AFF"/><ellipse cx="103" cy="104" rx="17" ry="10" fill="#7C6AFF"/><ellipse cx="65" cy="104" rx="9" ry="5" fill="#A594FE" opacity=".45"/><ellipse cx="103" cy="104" rx="9" ry="5" fill="#A594FE" opacity=".45"/><circle cx="84" cy="104" r="8" fill="#C4BBFF"/></>);
+  if (id === "ribbon") return (<><path d="M50,42 Q84,26 118,42" stroke="#FF80B0" strokeWidth="13" strokeLinecap="round" fill="none"/><circle cx="84" cy="30" r="12" fill="#FF80B0"/><circle cx="84" cy="30" r="6" fill="#FFB8D4"/><path d="M52,42 Q84,30 116,42" stroke="rgba(255,255,255,.3)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="5 4"/></>);
+  if (id === "scarf") return (<><path d="M34,108 Q84,122 134,108 Q136,117 134,122 Q84,136 34,122 Z" fill="#2DD4BF"/><path d="M34,108 Q84,116 134,108" stroke="rgba(255,255,255,.28)" strokeWidth="2" fill="none"/><path d="M48,121 Q42,134 46,148 Q49,159 58,154" stroke="#2DD4BF" strokeWidth="12" strokeLinecap="round" fill="none"/><path d="M48,121 Q42,134 46,148" stroke="rgba(255,255,255,.22)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="6 5"/></>);
+  if (id === "hat") return (<><ellipse cx="84" cy="22" rx="42" ry="10" fill="#FF80B0"/><polygon points="84,0 42,22 126,22" fill="#FF5FA0"/><line x1="60" y1="16" x2="70" y2="2" stroke="#FFD060" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/><line x1="76" y1="20" x2="82" y2="4" stroke="#7C6AFF" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/><line x1="90" y1="20" x2="96" y2="4" stroke="#2DD4BF" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/><line x1="103" y1="16" x2="110" y2="4" stroke="#FFD060" strokeWidth="3" strokeLinecap="round" opacity=".9"/><circle cx="84" cy="0" r="6" fill="#FFD060"/></>);
+  if (id === "headband") return (<><path d="M38,50 Q84,26 130,50" stroke="#7C6AFF" strokeWidth="10" strokeLinecap="round" fill="none"/><circle cx="84" cy="32" r="14" fill="#7C6AFF"/><circle cx="84" cy="32" r="7" fill="#C4BBFF"/></>);
+  if (id === "monocle") return (<><circle cx="109" cy="64" r="17" stroke="#8B7355" strokeWidth="3.5" fill="rgba(251,191,36,.1)"/><line x1="124" y1="77" x2="135" y2="90" stroke="#8B7355" strokeWidth="2.5" strokeLinecap="round"/></>);
+  if (id === "halo") return (<><ellipse cx="84" cy="10" rx="34" ry="9" fill="none" stroke="#FFD060" strokeWidth="4"/><ellipse cx="84" cy="10" rx="34" ry="9" fill="none" stroke="#FFE898" strokeWidth="2" opacity=".6"/></>);
+  if (id === "earring") return (<><circle cx="24" cy="78" r="5" fill="none" stroke="#FFD060" strokeWidth="2.5"/><circle cx="24" cy="90" r="5.5" fill="#FFB820"/></>);
+  if (id === "wizard") return (<><ellipse cx="84" cy="24" rx="30" ry="8" fill="#5E4FD4"/><polygon points="84,-8 54,24 114,24" fill="#4A3BB8"/><polygon points="84,-8 54,24 114,24" fill="none" stroke="#A594FE" strokeWidth="1.5" opacity=".6"/><circle cx="84" cy="-8" r="4" fill="#C4BBFF"/><circle cx="70" cy="6" r="3.5" fill="#C4BBFF" opacity=".85"/><circle cx="96" cy="0" r="2.5" fill="#C4BBFF" opacity=".7"/><circle cx="76" cy="16" r="2" fill="#A594FE" opacity=".6"/><circle cx="100" cy="12" r="2" fill="#A594FE" opacity=".5"/></>);
+  if (id === "bandana") return (<><path d="M41,104 Q84,118 127,104 Q127,118 84,136 Q41,118 41,104 Z" fill="#2DD4BF"/><path d="M41,104 Q84,114 127,104" stroke="rgba(255,255,255,.3)" strokeWidth="2" fill="none"/><path d="M64,130 L72,148 Q78,157 82,155" stroke="#2DD4BF" strokeWidth="9" strokeLinecap="round" fill="none"/></>);
   return null;
 }
 
@@ -596,9 +380,10 @@ function AccPreview({ id }: { id: AccId }) {
 }
 
 /* ─── CAT SVG ─────────────────────────────────────────────── */
-function CatSVG({ anim, acc, onClick }: { anim: AnimState; acc: AccId; onClick: () => void }) {
+function CatSVG({ anim, acc, onClick, mood }: { anim: AnimState; acc: AccId; onClick: () => void; mood?: MoodTier }) {
   const walk=anim==="walk",eat=anim==="eat",sleep=anim==="sleep",happy=["happy","excited","meow"].includes(anim),excited=anim==="excited";
   const bc=eat?"sp-eat":walk?"":"sp-idle",lf=walk?"sp-lf":"",lb=walk?"sp-lb":"";
+  const ecstatic=mood==="ecstatic",starving=mood==="starving";
   return (
     <svg viewBox="0 0 170 175" onClick={onClick} style={{ width:170,height:175,cursor:"pointer",overflow:"visible",filter:"drop-shadow(0 10px 28px rgba(210,130,80,.25))" }}>
       <defs>
@@ -619,21 +404,15 @@ function CatSVG({ anim, acc, onClick }: { anim: AnimState; acc: AccId; onClick: 
         <g className="sp-ear-l" style={{transformOrigin:"42px 50px"}}><polygon points="34,64 15,10 63,43" fill="#B9653C"/><polygon points="37,59 22,15 57,40" fill="#D98B5A"/><polygon points="41,54 27,20 54,39" fill="#F7C7A3" opacity="0.55"/></g>
         <g className="sp-ear-r" style={{transformOrigin:"126px 50px"}}><polygon points="130,64 153,10 105,43" fill="#B9653C"/><polygon points="127,59 146,15 111,40" fill="#D98B5A"/><polygon points="123,54 141,20 113,39" fill="#F7C7A3" opacity="0.55"/></g>
         <circle cx="84" cy="70" r="51" fill="url(#cat-face)"/><ellipse cx="77" cy="55" rx="20" ry="12" fill="rgba(255,255,255,.12)"/><ellipse cx="84" cy="86" rx="24" ry="16" fill="#F8D8BE" opacity=".9"/>
-        {happy && <><ellipse cx="52" cy="87" rx="10" ry="6" fill="#FF9DB0" opacity=".2"/><ellipse cx="116" cy="87" rx="10" ry="6" fill="#FF9DB0" opacity=".2"/></>}
+        {(happy||ecstatic) && <><ellipse cx="52" cy="87" rx="10" ry="6" fill="#FF9DB0" opacity={ecstatic?".5":".2"}/><ellipse cx="116" cy="87" rx="10" ry="6" fill="#FF9DB0" opacity={ecstatic?".5":".2"}/>{ecstatic&&<><circle cx="52" cy="84" r="3" fill="#FFD060" opacity=".55"/><circle cx="116" cy="84" r="3" fill="#FFD060" opacity=".55"/></>}</>}
         {sleep && <><ellipse cx="54" cy="80" rx="8" ry="5" fill="#EDB183" opacity=".22"/><ellipse cx="114" cy="80" rx="8" ry="5" fill="#EDB183" opacity=".22"/></>}
         <polygon points="84,86 79,80 89,80" fill="#F29AA3"/><polygon points="84,86 79,80 89,80" fill="none" stroke="#DD7C88" strokeWidth="0.7"/>
         <path d="M78,91 Q84,96 90,91" stroke="#B96D4A" strokeWidth="2" fill="none" strokeLinecap="round"/>
         <line x1="16" y1="80" x2="58" y2="84" stroke="#C97A4A" strokeWidth="1.6" strokeLinecap="round" opacity=".45"/><line x1="15" y1="89" x2="57" y2="89" stroke="#C97A4A" strokeWidth="1.6" strokeLinecap="round" opacity=".45"/><line x1="17" y1="97" x2="58" y2="93" stroke="#C97A4A" strokeWidth="1.2" strokeLinecap="round" opacity=".28"/>
         <line x1="152" y1="80" x2="110" y2="84" stroke="#C97A4A" strokeWidth="1.6" strokeLinecap="round" opacity=".45"/><line x1="153" y1="89" x2="111" y2="89" stroke="#C97A4A" strokeWidth="1.6" strokeLinecap="round" opacity=".45"/><line x1="151" y1="97" x2="110" y2="93" stroke="#C97A4A" strokeWidth="1.2" strokeLinecap="round" opacity=".28"/>
-        {!sleep && (<><ellipse className="sp-eye" cx="59" cy="70" rx="10" ry="12" fill="#2A2A2A"/><circle className="sp-pupil" cx="59" cy="67" r="3.5" fill="rgba(255,255,255,.9)"/><ellipse className="sp-eye2" cx="109" cy="70" rx="10" ry="12" fill="#2A2A2A"/><circle className="sp-pupil" cx="109" cy="67" r="3.5" fill="rgba(255,255,255,.9)"/><path className="sp-arc" d="M51 70 Q59 78 67 70" stroke="#2A2A2A" strokeWidth="3" fill="none" strokeLinecap="round"/><path className="sp-arc" d="M101 70 Q109 78 117 70" stroke="#2A2A2A" strokeWidth="3" fill="none" strokeLinecap="round"/></>)}
-        {sleep && (<>
-          {/* left closed eye — filled lid + curved lash line */}
-          <ellipse cx="59" cy="70" rx="10" ry="6" fill="#EDB183"/>
-          <path d="M49,70 Q59,76 69,70" stroke="#C97A4A" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-          {/* right closed eye */}
-          <ellipse cx="109" cy="70" rx="10" ry="6" fill="#EDB183"/>
-          <path d="M99,70 Q109,76 119,70" stroke="#C97A4A" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-        </>)}
+        {!sleep && !starving && (<><ellipse className="sp-eye" cx="59" cy="70" rx="10" ry="12" fill="#2A2A2A"/><circle className="sp-pupil" cx="59" cy="67" r="3.5" fill="rgba(255,255,255,.9)"/>{ecstatic&&<><circle cx="57" cy="65" r="2" fill="#FFD060" opacity=".9"/><circle cx="61" cy="67" r="1.5" fill="#FFD060" opacity=".7"/></>}<ellipse className="sp-eye2" cx="109" cy="70" rx="10" ry="12" fill="#2A2A2A"/><circle className="sp-pupil" cx="109" cy="67" r="3.5" fill="rgba(255,255,255,.9)"/>{ecstatic&&<><circle cx="107" cy="65" r="2" fill="#FFD060" opacity=".9"/><circle cx="111" cy="67" r="1.5" fill="#FFD060" opacity=".7"/></>}<path className="sp-arc" d="M51 70 Q59 78 67 70" stroke="#2A2A2A" strokeWidth="3" fill="none" strokeLinecap="round"/><path className="sp-arc" d="M101 70 Q109 78 117 70" stroke="#2A2A2A" strokeWidth="3" fill="none" strokeLinecap="round"/></>)}
+        {!sleep && starving && (<><ellipse cx="59" cy="70" rx="10" ry="12" fill="#2A2A2A"/><ellipse cx="59" cy="63" rx="11" ry="6" fill="#EDB183" opacity=".85"/><ellipse cx="109" cy="70" rx="10" ry="12" fill="#2A2A2A"/><ellipse cx="109" cy="63" rx="11" ry="6" fill="#EDB183" opacity=".85"/></>)}
+        {sleep && (<><ellipse cx="59" cy="70" rx="10" ry="6" fill="#EDB183"/><path d="M49,70 Q59,76 69,70" stroke="#C97A4A" strokeWidth="2.5" fill="none" strokeLinecap="round"/><ellipse cx="109" cy="70" rx="10" ry="6" fill="#EDB183"/><path d="M99,70 Q109,76 119,70" stroke="#C97A4A" strokeWidth="2.5" fill="none" strokeLinecap="round"/></>)}
         <CatAcc id={acc}/>
       </g>
     </svg>
@@ -641,9 +420,10 @@ function CatSVG({ anim, acc, onClick }: { anim: AnimState; acc: AccId; onClick: 
 }
 
 /* ─── DOG SVG ─────────────────────────────────────────────── */
-function DogSVG({ anim, acc, onClick }: { anim: AnimState; acc: AccId; onClick: () => void }) {
+function DogSVG({ anim, acc, onClick, mood }: { anim: AnimState; acc: AccId; onClick: () => void; mood?: MoodTier }) {
   const walk=anim==="walk",eat=anim==="eat",sleep=anim==="sleep",happy=["happy","excited","bark"].includes(anim),excited=anim==="excited";
   const bc=eat?"sp-eat":walk?"":"sp-idle",lf=walk?"sp-lf":"",lb=walk?"sp-lb":"";
+  const ecstatic=mood==="ecstatic",starving=mood==="starving";
   return (
     <svg viewBox="0 0 170 175" style={{width:170,height:175,cursor:"pointer",overflow:"visible",filter:"drop-shadow(0 10px 28px rgba(200,155,60,.28))"}} onClick={onClick}>
       <defs>
@@ -666,14 +446,16 @@ function DogSVG({ anim, acc, onClick }: { anim: AnimState; acc: AccId; onClick: 
         <ellipse cx="84" cy="84" rx="28" ry="22" fill="#F8EDD0"/><ellipse cx="74" cy="91" rx="10" ry="8" fill="#F0E0B8"/><ellipse cx="94" cy="91" rx="10" ry="8" fill="#F0E0B8"/><ellipse cx="84" cy="88" rx="7" ry="6" fill="#E8D4A8"/>
         <ellipse cx="84" cy="79" rx="11" ry="8" fill="#3A1F0C"/><ellipse cx="84" cy="78" rx="7" ry="5" fill="#2A1006"/><ellipse cx="81" cy="76" rx="3" ry="2" fill="rgba(255,255,255,.22)"/>
         <path d="M75,90 Q84,100 93,90" stroke="#8B5E30" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-        {happy && <><ellipse cx="47" cy="83" rx="10" ry="6" fill="#FF9040" opacity=".2"/><ellipse cx="121" cy="83" rx="10" ry="6" fill="#FF9040" opacity=".2"/></>}
+        {(happy||ecstatic) && <><ellipse cx="47" cy="83" rx="10" ry="6" fill="#FF9040" opacity={ecstatic?".45":".2"}/><ellipse cx="121" cy="83" rx="10" ry="6" fill="#FF9040" opacity={ecstatic?".45":".2"}/>{ecstatic&&<><circle cx="47" cy="80" r="3" fill="#FFD060" opacity=".55"/><circle cx="121" cy="80" r="3" fill="#FFD060" opacity=".55"/></>}</>}
         {sleep && <><ellipse cx="52" cy="80" rx="8" ry="5" fill="#C8A050" opacity=".2"/><ellipse cx="116" cy="80" rx="8" ry="5" fill="#C8A050" opacity=".2"/></>}
         <g className="sp-eye" style={{transformOrigin:"59px 64px"}}>
-          {!sleep && (<><circle cx="59" cy="64" r="14" fill="#1A0E04"/><circle cx="59" cy="64" r="14" fill="none" stroke="#4A2E10" strokeWidth="1.5"/><circle className="sp-pupil" cx="60" cy="64" r="9" fill="#F8F0E0"/><circle className="sp-pupil" cx="64" cy="60" r="4" fill="#7A4A18"/><circle className="sp-pupil" cx="57" cy="67" r="2.2" fill="rgba(255,255,255,.45)"/><circle className="sp-pupil" cx="63" cy="61" r="1.4" fill="rgba(255,255,255,.9)"/><path className="sp-arc" d="M46,64 Q59,50 72,64" stroke="#D4A050" strokeWidth="3.5" fill="none" strokeLinecap="round"/></>)}
+          {!sleep && !starving && (<><circle cx="59" cy="64" r="14" fill="#1A0E04"/><circle cx="59" cy="64" r="14" fill="none" stroke="#4A2E10" strokeWidth="1.5"/><circle className="sp-pupil" cx="60" cy="64" r="9" fill="#F8F0E0"/><circle className="sp-pupil" cx="64" cy="60" r="4" fill="#7A4A18"/><circle className="sp-pupil" cx="57" cy="67" r="2.2" fill="rgba(255,255,255,.45)"/><circle className="sp-pupil" cx="63" cy="61" r="1.4" fill="rgba(255,255,255,.9)"/>{ecstatic&&<><circle cx="62" cy="58" r="2" fill="#FFD060" opacity=".9"/><circle cx="58" cy="61" r="1.4" fill="#FFD060" opacity=".7"/></>}<path className="sp-arc" d="M46,64 Q59,50 72,64" stroke="#D4A050" strokeWidth="3.5" fill="none" strokeLinecap="round"/></>)}
+          {!sleep && starving && (<><circle cx="59" cy="64" r="14" fill="#1A0E04"/><ellipse cx="59" cy="57" rx="15" ry="7" fill="#D4AE6A" opacity=".88"/></>)}
           {sleep && (<><ellipse cx="59" cy="64" rx="12" ry="6" fill="#D4AE6A"/><path d="M47,64 Q59,70 71,64" stroke="#A07030" strokeWidth="2.5" fill="none" strokeLinecap="round"/></>)}
         </g>
         <g className="sp-eye2" style={{transformOrigin:"109px 64px"}}>
-          {!sleep && (<><circle cx="109" cy="64" r="14" fill="#1A0E04"/><circle cx="109" cy="64" r="14" fill="none" stroke="#4A2E10" strokeWidth="1.5"/><circle className="sp-pupil" cx="110" cy="64" r="9" fill="#F8F0E0"/><circle className="sp-pupil" cx="114" cy="60" r="4" fill="#7A4A18"/><circle className="sp-pupil" cx="107" cy="67" r="2.2" fill="rgba(255,255,255,.45)"/><circle className="sp-pupil" cx="113" cy="61" r="1.4" fill="rgba(255,255,255,.9)"/><path className="sp-arc" d="M96,64 Q109,50 122,64" stroke="#D4A050" strokeWidth="3.5" fill="none" strokeLinecap="round"/></>)}
+          {!sleep && !starving && (<><circle cx="109" cy="64" r="14" fill="#1A0E04"/><circle cx="109" cy="64" r="14" fill="none" stroke="#4A2E10" strokeWidth="1.5"/><circle className="sp-pupil" cx="110" cy="64" r="9" fill="#F8F0E0"/><circle className="sp-pupil" cx="114" cy="60" r="4" fill="#7A4A18"/><circle className="sp-pupil" cx="107" cy="67" r="2.2" fill="rgba(255,255,255,.45)"/><circle className="sp-pupil" cx="113" cy="61" r="1.4" fill="rgba(255,255,255,.9)"/>{ecstatic&&<><circle cx="112" cy="58" r="2" fill="#FFD060" opacity=".9"/><circle cx="108" cy="61" r="1.4" fill="#FFD060" opacity=".7"/></>}<path className="sp-arc" d="M96,64 Q109,50 122,64" stroke="#D4A050" strokeWidth="3.5" fill="none" strokeLinecap="round"/></>)}
+          {!sleep && starving && (<><circle cx="109" cy="64" r="14" fill="#1A0E04"/><ellipse cx="109" cy="57" rx="15" ry="7" fill="#D4AE6A" opacity=".88"/></>)}
           {sleep && (<><ellipse cx="109" cy="64" rx="12" ry="6" fill="#D4AE6A"/><path d="M97,64 Q109,70 121,64" stroke="#A07030" strokeWidth="2.5" fill="none" strokeLinecap="round"/></>)}
         </g>
         <DogAcc id={acc}/>
@@ -689,44 +471,23 @@ function SceneBg({ petType }: { petType: PetType }) {
   return (
     <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",overflow:"hidden"}} viewBox="0 0 400 220" preserveAspectRatio="xMidYMid slice">
       <defs>
-        <radialGradient id="scene-glow" cx="50%" cy="40%" r="55%">
-          <stop offset="0%" stopColor={c} stopOpacity=".12"/>
-          <stop offset="100%" stopColor={c} stopOpacity="0"/>
-        </radialGradient>
-        <radialGradient id="scene-floor" cx="50%" cy="100%" r="50%">
-          <stop offset="0%" stopColor={c} stopOpacity=".08"/>
-          <stop offset="100%" stopColor={c} stopOpacity="0"/>
-        </radialGradient>
-        <linearGradient id="scene-top" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={c} stopOpacity=".04"/>
-          <stop offset="100%" stopColor={c} stopOpacity="0"/>
-        </linearGradient>
+        <radialGradient id="scene-glow" cx="50%" cy="40%" r="55%"><stop offset="0%" stopColor={c} stopOpacity=".12"/><stop offset="100%" stopColor={c} stopOpacity="0"/></radialGradient>
+        <radialGradient id="scene-floor" cx="50%" cy="100%" r="50%"><stop offset="0%" stopColor={c} stopOpacity=".08"/><stop offset="100%" stopColor={c} stopOpacity="0"/></radialGradient>
+        <linearGradient id="scene-top" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={c} stopOpacity=".04"/><stop offset="100%" stopColor={c} stopOpacity="0"/></linearGradient>
       </defs>
-      {/* Background fills */}
       <rect width="400" height="220" fill="url(#scene-top)"/>
       <rect width="400" height="220" fill="url(#scene-glow)"/>
-      {/* Floor grid */}
       <g opacity=".12" stroke={c} strokeWidth=".6">
-        {[0,50,100,150,200,250,300,350,400].map(x=>(
-          <line key={x} x1={x} y1="185" x2={x+40} y2="220"/>
-        ))}
-        {[185,195,207,220].map(y=>(
-          <line key={y} x1="0" y1={y} x2="400" y2={y}/>
-        ))}
+        {[0,50,100,150,200,250,300,350,400].map(x=>(<line key={x} x1={x} y1="185" x2={x+40} y2="220"/>))}
+        {[185,195,207,220].map(y=>(<line key={y} x1="0" y1={y} x2="400" y2={y}/>))}
       </g>
-      {/* Floor glow */}
       <rect y="180" width="400" height="40" fill="url(#scene-floor)"/>
-      {/* Ground line */}
       <line x1="0" y1="185" x2="400" y2="185" stroke={c} strokeWidth="1" strokeOpacity=".18"/>
-      {/* Ambient particles */}
       {[[28,28,2.2,3.5],[372,22,1.8,2.8],[14,115,1.6,4],[386,108,2,3.2],[200,18,2.5,3],[80,70,1.4,2.5],[320,55,1.8,3.8],[150,140,1.2,2]].map(([x,y,r,dur],i)=>(
-        <circle key={i} cx={x} cy={y} r={r} fill={i%2===0?c:c2} opacity=".25"
-          style={{animation:`sp-float ${dur}s ease-in-out infinite`,animationDelay:`${i*.6}s`}}/>
+        <circle key={i} cx={x} cy={y} r={r} fill={i%2===0?c:c2} opacity=".25" style={{animation:`sp-float ${dur}s ease-in-out infinite`,animationDelay:`${i*.6}s`}}/>
       ))}
-      {/* Stars */}
       {[[60,18],[340,35],[180,10],[290,55]].map(([x,y],i)=>(
-        <circle key={`s${i}`} cx={x} cy={y} r=".8" fill={c2} opacity=".4"
-          style={{animation:`sp-float ${2.5+i*.4}s ease-in-out infinite`,animationDelay:`${i*.9}s`}}/>
+        <circle key={`s${i}`} cx={x} cy={y} r=".8" fill={c2} opacity=".4" style={{animation:`sp-float ${2.5+i*.4}s ease-in-out infinite`,animationDelay:`${i*.9}s`}}/>
       ))}
     </svg>
   );
@@ -738,10 +499,8 @@ function LevelUpModal({ levelName, droppedAcc, accName, accentHex, onClose }: {
 }) {
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-      <div style={{background:"var(--c-surface)",border:`1px solid ${accentHex}30`,borderRadius:28,padding:"36px 28px 28px",maxWidth:340,width:"100%",textAlign:"center",boxShadow:`var(--shadow-xl),0 0 60px ${accentHex}20`,animation:"sp-levelup .5s cubic-bezier(.34,1.56,.64,1) both",fontFamily:"var(--font-body)",position:"relative",overflow:"hidden"}}>
-        {/* Background glow */}
+      <div style={{background:"var(--c-surface)",border:`1px solid ${accentHex}30`,borderRadius:28,padding:"36px 28px 28px",maxWidth:340,width:"100%",textAlign:"center",boxShadow:`var(--shadow-lg),0 0 60px ${accentHex}20`,animation:"sp-levelup .5s cubic-bezier(.34,1.56,.64,1) both",fontFamily:"var(--font-body)",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:"-20%",left:"50%",transform:"translateX(-50%)",width:200,height:200,borderRadius:"50%",background:`radial-gradient(circle,${accentHex}15 0%,transparent 70%)`,pointerEvents:"none"}}/>
-        {/* Stars ring */}
         <div style={{position:"relative",margin:"0 auto 18px",width:80,height:80}}>
           <div style={{position:"absolute",inset:-8,borderRadius:"50%",border:`2px solid ${accentHex}20`,animation:"sp-pulse-ring 2s ease-out infinite"}}/>
           <div style={{width:80,height:80,borderRadius:22,background:`linear-gradient(135deg,${accentHex}25,${accentHex}10)`,border:`1.5px solid ${accentHex}40`,display:"flex",alignItems:"center",justifyContent:"center",animation:"sp-heartbeat 1.6s ease-in-out infinite",boxShadow:`0 4px 24px ${accentHex}30`}}>
@@ -761,16 +520,14 @@ function LevelUpModal({ levelName, droppedAcc, accName, accentHex, onClose }: {
           </div>
         )}
         <button onClick={onClose} style={{width:"100%",padding:"13px 0",border:"none",borderRadius:14,fontSize:14,fontWeight:700,cursor:"pointer",background:`linear-gradient(135deg,${accentHex},${accentHex}CC)`,color:"#fff",fontFamily:"var(--font-body)",boxShadow:`0 4px 20px ${accentHex}50`,letterSpacing:".02em",transition:"transform .15s,box-shadow .15s"}}
-          onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="translateY(-1px)";}}
-          onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="";}}>
+          onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.transform="translateY(-1px)";}}
+          onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.transform="";}}>
           Awesome!
         </button>
       </div>
     </div>
   );
 }
-
-/* ─── TOAST ──────────────────────────────────────────────── */
 
 /* ─── STAT BAR ───────────────────────────────────────────── */
 function StatBar({ label, val, pct, accent, icon, flash }: { label: string; val: string; pct: number; accent: string; icon: string; flash?: boolean }) {
@@ -792,6 +549,7 @@ function StatBar({ label, val, pct, accent, icon, flash }: { label: string; val:
     </div>
   );
 }
+
 /* ─── ACCESSORY CARD ─────────────────────────────────────── */
 function AccessoryCard({ acc, owned, active, canBuy, accentColor, isNew, onClick }: {
   acc: typeof ACCS[0]; owned: boolean; active: boolean; canBuy: boolean; accentColor: string; isNew?: boolean; onClick: () => void;
@@ -800,35 +558,17 @@ function AccessoryCard({ acc, owned, active, canBuy, accentColor, isNew, onClick
   const locked = !owned && !canBuy;
   return (
     <div onClick={onClick} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}
-      style={{
-        background: active ? `color-mix(in srgb,${accentColor} 10%,var(--c-surface))` : hover ? "var(--c-surface2)" : "var(--c-surface)",
-        border: `1.5px solid ${active ? accentColor : hover && !locked ? "var(--c-border2)" : "var(--c-border)"}`,
-        borderRadius:16, padding:"14px 10px", textAlign:"center" as const,
-        cursor: locked ? "not-allowed" : "pointer",
-        opacity: locked ? .4 : 1,
-        transition:"all .2s ease",
-        boxShadow: active ? `0 4px 18px ${accentColor}25` : hover && !locked ? "var(--shadow-sm)" : "none",
-        position:"relative" as const,
-      }}>
+      style={{background: active ? `color-mix(in srgb,${accentColor} 10%,var(--c-surface))` : hover ? "var(--c-surface2)" : "var(--c-surface)",border: `1.5px solid ${active ? accentColor : hover && !locked ? "var(--c-border2)" : "var(--c-border)"}`,borderRadius:16, padding:"14px 10px", textAlign:"center" as const,cursor: locked ? "not-allowed" : "pointer",opacity: locked ? .4 : 1,transition:"all .2s ease",boxShadow: active ? `0 4px 18px ${accentColor}25` : hover && !locked ? "var(--shadow-sm)" : "none",position:"relative" as const}}>
       {isNew && <div style={{position:"absolute",top:5,left:5,fontSize:8,fontWeight:800,background:"var(--c-green)",color:"#fff",padding:"2px 5px",borderRadius:5,letterSpacing:".05em",textTransform:"uppercase" as const}}>NEW</div>}
-      {active && (
-        <div style={{position:"absolute",top:6,right:6,width:17,height:17,borderRadius:"50%",background:accentColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 2px 6px ${accentColor}50`}}>
-          <Icon name="check" size={9} color="white" strokeWidth={2.8}/>
-        </div>
-      )}
+      {active && <div style={{position:"absolute",top:6,right:6,width:17,height:17,borderRadius:"50%",background:accentColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 2px 6px ${accentColor}50`}}><Icon name="check" size={9} color="white" strokeWidth={2.8}/></div>}
       <div style={{height:42,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8}}><AccPreview id={acc.id}/></div>
       <div style={{fontSize:11,fontWeight:600,color:"var(--c-text)",marginBottom:5}}>{acc.name}</div>
       <div style={{fontSize:10,fontWeight:600}}>
-        {acc.id==="none"
-          ? <span style={{color:"var(--c-text3)"}}>Default</span>
-          : active
-            ? <span style={{color:accentColor,display:"flex",alignItems:"center",justifyContent:"center",gap:2}}><Icon name="check" size={9} color={accentColor}/>Equipped</span>
-            : owned
-              ? <span style={{color:"var(--c-green)",display:"flex",alignItems:"center",justifyContent:"center",gap:2}}><Icon name="unlock" size={9} color="var(--c-green)"/>Owned</span>
-              : canBuy
-                ? <span style={{color:"var(--c-amber)",display:"flex",alignItems:"center",justifyContent:"center",gap:2}}><Icon name="coins" size={9} color="var(--c-amber)"/>{acc.cost}</span>
-                : <span style={{color:"var(--c-text3)",display:"flex",alignItems:"center",justifyContent:"center",gap:2}}><Icon name="lock" size={9} color="var(--c-text3)"/>{acc.cost}</span>
-        }
+        {acc.id==="none" ? <span style={{color:"var(--c-text3)"}}>Default</span>
+          : active ? <span style={{color:accentColor,display:"flex",alignItems:"center",justifyContent:"center",gap:2}}><Icon name="check" size={9} color={accentColor}/>Equipped</span>
+          : owned ? <span style={{color:"var(--c-green)",display:"flex",alignItems:"center",justifyContent:"center",gap:2}}><Icon name="unlock" size={9} color="var(--c-green)"/>Owned</span>
+          : canBuy ? <span style={{color:"var(--c-amber)",display:"flex",alignItems:"center",justifyContent:"center",gap:2}}><Icon name="coins" size={9} color="var(--c-amber)"/>{acc.cost}</span>
+          : <span style={{color:"var(--c-text3)",display:"flex",alignItems:"center",justifyContent:"center",gap:2}}><Icon name="lock" size={9} color="var(--c-text3)"/>{acc.cost}</span>}
       </div>
     </div>
   );
@@ -863,7 +603,7 @@ function TreatCapBanner({ petName, onBurn, onDismiss }: { petName: string; onBur
       </div>
       <div style={{flex:1}}>
         <div style={{fontSize:13,fontWeight:700,color:"var(--c-amber)",display:"flex",alignItems:"center",gap:5,marginBottom:2}}><Icon name="cookie" size={12} color="var(--c-amber)"/>Treat bar full!</div>
-        <div style={{fontSize:11,color:"var(--c-text2)",lineHeight:1.4}}>{petName} has 15/15 treats. Play to burn some!</div>
+        <div style={{fontSize:11,color:"var(--c-text2)",lineHeight:1.4}}>{petName} has 15/15 treats. Play mini-games to burn some!</div>
       </div>
       <div style={{display:"flex",flexDirection:"column" as const,gap:4,flexShrink:0}}>
         <button onClick={onBurn} style={{background:"linear-gradient(135deg,var(--c-amber),#E07800)",color:"#fff",border:"none",borderRadius:9,padding:"6px 11px",fontSize:11,fontWeight:700,fontFamily:"var(--font-body)",cursor:"pointer",whiteSpace:"nowrap" as const,boxShadow:"0 2px 8px rgba(196,121,0,.25)"}}>Play! −3</button>
@@ -901,7 +641,7 @@ function SimulateExplainer({ accentHex }: { accentHex: string }) {
             </div>
           ))}
           <div style={{height:1,background:"var(--c-border)",margin:"10px 0"}}/>
-          <div style={{fontSize:11,color:"var(--c-text3)",lineHeight:1.55,background:"rgba(251,191,36,.06)",border:"1px solid rgba(251,191,36,.18)",borderRadius:10,padding:"9px 12px"}}>The <strong style={{color:"var(--c-amber)"}}>Test</strong> button simulates an activity for demo purposes — XP and treats are credited as if the real activity happened. Use it to try out the feed animation or see how rewards work.</div>
+          <div style={{fontSize:11,color:"var(--c-text3)",lineHeight:1.55,background:"rgba(251,191,36,.06)",border:"1px solid rgba(251,191,36,.18)",borderRadius:10,padding:"9px 12px"}}>The <strong style={{color:"var(--c-amber)"}}>Test</strong> button simulates an activity for demo purposes.</div>
         </div>
       )}
     </div>
@@ -1016,105 +756,12 @@ function Onboarding({ onDone }: { onDone: (t: PetType, n: string) => void }) {
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:22,animation:"sp-fade-up .4s ease both"}}>
               <div style={{textAlign:"center"}}><h2 style={{fontSize:"1.45rem",fontFamily:"var(--font-serif)",fontStyle:"italic",color:"var(--c-text)",margin:"0 0 8px",fontWeight:400}}>Choose your companion</h2><p style={{fontSize:13,color:"var(--c-text2)",margin:0}}>Pick one to start — switch anytime in Profile.</p></div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,width:"100%"}}>
-                {/* Cat card */}
-                <div onClick={()=>setPet("cat")} style={{border:`1.5px solid ${pet==="cat"?"var(--c-accent)":"var(--c-border)"}`,background:pet==="cat"?"rgba(124,106,255,.1)":"rgba(255,255,255,.03)",borderRadius:18,padding:"16px 10px",cursor:"pointer",transition:"all .25s ease",display:"flex",flexDirection:"column",alignItems:"center",gap:8,boxShadow:pet==="cat"?"0 0 0 4px rgba(124,106,255,.12)":"none"}}>
-                  <svg width="100" height="100" viewBox="0 0 170 175">
-                    <defs>
-                      <radialGradient id="ob-cf" cx="50%" cy="38%" r="52%"><stop offset="0%" stopColor="#FBE0C7"/><stop offset="100%" stopColor="#EDB183"/></radialGradient>
-                      <radialGradient id="ob-cb" cx="50%" cy="40%" r="55%"><stop offset="0%" stopColor="#F6CFAE"/><stop offset="100%" stopColor="#E39B6B"/></radialGradient>
-                      <radialGradient id="ob-cbl" cx="50%" cy="55%" r="50%"><stop offset="0%" stopColor="#FFF1E3" stopOpacity="0.9"/><stop offset="100%" stopColor="#F6CFAE" stopOpacity="0"/></radialGradient>
-                    </defs>
-                    {/* tail */}
-                    <path d="M54,132 Q18,125 14,106 Q10,84 30,77" stroke="#C97A4A" strokeWidth="11" strokeLinecap="round" fill="none"/>
-                    <path d="M54,132 Q18,125 14,106 Q10,84 30,77" stroke="#E39B6B" strokeWidth="7" strokeLinecap="round" fill="none"/>
-                    {/* body */}
-                    <ellipse cx="84" cy="120" rx="46" ry="34" fill="url(#ob-cb)"/>
-                    <ellipse cx="84" cy="128" rx="28" ry="20" fill="url(#ob-cbl)"/>
-                    {/* collar */}
-                    <path d="M44,100 Q84,114 124,100" stroke="#B8840A" strokeWidth="9" fill="none" strokeLinecap="round"/>
-                    <path d="M44,100 Q84,114 124,100" stroke="#FFD060" strokeWidth="6" fill="none" strokeLinecap="round"/>
-                    <circle cx="84" cy="108" r="6.5" fill="#FFB820"/>
-                    {/* legs */}
-                    <rect x="58" y="124" width="16" height="30" rx="8" fill="#E39B6B"/>
-                    <rect x="94" y="124" width="16" height="30" rx="8" fill="#E39B6B"/>
-                    <rect x="54" y="112" width="16" height="30" rx="8" fill="#E39B6B"/>
-                    <rect x="96" y="112" width="16" height="30" rx="8" fill="#E39B6B"/>
-                    <ellipse cx="66" cy="155" rx="11" ry="5.5" fill="#C97A4A"/>
-                    <ellipse cx="102" cy="155" rx="11" ry="5.5" fill="#C97A4A"/>
-                    <ellipse cx="62" cy="143" rx="11" ry="5.5" fill="#C97A4A"/>
-                    <ellipse cx="104" cy="143" rx="11" ry="5.5" fill="#C97A4A"/>
-                    {/* ears */}
-                    <polygon points="34,64 15,10 63,43" fill="#B9653C"/>
-                    <polygon points="37,59 22,15 57,40" fill="#D98B5A"/>
-                    <polygon points="130,64 153,10 105,43" fill="#B9653C"/>
-                    <polygon points="127,59 146,15 111,40" fill="#D98B5A"/>
-                    {/* head */}
-                    <circle cx="84" cy="70" r="51" fill="url(#ob-cf)"/>
-                    <ellipse cx="84" cy="86" rx="24" ry="16" fill="#F8D8BE" opacity=".9"/>
-                    {/* nose + mouth */}
-                    <polygon points="84,86 79,80 89,80" fill="#F29AA3"/>
-                    <path d="M78,91 Q84,96 90,91" stroke="#B96D4A" strokeWidth="2" fill="none" strokeLinecap="round"/>
-                    {/* whiskers */}
-                    <line x1="16" y1="80" x2="58" y2="84" stroke="#C97A4A" strokeWidth="1.6" strokeLinecap="round" opacity=".45"/>
-                    <line x1="15" y1="89" x2="57" y2="89" stroke="#C97A4A" strokeWidth="1.6" strokeLinecap="round" opacity=".45"/>
-                    <line x1="152" y1="80" x2="110" y2="84" stroke="#C97A4A" strokeWidth="1.6" strokeLinecap="round" opacity=".45"/>
-                    <line x1="153" y1="89" x2="111" y2="89" stroke="#C97A4A" strokeWidth="1.6" strokeLinecap="round" opacity=".45"/>
-                    {/* eyes */}
-                    <ellipse cx="59" cy="70" rx="10" ry="12" fill="#2A2A2A"/>
-                    <circle cx="59" cy="67" r="3.5" fill="rgba(255,255,255,.9)"/>
-                    <ellipse cx="109" cy="70" rx="10" ry="12" fill="#2A2A2A"/>
-                    <circle cx="109" cy="67" r="3.5" fill="rgba(255,255,255,.9)"/>
-                  </svg>
-                  <div style={{fontSize:13,fontWeight:600,color:pet==="cat"?"var(--c-text)":"var(--c-text2)"}}>Cat</div>
-                  {pet==="cat" && <div style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--c-accent2)",fontWeight:500}}><Icon name="check" size={12} color="var(--c-accent2)"/>Selected</div>}
-                </div>
-
-                {/* Dog card */}
-                <div onClick={()=>setPet("dog")} style={{border:`1.5px solid ${pet==="dog"?"var(--c-accent)":"var(--c-border)"}`,background:pet==="dog"?"rgba(124,106,255,.1)":"rgba(255,255,255,.03)",borderRadius:18,padding:"16px 10px",cursor:"pointer",transition:"all .25s ease",display:"flex",flexDirection:"column",alignItems:"center",gap:8,boxShadow:pet==="dog"?"0 0 0 4px rgba(124,106,255,.12)":"none"}}>
-                  <svg width="100" height="100" viewBox="0 0 170 175">
-                    <defs>
-                      <radialGradient id="ob-df" cx="50%" cy="38%" r="52%"><stop offset="0%" stopColor="#F2D898"/><stop offset="100%" stopColor="#D4AE6A"/></radialGradient>
-                      <radialGradient id="ob-db" cx="50%" cy="40%" r="55%"><stop offset="0%" stopColor="#EAC97A"/><stop offset="100%" stopColor="#C8A050"/></radialGradient>
-                      <radialGradient id="ob-de" cx="50%" cy="50%" r="60%"><stop offset="0%" stopColor="#D0985A"/><stop offset="100%" stopColor="#A87040"/></radialGradient>
-                    </defs>
-                    {/* tail */}
-                    <path d="M122,110 Q150,95 155,74 Q158,54 138,50" stroke="#DEB870" strokeWidth="7" strokeLinecap="round" fill="none"/>
-                    {/* body */}
-                    <ellipse cx="84" cy="118" rx="48" ry="36" fill="url(#ob-db)"/>
-                    {/* legs */}
-                    <rect x="58" y="122" width="16" height="32" rx="8" fill="#C8A050"/>
-                    <rect x="94" y="122" width="16" height="32" rx="8" fill="#C8A050"/>
-                    <rect x="54" y="110" width="16" height="34" rx="8" fill="#C8A050"/>
-                    <rect x="96" y="110" width="16" height="34" rx="8" fill="#C8A050"/>
-                    <ellipse cx="66" cy="155" rx="11" ry="5.5" fill="#A07030"/>
-                    <ellipse cx="102" cy="155" rx="11" ry="5.5" fill="#A07030"/>
-                    <ellipse cx="62" cy="145" rx="11" ry="5.5" fill="#A07030"/>
-                    <ellipse cx="104" cy="145" rx="11" ry="5.5" fill="#A07030"/>
-                    {/* floppy ears */}
-                    <path d="M22,42 Q6,34 5,68 Q3,96 28,97 Q52,98 52,72 Q52,44 28,38 Z" fill="#A87040"/>
-                    <path d="M26,46 Q12,40 11,68 Q10,90 28,91 Q48,91 48,72 Q48,48 28,44 Z" fill="url(#ob-de)"/>
-                    <path d="M148,42 Q162,34 163,68 Q165,96 140,97 Q116,98 116,72 Q116,44 140,38 Z" fill="#A87040"/>
-                    <path d="M144,46 Q156,40 157,68 Q158,90 140,91 Q120,91 120,72 Q120,48 140,44 Z" fill="url(#ob-de)"/>
-                    {/* head */}
-                    <circle cx="84" cy="66" r="50" fill="url(#ob-df)"/>
-                    {/* snout */}
-                    <ellipse cx="84" cy="84" rx="28" ry="22" fill="#F8EDD0"/>
-                    <ellipse cx="84" cy="79" rx="11" ry="8" fill="#3A1F0C"/>
-                    <ellipse cx="81" cy="76" rx="3" ry="2" fill="rgba(255,255,255,.22)"/>
-                    <path d="M75,90 Q84,100 93,90" stroke="#8B5E30" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-                    {/* eyes */}
-                    <circle cx="59" cy="64" r="14" fill="#1A0E04"/>
-                    <circle cx="60" cy="64" r="9" fill="#F8F0E0"/>
-                    <circle cx="64" cy="60" r="4" fill="#7A4A18"/>
-                    <circle cx="63" cy="61" r="1.4" fill="rgba(255,255,255,.9)"/>
-                    <circle cx="109" cy="64" r="14" fill="#1A0E04"/>
-                    <circle cx="110" cy="64" r="9" fill="#F8F0E0"/>
-                    <circle cx="114" cy="60" r="4" fill="#7A4A18"/>
-                    <circle cx="113" cy="61" r="1.4" fill="rgba(255,255,255,.9)"/>
-                  </svg>
-                  <div style={{fontSize:13,fontWeight:600,color:pet==="dog"?"var(--c-text)":"var(--c-text2)"}}>Dog</div>
-                  {pet==="dog" && <div style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--c-accent2)",fontWeight:500}}><Icon name="check" size={12} color="var(--c-accent2)"/>Selected</div>}
-                </div>
+                {(["cat","dog"] as PetType[]).map(t => (
+                  <div key={t} onClick={()=>setPet(t)} style={{border:`1.5px solid ${pet===t?"var(--c-accent)":"var(--c-border)"}`,background:pet===t?"rgba(124,106,255,.1)":"rgba(255,255,255,.03)",borderRadius:18,padding:"16px 10px",cursor:"pointer",transition:"all .25s ease",display:"flex",flexDirection:"column",alignItems:"center",gap:8,boxShadow:pet===t?"0 0 0 4px rgba(124,106,255,.12)":"none"}}>
+                    <div style={{fontSize:11,fontWeight:600,color:pet===t?"var(--c-text)":"var(--c-text2)",textTransform:"capitalize" as const,marginTop:8}}>{t}</div>
+                    {pet===t && <div style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--c-accent2)",fontWeight:500}}><Icon name="check" size={12} color="var(--c-accent2)"/>Selected</div>}
+                  </div>
+                ))}
               </div>
               <ObBtn onClick={()=>setStep(2)} disabled={!pet}>Continue</ObBtn>
             </div>
@@ -1172,12 +819,15 @@ export default function StudyPalPage() {
   const [decayPopTicks, setDecayPopTicks]           = useState(0);
   const [showLevelUp, setShowLevelUp]               = useState(false);
   const [newlyDroppedAcc, setNewlyDroppedAcc]       = useState<AccId | null>(null);
+  const [showGames, setShowGames]                   = useState(false); // ← mini-games
 
   const animRef    = useRef<AnimState>("idle");
   const moodT      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const speakT     = useRef<ReturnType<typeof setTimeout> | null>(null);
   const walkT      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sleepT     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const moodDialogT = useRef<ReturnType<typeof setInterval> | null>(null);
+  const moodLineIdx = useRef(0);
   const pCnt       = useRef(0);
   const tCnt       = useRef(0);
   const xpCnt      = useRef(0);
@@ -1187,56 +837,48 @@ export default function StudyPalPage() {
 
   // ── LOAD + DECAY ON MOUNT ───────────────────────────────────
   useEffect(() => {
+    // Load from server first, merge with localStorage (winner = newer updatedAt)
+    studypalLoadFromServer().then((serverState) => {
+      if (serverState) {
+        const reloaded = load();
+        setS(reloaded);
+      }
+    });
+
     const loaded = load();
     setS(loaded);
 
-    // Apply passive decay and surface a pop if any ticks happened
     const lost = studypalApplyDecayOnMount();
     if (lost > 0) {
       setDecayPopTicks(lost);
       setTimeout(() => setDecayPopTicks(0), 2500);
     }
 
-    // Hunger check (after decay is applied)
     const lastFed = loaded.lastFedAt;
     const isHungry = !lastFed || (Date.now() - lastFed > TWO_DAYS_MS);
     if (isHungry) {
       setShowHungerBanner(true);
-
-      // Fire bell notification once per 24h max
       const notifyKey = "sp_hunger_notified";
       const lastNotified = localStorage.getItem(notifyKey);
-      const alreadyNotified = lastNotified &&
-        Date.now() - Number(lastNotified) < 24 * 60 * 60 * 1000;
-
+      const alreadyNotified = lastNotified && Date.now() - Number(lastNotified) < 24 * 60 * 60 * 1000;
       if (!alreadyNotified && loaded.onboarded) {
-        fetch("/api/studypal/hungry", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ petName: loaded.petName }),
-        }).then(r => {
-          if (r.ok) localStorage.setItem(notifyKey, String(Date.now()));
-        }).catch(() => {}); // silently ignore if offline
+        fetch("/api/studypal/hungry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ petName: loaded.petName }) })
+          .then(r => { if (r.ok) localStorage.setItem(notifyKey, String(Date.now())); })
+          .catch(() => {});
       }
     }
 
-    // Treat cap check
-    if (loaded.treatCapReached) {
-      setShowTreatCapBanner(true);
-      studypalClearTreatCap();
-    }
-
-    // Level-up drop check
-    if (loaded.leveledUp && loaded.pendingDrop) {
-      setNewlyDroppedAcc(loaded.pendingDrop as AccId);
-      setShowLevelUp(true);
-      studypalClearPendingDrop();
-    }
+    if (loaded.treatCapReached) { setShowTreatCapBanner(true); studypalClearTreatCap(); }
+    if (loaded.leveledUp && loaded.pendingDrop) { setNewlyDroppedAcc(loaded.pendingDrop as AccId); setShowLevelUp(true); studypalClearPendingDrop(); }
   }, []);
-  // ────────────────────────────────────────────────────────────
 
   const upd = useCallback((patch: Partial<SPState>) => {
-    setS(prev => { const n = { ...prev, ...patch }; save(n); return n; });
+    setS(prev => {
+      const n = { ...prev, ...patch };
+      save(n);
+      studypalScheduleSync(); // debounced — fires 300ms after last change
+      return n;
+    });
   }, []);
 
   function triggerAnim(a: AnimState, dur = 2400) {
@@ -1267,7 +909,6 @@ export default function StudyPalPage() {
     }
   }
 
-  // Walk loop
   useEffect(() => {
     function doWalk() {
       if (animRef.current==="idle"||animRef.current==="walk") {
@@ -1285,9 +926,21 @@ export default function StudyPalPage() {
     sleepT.current=setTimeout(()=>{if(animRef.current==="idle"){triggerAnim("sleep",999999);triggerSpeech("Resting…");}},30000);
   }
   useEffect(()=>{resetSleep();return()=>clearTimeout(sleepT.current!);},[]);
-
-  // Reset sleep timer on tab change too
   useEffect(() => { resetSleep(); }, [tab]);
+
+  // ── Mood auto-dialogue every 45s of inactivity ──────────
+  useEffect(() => {
+    clearInterval(moodDialogT.current!);
+    moodDialogT.current = setInterval(() => {
+      if (animRef.current === "idle" || animRef.current === "sleep") {
+        const pool = MOODS[computeMood(load()).tier].dialogue[load().petType as "cat"|"dog"] ?? MOODS.neutral.dialogue.cat;
+        const line = pool[moodLineIdx.current % pool.length];
+        moodLineIdx.current++;
+        triggerSpeech(line);
+      }
+    }, 45000);
+    return () => clearInterval(moodDialogT.current!);
+  }, []);
 
   function onPetClick() {
     resetSleep();
@@ -1302,42 +955,22 @@ export default function StudyPalPage() {
 
   function triggerActivity(id: string) {
     const a=ACTIVITIES.find(x=>x.id===id);if(!a)return;
-    // If treats already maxed out AND nothing pending to feed, block new rewards
-    if (S.treats >= TREATS_MAX && S.pending === 0) {
-      setShowTreatCapBanner(true);
-      triggerSpeech("I'm stuffed!");
-      return;
-    }
-    // If treats maxed but pending exists, just guide to feed — don't block XP
-    if (S.treats >= TREATS_MAX && S.pending > 0) {
-      triggerSpeech("Feed me first!");
-      setTab("feed");
-      return;
-    }
+    if (S.treats >= TREATS_MAX && S.pending === 0) { setShowTreatCapBanner(true); triggerSpeech("I'm stuffed!"); return; }
+    if (S.treats >= TREATS_MAX && S.pending > 0) { triggerSpeech("Feed me first!"); setTab("feed"); return; }
     const prevLevel = getLvl(S.xp);
     const newXP     = S.xp + a.xp;
     const newLevel  = getLvl(newXP);
-
-    // Log entry
     const entry: SPLogEntry = {activityId:id as any,activityName:a.name,xp:a.xp,treats:a.treats,timestamp:Date.now()};
     const newLog = [entry,...(S.activityLog||[])].slice(0,10);
-
     upd({ xp:newXP, pending:S.pending+a.treats, points:S.points+a.xp, activityLog:newLog });
     triggerAnim("excited",1800);triggerSpeech(`+${a.xp} XP`);
     spawnParticles();popXP(a.xp);
-
-    // Level up?
     if (newLevel > prevLevel) {
       setTimeout(() => {
-        const lvlName = LEVELS[newLevel].name;
-        // Pick a random drop from unowned
         const ownedNow = S.owned as AccId[];
         const droppable = (["bow","headband","glasses","hat","cap","scarf","ribbon","sunglasses","earring","monocle","halo","bandana","wizard","crown"] as AccId[]).filter(id=>!ownedNow.includes(id));
         const drop: AccId | null = droppable.length>0 ? droppable[Math.floor(Math.random()*droppable.length)] : null;
-        if (drop) {
-          setNewlyDroppedAcc(drop);
-          upd({ owned:[...ownedNow,drop] });
-        }
+        if (drop) { setNewlyDroppedAcc(drop); upd({ owned:[...ownedNow,drop] }); }
         setShowLevelUp(true);
         triggerAnim("happy",4000);spawnParticles();
       }, 1200);
@@ -1360,7 +993,6 @@ export default function StudyPalPage() {
   }
 
   function burnTreats() {
-    // "Play" action — pet burns 3 treats doing zoomies, making room to earn more
     if (S.treats < 3) return;
     upd({treats:S.treats-3});
     triggerAnim("excited",2200);triggerSpeech("Zoomies!");
@@ -1374,21 +1006,20 @@ export default function StudyPalPage() {
   const xpPct=nxt?Math.round(((S.xp-lvl.xp)/(nxt.xp-lvl.xp))*100):100;
   const tPct=Math.round((Math.min(S.treats,TREATS_MAX)/TREATS_MAX)*100);
   const hungry=S.treats<3;
+  const mood = computeMood(S);
 
   const accentColor=S.petType==="cat"?"var(--c-accent)":"var(--c-dog)";
   const accentHex=S.petType==="cat"?"#7C6AFF":"#60AEFF";
   const PetComp=S.petType==="cat"?CatSVG:DogSVG;
 
   const statusMsg: Record<AnimState,string>={walk:"Strolling around",eat:"Having a treat",sleep:"Resting",jump:"Jumping!",meow:"Meow!",bark:"Woof!",happy:"Happy!",excited:"Excited!",idle:"Tap to interact"};
-
-  // Acc name lookup for level-up modal
   const droppedAccName = newlyDroppedAcc ? (ACCS.find(a=>a.id===newlyDroppedAcc)?.name ?? "") : "";
 
   return (
     <div className="sp">
       <style>{KF}</style>
 
-      {/* Level-up modal */}
+      {/* Modals */}
       {showLevelUp && (
         <LevelUpModal
           levelName={LEVELS[getLvl(S.xp)].name}
@@ -1399,27 +1030,46 @@ export default function StudyPalPage() {
         />
       )}
 
-      {/* Decay pop */}
+      {/* ── Mini-games modal ── */}
+      {showGames && (
+        <MiniGamesModal
+          open={showGames}
+          treats={S.treats}
+          accentHex={accentHex}
+          petName={S.petName}
+          onClose={() => setShowGames(false)}
+          onReward={(delta, type) => {
+            if (type === "treats") {
+              upd({ treats: Math.max(0, S.treats - delta) });
+            } else {
+              upd({ xp: S.xp + delta, points: S.points + delta });
+              triggerAnim(delta >= 8 ? "excited" : "happy", 2400);
+              triggerSpeech(delta >= 8 ? "Zoomies!" : "Yay!");
+              spawnParticles();
+              popXP(delta);
+            }
+          }}
+        />
+      )}
+
       {decayPopTicks > 0 && <DecayPop ticks={decayPopTicks}/>}
 
-{/* Header */}
+      {/* Header */}
       <header style={{background:"color-mix(in srgb,var(--c-surface) 88%,transparent)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",borderBottom:"1px solid var(--c-border)",position:"sticky",top:0,zIndex:50}}>
-        {/* accent top line */}
         <div style={{height:2,background:`linear-gradient(90deg,${accentHex}00,${accentHex},${accentHex}00)`}}/>
         <div style={{maxWidth:650,margin:"0 auto",padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <div style={{display:"flex",alignItems:"center",gap:11}}>
-            {/* avatar */}
             <div style={{position:"relative",flexShrink:0}}>
               <div style={{width:42,height:42,borderRadius:13,background:`linear-gradient(140deg,${accentHex} 0%,${S.petType==="cat"?"#5E4FD4":"#1A6FC4"} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${accentHex}55`}}>
                 <Icon name={S.petType} size={21} color="white" strokeWidth={1.6}/>
               </div>
               <div style={{position:"absolute",bottom:-1,right:-1,width:11,height:11,borderRadius:"50%",background:"var(--c-green)",border:"2px solid var(--c-bg)",animation:"sp-heartbeat 3s ease-in-out infinite"}}/>
             </div>
-            {/* name + xp */}
             <div style={{minWidth:0}}>
               <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" as const}}>
                 <span style={{fontSize:15,fontWeight:700,color:"var(--c-text)",fontFamily:"var(--font-serif)",fontStyle:"italic",lineHeight:1.1}}>{S.petName}</span>
                 <span style={{fontSize:10,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase" as const,background:`${accentHex}22`,color:accentHex,padding:"2px 8px",borderRadius:20,border:`1px solid ${accentHex}38`}}>{lvl.name}</span>
+                <span style={{fontSize:11}}>{mood.emoji}</span>
                 {(S.streakCount??0)>0 && (
                   <span style={{fontSize:10,fontWeight:700,background:"rgba(229,57,53,.12)",color:"var(--c-red)",padding:"2px 8px",borderRadius:20,border:"1px solid rgba(229,57,53,.22)",display:"flex",alignItems:"center",gap:3}}>
                     <Icon name="flame" size={10} color="var(--c-red)"/>{S.streakCount}d
@@ -1434,14 +1084,13 @@ export default function StudyPalPage() {
               </div>
             </div>
           </div>
-          {/* points pill */}
           <div style={{display:"flex",alignItems:"center",gap:5,background:"color-mix(in srgb,var(--c-amber) 12%,transparent)",color:"var(--c-amber)",fontSize:14,fontWeight:700,padding:"7px 14px",borderRadius:20,border:"1px solid color-mix(in srgb,var(--c-amber) 28%,transparent)",flexShrink:0,boxShadow:"0 2px 8px rgba(214,128,0,.12)"}}>
             <Icon name="coins" size={14} color="var(--c-amber)"/>{S.points}
           </div>
         </div>
       </header>
 
-      {/* Content column */}
+      {/* Content */}
       <div className="sp-inner">
 
         {/* Banners */}
@@ -1452,7 +1101,6 @@ export default function StudyPalPage() {
           </div>
         )}
 
-        {/* Persistent pending treats banner on mount */}
         {S.pending > 0 && !showBowl && tab !== "feed" && (
           <div style={{margin:"14px 16px 0",background:"color-mix(in srgb,var(--c-accent) 10%,var(--c-surface))",border:"1px solid color-mix(in srgb,var(--c-accent) 25%,transparent)",borderRadius:16,padding:"12px 15px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",boxShadow:"var(--shadow-sm)",transition:"transform .15s ease"}} onClick={()=>setTab("feed")} className="sp-card-hover">
             <div style={{width:36,height:36,borderRadius:10,background:"color-mix(in srgb,var(--c-accent) 18%,transparent)",border:"1px solid color-mix(in srgb,var(--c-accent) 28%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:"sp-float 1.8s ease-in-out infinite"}}><Icon name="cookie" size={16} color="var(--c-accent2)"/></div>
@@ -1475,17 +1123,14 @@ export default function StudyPalPage() {
                 {["happy","excited"].includes(anim) && <div style={{position:"absolute",inset:-12,borderRadius:"50%",border:`2px solid ${accentHex}40`,animation:"sp-glow 2s ease-in-out infinite",pointerEvents:"none"}}/>}
                 {xpPops.map(p=>(
                   <div key={p.id} style={{position:"absolute",inset:0,pointerEvents:"none",zIndex:50}}>
-                    {/* Main XP pop */}
                     <div style={{position:"absolute",top:-10,left:"50%",transform:"translateX(-50%)",fontSize:16,fontWeight:700,color:"#fff",background:accentHex,padding:"4px 11px",borderRadius:20,boxShadow:`0 2px 14px ${accentHex}80`,animation:"sp-xp 1.2s cubic-bezier(.2,1.4,.5,1) forwards",fontFamily:"var(--font-body)",whiteSpace:"nowrap" as const,display:"flex",alignItems:"center",gap:4}}>
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="white"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>+{p.v} XP
                     </div>
-                    {/* Secondary left pop */}
                     <div style={{position:"absolute",top:14,left:"calc(50% - 42px)",fontSize:11,fontWeight:700,color:accentHex,animation:"sp-xp2 1.3s ease-out .08s forwards",fontFamily:"var(--font-body)",opacity:0,whiteSpace:"nowrap" as const}}>+{p.v}</div>
-                    {/* Tertiary right pop */}
                     <div style={{position:"absolute",top:18,left:"calc(50% + 26px)",fontSize:10,fontWeight:600,color:accentHex,animation:"sp-xp2 1.1s ease-out .18s forwards",fontFamily:"var(--font-body)",opacity:0,whiteSpace:"nowrap" as const}}>XP</div>
                   </div>
                 ))}
-                <PetComp anim={anim} acc={S.acc} onClick={onPetClick}/>
+                <PetComp anim={anim} acc={S.acc} onClick={onPetClick} mood={mood.tier}/>
                 {particles.map(p=><div key={p.id} style={{position:"absolute",left:`${p.x}%`,top:`${p.y}%`,width:p.s,height:p.s,borderRadius:"50%",background:p.c,pointerEvents:"none",//@ts-ignore
                 "--dx":`${(p.x-50)*1.1}px`,"--dy":`${(p.y-42)*.9}px`,animation:"sp-burst .7s ease-out forwards",zIndex:40}}/>)}
                 {treats.map(t=><div key={t.id} style={{position:"absolute",left:t.x,top:0,animation:"sp-treat .7s ease-out forwards",zIndex:38}}><svg width="13" height="13" viewBox="0 0 13 13"><circle cx="6.5" cy="6.5" r="6.5" fill={accentHex}/><circle cx="6.5" cy="6.5" r="4" fill="#C4BBFF"/></svg></div>)}
@@ -1501,16 +1146,16 @@ export default function StudyPalPage() {
             <StatBar label="Treat level" val={`${S.treats} / ${TREATS_MAX}`} pct={tPct} accent={hungry?"#F87171":accentHex} icon="cookie" flash={false}/>
           </div>
 
-          {/* Status pills */}
+          {/* Status pills + Play button */}
           <div style={{padding:"10px 18px 18px"}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <div style={{background:hungry?"color-mix(in srgb,var(--c-red) 8%,var(--c-surface2))":"color-mix(in srgb,var(--c-green) 8%,var(--c-surface2))",border:`1px solid ${hungry?"color-mix(in srgb,var(--c-red) 22%,transparent)":"color-mix(in srgb,var(--c-green) 22%,transparent)"}`,borderRadius:14,padding:"11px 14px",display:"flex",alignItems:"center",gap:9,transition:"all .3s ease"}}>
-                <div style={{width:30,height:30,borderRadius:9,background:hungry?"color-mix(in srgb,var(--c-red) 15%,transparent)":"color-mix(in srgb,var(--c-green) 15%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <Icon name={hungry?"help":"paw"} size={16} color={hungry?"var(--c-red)":"var(--c-green)"}/>
+              <div style={{background:mood.bg,border:`1px solid ${mood.border}`,borderRadius:14,padding:"11px 14px",display:"flex",alignItems:"center",gap:9,transition:"all .3s ease"}}>
+                <div style={{width:30,height:30,borderRadius:9,background:`${mood.color}20`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16,lineHeight:1}}>
+                  {mood.emoji}
                 </div>
                 <div>
-                  <div style={{fontSize:12,fontWeight:700,color:hungry?"var(--c-red)":"var(--c-green)"}}>{hungry?"Hungry":"Happy"}</div>
-                  <div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>{hungry?"Give treats!":"All good"}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:mood.color}}>{mood.label}</div>
+                  <div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>{mood.tier==="starving"?"Feed me!":mood.tier==="hungry"?"Getting hungry":mood.tier==="ecstatic"?"On a roll!":"All good"}</div>
                 </div>
               </div>
               <div style={{background:"var(--c-surface2)",border:"1px solid var(--c-border)",borderRadius:14,padding:"11px 14px",display:"flex",alignItems:"center",gap:9}}>
@@ -1518,21 +1163,27 @@ export default function StudyPalPage() {
                   <div style={{width:30,height:30,borderRadius:9,background:"color-mix(in srgb,var(--c-red) 12%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                     <Icon name="flame" size={16} color="var(--c-red)"/>
                   </div>
-                  <div>
-                    <div style={{fontSize:12,fontWeight:700,color:"var(--c-red)"}}>{S.streakCount}-day streak</div>
-                    <div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>Keep it up!</div>
-                  </div>
+                  <div><div style={{fontSize:12,fontWeight:700,color:"var(--c-red)"}}>{S.streakCount}-day streak</div><div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>Keep it up!</div></div>
                 </>) : (<>
                   <div style={{width:30,height:30,borderRadius:9,background:"color-mix(in srgb,var(--c-accent) 12%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                     <Icon name="zap" size={16} color="var(--c-accent2)"/>
                   </div>
-                  <div>
-                    <div style={{fontSize:12,fontWeight:700,color:"var(--c-accent2)"}}>{S.xp} XP</div>
-                    <div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>{lvl.name}{nxt?` → ${nxt.name}`:" · Max"}</div>
-                  </div>
+                  <div><div style={{fontSize:12,fontWeight:700,color:"var(--c-accent2)"}}>{S.xp} XP</div><div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>{lvl.name}{nxt?` → ${nxt.name}`:" · Max"}</div></div>
                 </>)}
               </div>
             </div>
+
+            {/* ── Play mini-games button ── */}
+            <button
+              onClick={() => setShowGames(true)}
+              style={{marginTop:10,width:"100%",padding:"10px 0",borderRadius:13,fontSize:12,fontWeight:700,cursor:"pointer",background:`${accentHex}14`,color:accentHex,border:`1px solid ${accentHex}30`,display:"flex",alignItems:"center",justifyContent:"center",gap:7,fontFamily:"var(--font-body)",transition:"all .18s ease"}}
+              onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.background=accentHex;el.style.color="#fff";el.style.boxShadow=`0 4px 16px ${accentHex}40`;}}
+              onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.background=`${accentHex}14`;el.style.color=accentHex;el.style.boxShadow="none";}}
+            >
+              <Icon name="gamepad" size={14} color="currentColor"/>
+              Play mini-games · burn treats
+              <span style={{fontSize:10,opacity:.7,fontWeight:500}}>({S.treats} treats)</span>
+            </button>
           </div>
         </div>
 
@@ -1562,28 +1213,24 @@ export default function StudyPalPage() {
                 <button onClick={()=>feedNow(S.pending)} style={{background:`linear-gradient(135deg,var(--c-accent),${S.petType==="cat"?"#5E4FD4":"#1A6FC4"})`,color:"#fff",border:"none",borderRadius:11,padding:"10px 16px",fontSize:12,fontWeight:700,fontFamily:"var(--font-body)",cursor:"pointer",flexShrink:0,boxShadow:"var(--shadow-accent)",whiteSpace:"nowrap" as const,display:"flex",alignItems:"center",gap:6}}><Icon name="cookie" size={13} color="white"/>Give Treat</button>
               </div>
             )}
-
             <div style={{fontSize:10,fontWeight:600,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const,marginBottom:10,paddingLeft:2}}>Activity Rewards</div>
-
             <SimulateExplainer accentHex={accentHex}/>
             <PointsExplainer/>
             <ActivityLog log={S.activityLog||[]}/>
-
             {ACTIVITIES.map((a,i)=>{
               const colors: Record<string,{bg:string,icon:string,border:string}> = {
-                quiz:    {bg:"rgba(107,88,240,.12)",icon:"var(--c-accent2)",border:"rgba(107,88,240,.2)"},
-                streak:  {bg:"rgba(224,64,64,.10)",icon:"var(--c-red)",border:"rgba(224,64,64,.18)"},
-                booking: {bg:"rgba(13,184,164,.10)",icon:"var(--c-teal)",border:"rgba(13,184,164,.18)"},
-                session: {bg:"rgba(22,169,122,.10)",icon:"var(--c-green)",border:"rgba(22,169,122,.18)"},
-                sos:     {bg:"rgba(196,121,0,.10)",icon:"var(--c-amber)",border:"rgba(196,121,0,.18)"},
-                badge:   {bg:"rgba(251,191,36,.10)",icon:"var(--c-amber)",border:"rgba(251,191,36,.20)"},
+                quiz:{bg:"rgba(107,88,240,.12)",icon:"var(--c-accent2)",border:"rgba(107,88,240,.2)"},
+                streak:{bg:"rgba(224,64,64,.10)",icon:"var(--c-red)",border:"rgba(224,64,64,.18)"},
+                booking:{bg:"rgba(13,184,164,.10)",icon:"var(--c-teal)",border:"rgba(13,184,164,.18)"},
+                session:{bg:"rgba(22,169,122,.10)",icon:"var(--c-green)",border:"rgba(22,169,122,.18)"},
+                sos:{bg:"rgba(196,121,0,.10)",icon:"var(--c-amber)",border:"rgba(196,121,0,.18)"},
+                badge:{bg:"rgba(251,191,36,.10)",icon:"var(--c-amber)",border:"rgba(251,191,36,.20)"},
               };
               const col = colors[a.id] || colors.quiz;
               return (
                 <div key={a.id} style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:16,padding:"13px 15px",marginBottom:7,display:"flex",alignItems:"center",gap:12,animation:`sp-pop .35s ease both`,animationDelay:`${i*.05}s`,transition:"border-color .18s,transform .18s,box-shadow .18s"}}
                   onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="translateY(-1px)";el.style.boxShadow="var(--shadow-sm)";el.style.borderColor="var(--c-border2)";}}
                   onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="";el.style.boxShadow="";el.style.borderColor="";}}>
-
                   <div style={{width:40,height:40,borderRadius:12,background:col.bg,border:`1px solid ${col.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                     <ActivityIcon id={a.id} size={17} color={col.icon}/>
                   </div>
@@ -1630,8 +1277,6 @@ export default function StudyPalPage() {
         {/* ── ABOUT TAB ── */}
         {tab==="about" && (
           <div style={{margin:"12px 16px 0",display:"flex",flexDirection:"column",gap:10}}>
-
-            {/* Companion switcher */}
             <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:20,padding:"16px",boxShadow:"var(--shadow-sm)"}}>
               <div style={{fontSize:10,fontWeight:700,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const,marginBottom:12}}>Companion</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -1654,17 +1299,16 @@ export default function StudyPalPage() {
               </div>
             </div>
 
-            {/* Stats grid */}
             <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:20,padding:"16px",boxShadow:"var(--shadow-sm)"}}>
               <div style={{fontSize:10,fontWeight:700,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const,marginBottom:12}}>Stats</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                 {[
-                  {v:S.xp,       l:"Total XP",    icon:"zap",     c:accentHex,          bg:`${accentHex}12`},
-                  {v:S.treats,   l:"Treats",       icon:"cookie",  c:"var(--c-teal)",    bg:"rgba(13,184,164,.10)"},
-                  {v:S.points,   l:"Points",       icon:"coins",   c:"var(--c-amber)",   bg:"rgba(196,121,0,.10)"},
-                  {v:S.owned.length-1, l:"Accessories", icon:"shirt", c:"var(--c-green)", bg:"rgba(22,169,122,.10)"},
-                  {v:S.streakCount??0, l:"Day streak",  icon:"flame", c:"var(--c-red)",   bg:"rgba(224,64,64,.10)"},
-                  {v:S.activityLog?.length??0, l:"Activities", icon:"history", c:"var(--c-accent2)", bg:`${accentHex}10`},
+                  {v:S.xp,l:"Total XP",icon:"zap",c:accentHex,bg:`${accentHex}12`},
+                  {v:S.treats,l:"Treats",icon:"cookie",c:"var(--c-teal)",bg:"rgba(13,184,164,.10)"},
+                  {v:S.points,l:"Points",icon:"coins",c:"var(--c-amber)",bg:"rgba(196,121,0,.10)"},
+                  {v:S.owned.length-1,l:"Accessories",icon:"shirt",c:"var(--c-green)",bg:"rgba(22,169,122,.10)"},
+                  {v:S.streakCount??0,l:"Day streak",icon:"flame",c:"var(--c-red)",bg:"rgba(224,64,64,.10)"},
+                  {v:S.activityLog?.length??0,l:"Activities",icon:"history",c:"var(--c-accent2)",bg:`${accentHex}10`},
                 ].map(x=>(
                   <div key={x.l} style={{background:x.bg,border:"1px solid var(--c-border)",borderRadius:14,padding:"12px 13px"}}>
                     <div style={{width:26,height:26,borderRadius:8,background:"rgba(255,255,255,.08)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:7,border:"1px solid rgba(255,255,255,.06)"}}>
@@ -1677,7 +1321,6 @@ export default function StudyPalPage() {
               </div>
             </div>
 
-            {/* Last fed */}
             {S.lastFedAt && (
               <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:14,padding:"13px 16px",display:"flex",alignItems:"center",gap:11}}>
                 <div style={{width:34,height:34,borderRadius:10,background:"var(--c-surface2)",border:"1px solid var(--c-border)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -1690,7 +1333,6 @@ export default function StudyPalPage() {
               </div>
             )}
 
-            {/* Level progression */}
             <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:20,padding:"16px",boxShadow:"var(--shadow-sm)"}}>
               <div style={{fontSize:10,fontWeight:700,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const,marginBottom:12}}>Level Progression</div>
               <div style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -1719,7 +1361,6 @@ export default function StudyPalPage() {
               </div>
             </div>
 
-            {/* Reset */}
             <button onClick={()=>{if(confirm("Reset all progress?")){const n=def();n.onboarded=false;setS(n);save(n);}}}
               style={{background:"var(--c-surface)",color:"var(--c-text3)",border:"1px solid var(--c-border)",borderRadius:14,padding:"13px",fontSize:12,fontWeight:600,fontFamily:"var(--font-body)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .18s ease",marginBottom:4}}
               onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.background="var(--c-surface2)";el.style.borderColor="var(--c-border2)";}}
@@ -1729,8 +1370,6 @@ export default function StudyPalPage() {
           </div>
         )}
       </div>
-
-
     </div>
   );
 
