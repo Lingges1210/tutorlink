@@ -116,18 +116,27 @@ export async function POST(req: NextRequest) {
     try {
       ocrText = await extractTextFromImage(buffer);
       const match = matchMatricAndName({ ocrText, matricNo, fullName });
+
       ocrMatchedMatric = match.matricMatch;
       ocrMatchedName   = match.nameMatch;
 
-      const hasUSM =
-        ocrText.toLowerCase().includes("usm") ||
-        ocrText.toLowerCase().includes("universiti sains malaysia");
+      // AUTO_VERIFIED requires matric + USM keyword.
+      // Name match is also checked but relaxed to 0.4 since matric is
+      // the stronger identity signal and OCR on names can be noisy.
+      const relaxedNameMatch = match.nameScore >= 0.4;
 
-      if (ocrMatchedMatric && ocrMatchedName && hasUSM) {
+      if (match.matricMatch && match.hasUSM && (match.nameMatch || relaxedNameMatch)) {
         verificationStatus = "AUTO_VERIFIED";
       }
 
-      console.log("OCR RESULT:", { ocrMatchedMatric, ocrMatchedName, hasUSM, verificationStatus });
+      console.log("OCR RESULT:", {
+        ocrMatchedMatric,
+        ocrMatchedName,
+        hasUSM: match.hasUSM,
+        nameScore: match.nameScore,
+        verificationStatus,
+        debug: match.debug,
+      });
     } catch (err) {
       console.warn("OCR failed → manual review:", err);
     }
@@ -161,7 +170,6 @@ export async function POST(req: NextRequest) {
     let user;
     try {
       user = await prisma.$transaction(async (tx) => {
-        // Re-check inside transaction — atomic, prevents race condition
         const existing = await tx.user.findUnique({ where: { email } });
         if (existing) throw new Error("EMAIL_EXISTS");
 
@@ -193,7 +201,6 @@ export async function POST(req: NextRequest) {
         });
       });
     } catch (err: any) {
-      // Rollback: delete the Supabase auth user and uploaded file
       if (authData?.user?.id) {
         await supabaseServer.auth.admin.deleteUser(authData.user.id);
       }
@@ -214,7 +221,10 @@ export async function POST(req: NextRequest) {
       throw err;
     }
 
-    // Send verification email via Resend
+    // Everyone must verify their email before login.
+    // After email verified:
+    //   AUTO_VERIFIED  → full access immediately
+    //   PENDING_REVIEW → locked until admin approves
     try {
       const { data: linkData, error: linkError } =
         await supabaseServer.auth.admin.generateLink({
@@ -239,12 +249,13 @@ export async function POST(req: NextRequest) {
       console.warn("Verification email failed:", emailErr);
     }
 
+
     return NextResponse.json(
       {
         success: true,
         message:
           verificationStatus === "AUTO_VERIFIED"
-            ? "Registration successful and verified."
+            ? "Registration successful and auto-verified!"
             : "Registration submitted. Please check your email to verify your account.",
         user,
         supabaseUserId: authData.user?.id ?? null,

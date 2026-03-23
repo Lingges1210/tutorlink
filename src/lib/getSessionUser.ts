@@ -26,6 +26,7 @@ export const getSessionUser = cache(async () => {
       matricNo: true,
       profileTitle: true,
       badgeFrame: true,
+      profileBanner: true,
       streakCount: true,
       streakLastSeen: true,
       streakBrokenAt: true,

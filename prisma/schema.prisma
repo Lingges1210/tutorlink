@@ -38,8 +38,6 @@ model User {
   activeMultiplierKey       String?
   avatarBorder              String?
   earlyAccessUntil          DateTime?
-  streakCount               Int                       @default(0)
-  streakLastSeen            DateTime?
   leaderboardSpotlightUntil DateTime?
   multiplierUntil           DateTime?
   profileBanner             String?
@@ -52,6 +50,9 @@ model User {
   doubleUntil               DateTime?
   profileTitle              String?
   streakShieldCount         Int                      @default(0)
+  streakCount               Int                      @default(0)
+  streakLastSeen            DateTime?                @db.Timestamptz(6)
+  approvalEmailSent         Boolean                  @default(false)
   adminAuditLogs            AdminAuditLog[]          @relation("AdminActor")
   adminAuditLogsTarget      AdminAuditLog[]          @relation("AdminTargetUser")
   chatChannelsAsStudent     ChatChannel[]            @relation("ChatStudent")

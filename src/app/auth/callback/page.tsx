@@ -23,7 +23,6 @@ export default function CallbackPage() {
       return;
     }
 
-    // Use @supabase/supabase-js which auto-processes #access_token hash
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -32,10 +31,22 @@ export default function CallbackPage() {
     let redirectTimer: ReturnType<typeof setTimeout>;
     let resolved = false;
 
-    function handleSuccess() {
+    async function handleSuccess(accessToken?: string) {
       if (resolved) return;
       resolved = true;
       setStage("success");
+
+      // Fire post-verify — sends "You're all set!" email if AUTO_VERIFIED
+      // Pass the access token so the server can authenticate the request
+      try {
+        await fetch("/api/auth/post-verify", {
+          method: "POST",
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+        });
+      } catch {
+        // ignore — non-critical
+      }
+
       redirectTimer = setTimeout(() => {
         router.replace("/auth/login?verified=true");
       }, 2500);
@@ -51,7 +62,7 @@ export default function CallbackPage() {
     // onAuthStateChange fires when Supabase processes the #access_token hash
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session) {
-        handleSuccess();
+        handleSuccess(session.access_token);
       } else if (event === "PASSWORD_RECOVERY") {
         resolved = true;
         router.replace("/auth/reset-password");
@@ -62,9 +73,9 @@ export default function CallbackPage() {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
     if (code) {
-      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+      supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
         if (error) handleError(error.message);
-        else handleSuccess();
+        else handleSuccess(data.session?.access_token);
       });
     }
 
@@ -74,7 +85,7 @@ export default function CallbackPage() {
       setTimeout(async () => {
         if (resolved) return;
         const { data: { session } } = await supabase.auth.getSession();
-        if (session) handleSuccess();
+        if (session) handleSuccess(session.access_token);
         else if (ms === 5000) handleError();
       }, ms)
     );

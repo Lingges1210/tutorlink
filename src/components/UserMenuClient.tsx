@@ -208,16 +208,21 @@ export default function UserMenuClient({
       {/* ── Dropdown ── */}
       {open && (
         <div
-          className="absolute right-0 mt-2 w-64 overflow-hidden rounded-xl
+          className="absolute right-0 mt-2 w-64 rounded-xl
                      border border-[rgb(var(--border))]
                      bg-[rgb(var(--bg))]
                      shadow-[0_24px_64px_-12px_rgb(0,0,0,0.22),0_0_0_1px_rgb(var(--border)/0.4)]
                      animate-in fade-in slide-in-from-top-2 duration-150
-                     z-50"
+                     z-50
+                     flex flex-col"
+          style={{
+            /* Cap height so it never overflows short screens */
+            maxHeight: "min(520px, calc(100dvh - 80px))",
+          }}
           role="menu"
         >
-          {/* ── Profile Header ── */}
-          <div className="relative overflow-hidden px-3 py-3">
+          {/* ── Profile Header (always visible, never scrolls away) ── */}
+          <div className="relative overflow-hidden px-3 py-3 shrink-0">
             <div
               className={`pointer-events-none absolute -top-6 -right-6 h-24 w-24 rounded-full
                          bg-gradient-to-br ${avatarGradient} opacity-10 blur-2xl`}
@@ -237,14 +242,14 @@ export default function UserMenuClient({
                   {email}
                 </p>
 
-              {profileTitle && (
-                 <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-[rgb(var(--primary)/0.3)] bg-[rgb(var(--primary)/0.08)] px-2 py-0.5 text-[10px] font-bold text-[rgb(var(--primary))]">
-                   <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                   </svg>
-                   {profileTitle}
-                 </span>
-               )}
+                {profileTitle && (
+                  <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-[rgb(var(--primary)/0.3)] bg-[rgb(var(--primary)/0.08)] px-2 py-0.5 text-[10px] font-bold text-[rgb(var(--primary))]">
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                    {profileTitle}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -256,10 +261,13 @@ export default function UserMenuClient({
             </div>
           </div>
 
-          <div className="mx-2 border-t border-[rgb(var(--border))]" />
+          <div className="mx-2 border-t border-[rgb(var(--border))] shrink-0" />
 
-          {/* ── Menu Items ── */}
-          <div className="px-2 py-1">
+          {/* ── Scrollable menu items ── */}
+          <div
+            className="overflow-y-auto overscroll-contain px-2 py-1"
+            style={{ scrollbarWidth: "thin" }}
+          >
             <SectionLabel>Quick Access</SectionLabel>
             <MenuItem
               href="/dashboard/student"
@@ -332,10 +340,10 @@ export default function UserMenuClient({
             />
           </div>
 
-          <div className="mx-2 border-t border-[rgb(var(--border))]" />
+          <div className="mx-2 border-t border-[rgb(var(--border))] shrink-0" />
 
-          {/* ── Logout — full width ── */}
-          <div className="px-2 py-2">
+          {/* ── Logout — always pinned at bottom ── */}
+          <div className="px-2 py-2 shrink-0">
             <LogoutButton
               onLogout={async () => {
                 setOpen(false);
