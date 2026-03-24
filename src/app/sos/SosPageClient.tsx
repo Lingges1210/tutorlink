@@ -327,7 +327,7 @@ export default function SosPageClient({
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error || "Failed");
       if (json.status === "ACCEPTED" && json.channelId) {
-        router.push(`/messaging?channelId=${encodeURIComponent(json.channelId)}`);
+        router.push(`/dashboard/tutor/sessions?sessionId=${encodeURIComponent(json.sessionId)}`);
         return;
       }
       await loadTutor();
