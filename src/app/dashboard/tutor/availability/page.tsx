@@ -51,6 +51,86 @@ function availabilityToPrettyText(av: AvailabilityState) {
   }).join(" • ");
 }
 
+function compactDayLabel(day: DayKey) {
+  return {
+    MON: "Mon",
+    TUE: "Tue",
+    WED: "Wed",
+    THU: "Thu",
+    FRI: "Fri",
+    SAT: "Sat",
+    SUN: "Sun",
+  }[day];
+}
+
+function groupConsecutiveDays(days: DayKey[]) {
+  const order: DayKey[] = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+  const labels = order.filter((d) => days.includes(d));
+
+  const groups: string[] = [];
+  let start = 0;
+
+  while (start < labels.length) {
+    let end = start;
+    while (
+      end + 1 < labels.length &&
+      order.indexOf(labels[end + 1]) === order.indexOf(labels[end]) + 1
+    ) {
+      end++;
+    }
+
+    if (start === end) {
+      groups.push(compactDayLabel(labels[start]));
+    } else {
+      groups.push(`${compactDayLabel(labels[start])}–${compactDayLabel(labels[end])}`);
+    }
+
+    start = end + 1;
+  }
+
+  return groups;
+}
+
+function availabilityToPrettySummary(av: AvailabilityState) {
+  const activeDays = av.filter((d) => !d.off && d.slots.some(isValidSlot));
+  if (!activeDays.length) {
+    return {
+      title: "No availability set",
+      subtitle: "Choose at least one valid time slot.",
+      chips: [],
+      full: "",
+    };
+  }
+
+  const dayGroups = groupConsecutiveDays(activeDays.map((d) => d.day));
+
+  const ranges = Array.from(
+    new Set(
+      activeDays.flatMap((d) =>
+        d.slots.filter(isValidSlot).map((s) => `${s.start}–${s.end}`)
+      )
+    )
+  );
+
+  return {
+    title: dayGroups.join(", "),
+    subtitle:
+      ranges.length === 1
+        ? "1 time range"
+        : `${ranges.length} time ranges`,
+    chips: ranges.slice(0, 3),
+    full: activeDays
+      .map((d) => {
+        const slots = d.slots
+          .filter(isValidSlot)
+          .map((s) => `${s.start}–${s.end}`)
+          .join(", ");
+        return `${compactDayLabel(d.day)}: ${slots}`;
+      })
+      .join(" • "),
+  };
+}
+
 function countStats(av: AvailabilityState) {
   const openDays = av.filter((d) => !d.off);
   const totalSlots = openDays.reduce((acc, d) => acc + d.slots.filter(isValidSlot).length, 0);
@@ -81,7 +161,7 @@ export default function TutorAvailabilityPage() {
   // Use localAvailability if user has made edits, otherwise use server state
   const availability = localAvailability ?? serverAvailability;
 
-  const pretty = useMemo(() => availabilityToPrettyText(availability), [availability]);
+  const pretty = useMemo(() => availabilityToPrettySummary(availability), [availability]);
   const stats = useMemo(() => countStats(availability), [availability]);
   const isValid = validateAvailability(availability).ok;
 
@@ -198,9 +278,43 @@ export default function TutorAvailabilityPage() {
             </div>
 
             <div className="preview-card">
-              <div className="preview-label">Preview</div>
-              <div className="preview-text">{pretty}</div>
-            </div>
+  <div className="preview-label">Preview</div>
+
+  <div className="space-y-3">
+    <div>
+      <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+        {pretty.title}
+      </div>
+      <div className="text-xs text-[rgb(var(--muted))] mt-1">
+        {pretty.subtitle}
+      </div>
+    </div>
+
+    {!!pretty.chips.length && (
+      <div className="flex flex-wrap gap-2">
+        {pretty.chips.map((chip) => (
+          <span
+            key={chip}
+            className="inline-flex items-center rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2.5 py-1 text-[11px] font-medium text-[rgb(var(--fg))]"
+          >
+            {chip}
+          </span>
+        ))}
+      </div>
+    )}
+
+    {pretty.full && (
+      <details className="group">
+        <summary className="cursor-pointer list-none text-xs font-semibold text-[rgb(var(--primary))]">
+          View full schedule
+        </summary>
+        <div className="mt-2 text-xs leading-6 text-[rgb(var(--muted))]">
+          {pretty.full}
+        </div>
+      </details>
+    )}
+  </div>
+</div>
 
             <button
               type="button"

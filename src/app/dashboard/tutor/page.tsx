@@ -45,46 +45,87 @@ function fmtLocal(iso: string) {
 function summarizeAvailability(raw: string) {
   const dayOrder = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
   const dayLabel: Record<string, string> = {
-    MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu",
-    FRI: "Fri", SAT: "Sat", SUN: "Sun",
+    MON: "Mon",
+    TUE: "Tue",
+    WED: "Wed",
+    THU: "Thu",
+    FRI: "Fri",
+    SAT: "Sat",
+    SUN: "Sun",
   };
+
+  function groupDays(days: string[]) {
+    const normalized = dayOrder.filter((d) => days.includes(d));
+    const groups: string[] = [];
+    let start = 0;
+
+    while (start < normalized.length) {
+      let end = start;
+      while (
+        end + 1 < normalized.length &&
+        dayOrder.indexOf(normalized[end + 1]) === dayOrder.indexOf(normalized[end]) + 1
+      ) {
+        end++;
+      }
+
+      if (start === end) groups.push(dayLabel[normalized[start]]);
+      else groups.push(`${dayLabel[normalized[start]]}–${dayLabel[normalized[end]]}`);
+
+      start = end + 1;
+    }
+
+    return groups;
+  }
+
   try {
     const parsed = JSON.parse(raw);
     const rows: any[] = Array.isArray(parsed)
       ? parsed
-      : Array.isArray(parsed?.availability) ? parsed.availability : [];
-    const active = rows.filter((r) => r && r.off === false);
-    if (!active.length) return { headline: "No active days", detail: "You marked all days as off." };
-    active.sort((a, b) =>
-      dayOrder.indexOf((a.day ?? "").toUpperCase()) -
-      dayOrder.indexOf((b.day ?? "").toUpperCase())
+      : Array.isArray(parsed?.availability)
+      ? parsed.availability
+      : [];
+
+    const active = rows.filter(
+      (r) => r && r.off === false && Array.isArray(r.slots) && r.slots.length
     );
-    const days = active.map((r) => dayLabel[(r.day ?? "").toUpperCase()] ?? r.day).filter(Boolean);
-    const ranges: string[] = [];
-    let slotsCount = 0;
-    for (const r of active) {
-      const slots: any[] = Array.isArray(r.slots) ? r.slots : [];
-      slotsCount += slots.length;
-      for (const s of slots) {
-        const start = typeof s?.start === "string" ? s.start : null;
-        const end = typeof s?.end === "string" ? s.end : null;
-        if (start && end) ranges.push(`${start}–${end}`);
-      }
+
+    if (!active.length) {
+      return {
+        headline: "No active days",
+        detail: "You marked all days as off.",
+        chips: [],
+      };
     }
-    const uniqRanges = Array.from(new Set(ranges));
-    const rangesPreview = uniqRanges.length > 2
-      ? `${uniqRanges.slice(0, 2).join(", ")} +${uniqRanges.length - 2} more`
-      : uniqRanges.join(", ");
-    const daysPreview = days.length > 4 ? `${days.slice(0, 4).join(", ")}…` : days.join(", ");
+
+    const groupedDays = groupDays(
+      active.map((r) => String(r.day || "").toUpperCase()).filter(Boolean)
+    );
+
+    const ranges = Array.from(
+      new Set(
+        active.flatMap((r) =>
+          (Array.isArray(r.slots) ? r.slots : [])
+            .map((s: any) =>
+              s?.start && s?.end ? `${s.start}–${s.end}` : null
+            )
+            .filter(Boolean)
+        )
+      )
+    ) as string[];
+
     return {
-      headline: daysPreview,
-      detail: rangesPreview || `${active.length} day${active.length === 1 ? "" : "s"} set · ${slotsCount} slot${slotsCount === 1 ? "" : "s"}`,
+      headline: groupedDays.join(", "),
+      detail:
+        ranges.length === 0
+          ? `${active.length} active day${active.length === 1 ? "" : "s"}`
+          : `${ranges.length} time range${ranges.length === 1 ? "" : "s"} set`,
+      chips: ranges.slice(0, 2),
     };
   } catch {
-    const clean = raw.replace(/\s+/g, " ").trim();
     return {
       headline: "Availability set",
-      detail: clean.length > 60 ? clean.slice(0, 60).trimEnd() + "…" : clean,
+      detail: "Tap to view and edit your schedule.",
+      chips: [],
     };
   }
 }
@@ -294,10 +335,25 @@ export default function TutorDashboardPage() {
               );
               const s = summarizeAvailability(raw);
               return (
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-[rgb(var(--fg))]">{s.headline}</p>
-                  <p className="text-xs text-[rgb(var(--muted))]">{s.detail}</p>
-                </div>
+                <div className="space-y-2">
+  <div>
+    <p className="text-sm font-semibold text-[rgb(var(--fg))]">{s.headline}</p>
+    <p className="text-xs text-[rgb(var(--muted))]">{s.detail}</p>
+  </div>
+
+  {!!s.chips.length && (
+    <div className="flex flex-wrap gap-1.5">
+      {s.chips.map((chip) => (
+        <span
+          key={chip}
+          className="inline-flex items-center rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card2))] px-2 py-0.5 text-[10px] font-medium text-[rgb(var(--muted2))]"
+        >
+          {chip}
+        </span>
+      ))}
+    </div>
+  )}
+</div>
               );
             })()}
           </GlanceCard>
