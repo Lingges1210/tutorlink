@@ -1,3 +1,4 @@
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
 /**
  * studypalReward.ts
  * ─────────────────────────────────────────────────────────────────
@@ -155,6 +156,13 @@ export function studypalScheduleSync(): void {
  */
 export async function studypalSyncToServer(): Promise<boolean> {
   if (typeof window === "undefined") return false;
+
+  const {
+    data: { session },
+  } = await supabaseBrowser.auth.getSession();
+
+  if (!session) return false;
+
   const state = readState();
   if (!state) return false;
 
@@ -167,42 +175,45 @@ export async function studypalSyncToServer(): Promise<boolean> {
         clientUpdatedAt: getLocalUpdatedAt(),
       }),
     });
+
     if (!res.ok) return false;
+
     const json = await res.json();
 
-    // Server says our data is stale — reload from DB
     if (json.stale) {
       await studypalLoadFromServer();
     }
+
     return true;
   } catch {
     return false;
   }
 }
 
-/**
- * Load state from server and merge with localStorage.
- * Winner = whichever has a higher updatedAt timestamp.
- * Returns the winning state (already written to localStorage).
- */
 export async function studypalLoadFromServer(): Promise<SPStoredState | null> {
   if (typeof window === "undefined") return null;
+
+  const {
+    data: { session },
+  } = await supabaseBrowser.auth.getSession();
+
+  if (!session) return null;
+
   try {
     const res = await fetch("/api/studypal/state");
     if (!res.ok) return null;
+
     const json = await res.json();
     if (!json.ok || !json.state) return null;
 
     const serverState = json.state as SPStoredState & { updatedAt: number };
     const localUpdatedAt = getLocalUpdatedAt();
 
-    // Server is newer — overwrite local
     if (serverState.updatedAt > localUpdatedAt) {
       writeState(serverState);
       return serverState;
     }
 
-    // Local is newer — push local to server
     studypalScheduleSync();
     return readState();
   } catch {

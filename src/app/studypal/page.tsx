@@ -10,6 +10,7 @@ import {
   type SPLogEntry,
 } from "@/lib/studypalReward";
 import MiniGamesModal from "@/components/MiniGamesModal";
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 /* ─── TYPES ─────────────────────────────────────────────── */
 type PetType  = "cat" | "dog";
@@ -381,38 +382,78 @@ function AccPreview({ id }: { id: AccId }) {
 
 /* ─── CAT SVG ─────────────────────────────────────────────── */
 function CatSVG({ anim, acc, onClick, mood }: { anim: AnimState; acc: AccId; onClick: () => void; mood?: MoodTier }) {
-  const walk=anim==="walk",eat=anim==="eat",sleep=anim==="sleep",happy=["happy","excited","meow"].includes(anim),excited=anim==="excited";
-  const bc=eat?"sp-eat":walk?"":"sp-idle",lf=walk?"sp-lf":"",lb=walk?"sp-lb":"";
-  const ecstatic=mood==="ecstatic",starving=mood==="starving";
+  const sleep = anim === "sleep";
+  const ecstatic = mood === "ecstatic";
+  const starving = mood === "starving";
+  
   return (
-    <svg viewBox="0 0 170 175" onClick={onClick} style={{ width:170,height:175,cursor:"pointer",overflow:"visible",filter:"drop-shadow(0 10px 28px rgba(210,130,80,.25))" }}>
+    <svg viewBox="0 0 170 175" onClick={onClick} style={{ width: 170, height: 175, cursor: "pointer", overflow: "visible", filter: "drop-shadow(0 12px 30px rgba(108,92,231,0.2))" }}>
       <defs>
-        <radialGradient id="cat-body" cx="50%" cy="40%" r="55%"><stop offset="0%" stopColor="#F6CFAE"/><stop offset="100%" stopColor="#E39B6B"/></radialGradient>
-        <radialGradient id="cat-face" cx="50%" cy="38%" r="52%"><stop offset="0%" stopColor="#FBE0C7"/><stop offset="100%" stopColor="#EDB183"/></radialGradient>
-        <radialGradient id="cat-belly" cx="50%" cy="55%" r="50%"><stop offset="0%" stopColor="#FFF1E3" stopOpacity="0.9"/><stop offset="100%" stopColor="#F6CFAE" stopOpacity="0"/></radialGradient>
+        {/* Deep 3D Body Gradient */}
+        <radialGradient id="cat-3d-fur" cx="40%" cy="35%" r="60%">
+          <stop offset="0%" stopColor="#FBE0C7" />
+          <stop offset="60%" stopColor="#E39B6B" />
+          <stop offset="100%" stopColor="#C97A4A" />
+        </radialGradient>
+        {/* Soft Belly Inset */}
+        <radialGradient id="cat-3d-belly" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#FFF1E3" />
+          <stop offset="100%" stopColor="#F6CFAE" stopOpacity="0" />
+        </radialGradient>
       </defs>
-      <g className={`${bc}${happy?" sp-happy":""}${excited?" sp-excited":""}`}>
-        <ellipse cx="85" cy="171" rx="36" ry="7" fill="rgba(210,130,80,.18)"/>
-        <g className="sp-tail-c" style={{transformOrigin:"54px 132px"}}><path d="M54,132 Q18,125 14,106 Q10,84 30,77" stroke="#C97A4A" strokeWidth="11" strokeLinecap="round" fill="none"/><path d="M54,132 Q18,125 14,106 Q10,84 30,77" stroke="#E39B6B" strokeWidth="7" strokeLinecap="round" fill="none"/><path d="M54,132 Q18,125 14,106 Q10,84 30,77" stroke="#F6CFAE" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.55"/><circle cx="29" cy="75" r="8" fill="#E39B6B"/><circle cx="29" cy="75" r="4" fill="#FFF1E3"/></g>
-        <g className={lb} style={{transformOrigin:"66px 124px"}}><rect x="58" y="124" width="16" height="33" rx="8" fill="#E39B6B"/><ellipse cx="66" cy="158" rx="12" ry="6" fill="#C97A4A"/></g>
-        <g className={lb} style={{transformOrigin:"102px 124px"}}><rect x="94" y="124" width="16" height="33" rx="8" fill="#E39B6B"/><ellipse cx="102" cy="158" rx="12" ry="6" fill="#C97A4A"/></g>
-        <ellipse cx="84" cy="120" rx="46" ry="34" fill="url(#cat-body)"/>
-        <ellipse cx="84" cy="128" rx="28" ry="20" fill="url(#cat-belly)"/>
-        <path d="M44,100 Q84,114 124,100" stroke="#B8840A" strokeWidth="9" fill="none" strokeLinecap="round"/><path d="M44,100 Q84,114 124,100" stroke="#FFD060" strokeWidth="6" fill="none" strokeLinecap="round"/><path d="M44,100 Q84,114 124,100" stroke="#FFE898" strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.6"/><circle cx="84" cy="108" r="6.5" fill="#FFB820"/><circle cx="82" cy="106" r="3" fill="#FFE070"/><line x1="84" y1="111" x2="84" y2="115" stroke="#C07800" strokeWidth="1.5" strokeLinecap="round"/>
-        <g className={lf} style={{transformOrigin:"62px 112px"}}><rect x="54" y="112" width="16" height="35" rx="8" fill="#E39B6B"/><ellipse cx="62" cy="148" rx="12" ry="6" fill="#C97A4A"/></g>
-        <g className={lf} style={{transformOrigin:"104px 112px"}}><rect x="96" y="112" width="16" height="35" rx="8" fill="#E39B6B"/><ellipse cx="104" cy="148" rx="12" ry="6" fill="#C97A4A"/></g>
-        <g className="sp-ear-l" style={{transformOrigin:"42px 50px"}}><polygon points="34,64 15,10 63,43" fill="#B9653C"/><polygon points="37,59 22,15 57,40" fill="#D98B5A"/><polygon points="41,54 27,20 54,39" fill="#F7C7A3" opacity="0.55"/></g>
-        <g className="sp-ear-r" style={{transformOrigin:"126px 50px"}}><polygon points="130,64 153,10 105,43" fill="#B9653C"/><polygon points="127,59 146,15 111,40" fill="#D98B5A"/><polygon points="123,54 141,20 113,39" fill="#F7C7A3" opacity="0.55"/></g>
-        <circle cx="84" cy="70" r="51" fill="url(#cat-face)"/><ellipse cx="77" cy="55" rx="20" ry="12" fill="rgba(255,255,255,.12)"/><ellipse cx="84" cy="86" rx="24" ry="16" fill="#F8D8BE" opacity=".9"/>
-        {(happy||ecstatic) && <><ellipse cx="52" cy="87" rx="10" ry="6" fill="#FF9DB0" opacity={ecstatic?".5":".2"}/><ellipse cx="116" cy="87" rx="10" ry="6" fill="#FF9DB0" opacity={ecstatic?".5":".2"}/>{ecstatic&&<><circle cx="52" cy="84" r="3" fill="#FFD060" opacity=".55"/><circle cx="116" cy="84" r="3" fill="#FFD060" opacity=".55"/></>}</>}
-        {sleep && <><ellipse cx="54" cy="80" rx="8" ry="5" fill="#EDB183" opacity=".22"/><ellipse cx="114" cy="80" rx="8" ry="5" fill="#EDB183" opacity=".22"/></>}
-        <polygon points="84,86 79,80 89,80" fill="#F29AA3"/><polygon points="84,86 79,80 89,80" fill="none" stroke="#DD7C88" strokeWidth="0.7"/>
-        <path d="M78,91 Q84,96 90,91" stroke="#B96D4A" strokeWidth="2" fill="none" strokeLinecap="round"/>
-        <line x1="16" y1="80" x2="58" y2="84" stroke="#C97A4A" strokeWidth="1.6" strokeLinecap="round" opacity=".45"/><line x1="15" y1="89" x2="57" y2="89" stroke="#C97A4A" strokeWidth="1.6" strokeLinecap="round" opacity=".45"/><line x1="17" y1="97" x2="58" y2="93" stroke="#C97A4A" strokeWidth="1.2" strokeLinecap="round" opacity=".28"/>
-        <line x1="152" y1="80" x2="110" y2="84" stroke="#C97A4A" strokeWidth="1.6" strokeLinecap="round" opacity=".45"/><line x1="153" y1="89" x2="111" y2="89" stroke="#C97A4A" strokeWidth="1.6" strokeLinecap="round" opacity=".45"/><line x1="151" y1="97" x2="110" y2="93" stroke="#C97A4A" strokeWidth="1.2" strokeLinecap="round" opacity=".28"/>
-        {!sleep && !starving && (<><ellipse className="sp-eye" cx="59" cy="70" rx="10" ry="12" fill="#2A2A2A"/><circle className="sp-pupil" cx="59" cy="67" r="3.5" fill="rgba(255,255,255,.9)"/>{ecstatic&&<><circle cx="57" cy="65" r="2" fill="#FFD060" opacity=".9"/><circle cx="61" cy="67" r="1.5" fill="#FFD060" opacity=".7"/></>}<ellipse className="sp-eye2" cx="109" cy="70" rx="10" ry="12" fill="#2A2A2A"/><circle className="sp-pupil" cx="109" cy="67" r="3.5" fill="rgba(255,255,255,.9)"/>{ecstatic&&<><circle cx="107" cy="65" r="2" fill="#FFD060" opacity=".9"/><circle cx="111" cy="67" r="1.5" fill="#FFD060" opacity=".7"/></>}<path className="sp-arc" d="M51 70 Q59 78 67 70" stroke="#2A2A2A" strokeWidth="3" fill="none" strokeLinecap="round"/><path className="sp-arc" d="M101 70 Q109 78 117 70" stroke="#2A2A2A" strokeWidth="3" fill="none" strokeLinecap="round"/></>)}
-        {!sleep && starving && (<><ellipse cx="59" cy="70" rx="10" ry="12" fill="#2A2A2A"/><ellipse cx="59" cy="63" rx="11" ry="6" fill="#EDB183" opacity=".85"/><ellipse cx="109" cy="70" rx="10" ry="12" fill="#2A2A2A"/><ellipse cx="109" cy="63" rx="11" ry="6" fill="#EDB183" opacity=".85"/></>)}
-        {sleep && (<><ellipse cx="59" cy="70" rx="10" ry="6" fill="#EDB183"/><path d="M49,70 Q59,76 69,70" stroke="#C97A4A" strokeWidth="2.5" fill="none" strokeLinecap="round"/><ellipse cx="109" cy="70" rx="10" ry="6" fill="#EDB183"/><path d="M99,70 Q109,76 119,70" stroke="#C97A4A" strokeWidth="2.5" fill="none" strokeLinecap="round"/></>)}
+
+      <g className={anim === "walk" ? "sp-walk" : "sp-idle"}>
+        {/* Floor Shadow */}
+        <ellipse cx="85" cy="168" rx="42" ry="8" fill="rgba(24,22,46,0.12)" />
+
+        {/* Tail - 3D Volume */}
+        <path d="M54,132 Q18,125 14,106 Q10,84 30,77" stroke="#A05A35" strokeWidth="14" fill="none" strokeLinecap="round" className="sp-tail-c" />
+        <path d="M54,132 Q18,125 14,106 Q10,84 30,77" stroke="url(#cat-3d-fur)" strokeWidth="10" fill="none" strokeLinecap="round" className="sp-tail-c" />
+
+        {/* Back Legs with Ambient Occlusion */}
+        <circle cx="66" cy="148" r="14" fill="#A05A35" />
+        <circle cx="104" cy="148" r="14" fill="#A05A35" />
+
+        {/* Main Body Sphere */}
+        <circle cx="85" cy="118" r="48" fill="url(#cat-3d-fur)" />
+        <ellipse cx="85" cy="125" rx="30" ry="22" fill="url(#cat-3d-belly)" />
+
+        {/* Front Paws - Floating 3D style */}
+        <circle cx="62" cy="144" r="14" fill="#A05A35" />
+        <circle cx="62" cy="140" r="14" fill="#E39B6B" />
+        <circle cx="108" cy="144" r="14" fill="#A05A35" />
+        <circle cx="108" cy="140" r="14" fill="#E39B6B" />
+
+        {/* Head Sphere */}
+        <circle cx="85" cy="72" r="52" fill="url(#cat-3d-fur)" />
+        
+        {/* Ears with Interior Depth */}
+        <path d="M40,40 L25,5 L70,30 Z" fill="#A05A35" />
+        <path d="M45,40 L35,15 L65,32 Z" fill="#F7C7A3" opacity="0.6" />
+        <path d="M130,40 L145,5 L100,30 Z" fill="#A05A35" />
+        <path d="M125,40 L135,15 L105,32 Z" fill="#F7C7A3" opacity="0.6" />
+
+        {/* Glassy Eyes with Dual Highlights */}
+        {!sleep && (
+          <g>
+            {/* Left Eye */}
+            <circle cx="62" cy="72" r="11" fill="#1A162E" className="sp-eye" />
+            <circle cx="59" cy="68" r="4" fill="white" opacity="0.8" /> 
+            <circle cx="65" cy="76" r="1.5" fill="white" opacity="0.3" /> 
+            {/* Right Eye */}
+            <circle cx="108" cy="72" r="11" fill="#1A162E" className="sp-eye2" />
+            <circle cx="105" cy="68" r="4" fill="white" opacity="0.8" />
+            <circle cx="111" cy="76" r="1.5" fill="white" opacity="0.3" />
+          </g>
+        )}
+        {sleep && <path d="M55,75 Q65,82 75,75 M95,75 Q105,82 115,75" stroke="#1A162E" strokeWidth="4" fill="none" strokeLinecap="round" />}
+
+        {/* 3D Snout/Muzzle (W shape) */}
+        <ellipse cx="76" cy="94" rx="14" ry="10" fill="white" opacity="0.12" />
+        <ellipse cx="94" cy="94" rx="14" ry="10" fill="white" opacity="0.12" />
+        <circle cx="85" cy="88" r="5" fill="#F29AA3" />
+        <circle cx="83.5" cy="86" r="1.5" fill="white" opacity="0.5" />
+
         <CatAcc id={acc}/>
       </g>
     </svg>
@@ -421,43 +462,60 @@ function CatSVG({ anim, acc, onClick, mood }: { anim: AnimState; acc: AccId; onC
 
 /* ─── DOG SVG ─────────────────────────────────────────────── */
 function DogSVG({ anim, acc, onClick, mood }: { anim: AnimState; acc: AccId; onClick: () => void; mood?: MoodTier }) {
-  const walk=anim==="walk",eat=anim==="eat",sleep=anim==="sleep",happy=["happy","excited","bark"].includes(anim),excited=anim==="excited";
-  const bc=eat?"sp-eat":walk?"":"sp-idle",lf=walk?"sp-lf":"",lb=walk?"sp-lb":"";
-  const ecstatic=mood==="ecstatic",starving=mood==="starving";
+  const sleep = anim === "sleep";
   return (
-    <svg viewBox="0 0 170 175" style={{width:170,height:175,cursor:"pointer",overflow:"visible",filter:"drop-shadow(0 10px 28px rgba(200,155,60,.28))"}} onClick={onClick}>
+    <svg viewBox="0 0 170 175" onClick={onClick} style={{ width:170,height:175,cursor:"pointer",overflow:"visible",filter:"drop-shadow(0 12px 30px rgba(0,0,0,0.15))" }}>
       <defs>
-        <radialGradient id="dog-body" cx="50%" cy="40%" r="55%"><stop offset="0%" stopColor="#EAC97A"/><stop offset="100%" stopColor="#C8A050"/></radialGradient>
-        <radialGradient id="dog-face" cx="50%" cy="38%" r="52%"><stop offset="0%" stopColor="#F2D898"/><stop offset="100%" stopColor="#D4AE6A"/></radialGradient>
-        <radialGradient id="dog-belly" cx="50%" cy="60%" r="50%"><stop offset="0%" stopColor="#FBF0D2" stopOpacity="0.9"/><stop offset="100%" stopColor="#EAC97A" stopOpacity="0"/></radialGradient>
-        <radialGradient id="dog-ear" cx="50%" cy="50%" r="60%"><stop offset="0%" stopColor="#D0985A"/><stop offset="100%" stopColor="#A87040"/></radialGradient>
+        <radialGradient id="dog-body-deep" cx="40%" cy="30%" r="65%">
+          <stop offset="0%" stopColor="#F2D898" />
+          <stop offset="70%" stopColor="#D4AE6A" />
+          <stop offset="100%" stopColor="#A07030" />
+        </radialGradient>
+        <radialGradient id="dog-rim" cx="50%" cy="50%" r="50%">
+          <stop offset="90%" stopColor="transparent" />
+          <stop offset="100%" stopColor="white" stopOpacity="0.25" />
+        </radialGradient>
       </defs>
-      <g className={`${bc}${happy?" sp-happy":""}${excited?" sp-excited":""}`}>
-        <ellipse cx="85" cy="171" rx="38" ry="7" fill="rgba(180,130,40,.18)"/>
-        <g className="sp-tail-d" style={{transformOrigin:"122px 110px"}}><path d="M122,110 Q150,95 155,74 Q158,54 138,50" stroke="#A07030" strokeWidth="11" strokeLinecap="round" fill="none"/><path d="M122,110 Q150,95 155,74 Q158,54 138,50" stroke="#DEB870" strokeWidth="7" strokeLinecap="round" fill="none"/><path d="M122,110 Q150,95 155,74 Q158,54 138,50" stroke="#F5DCA0" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.55"/><circle cx="137" cy="48" r="8" fill="#DEB870"/><circle cx="137" cy="48" r="4" fill="#F8E8B8"/></g>
-        <g className={lb} style={{transformOrigin:"66px 122px"}}><rect x="58" y="122" width="16" height="35" rx="8" fill="#C8A050"/><ellipse cx="66" cy="158" rx="12" ry="6" fill="#A07030"/></g>
-        <g className={lb} style={{transformOrigin:"102px 122px"}}><rect x="94" y="122" width="16" height="35" rx="8" fill="#C8A050"/><ellipse cx="102" cy="158" rx="12" ry="6" fill="#A07030"/></g>
-        <ellipse cx="84" cy="118" rx="48" ry="36" fill="url(#dog-body)"/><ellipse cx="84" cy="126" rx="30" ry="22" fill="url(#dog-belly)"/>
-        <g className={lf} style={{transformOrigin:"62px 110px"}}><rect x="54" y="110" width="16" height="37" rx="8" fill="#C8A050"/><ellipse cx="62" cy="148" rx="12" ry="6" fill="#A07030"/></g>
-        <g className={lf} style={{transformOrigin:"104px 110px"}}><rect x="96" y="110" width="16" height="37" rx="8" fill="#C8A050"/><ellipse cx="104" cy="148" rx="12" ry="6" fill="#A07030"/></g>
-        <path d="M22,42 Q6,34 5,68 Q3,96 28,97 Q52,98 52,72 Q52,44 28,38 Z" fill="#A87040"/><path d="M26,46 Q12,40 11,68 Q10,90 28,91 Q48,91 48,72 Q48,48 28,44 Z" fill="url(#dog-ear)"/>
-        <path d="M148,42 Q162,34 163,68 Q165,96 140,97 Q116,98 116,72 Q116,44 140,38 Z" fill="#A87040"/><path d="M144,46 Q156,40 157,68 Q158,90 140,91 Q120,91 120,72 Q120,48 140,44 Z" fill="url(#dog-ear)"/>
-        <circle cx="84" cy="66" r="50" fill="url(#dog-face)"/><ellipse cx="77" cy="52" rx="22" ry="13" fill="rgba(255,255,255,.12)"/>
-        <ellipse cx="84" cy="84" rx="28" ry="22" fill="#F8EDD0"/><ellipse cx="74" cy="91" rx="10" ry="8" fill="#F0E0B8"/><ellipse cx="94" cy="91" rx="10" ry="8" fill="#F0E0B8"/><ellipse cx="84" cy="88" rx="7" ry="6" fill="#E8D4A8"/>
-        <ellipse cx="84" cy="79" rx="11" ry="8" fill="#3A1F0C"/><ellipse cx="84" cy="78" rx="7" ry="5" fill="#2A1006"/><ellipse cx="81" cy="76" rx="3" ry="2" fill="rgba(255,255,255,.22)"/>
-        <path d="M75,90 Q84,100 93,90" stroke="#8B5E30" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-        {(happy||ecstatic) && <><ellipse cx="47" cy="83" rx="10" ry="6" fill="#FF9040" opacity={ecstatic?".45":".2"}/><ellipse cx="121" cy="83" rx="10" ry="6" fill="#FF9040" opacity={ecstatic?".45":".2"}/>{ecstatic&&<><circle cx="47" cy="80" r="3" fill="#FFD060" opacity=".55"/><circle cx="121" cy="80" r="3" fill="#FFD060" opacity=".55"/></>}</>}
-        {sleep && <><ellipse cx="52" cy="80" rx="8" ry="5" fill="#C8A050" opacity=".2"/><ellipse cx="116" cy="80" rx="8" ry="5" fill="#C8A050" opacity=".2"/></>}
-        <g className="sp-eye" style={{transformOrigin:"59px 64px"}}>
-          {!sleep && !starving && (<><circle cx="59" cy="64" r="14" fill="#1A0E04"/><circle cx="59" cy="64" r="14" fill="none" stroke="#4A2E10" strokeWidth="1.5"/><circle className="sp-pupil" cx="60" cy="64" r="9" fill="#F8F0E0"/><circle className="sp-pupil" cx="64" cy="60" r="4" fill="#7A4A18"/><circle className="sp-pupil" cx="57" cy="67" r="2.2" fill="rgba(255,255,255,.45)"/><circle className="sp-pupil" cx="63" cy="61" r="1.4" fill="rgba(255,255,255,.9)"/>{ecstatic&&<><circle cx="62" cy="58" r="2" fill="#FFD060" opacity=".9"/><circle cx="58" cy="61" r="1.4" fill="#FFD060" opacity=".7"/></>}<path className="sp-arc" d="M46,64 Q59,50 72,64" stroke="#D4A050" strokeWidth="3.5" fill="none" strokeLinecap="round"/></>)}
-          {!sleep && starving && (<><circle cx="59" cy="64" r="14" fill="#1A0E04"/><ellipse cx="59" cy="57" rx="15" ry="7" fill="#D4AE6A" opacity=".88"/></>)}
-          {sleep && (<><ellipse cx="59" cy="64" rx="12" ry="6" fill="#D4AE6A"/><path d="M47,64 Q59,70 71,64" stroke="#A07030" strokeWidth="2.5" fill="none" strokeLinecap="round"/></>)}
+      
+      <g className={anim === "walk" ? "sp-walk" : "sp-idle"}>
+        <ellipse cx="85" cy="168" rx="46" ry="8" fill="rgba(0,0,0,0.12)"/>
+
+        {/* Body Sphere */}
+        <circle cx="85" cy="118" r="52" fill="url(#dog-body-deep)" />
+        <circle cx="85" cy="118" r="52" fill="url(#dog-rim)" />
+
+        {/* Thick 3D Legs */}
+        <g>
+          <rect x="58" y="132" width="20" height="30" rx="10" fill="#8D5B20" opacity="0.4" />
+          <rect x="58" y="128" width="18" height="28" rx="9" fill="url(#dog-body-deep)" />
+          <rect x="94" y="132" width="20" height="30" rx="10" fill="#8D5B20" opacity="0.4" />
+          <rect x="94" y="128" width="18" height="28" rx="9" fill="url(#dog-body-deep)" />
         </g>
-        <g className="sp-eye2" style={{transformOrigin:"109px 64px"}}>
-          {!sleep && !starving && (<><circle cx="109" cy="64" r="14" fill="#1A0E04"/><circle cx="109" cy="64" r="14" fill="none" stroke="#4A2E10" strokeWidth="1.5"/><circle className="sp-pupil" cx="110" cy="64" r="9" fill="#F8F0E0"/><circle className="sp-pupil" cx="114" cy="60" r="4" fill="#7A4A18"/><circle className="sp-pupil" cx="107" cy="67" r="2.2" fill="rgba(255,255,255,.45)"/><circle className="sp-pupil" cx="113" cy="61" r="1.4" fill="rgba(255,255,255,.9)"/>{ecstatic&&<><circle cx="112" cy="58" r="2" fill="#FFD060" opacity=".9"/><circle cx="108" cy="61" r="1.4" fill="#FFD060" opacity=".7"/></>}<path className="sp-arc" d="M96,64 Q109,50 122,64" stroke="#D4A050" strokeWidth="3.5" fill="none" strokeLinecap="round"/></>)}
-          {!sleep && starving && (<><circle cx="109" cy="64" r="14" fill="#1A0E04"/><ellipse cx="109" cy="57" rx="15" ry="7" fill="#D4AE6A" opacity=".88"/></>)}
-          {sleep && (<><ellipse cx="109" cy="64" rx="12" ry="6" fill="#D4AE6A"/><path d="M97,64 Q109,70 121,64" stroke="#A07030" strokeWidth="2.5" fill="none" strokeLinecap="round"/></>)}
-        </g>
+
+        {/* Head Sphere */}
+        <circle cx="85" cy="78" r="54" fill="url(#dog-body-deep)" />
+        <circle cx="85" cy="78" r="54" fill="url(#dog-rim)" />
+        
+        {/* Soft Floppy Ears */}
+        <path d="M40,45 Q15,40 22,95 Q40,110 52,85 Z" fill="#A07030" />
+        <path d="M130,45 Q155,40 148,95 Q130,110 118,85 Z" fill="#A07030" />
+
+        {/* Snout Volume */}
+        <ellipse cx="85" cy="104" rx="26" ry="18" fill="white" opacity="0.2" />
+        <path d="M75,106 Q85,114 95,106" stroke="#3A1F0C" strokeWidth="3" fill="none" strokeLinecap="round" />
+
+        {!sleep ? (
+          <g>
+            <circle cx="68" cy="78" r="10" fill="#2A1A0A" />
+            <circle cx="65" cy="74" r="4" fill="white" opacity="0.7" />
+            <circle cx="102" cy="78" r="10" fill="#2A1A0A" />
+            <circle cx="99" cy="74" r="4" fill="white" opacity="0.7" />
+          </g>
+        ) : (
+          <path d="M60,82 Q70,88 80,82 M90,82 Q100,88 110,82" stroke="#2A1A0A" strokeWidth="4" fill="none" strokeLinecap="round" />
+        )}
+        
+        <rect x="78" y="92" width="14" height="9" rx="5" fill="#1A0E04" />
         <DogAcc id={acc}/>
       </g>
     </svg>
@@ -834,6 +892,42 @@ export default function StudyPalPage() {
   const clickRot   = useRef(0);
 
   const PCOLORS = ["#7C6AFF","#A594FE","#C4BBFF","#2DD4BF","#60AEFF","#FBBF24","#34D399"];
+
+  useEffect(() => {
+  let mounted = true;
+
+  async function initStudypal() {
+    const {
+      data: { session },
+    } = await supabaseBrowser.auth.getSession();
+
+    if (!mounted) return;
+    if (!session) {
+      console.log("[STUDYPAL] no session yet, skipping server sync");
+      return;
+    }
+
+    await studypalLoadFromServer();
+    studypalScheduleSync();
+  }
+
+  initStudypal();
+
+  const {
+    data: { subscription },
+  } = supabaseBrowser.auth.onAuthStateChange(async (_event, session) => {
+    if (!mounted) return;
+    if (!session) return;
+
+    await studypalLoadFromServer();
+    studypalScheduleSync();
+  });
+
+  return () => {
+    mounted = false;
+    subscription.unsubscribe();
+  };
+}, []);
 
   // ── LOAD + DECAY ON MOUNT ───────────────────────────────────
   useEffect(() => {

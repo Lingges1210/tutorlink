@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@daily-co/daily-js": "^0.87.0",
+    "@dotlottie/react-player": "^1.6.19",
     "@google-cloud/vision": "^5.3.4",
     "@google/generative-ai": "^0.24.1",
     "@livekit/components-react": "^2.9.20",
