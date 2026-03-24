@@ -82,32 +82,91 @@ function injectStyles() {
     /* ── Hide LiveKit's built-in Leave button — we render our own ── */
     .lk-disconnect-button { display: none !important; }
 
-    /* ── Light mode: override LiveKit's dark pill button styles ── */
-    .lk-control-bar { gap: 6px !important; }
-    .lk-button {
-      background: rgba(0,0,0,0.05) !important;
-      border: 1px solid rgba(0,0,0,0.1) !important;
-      color: rgba(0,0,0,0.7) !important;
-      border-radius: 10px !important;
-      font-size: 13px !important;
-      font-weight: 500 !important;
-      padding: 8px 12px !important;
-    }
-    .lk-button:hover {
-      background: rgba(0,0,0,0.09) !important;
-    }
-    .lk-button[aria-pressed="true"], .lk-button[data-lk-enabled="true"] {
-      background: rgba(0,0,0,0.07) !important;
-    }
-    /* Dark mode — keep LiveKit's own dark styles, just fix radius */
-    .dark .lk-button {
-      background: rgba(255,255,255,0.08) !important;
-      border: 1px solid rgba(255,255,255,0.1) !important;
-      color: rgba(255,255,255,0.75) !important;
-    }
-    .dark .lk-button:hover {
-      background: rgba(255,255,255,0.13) !important;
-    }
+   /* =========================
+   LIGHT MODE
+========================= */
+html:not(.dark) .lk-control-bar {
+  gap: 6px !important;
+  background: transparent !important;
+}
+
+html:not(.dark) .lk-button {
+  background: rgba(0,0,0,0.04) !important;
+  border: 1px solid rgba(0,0,0,0.12) !important;
+  color: rgba(0,0,0,0.72) !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  padding: 8px 12px !important;
+}
+
+html:not(.dark) .lk-button:hover {
+  background: rgba(0,0,0,0.08) !important;
+}
+
+html:not(.dark) .lk-button[aria-pressed="true"],
+html:not(.dark) .lk-button[data-lk-enabled="true"] {
+  background: rgba(0,0,0,0.10) !important;
+}
+
+html:not(.dark) .lk-button svg,
+html:not(.dark) .lk-button span {
+  color: rgba(0,0,0,0.72) !important;
+  stroke: rgba(0,0,0,0.72) !important;
+}
+
+/* =========================
+   DARK MODE
+========================= */
+html.dark .lk-control-bar {
+  gap: 6px !important;
+  background: transparent !important;
+}
+
+html.dark .lk-button {
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  color: rgba(255,255,255,0.82) !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  padding: 8px 12px !important;
+}
+
+html.dark .lk-button:hover {
+  background: rgba(255,255,255,0.12) !important;
+}
+
+html.dark .lk-button[aria-pressed="true"],
+html.dark .lk-button[data-lk-enabled="true"] {
+  background: rgba(255,255,255,0.14) !important;
+}
+
+html.dark .lk-button svg,
+html.dark .lk-button span {
+  color: rgba(255,255,255,0.82) !important;
+  stroke: rgba(255,255,255,0.82) !important;
+}
+
+/* Device dropdown popups */
+html.dark .lk-device-menu,
+html.dark .lk-device-menu * {
+  background: #1c1c1e !important;
+  color: rgba(255,255,255,0.82) !important;
+  border-color: rgba(255,255,255,0.10) !important;
+}
+
+html:not(.dark) .lk-device-menu,
+html:not(.dark) .lk-device-menu * {
+  background: #ffffff !important;
+  color: rgba(0,0,0,0.78) !important;
+  border-color: rgba(0,0,0,0.10) !important;
+}
+
+/* Hide built-in leave button */
+.lk-disconnect-button {
+  display: none !important;
+}
   `;
   document.head.appendChild(el);
 }
