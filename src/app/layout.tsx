@@ -47,7 +47,7 @@ export default async function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen antialiased bg-[rgb(var(--bg))] text-[rgb(var(--fg))]">
         <ThemeProvider>
-          <FloatingWidget isLoggedIn={!isAdmin} />
+          <FloatingWidget isLoggedIn={!!user && !isAdmin} />
           <UserPresenceBeacon />
 
           

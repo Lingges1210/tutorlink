@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { Dog } from "lucide-react";
 import {
   studypalApplyDecayOnMount,
   studypalMarkFed,
@@ -10,12 +11,13 @@ import {
   type SPLogEntry,
 } from "@/lib/studypalReward";
 import MiniGamesModal from "@/components/MiniGamesModal";
+import { createPortal } from "react-dom";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 /* ─── TYPES ─────────────────────────────────────────────── */
 type PetType  = "cat" | "dog";
 type AnimState = "idle" | "walk" | "jump" | "happy" | "excited" | "eat" | "sleep" | "meow" | "bark";
-type AccId    = "none" | "cap" | "glasses" | "crown" | "bow" | "scarf" | "hat" | "headband" | "monocle" | "sunglasses" | "ribbon" | "halo" | "earring" | "wizard" | "bandana";
+type AccId    = "none" | "cap" | "glasses" | "crown" | "bow" | "scarf" | "hat" | "headband" | "monocle" | "ribbon" | "halo" | "earring" | "wizard" | "bandana";
 type TabId    = "feed" | "wardrobe" | "about";
 
 interface SPState {
@@ -52,21 +54,20 @@ const LEVELS = [
 ];
 
 const ACCS: { id: AccId; name: string; cost: number }[] = [
-  { id: "none",       name: "Default",    cost: 0  },
-  { id: "bow",        name: "Bow Tie",    cost: 10 },
-  { id: "headband",   name: "Headband",   cost: 12 },
-  { id: "glasses",    name: "Glasses",    cost: 15 },
-  { id: "hat",        name: "Party Hat",  cost: 18 },
-  { id: "cap",        name: "Grad Cap",   cost: 20 },
-  { id: "scarf",      name: "Scarf",      cost: 25 },
-  { id: "monocle",    name: "Monocle",    cost: 35 },
-  { id: "ribbon",     name: "Ribbon",     cost: 22 },
-  { id: "sunglasses", name: "Sunglasses", cost: 28 },
-  { id: "earring",    name: "Earring",    cost: 30 },
-  { id: "halo",       name: "Halo",       cost: 40 },
-  { id: "bandana",    name: "Bandana",    cost: 18 },
-  { id: "wizard",     name: "Wizard Hat", cost: 45 },
-  { id: "crown",      name: "Crown",      cost: 50 },
+  { id: "none",     name: "Default",    cost: 0  },
+  { id: "bow",      name: "Bow Tie",    cost: 10 },
+  { id: "headband", name: "Headband",   cost: 12 },
+  { id: "glasses",  name: "Glasses",    cost: 15 },
+  { id: "hat",      name: "Party Hat",  cost: 18 },
+  { id: "cap",      name: "Grad Cap",   cost: 20 },
+  { id: "scarf",    name: "Scarf",      cost: 25 },
+  { id: "monocle",  name: "Monocle",    cost: 35 },
+  { id: "ribbon",   name: "Ribbon",     cost: 22 },
+  { id: "earring",  name: "Earring",    cost: 30 },
+  { id: "halo",     name: "Halo",       cost: 40 },
+  { id: "bandana",  name: "Bandana",    cost: 18 },
+  { id: "wizard",   name: "Wizard Hat", cost: 45 },
+  { id: "crown",    name: "Crown",      cost: 50 },
 ];
 
 const LS_KEY       = "sp_v6";
@@ -92,7 +93,6 @@ function load(): SPState {
 }
 function save(s: SPState) { try { localStorage.setItem(LS_KEY, JSON.stringify(s)); } catch { } }
 function getLvl(xp: number) { for (let i = LEVELS.length - 1; i >= 0; i--) if (xp >= LEVELS[i].xp) return i; return 0; }
-
 
 /* ─── MOOD SYSTEM ────────────────────────────────────────── */
 type MoodTier = "ecstatic" | "happy" | "neutral" | "hungry" | "starving";
@@ -167,6 +167,18 @@ function fmtRelTime(ms: number): string {
 function Icon({ name, size = 16, color = "currentColor", strokeWidth = 1.8 }: { name: string; size?: number; color?: string; strokeWidth?: number }) {
   const s = { style: { width: size, height: size, display: "inline-block", flexShrink: 0 } };
   const p = { stroke: color, strokeWidth, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, fill: "none" };
+
+  if (name === "dog") {
+    return (
+      <Dog
+        size={size}
+        color={color}
+        strokeWidth={strokeWidth}
+        style={{ display: "inline-block", flexShrink: 0 }}
+      />
+    );
+  }
+
   switch (name) {
     case "star":       return <svg {...s} viewBox="0 0 24 24"><polygon {...p} points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>;
     case "zap":        return <svg {...s} viewBox="0 0 24 24"><polygon {...p} points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>;
@@ -192,7 +204,6 @@ function Icon({ name, size = 16, color = "currentColor", strokeWidth = 1.8 }: { 
     case "arrow-r":    return <svg {...s} viewBox="0 0 24 24"><line {...p} x1="5" y1="12" x2="19" y2="12" /><polyline {...p} points="12 5 19 12 12 19" /></svg>;
     case "chevron-r":  return <svg {...s} viewBox="0 0 24 24"><polyline {...p} points="9 18 15 12 9 6" /></svg>;
     case "cat":        return <svg {...s} viewBox="0 0 24 24"><path {...p} d="M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.84 6.42-2.26 1.4.58-.42 7-.42 7 .57 1.07 1 2.24 1 3.44C21 17.9 16.97 21 12 21s-9-3-9-7.56c0-1.25.5-2.4 1-3.44 0 0-1.89-6.42-.5-7 1.39-.58 4.72.23 6.5 2.26A9.06 9.06 0 0 1 12 5z" /><path {...p} d="M8 14v.5" /><path {...p} d="M16 14v.5" /><path {...p} d="M11.25 16.25h1.5L12 17l-.75-.75z" /></svg>;
-    case "dog":        return <svg {...s} viewBox="0 0 24 24"><path {...p} d="M4.5 7.5C4 5.5 5 4 7 4l1.5 3"/><path {...p} d="M19.5 7.5C20 5.5 19 4 17 4l-1.5 3"/><path {...p} d="M12 4c-4.5 0-7.5 2.5-7.5 6.5C4.5 15 7.5 18 12 18s7.5-3 7.5-7.5C19.5 6.5 16.5 4 12 4z"/><circle cx="9" cy="11" r="1" fill={color} stroke="none"/><circle cx="15" cy="11" r="1" fill={color} stroke="none"/><ellipse cx="12" cy="13.5" rx="1.8" ry="1.2" fill={color} stroke="none"/><path {...p} d="M10 15.5q2 1.5 4 0"/></svg>;
     case "paw":        return <svg {...s} viewBox="0 0 24 24"><circle {...p} cx="11" cy="4" r="2" /><circle {...p} cx="18" cy="8" r="2" /><circle {...p} cx="20" cy="16" r="2" /><path {...p} d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z" /></svg>;
     case "settings":   return <svg {...s} viewBox="0 0 24 24"><circle {...p} cx="12" cy="12" r="3" /><path {...p} d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>;
     case "lock":       return <svg {...s} viewBox="0 0 24 24"><rect {...p} x="3" y="11" width="18" height="11" rx="2" ry="2" /><path {...p} d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>;
@@ -252,7 +263,34 @@ const KF = `
     --shadow-glow:0 0 0 3px rgba(124,106,255,0.18);
   }
   * { box-sizing:border-box; }
-  .sp { font-family:var(--font-body);background:var(--c-bg);color:var(--c-text);-webkit-font-smoothing:antialiased; }
+
+  /* ── Main pet page: scrollable, no visible scrollbar ── */
+  .sp {
+    font-family:var(--font-body);
+    background:var(--c-bg);
+    color:var(--c-text);
+    -webkit-font-smoothing:antialiased;
+    height:100vh;
+    overflow-y:scroll;
+    overflow-x:hidden;
+    scrollbar-width:none;
+    -ms-overflow-style:none;
+  }
+  .sp::-webkit-scrollbar { display:none; width:0; height:0; }
+
+  /* ── Onboarding: fills the .sp panel, scrollable ── */
+  .sp-onboarding-inner {
+    font-family:var(--font-body);
+    color:var(--c-text);
+    -webkit-font-smoothing:antialiased;
+    min-height:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+
   .sp-inner { max-width:650px;margin:0 auto;padding:0 0 48px; }
   @keyframes sp-idle    { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
   @keyframes sp-walk-x  { 0%{left:-180px;transform:scaleX(1)} 47%{left:calc(100% + 20px);transform:scaleX(1)} 50%{left:calc(100% + 20px);transform:scaleX(-1)} 97%{left:-180px;transform:scaleX(-1)} 100%{left:-180px;transform:scaleX(1)} }
@@ -290,7 +328,7 @@ const KF = `
   .sp-jump  { animation:sp-jump .65s cubic-bezier(.2,1.4,.5,1) forwards; }
   .sp-wiggle{ animation:sp-wiggle .5s ease-in-out; }
   .sp-tail-c{ transform-origin:0 100%;animation:sp-tail-c 2.2s ease-in-out infinite; }
-  .sp-tail-d{ transform-origin:0 0;animation:sp-tail-d .95s ease-in-out infinite; }
+  .sp-tail-d{ transform-origin:125px 108px;animation:sp-tail-d .95s ease-in-out infinite; }
   .sp-lf    { transform-origin:50% 0;animation:sp-leg-f .5s ease-in-out infinite; }
   .sp-lb    { transform-origin:50% 0;animation:sp-leg-b .5s ease-in-out infinite; }
   .sp-eye,.sp-eye2 { transform-origin:50% 50%;animation:sp-blink 5.5s ease-in-out infinite; }
@@ -321,205 +359,295 @@ const KF = `
   .sp ::-webkit-scrollbar-thumb { background:var(--c-border2);border-radius:4px; }
 `;
 
-/* ─── ACCESSORY SVG (cat) ───────────────────────────────── */
+/* ─── CAT ACCESSORIES ───────────────────────────────────── */
 function CatAcc({ id }: { id: AccId }) {
-  if (id === "cap") return (<><rect x="50" y="28" width="68" height="9" rx="3" fill="#7C6AFF"/><rect x="64" y="10" width="40" height="20" rx="3" fill="#5E4FD4"/><rect x="63" y="28" width="42" height="3" rx="1" fill="#4A3EC0"/><line x1="116" y1="28" x2="122" y2="46" stroke="#A594FE" strokeWidth="3.5" strokeLinecap="round"/><circle cx="122" cy="49" r="5" fill="#A594FE"/></>);
-  if (id === "glasses") return (<><circle cx="59" cy="70" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)" opacity=".9"/><circle cx="109" cy="70" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)" opacity=".9"/><line x1="74" y1="70" x2="94" y2="70" stroke="#7C6AFF" strokeWidth="2.5"/><line x1="22" y1="68" x2="44" y2="70" stroke="#7C6AFF" strokeWidth="2"/><line x1="146" y1="68" x2="124" y2="70" stroke="#7C6AFF" strokeWidth="2"/></>);
-  if (id === "sunglasses") return (<><rect x="41" y="63" width="36" height="18" rx="7" fill="#1A1040" opacity=".93"/><rect x="91" y="63" width="36" height="18" rx="7" fill="#1A1040" opacity=".93"/><line x1="77" y1="72" x2="91" y2="72" stroke="#7C6AFF" strokeWidth="2.5"/><line x1="22" y1="69" x2="41" y2="72" stroke="#7C6AFF" strokeWidth="2"/><line x1="146" y1="69" x2="127" y2="72" stroke="#7C6AFF" strokeWidth="2"/><rect x="46" y="66" width="11" height="7" rx="2" fill="rgba(124,106,255,.28)"/><rect x="96" y="66" width="11" height="7" rx="2" fill="rgba(124,106,255,.28)"/></>);
-  if (id === "crown") return (<><path d="M58,26 L69,8 L84,22 L99,8 L110,26 L107,38 H61 Z" fill="#FBBF24"/><circle cx="84" cy="22" r="5" fill="#FDE68A"/><circle cx="58" cy="26" r="4" fill="#FDE68A"/><circle cx="110" cy="26" r="4" fill="#FDE68A"/><rect x="61" y="36" width="46" height="4" rx="2" fill="#D97706"/></>);
-  if (id === "bow") return (<><ellipse cx="65" cy="108" rx="17" ry="10" fill="#7C6AFF"/><ellipse cx="103" cy="108" rx="17" ry="10" fill="#7C6AFF"/><ellipse cx="65" cy="108" rx="9" ry="5" fill="#A594FE" opacity=".45"/><ellipse cx="103" cy="108" rx="9" ry="5" fill="#A594FE" opacity=".45"/><circle cx="84" cy="108" r="8" fill="#C4BBFF"/></>);
-  if (id === "ribbon") return (<><path d="M50,46 Q84,30 118,46" stroke="#FF80B0" strokeWidth="13" strokeLinecap="round" fill="none"/><circle cx="84" cy="34" r="12" fill="#FF80B0"/><circle cx="84" cy="34" r="6" fill="#FFB8D4"/><path d="M52,46 Q84,34 116,46" stroke="rgba(255,255,255,.3)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="5 4"/></>);
-  if (id === "scarf") return (<><path d="M38,112 Q84,126 130,112 Q132,121 130,126 Q84,140 38,126 Z" fill="#2DD4BF"/><path d="M38,112 Q84,120 130,112" stroke="rgba(255,255,255,.28)" strokeWidth="2" fill="none"/><path d="M50,125 Q44,138 48,152 Q51,162 60,157" stroke="#2DD4BF" strokeWidth="12" strokeLinecap="round" fill="none"/><path d="M50,125 Q44,138 48,152" stroke="rgba(255,255,255,.22)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="6 5"/></>);
-  if (id === "hat") return (<><ellipse cx="84" cy="28" rx="42" ry="10" fill="#FF80B0"/><polygon points="84,0 42,28 126,28" fill="#FF5FA0"/><line x1="60" y1="21" x2="70" y2="5" stroke="#FFD060" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/><line x1="76" y1="26" x2="82" y2="8" stroke="#7C6AFF" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/><line x1="90" y1="26" x2="96" y2="8" stroke="#2DD4BF" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/><line x1="103" y1="21" x2="110" y2="7" stroke="#FFD060" strokeWidth="3" strokeLinecap="round" opacity=".9"/><circle cx="84" cy="0" r="6" fill="#FFD060"/></>);
-  if (id === "headband") return (<><path d="M26,56 Q84,30 142,56" stroke="#7C6AFF" strokeWidth="10" strokeLinecap="round" fill="none"/><circle cx="84" cy="36" r="14" fill="#7C6AFF"/><circle cx="84" cy="36" r="7" fill="#C4BBFF"/></>);
-  if (id === "monocle") return (<><circle cx="109" cy="70" r="17" stroke="#8B7355" strokeWidth="3.5" fill="rgba(251,191,36,.1)"/><line x1="124" y1="83" x2="135" y2="96" stroke="#8B7355" strokeWidth="2.5" strokeLinecap="round"/></>);
-  if (id === "halo") return (<><ellipse cx="84" cy="13" rx="34" ry="9" fill="none" stroke="#FFD060" strokeWidth="4"/><ellipse cx="84" cy="13" rx="34" ry="9" fill="none" stroke="#FFE898" strokeWidth="2" opacity=".6"/></>);
-  if (id === "earring") return (<><circle cx="31" cy="88" r="5" fill="none" stroke="#FFD060" strokeWidth="2.5"/><circle cx="31" cy="100" r="5.5" fill="#FFB820"/></>);
-  if (id === "wizard") return (<><ellipse cx="84" cy="30" rx="30" ry="8" fill="#5E4FD4"/><polygon points="84,-8 54,30 114,30" fill="#4A3BB8"/><polygon points="84,-8 54,30 114,30" fill="none" stroke="#A594FE" strokeWidth="1.5" opacity=".6"/><circle cx="84" cy="-8" r="4" fill="#C4BBFF"/><circle cx="70" cy="10" r="3.5" fill="#C4BBFF" opacity=".85"/><circle cx="96" cy="4" r="2.5" fill="#C4BBFF" opacity=".7"/><circle cx="76" cy="20" r="2" fill="#A594FE" opacity=".6"/><circle cx="100" cy="16" r="2" fill="#A594FE" opacity=".5"/></>);
-  if (id === "bandana") return (<><path d="M41,108 Q84,122 127,108 Q127,122 84,140 Q41,122 41,108 Z" fill="#2DD4BF"/><path d="M41,108 Q84,118 127,108" stroke="rgba(255,255,255,.3)" strokeWidth="2" fill="none"/><path d="M64,134 L72,152 Q78,161 82,159" stroke="#2DD4BF" strokeWidth="9" strokeLinecap="round" fill="none"/></>);
+  if (id === "halo") return (
+    <>
+      <ellipse cx="85" cy="6" rx="34" ry="9" fill="none" stroke="#FFD060" strokeWidth="4"/>
+      <ellipse cx="85" cy="6" rx="34" ry="9" fill="none" stroke="#FFE898" strokeWidth="2" opacity=".6"/>
+    </>
+  );
+  if (id === "wizard") return (
+    <>
+      <ellipse cx="85" cy="26" rx="32" ry="8" fill="#5E4FD4"/>
+      <polygon points="85,-10 53,26 117,26" fill="#4A3BB8"/>
+      <polygon points="85,-10 53,26 117,26" fill="none" stroke="#A594FE" strokeWidth="1.5" opacity=".55"/>
+      <circle cx="85" cy="-10" r="4" fill="#C4BBFF"/>
+      <circle cx="71" cy="8"   r="3"   fill="#C4BBFF" opacity=".85"/>
+      <circle cx="97" cy="2"   r="2.5" fill="#C4BBFF" opacity=".7"/>
+      <circle cx="76" cy="18"  r="2"   fill="#A594FE" opacity=".6"/>
+      <circle cx="100" cy="14" r="1.8" fill="#A594FE" opacity=".5"/>
+    </>
+  );
+  if (id === "crown") return (
+    <>
+      <path d="M58,28 L68,8 L85,22 L102,8 L112,28 L109,38 H61 Z" fill="#FBBF24"/>
+      <rect x="61" y="35" width="48" height="5" rx="2" fill="#D97706"/>
+      <circle cx="85"  cy="11" r="5.5" fill="#FDE68A"/>
+      <circle cx="59"  cy="28" r="4"   fill="#FDE68A"/>
+      <circle cx="111" cy="28" r="4"   fill="#FDE68A"/>
+    </>
+  );
+  if (id === "hat") return (
+    <>
+      <ellipse cx="85" cy="24" rx="40" ry="9" fill="#FF80B0"/>
+      <polygon points="85,-4 45,24 125,24" fill="#FF5FA0"/>
+      <line x1="62"  y1="16" x2="70"  y2="2"  stroke="#FFD060" strokeWidth="3" strokeLinecap="round" opacity=".9"/>
+      <line x1="77"  y1="21" x2="83"  y2="5"  stroke="#7C6AFF" strokeWidth="3" strokeLinecap="round" opacity=".9"/>
+      <line x1="91"  y1="21" x2="97"  y2="5"  stroke="#2DD4BF" strokeWidth="3" strokeLinecap="round" opacity=".9"/>
+      <line x1="103" y1="17" x2="110" y2="4"  stroke="#FFD060" strokeWidth="3" strokeLinecap="round" opacity=".9"/>
+      <circle cx="85" cy="-4" r="5.5" fill="#FFD060"/>
+    </>
+  );
+  if (id === "cap") return (
+    <>
+      <rect x="51" y="28" width="68" height="8" rx="3" fill="#7C6AFF"/>
+      <rect x="65" y="10" width="40" height="20" rx="4" fill="#5E4FD4"/>
+      <rect x="63" y="26" width="44" height="4" rx="1.5" fill="#4A3EC0"/>
+      <line x1="113" y1="28" x2="121" y2="47" stroke="#A594FE" strokeWidth="3.5" strokeLinecap="round"/>
+      <circle cx="121" cy="51" r="5" fill="#A594FE"/>
+    </>
+  );
+  if (id === "headband") return (
+    <>
+      <path d="M28,54 Q85,26 142,54" stroke="#7C6AFF" strokeWidth="9" strokeLinecap="round" fill="none"/>
+      <circle cx="85" cy="34" r="13" fill="#7C6AFF"/>
+      <circle cx="85" cy="34" r="6.5" fill="#C4BBFF"/>
+    </>
+  );
+  if (id === "ribbon") return (
+    <>
+      <path d="M50,44 Q85,28 120,44" stroke="#FF80B0" strokeWidth="13" strokeLinecap="round" fill="none"/>
+      <circle cx="85" cy="32" r="12" fill="#FF80B0"/>
+      <circle cx="85" cy="32" r="6"  fill="#FFB8D4"/>
+      <path d="M52,44 Q85,32 118,44" stroke="rgba(255,255,255,.3)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="5 4"/>
+    </>
+  );
+  if (id === "glasses") return (
+    <>
+      <circle cx="64"  cy="72" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)"/>
+      <circle cx="106" cy="72" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)"/>
+      <line x1="79"  y1="72" x2="91"  y2="72" stroke="#7C6AFF" strokeWidth="2.5"/>
+      <line x1="22"  y1="70" x2="49"  y2="72" stroke="#7C6AFF" strokeWidth="2"/>
+      <line x1="148" y1="70" x2="121" y2="72" stroke="#7C6AFF" strokeWidth="2"/>
+    </>
+  );
+  if (id === "monocle") return (
+    <>
+      <circle cx="106" cy="72" r="17" stroke="#8B7355" strokeWidth="3.2" fill="rgba(251,191,36,.10)"/>
+      <line x1="121" y1="85" x2="133" y2="99" stroke="#8B7355" strokeWidth="2.2" strokeLinecap="round"/>
+    </>
+  );
+  if (id === "earring") return (
+    <>
+      <circle cx="34" cy="82" r="4.5" fill="none" stroke="#FFD060" strokeWidth="2.2"/>
+      <circle cx="34" cy="94" r="5"   fill="#FFB820"/>
+    </>
+  );
+  if (id === "bow") return (
+    <>
+      <ellipse cx="66"  cy="114" rx="17"  ry="10"  fill="#7C6AFF"/>
+      <ellipse cx="104" cy="114" rx="17"  ry="10"  fill="#7C6AFF"/>
+      <ellipse cx="66"  cy="114" rx="9.5" ry="5.5" fill="#A594FE" opacity=".4"/>
+      <ellipse cx="104" cy="114" rx="9.5" ry="5.5" fill="#A594FE" opacity=".4"/>
+      <circle  cx="85"  cy="114" r="8"               fill="#C4BBFF"/>
+    </>
+  );
+  if (id === "scarf") return (
+    <>
+      <path d="M38,112 Q85,126 132,112 Q134,121 132,127 Q85,141 38,127 Z" fill="#2DD4BF"/>
+      <path d="M38,112 Q85,120 132,112" stroke="rgba(255,255,255,.28)" strokeWidth="2" fill="none"/>
+      <path d="M50,126 Q44,139 48,153 Q51,163 60,158" stroke="#2DD4BF" strokeWidth="12" strokeLinecap="round" fill="none"/>
+      <path d="M50,126 Q44,139 48,153" stroke="rgba(255,255,255,.22)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="6 5"/>
+    </>
+  );
+  if (id === "bandana") return (
+    <>
+      <path d="M42,110 Q85,124 128,110 Q128,124 85,142 Q42,124 42,110 Z" fill="#2DD4BF"/>
+      <path d="M42,110 Q85,120 128,110" stroke="rgba(255,255,255,.28)" strokeWidth="1.5" fill="none"/>
+      <path d="M65,136 L73,154 Q79,163 83,161" stroke="#2DD4BF" strokeWidth="9" strokeLinecap="round" fill="none"/>
+    </>
+  );
   return null;
 }
 
-/* ─── ACCESSORY SVG (dog) ───────────────────────────────── */
+/* ─── CAT SVG ─────────────────────────────────────────────── */
+function CatSVG({ anim, acc, onClick, mood }: { anim: AnimState; acc: AccId; onClick: () => void; mood?: MoodTier; }) {
+  const sleep = anim === "sleep";
+  return (
+    <svg viewBox="0 0 170 175" onClick={onClick} style={{ width: 170, height: 175, cursor: "pointer", overflow: "visible", filter: "drop-shadow(0 12px 30px rgba(108,92,231,0.20))" }}>
+      <defs>
+        <radialGradient id="cat-fur" cx="36%" cy="30%" r="64%">
+          <stop offset="0%"   stopColor="#FDDFC0"/><stop offset="52%"  stopColor="#E8A46A"/><stop offset="100%" stopColor="#C47840"/>
+        </radialGradient>
+        <radialGradient id="cat-head" cx="36%" cy="28%" r="64%">
+          <stop offset="0%"   stopColor="#FEEACC"/><stop offset="55%"  stopColor="#E8A46A"/><stop offset="100%" stopColor="#C07438"/>
+        </radialGradient>
+        <radialGradient id="cat-belly" cx="50%" cy="42%" r="48%">
+          <stop offset="0%"   stopColor="#FFF4E6" stopOpacity="0.9"/><stop offset="100%" stopColor="#F0C48A" stopOpacity="0"/>
+        </radialGradient>
+        <radialGradient id="cat-ear" cx="50%" cy="50%" r="50%">
+          <stop offset="0%"   stopColor="#FFCCD4"/><stop offset="100%" stopColor="#E890A0" stopOpacity="0.5"/>
+        </radialGradient>
+        <radialGradient id="cat-nose" cx="38%" cy="32%" r="55%">
+          <stop offset="0%"   stopColor="#F8A8B8"/><stop offset="100%" stopColor="#D87090"/>
+        </radialGradient>
+      </defs>
+      <g className={anim === "walk" ? "sp-walk" : "sp-idle"}>
+        <ellipse cx="85" cy="170" rx="38" ry="6" fill="rgba(24,16,48,0.09)"/>
+        <path d="M58,134 Q24,126 18,108 Q12,86 32,78" stroke="#A06030" strokeWidth="13" fill="none" strokeLinecap="round" className="sp-tail-c"/>
+        <path d="M58,134 Q24,126 18,108 Q12,86 32,78" stroke="#E8A46A" strokeWidth="9" fill="none" strokeLinecap="round" className="sp-tail-c"/>
+        <circle cx="85" cy="120" r="46" fill="#A86838"/>
+        <circle cx="85" cy="120" r="46" fill="url(#cat-fur)"/>
+        <ellipse cx="85" cy="128" rx="25" ry="20" fill="url(#cat-belly)"/>
+        <ellipse cx="62"  cy="154" rx="15" ry="9" fill="#A86838"/><ellipse cx="62"  cy="151" rx="14" ry="8" fill="#D8984A"/>
+        <ellipse cx="108" cy="154" rx="15" ry="9" fill="#A86838"/><ellipse cx="108" cy="151" rx="14" ry="8" fill="#D8984A"/>
+        <ellipse cx="64"  cy="148" rx="14" ry="9" fill="#A86838"/><ellipse cx="64"  cy="145" rx="13" ry="8" fill="url(#cat-fur)"/>
+        <line x1="58" y1="142" x2="58" y2="146" stroke="#9A5828" strokeWidth="1.2" strokeLinecap="round" opacity="0.4"/>
+        <line x1="64" y1="141" x2="64" y2="145" stroke="#9A5828" strokeWidth="1.2" strokeLinecap="round" opacity="0.4"/>
+        <line x1="70" y1="142" x2="70" y2="146" stroke="#9A5828" strokeWidth="1.2" strokeLinecap="round" opacity="0.4"/>
+        <ellipse cx="106" cy="148" rx="14" ry="9" fill="#A86838"/><ellipse cx="106" cy="145" rx="13" ry="8" fill="url(#cat-fur)"/>
+        <line x1="100" y1="142" x2="100" y2="146" stroke="#9A5828" strokeWidth="1.2" strokeLinecap="round" opacity="0.4"/>
+        <line x1="106" y1="141" x2="106" y2="145" stroke="#9A5828" strokeWidth="1.2" strokeLinecap="round" opacity="0.4"/>
+        <line x1="112" y1="142" x2="112" y2="146" stroke="#9A5828" strokeWidth="1.2" strokeLinecap="round" opacity="0.4"/>
+        <path d="M42,60 Q38,36 52,14 Q66,36 68,60 Z" fill="#C07438"/>
+        <path d="M46,58 Q43,38 52,22 Q61,38 64,58 Z" fill="url(#cat-ear)" opacity="0.85"/>
+        <path d="M102,60 Q104,36 118,14 Q132,36 128,60 Z" fill="#C07438"/>
+        <path d="M106,58 Q109,38 118,22 Q127,38 124,58 Z" fill="url(#cat-ear)" opacity="0.85"/>
+        <circle cx="85" cy="72" r="52" fill="#A86838"/>
+        <circle cx="85" cy="72" r="52" fill="url(#cat-head)"/>
+        <path d="M72,52 Q78,46 84,52" stroke="#C08040" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity="0.35"/>
+        <path d="M86,50 Q92,44 98,50" stroke="#C08040" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity="0.35"/>
+        <ellipse cx="74" cy="88" rx="13" ry="10" fill="#F8DDB0" opacity="0.50"/>
+        <ellipse cx="96" cy="88" rx="13" ry="10" fill="#F8DDB0" opacity="0.50"/>
+        <CatAcc id={acc}/>
+        {!sleep ? (
+          <>
+            <g className="sp-eye" style={{transformOrigin:"64px 72px"}}>
+              <circle cx="64"  cy="72" r="12" fill="#0D0D0D"/><circle cx="59"  cy="67" r="4.5" fill="white"/><circle cx="68"  cy="77" r="2"   fill="white" opacity="0.55"/>
+            </g>
+            <g className="sp-eye2" style={{transformOrigin:"106px 72px"}}>
+              <circle cx="106" cy="72" r="12" fill="#0D0D0D"/><circle cx="101" cy="67" r="4.5" fill="white"/><circle cx="110" cy="77" r="2"   fill="white" opacity="0.55"/>
+            </g>
+          </>
+        ) : (
+          <path d="M53,75 Q64,83 75,75 M95,75 Q106,83 117,75" stroke="#0D0D0D" strokeWidth="3.5" fill="none" strokeLinecap="round"/>
+        )}
+        <path d="M82,88 Q85,92 88,88 Q86.5,84.5 85,83.5 Q83.5,84.5 82,88Z" fill="url(#cat-nose)"/>
+        <circle cx="83.5" cy="85.5" r="1.2" fill="white" opacity="0.5"/>
+        <path d="M85,92 Q79,98 76,95" stroke="#B06060" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
+        <path d="M85,92 Q91,98 94,95" stroke="#B06060" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
+        <line x1="70" y1="87" x2="28" y2="80" stroke="#A07848" strokeWidth="1.1" opacity="0.55"/>
+        <line x1="70" y1="89" x2="28" y2="89" stroke="#A07848" strokeWidth="1.1" opacity="0.55"/>
+        <line x1="70" y1="91" x2="31" y2="98" stroke="#A07848" strokeWidth="1.1" opacity="0.55"/>
+        <line x1="100" y1="87" x2="142" y2="80" stroke="#A07848" strokeWidth="1.1" opacity="0.55"/>
+        <line x1="100" y1="89" x2="142" y2="89" stroke="#A07848" strokeWidth="1.1" opacity="0.55"/>
+        <line x1="100" y1="91" x2="139" y2="98" stroke="#A07848" strokeWidth="1.1" opacity="0.55"/>
+        <ellipse cx="50"  cy="82" rx="10" ry="7" fill="#F4A0A8" opacity="0.32"/>
+        <ellipse cx="120" cy="82" rx="10" ry="7" fill="#F4A0A8" opacity="0.32"/>
+      </g>
+    </svg>
+  );
+}
+
+/* ─── DOG ACCESSORIES ───────────────────────────────────── */
 function DogAcc({ id }: { id: AccId }) {
-  if (id === "cap") return (<><rect x="50" y="24" width="68" height="9" rx="3" fill="#7C6AFF"/><rect x="64" y="6" width="40" height="20" rx="3" fill="#5E4FD4"/><rect x="63" y="24" width="42" height="3" rx="1" fill="#4A3EC0"/><line x1="116" y1="24" x2="122" y2="42" stroke="#A594FE" strokeWidth="3.5" strokeLinecap="round"/><circle cx="122" cy="45" r="5" fill="#A594FE"/></>);
-  if (id === "glasses") return (<><circle cx="59" cy="64" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)" opacity=".9"/><circle cx="109" cy="64" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)" opacity=".9"/><line x1="74" y1="64" x2="94" y2="64" stroke="#7C6AFF" strokeWidth="2.5"/><line x1="22" y1="62" x2="44" y2="64" stroke="#7C6AFF" strokeWidth="2"/><line x1="146" y1="62" x2="124" y2="64" stroke="#7C6AFF" strokeWidth="2"/></>);
-  if (id === "sunglasses") return (<><rect x="41" y="55" width="36" height="18" rx="7" fill="#1A1040" opacity=".93"/><rect x="91" y="55" width="36" height="18" rx="7" fill="#1A1040" opacity=".93"/><line x1="77" y1="64" x2="91" y2="64" stroke="#60AEFF" strokeWidth="2.5"/><line x1="22" y1="61" x2="41" y2="64" stroke="#60AEFF" strokeWidth="2"/><line x1="146" y1="61" x2="127" y2="64" stroke="#60AEFF" strokeWidth="2"/><rect x="46" y="58" width="11" height="7" rx="2" fill="rgba(96,174,255,.28)"/><rect x="96" y="58" width="11" height="7" rx="2" fill="rgba(96,174,255,.28)"/></>);
-  if (id === "crown") return (<><path d="M58,22 L69,4 L84,18 L99,4 L110,22 L107,34 H61 Z" fill="#FBBF24"/><circle cx="84" cy="18" r="5" fill="#FDE68A"/><circle cx="58" cy="22" r="4" fill="#FDE68A"/><circle cx="110" cy="22" r="4" fill="#FDE68A"/><rect x="61" y="32" width="46" height="4" rx="2" fill="#D97706"/></>);
-  if (id === "bow") return (<><ellipse cx="65" cy="104" rx="17" ry="10" fill="#7C6AFF"/><ellipse cx="103" cy="104" rx="17" ry="10" fill="#7C6AFF"/><ellipse cx="65" cy="104" rx="9" ry="5" fill="#A594FE" opacity=".45"/><ellipse cx="103" cy="104" rx="9" ry="5" fill="#A594FE" opacity=".45"/><circle cx="84" cy="104" r="8" fill="#C4BBFF"/></>);
-  if (id === "ribbon") return (<><path d="M50,42 Q84,26 118,42" stroke="#FF80B0" strokeWidth="13" strokeLinecap="round" fill="none"/><circle cx="84" cy="30" r="12" fill="#FF80B0"/><circle cx="84" cy="30" r="6" fill="#FFB8D4"/><path d="M52,42 Q84,30 116,42" stroke="rgba(255,255,255,.3)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="5 4"/></>);
-  if (id === "scarf") return (<><path d="M34,108 Q84,122 134,108 Q136,117 134,122 Q84,136 34,122 Z" fill="#2DD4BF"/><path d="M34,108 Q84,116 134,108" stroke="rgba(255,255,255,.28)" strokeWidth="2" fill="none"/><path d="M48,121 Q42,134 46,148 Q49,159 58,154" stroke="#2DD4BF" strokeWidth="12" strokeLinecap="round" fill="none"/><path d="M48,121 Q42,134 46,148" stroke="rgba(255,255,255,.22)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="6 5"/></>);
-  if (id === "hat") return (<><ellipse cx="84" cy="22" rx="42" ry="10" fill="#FF80B0"/><polygon points="84,0 42,22 126,22" fill="#FF5FA0"/><line x1="60" y1="16" x2="70" y2="2" stroke="#FFD060" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/><line x1="76" y1="20" x2="82" y2="4" stroke="#7C6AFF" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/><line x1="90" y1="20" x2="96" y2="4" stroke="#2DD4BF" strokeWidth="3.5" strokeLinecap="round" opacity=".9"/><line x1="103" y1="16" x2="110" y2="4" stroke="#FFD060" strokeWidth="3" strokeLinecap="round" opacity=".9"/><circle cx="84" cy="0" r="6" fill="#FFD060"/></>);
-  if (id === "headband") return (<><path d="M38,50 Q84,26 130,50" stroke="#7C6AFF" strokeWidth="10" strokeLinecap="round" fill="none"/><circle cx="84" cy="32" r="14" fill="#7C6AFF"/><circle cx="84" cy="32" r="7" fill="#C4BBFF"/></>);
-  if (id === "monocle") return (<><circle cx="109" cy="64" r="17" stroke="#8B7355" strokeWidth="3.5" fill="rgba(251,191,36,.1)"/><line x1="124" y1="77" x2="135" y2="90" stroke="#8B7355" strokeWidth="2.5" strokeLinecap="round"/></>);
-  if (id === "halo") return (<><ellipse cx="84" cy="10" rx="34" ry="9" fill="none" stroke="#FFD060" strokeWidth="4"/><ellipse cx="84" cy="10" rx="34" ry="9" fill="none" stroke="#FFE898" strokeWidth="2" opacity=".6"/></>);
-  if (id === "earring") return (<><circle cx="24" cy="78" r="5" fill="none" stroke="#FFD060" strokeWidth="2.5"/><circle cx="24" cy="90" r="5.5" fill="#FFB820"/></>);
-  if (id === "wizard") return (<><ellipse cx="84" cy="24" rx="30" ry="8" fill="#5E4FD4"/><polygon points="84,-8 54,24 114,24" fill="#4A3BB8"/><polygon points="84,-8 54,24 114,24" fill="none" stroke="#A594FE" strokeWidth="1.5" opacity=".6"/><circle cx="84" cy="-8" r="4" fill="#C4BBFF"/><circle cx="70" cy="6" r="3.5" fill="#C4BBFF" opacity=".85"/><circle cx="96" cy="0" r="2.5" fill="#C4BBFF" opacity=".7"/><circle cx="76" cy="16" r="2" fill="#A594FE" opacity=".6"/><circle cx="100" cy="12" r="2" fill="#A594FE" opacity=".5"/></>);
-  if (id === "bandana") return (<><path d="M41,104 Q84,118 127,104 Q127,118 84,136 Q41,118 41,104 Z" fill="#2DD4BF"/><path d="M41,104 Q84,114 127,104" stroke="rgba(255,255,255,.3)" strokeWidth="2" fill="none"/><path d="M64,130 L72,148 Q78,157 82,155" stroke="#2DD4BF" strokeWidth="9" strokeLinecap="round" fill="none"/></>);
+  if (id === "halo") return (<><ellipse cx="85" cy="8"  rx="34" ry="9" fill="none" stroke="#FFD060" strokeWidth="4"/><ellipse cx="85" cy="8"  rx="34" ry="9" fill="none" stroke="#FFE898" strokeWidth="2" opacity=".6"/></>);
+  if (id === "wizard") return (<><ellipse cx="85" cy="28" rx="32" ry="8" fill="#5E4FD4"/><polygon points="85,-8 53,28 117,28" fill="#4A3BB8"/><polygon points="85,-8 53,28 117,28" fill="none" stroke="#A594FE" strokeWidth="1.5" opacity=".55"/><circle cx="85" cy="-8" r="4" fill="#C4BBFF"/><circle cx="71" cy="10" r="3" fill="#C4BBFF" opacity=".85"/><circle cx="97" cy="4" r="2.5" fill="#C4BBFF" opacity=".7"/></>);
+  if (id === "crown") return (<><path d="M58,30 L68,10 L85,24 L102,10 L112,30 L109,40 H61 Z" fill="#FBBF24"/><rect x="61" y="37" width="48" height="5" rx="2" fill="#D97706"/><circle cx="85" cy="13" r="5.5" fill="#FDE68A"/><circle cx="59" cy="30" r="4" fill="#FDE68A"/><circle cx="111" cy="30" r="4" fill="#FDE68A"/></>);
+  if (id === "hat") return (<><ellipse cx="85" cy="26" rx="40" ry="9" fill="#FF80B0"/><polygon points="85,-2 45,26 125,26" fill="#FF5FA0"/><line x1="62" y1="18" x2="70" y2="4" stroke="#FFD060" strokeWidth="3" strokeLinecap="round" opacity=".9"/><line x1="77" y1="23" x2="83" y2="7" stroke="#7C6AFF" strokeWidth="3" strokeLinecap="round" opacity=".9"/><line x1="91" y1="23" x2="97" y2="7" stroke="#2DD4BF" strokeWidth="3" strokeLinecap="round" opacity=".9"/><circle cx="85" cy="-2" r="5.5" fill="#FFD060"/></>);
+  if (id === "cap") return (<><rect x="51" y="26" width="68" height="8" rx="3" fill="#7C6AFF"/><rect x="65" y="8" width="40" height="20" rx="4" fill="#5E4FD4"/><rect x="63" y="24" width="44" height="4" rx="1.5" fill="#4A3EC0"/><line x1="113" y1="26" x2="121" y2="45" stroke="#A594FE" strokeWidth="3.5" strokeLinecap="round"/><circle cx="121" cy="49" r="5" fill="#A594FE"/></>);
+  if (id === "headband") return (<><path d="M28,56 Q85,28 142,56" stroke="#7C6AFF" strokeWidth="9" strokeLinecap="round" fill="none"/><circle cx="85" cy="36" r="13" fill="#7C6AFF"/><circle cx="85" cy="36" r="6.5" fill="#C4BBFF"/></>);
+  if (id === "ribbon") return (<><path d="M50,46 Q85,30 120,46" stroke="#FF80B0" strokeWidth="13" strokeLinecap="round" fill="none"/><circle cx="85" cy="34" r="12" fill="#FF80B0"/><circle cx="85" cy="34" r="6" fill="#FFB8D4"/><path d="M52,46 Q85,34 118,46" stroke="rgba(255,255,255,.3)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="5 4"/></>);
+  if (id === "glasses") return (<><circle cx="68" cy="64" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)"/><circle cx="102" cy="64" r="15" stroke="#7C6AFF" strokeWidth="2.8" fill="rgba(124,106,255,.12)"/><line x1="83" y1="64" x2="87" y2="64" stroke="#7C6AFF" strokeWidth="2.5"/><line x1="22" y1="62" x2="53" y2="64" stroke="#7C6AFF" strokeWidth="2"/><line x1="148" y1="62" x2="117" y2="64" stroke="#7C6AFF" strokeWidth="2"/></>);
+  if (id === "monocle") return (<><circle cx="102" cy="64" r="17" stroke="#8B7355" strokeWidth="3.2" fill="rgba(251,191,36,.10)"/><line x1="117" y1="77" x2="129" y2="91" stroke="#8B7355" strokeWidth="2.2" strokeLinecap="round"/></>);
+  if (id === "earring") return (<><circle cx="26" cy="88" r="4.5" fill="none" stroke="#FFD060" strokeWidth="2.2"/><circle cx="26" cy="100" r="5" fill="#FFB820"/></>);
+  if (id === "bow") return (<><ellipse cx="66" cy="118" rx="17" ry="10" fill="#7C6AFF"/><ellipse cx="104" cy="118" rx="17" ry="10" fill="#7C6AFF"/><ellipse cx="66" cy="118" rx="9.5" ry="5.5" fill="#A594FE" opacity=".4"/><ellipse cx="104" cy="118" rx="9.5" ry="5.5" fill="#A594FE" opacity=".4"/><circle cx="85" cy="118" r="8" fill="#C4BBFF"/></>);
+  if (id === "scarf") return (<><path d="M34,116 Q85,130 136,116 Q138,125 136,131 Q85,145 34,131 Z" fill="#2DD4BF"/><path d="M34,116 Q85,124 136,116" stroke="rgba(255,255,255,.28)" strokeWidth="2" fill="none"/><path d="M48,129 Q42,142 46,156 Q49,166 58,161" stroke="#2DD4BF" strokeWidth="12" strokeLinecap="round" fill="none"/><path d="M48,129 Q42,142 46,156" stroke="rgba(255,255,255,.22)" strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="6 5"/></>);
+  if (id === "bandana") return (<><path d="M42,114 Q85,128 128,114 Q128,128 85,146 Q42,128 42,114 Z" fill="#2DD4BF"/><path d="M42,114 Q85,124 128,114" stroke="rgba(255,255,255,.28)" strokeWidth="1.5" fill="none"/><path d="M65,140 L73,158 Q79,167 83,165" stroke="#2DD4BF" strokeWidth="9" strokeLinecap="round" fill="none"/></>);
   return null;
+}
+
+/* ─── DOG SVG ─────────────────────────────────────────────── */
+function DogSVG({ anim, acc, onClick }: { anim: AnimState; acc: AccId; onClick: () => void; mood?: MoodTier; }) {
+  const sleep = anim === "sleep";
+  return (
+    <svg viewBox="0 0 170 175" onClick={onClick} style={{ width: 170, height: 175, cursor: "pointer", overflow: "visible", filter: "drop-shadow(0 12px 30px rgba(0,0,0,0.15))" }}>
+      <defs>
+        <radialGradient id="dog-fur" cx="40%" cy="30%" r="65%">
+          <stop offset="0%"   stopColor="#F2D898"/><stop offset="70%"  stopColor="#D4AE6A"/><stop offset="100%" stopColor="#A07030"/>
+        </radialGradient>
+        <radialGradient id="dog-rim" cx="50%" cy="50%" r="50%">
+          <stop offset="90%"  stopColor="transparent"/><stop offset="100%" stopColor="white" stopOpacity="0.22"/>
+        </radialGradient>
+      </defs>
+      <g className={anim === "walk" ? "sp-walk" : "sp-idle"}>
+        <ellipse cx="85" cy="170" rx="42" ry="6" fill="rgba(0,0,0,0.10)"/>
+        <g className="sp-tail-d">
+          <path d="M125,108 Q151,89 155,67 Q157,53 149,49" stroke="#8A5C18" strokeWidth="13" fill="none" strokeLinecap="round"/>
+          <path d="M125,108 Q151,89 155,67 Q157,53 149,49" stroke="#D4AE6A" strokeWidth="9" fill="none" strokeLinecap="round"/>
+          <circle cx="149" cy="49" r="8" fill="#C09040"/><circle cx="149" cy="49" r="5" fill="#F0D890"/>
+        </g>
+        <circle cx="85" cy="122" r="50" fill="url(#dog-fur)"/>
+        <circle cx="85" cy="122" r="50" fill="url(#dog-rim)"/>
+        <ellipse cx="85" cy="132" rx="28" ry="22" fill="white" opacity="0.08"/>
+        <rect x="58" y="130" width="18" height="28" rx="9" fill="#8D5B20" opacity="0.4"/>
+        <rect x="58" y="128" width="18" height="28" rx="9" fill="url(#dog-fur)"/>
+        <ellipse cx="67" cy="160" rx="11" ry="6" fill="#B07830"/>
+        <rect x="94" y="130" width="18" height="28" rx="9" fill="#8D5B20" opacity="0.4"/>
+        <rect x="94" y="128" width="18" height="28" rx="9" fill="url(#dog-fur)"/>
+        <ellipse cx="103" cy="160" rx="11" ry="6" fill="#B07830"/>
+        <circle cx="85" cy="68" r="54" fill="url(#dog-fur)"/>
+        <circle cx="85" cy="68" r="54" fill="url(#dog-rim)"/>
+        <path d="M38,42 Q12,38 18,92 Q36,110 50,84 Z" fill="#A07030"/>
+        <path d="M40,46 Q18,44 22,88 Q38,104 48,82 Z" fill="#C09040" opacity="0.35"/>
+        <path d="M132,42 Q158,38 152,92 Q134,110 120,84 Z" fill="#A07030"/>
+        <path d="M130,46 Q152,44 148,88 Q132,104 122,82 Z" fill="#C09040" opacity="0.35"/>
+        <ellipse cx="85" cy="96" rx="28" ry="20" fill="#E8C878" opacity="0.50"/>
+        <path d="M76,104 Q85,112 94,104" stroke="#3A1F0C" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+        <ellipse cx="85" cy="110" rx="6" ry="4.5" fill="#E87090" opacity="0.85"/>
+        <DogAcc id={acc}/>
+        {!sleep ? (
+          <>
+            <g className="sp-eye" style={{transformOrigin:"68px 64px"}}>
+              <circle cx="68"  cy="64" r="11" fill="#1A0E04"/><circle cx="65"  cy="60" r="4"  fill="white"/><circle cx="71"  cy="69" r="1.8" fill="white" opacity="0.5"/>
+            </g>
+            <g className="sp-eye2" style={{transformOrigin:"102px 64px"}}>
+              <circle cx="102" cy="64" r="11" fill="#1A0E04"/><circle cx="99"  cy="60" r="4"  fill="white"/><circle cx="105" cy="69" r="1.8" fill="white" opacity="0.5"/>
+            </g>
+          </>
+        ) : (
+          <path d="M57,67 Q68,75 79,67 M91,67 Q102,75 113,67" stroke="#1A0E04" strokeWidth="3.5" fill="none" strokeLinecap="round"/>
+        )}
+        <path d="M58,51 Q68,46 78,51" stroke="#7A5020" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
+        <path d="M92,51 Q102,46 112,51" stroke="#7A5020" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
+        <ellipse cx="85" cy="92" rx="10" ry="7.5" fill="#1E0E04"/>
+        <ellipse cx="83" cy="89" rx="3.5" ry="2" fill="white" opacity="0.28"/>
+        <ellipse cx="50"  cy="82" rx="10" ry="7" fill="#F4A0A8" opacity="0.22"/>
+        <ellipse cx="120" cy="82" rx="10" ry="7" fill="#F4A0A8" opacity="0.22"/>
+      </g>
+    </svg>
+  );
 }
 
 /* ─── ACCESSORY PREVIEW ─────────────────────────────────── */
 function AccPreview({ id }: { id: AccId }) {
   const sz = { width: 48, height: 36 };
-  if (id === "none")       return (<svg {...sz} viewBox="0 0 48 36"><rect x="4" y="4" width="40" height="28" rx="8" fill="rgba(255,255,255,.06)" stroke="rgba(255,255,255,.12)" strokeWidth="1.5"/><line x1="16" y1="12" x2="32" y2="24" stroke="rgba(255,255,255,.25)" strokeWidth="2" strokeLinecap="round"/><line x1="32" y1="12" x2="16" y2="24" stroke="rgba(255,255,255,.25)" strokeWidth="2" strokeLinecap="round"/></svg>);
-  if (id === "cap")        return (<svg {...sz} viewBox="0 0 80 42"><rect x="8" y="24" width="64" height="11" rx="5.5" fill="#7C6AFF"/><polygon points="40,4 70,24 10,24" fill="#5E4FD4"/><circle cx="70" cy="40" r="5" fill="#A594FE"/></svg>);
-  if (id === "glasses")    return (<svg {...sz} viewBox="0 0 88 30"><circle cx="22" cy="15" r="13" stroke="#7C6AFF" strokeWidth="2.5" fill="rgba(124,106,255,.1)"/><circle cx="66" cy="15" r="13" stroke="#7C6AFF" strokeWidth="2.5" fill="rgba(124,106,255,.1)"/><line x1="35" y1="15" x2="53" y2="15" stroke="#7C6AFF" strokeWidth="2"/></svg>);
-  if (id === "crown")      return (<svg {...sz} viewBox="0 0 80 34"><path d="M4,30 L18,8 L40,22 L62,8 L76,30 Z" fill="#FBBF24"/><circle cx="40" cy="8" r="5" fill="#FDE68A"/></svg>);
-  if (id === "bow")        return (<svg {...sz} viewBox="0 0 80 30"><ellipse cx="22" cy="15" rx="19" ry="12" fill="#7C6AFF"/><ellipse cx="58" cy="15" rx="19" ry="12" fill="#7C6AFF"/><circle cx="40" cy="15" r="8" fill="#C4BBFF"/></svg>);
-  if (id === "scarf")      return (<svg {...sz} viewBox="0 0 80 20"><path d="M4,10 Q40,2 76,10 Q40,18 4,10Z" fill="#2DD4BF"/></svg>);
-  if (id === "hat")        return (<svg {...sz} viewBox="0 0 80 46"><ellipse cx="40" cy="38" rx="34" ry="9" fill="#7C6AFF"/><rect x="24" y="2" width="32" height="38" rx="5" fill="#7C6AFF"/><circle cx="40" cy="2" r="5.5" fill="#C4BBFF"/></svg>);
-  if (id === "headband")   return (<svg {...sz} viewBox="0 0 80 30"><path d="M4,22 Q40,4 76,22" stroke="#7C6AFF" strokeWidth="8" strokeLinecap="round" fill="none"/><circle cx="40" cy="12" r="11" fill="#7C6AFF"/><circle cx="40" cy="12" r="5.5" fill="#C4BBFF"/></svg>);
-  if (id === "monocle")    return (<svg {...sz} viewBox="0 0 60 46"><circle cx="22" cy="18" r="16" stroke="#8B7355" strokeWidth="3" fill="rgba(251,191,36,.1)"/><line x1="36" y1="28" x2="50" y2="42" stroke="#8B7355" strokeWidth="2.5" strokeLinecap="round"/></svg>);
-  if (id === "sunglasses") return (<svg {...sz} viewBox="0 0 88 30"><rect x="4" y="6" width="32" height="18" rx="6" fill="#1A1040"/><rect x="52" y="6" width="32" height="18" rx="6" fill="#1A1040"/><line x1="36" y1="15" x2="52" y2="15" stroke="#7C6AFF" strokeWidth="2"/></svg>);
-  if (id === "ribbon")     return (<svg {...sz} viewBox="0 0 80 30"><path d="M6,20 Q40,4 74,20" stroke="#FF80B0" strokeWidth="9" strokeLinecap="round" fill="none"/><circle cx="40" cy="12" r="9" fill="#FF80B0"/><circle cx="40" cy="12" r="4.5" fill="#FFB8D4"/></svg>);
-  if (id === "halo")       return (<svg {...sz} viewBox="0 0 80 24"><ellipse cx="40" cy="12" rx="30" ry="10" fill="none" stroke="#FFD060" strokeWidth="4"/><ellipse cx="40" cy="12" rx="30" ry="10" fill="none" stroke="#FFE898" strokeWidth="2" opacity=".6"/></svg>);
-  if (id === "earring")    return (<svg {...sz} viewBox="0 0 40 40"><circle cx="20" cy="12" r="7" fill="none" stroke="#FFD060" strokeWidth="2.5"/><circle cx="20" cy="26" r="6" fill="#FFB820"/></svg>);
-  if (id === "wizard")     return (<svg {...sz} viewBox="0 0 80 50"><path d="M40,2 L20,44 L60,44 Z" fill="#5E4FD4"/><ellipse cx="40" cy="44" rx="22" ry="7" fill="#7C6AFF"/><circle cx="40" cy="4" r="4" fill="#C4BBFF"/></svg>);
-  if (id === "bandana")    return (<svg {...sz} viewBox="0 0 80 30"><path d="M4,14 Q40,2 76,14 Q40,26 4,14Z" fill="#2DD4BF"/></svg>);
+  if (id === "none")     return <svg {...sz} viewBox="0 0 48 36"><rect x="4" y="4" width="40" height="28" rx="8" fill="rgba(255,255,255,.06)" stroke="rgba(255,255,255,.12)" strokeWidth="1.5"/><line x1="16" y1="12" x2="32" y2="24" stroke="rgba(255,255,255,.25)" strokeWidth="2" strokeLinecap="round"/><line x1="32" y1="12" x2="16" y2="24" stroke="rgba(255,255,255,.25)" strokeWidth="2" strokeLinecap="round"/></svg>;
+  if (id === "cap")      return <svg {...sz} viewBox="0 0 80 42"><rect x="8" y="24" width="64" height="11" rx="5.5" fill="#7C6AFF"/><polygon points="40,4 70,24 10,24" fill="#5E4FD4"/><circle cx="70" cy="40" r="5" fill="#A594FE"/></svg>;
+  if (id === "glasses")  return <svg {...sz} viewBox="0 0 88 30"><circle cx="22" cy="15" r="13" stroke="#7C6AFF" strokeWidth="2.5" fill="rgba(124,106,255,.1)"/><circle cx="66" cy="15" r="13" stroke="#7C6AFF" strokeWidth="2.5" fill="rgba(124,106,255,.1)"/><line x1="35" y1="15" x2="53" y2="15" stroke="#7C6AFF" strokeWidth="2"/></svg>;
+  if (id === "crown")    return <svg {...sz} viewBox="0 0 80 34"><path d="M4,30 L18,8 L40,22 L62,8 L76,30 Z" fill="#FBBF24"/><circle cx="40" cy="8" r="5" fill="#FDE68A"/></svg>;
+  if (id === "bow")      return <svg {...sz} viewBox="0 0 80 30"><ellipse cx="22" cy="15" rx="19" ry="12" fill="#7C6AFF"/><ellipse cx="58" cy="15" rx="19" ry="12" fill="#7C6AFF"/><circle cx="40" cy="15" r="8" fill="#C4BBFF"/></svg>;
+  if (id === "scarf")    return <svg {...sz} viewBox="0 0 80 20"><path d="M4,10 Q40,2 76,10 Q40,18 4,10Z" fill="#2DD4BF"/></svg>;
+  if (id === "hat")      return <svg {...sz} viewBox="0 0 80 46"><ellipse cx="40" cy="38" rx="34" ry="9" fill="#FF80B0"/><polygon points="40,2 10,38 70,38" fill="#FF5FA0"/><circle cx="40" cy="2" r="5.5" fill="#FFD060"/></svg>;
+  if (id === "headband") return <svg {...sz} viewBox="0 0 80 30"><path d="M4,22 Q40,4 76,22" stroke="#7C6AFF" strokeWidth="8" strokeLinecap="round" fill="none"/><circle cx="40" cy="12" r="11" fill="#7C6AFF"/><circle cx="40" cy="12" r="5.5" fill="#C4BBFF"/></svg>;
+  if (id === "monocle")  return <svg {...sz} viewBox="0 0 60 46"><circle cx="22" cy="18" r="16" stroke="#8B7355" strokeWidth="3" fill="rgba(251,191,36,.1)"/><line x1="36" y1="28" x2="50" y2="42" stroke="#8B7355" strokeWidth="2.5" strokeLinecap="round"/></svg>;
+  if (id === "ribbon")   return <svg {...sz} viewBox="0 0 80 30"><path d="M6,20 Q40,4 74,20" stroke="#FF80B0" strokeWidth="9" strokeLinecap="round" fill="none"/><circle cx="40" cy="12" r="9" fill="#FF80B0"/><circle cx="40" cy="12" r="4.5" fill="#FFB8D4"/></svg>;
+  if (id === "halo")     return <svg {...sz} viewBox="0 0 80 24"><ellipse cx="40" cy="12" rx="30" ry="10" fill="none" stroke="#FFD060" strokeWidth="4"/><ellipse cx="40" cy="12" rx="30" ry="10" fill="none" stroke="#FFE898" strokeWidth="2" opacity=".6"/></svg>;
+  if (id === "earring")  return <svg {...sz} viewBox="0 0 40 40"><circle cx="20" cy="12" r="7" fill="none" stroke="#FFD060" strokeWidth="2.5"/><circle cx="20" cy="26" r="6" fill="#FFB820"/></svg>;
+  if (id === "wizard")   return <svg {...sz} viewBox="0 0 80 50"><path d="M40,2 L20,44 L60,44 Z" fill="#5E4FD4"/><ellipse cx="40" cy="44" rx="22" ry="7" fill="#7C6AFF"/><circle cx="40" cy="4" r="4" fill="#C4BBFF"/></svg>;
+  if (id === "bandana")  return <svg {...sz} viewBox="0 0 80 30"><path d="M4,14 Q40,2 76,14 Q40,26 4,14Z" fill="#2DD4BF"/></svg>;
   return null;
-}
-
-/* ─── CAT SVG ─────────────────────────────────────────────── */
-function CatSVG({ anim, acc, onClick, mood }: { anim: AnimState; acc: AccId; onClick: () => void; mood?: MoodTier }) {
-  const sleep = anim === "sleep";
-  const ecstatic = mood === "ecstatic";
-  const starving = mood === "starving";
-  
-  return (
-    <svg viewBox="0 0 170 175" onClick={onClick} style={{ width: 170, height: 175, cursor: "pointer", overflow: "visible", filter: "drop-shadow(0 12px 30px rgba(108,92,231,0.2))" }}>
-      <defs>
-        {/* Deep 3D Body Gradient */}
-        <radialGradient id="cat-3d-fur" cx="40%" cy="35%" r="60%">
-          <stop offset="0%" stopColor="#FBE0C7" />
-          <stop offset="60%" stopColor="#E39B6B" />
-          <stop offset="100%" stopColor="#C97A4A" />
-        </radialGradient>
-        {/* Soft Belly Inset */}
-        <radialGradient id="cat-3d-belly" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#FFF1E3" />
-          <stop offset="100%" stopColor="#F6CFAE" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-
-      <g className={anim === "walk" ? "sp-walk" : "sp-idle"}>
-        {/* Floor Shadow */}
-        <ellipse cx="85" cy="168" rx="42" ry="8" fill="rgba(24,22,46,0.12)" />
-
-        {/* Tail - 3D Volume */}
-        <path d="M54,132 Q18,125 14,106 Q10,84 30,77" stroke="#A05A35" strokeWidth="14" fill="none" strokeLinecap="round" className="sp-tail-c" />
-        <path d="M54,132 Q18,125 14,106 Q10,84 30,77" stroke="url(#cat-3d-fur)" strokeWidth="10" fill="none" strokeLinecap="round" className="sp-tail-c" />
-
-        {/* Back Legs with Ambient Occlusion */}
-        <circle cx="66" cy="148" r="14" fill="#A05A35" />
-        <circle cx="104" cy="148" r="14" fill="#A05A35" />
-
-        {/* Main Body Sphere */}
-        <circle cx="85" cy="118" r="48" fill="url(#cat-3d-fur)" />
-        <ellipse cx="85" cy="125" rx="30" ry="22" fill="url(#cat-3d-belly)" />
-
-        {/* Front Paws - Floating 3D style */}
-        <circle cx="62" cy="144" r="14" fill="#A05A35" />
-        <circle cx="62" cy="140" r="14" fill="#E39B6B" />
-        <circle cx="108" cy="144" r="14" fill="#A05A35" />
-        <circle cx="108" cy="140" r="14" fill="#E39B6B" />
-
-        {/* Head Sphere */}
-        <circle cx="85" cy="72" r="52" fill="url(#cat-3d-fur)" />
-        
-        {/* Ears with Interior Depth */}
-        <path d="M40,40 L25,5 L70,30 Z" fill="#A05A35" />
-        <path d="M45,40 L35,15 L65,32 Z" fill="#F7C7A3" opacity="0.6" />
-        <path d="M130,40 L145,5 L100,30 Z" fill="#A05A35" />
-        <path d="M125,40 L135,15 L105,32 Z" fill="#F7C7A3" opacity="0.6" />
-
-        {/* Glassy Eyes with Dual Highlights */}
-        {!sleep && (
-          <g>
-            {/* Left Eye */}
-            <circle cx="62" cy="72" r="11" fill="#1A162E" className="sp-eye" />
-            <circle cx="59" cy="68" r="4" fill="white" opacity="0.8" /> 
-            <circle cx="65" cy="76" r="1.5" fill="white" opacity="0.3" /> 
-            {/* Right Eye */}
-            <circle cx="108" cy="72" r="11" fill="#1A162E" className="sp-eye2" />
-            <circle cx="105" cy="68" r="4" fill="white" opacity="0.8" />
-            <circle cx="111" cy="76" r="1.5" fill="white" opacity="0.3" />
-          </g>
-        )}
-        {sleep && <path d="M55,75 Q65,82 75,75 M95,75 Q105,82 115,75" stroke="#1A162E" strokeWidth="4" fill="none" strokeLinecap="round" />}
-
-        {/* 3D Snout/Muzzle (W shape) */}
-        <ellipse cx="76" cy="94" rx="14" ry="10" fill="white" opacity="0.12" />
-        <ellipse cx="94" cy="94" rx="14" ry="10" fill="white" opacity="0.12" />
-        <circle cx="85" cy="88" r="5" fill="#F29AA3" />
-        <circle cx="83.5" cy="86" r="1.5" fill="white" opacity="0.5" />
-
-        <CatAcc id={acc}/>
-      </g>
-    </svg>
-  );
-}
-
-/* ─── DOG SVG ─────────────────────────────────────────────── */
-function DogSVG({ anim, acc, onClick, mood }: { anim: AnimState; acc: AccId; onClick: () => void; mood?: MoodTier }) {
-  const sleep = anim === "sleep";
-  return (
-    <svg viewBox="0 0 170 175" onClick={onClick} style={{ width:170,height:175,cursor:"pointer",overflow:"visible",filter:"drop-shadow(0 12px 30px rgba(0,0,0,0.15))" }}>
-      <defs>
-        <radialGradient id="dog-body-deep" cx="40%" cy="30%" r="65%">
-          <stop offset="0%" stopColor="#F2D898" />
-          <stop offset="70%" stopColor="#D4AE6A" />
-          <stop offset="100%" stopColor="#A07030" />
-        </radialGradient>
-        <radialGradient id="dog-rim" cx="50%" cy="50%" r="50%">
-          <stop offset="90%" stopColor="transparent" />
-          <stop offset="100%" stopColor="white" stopOpacity="0.25" />
-        </radialGradient>
-      </defs>
-      
-      <g className={anim === "walk" ? "sp-walk" : "sp-idle"}>
-        <ellipse cx="85" cy="168" rx="46" ry="8" fill="rgba(0,0,0,0.12)"/>
-
-        {/* Body Sphere */}
-        <circle cx="85" cy="118" r="52" fill="url(#dog-body-deep)" />
-        <circle cx="85" cy="118" r="52" fill="url(#dog-rim)" />
-
-        {/* Thick 3D Legs */}
-        <g>
-          <rect x="58" y="132" width="20" height="30" rx="10" fill="#8D5B20" opacity="0.4" />
-          <rect x="58" y="128" width="18" height="28" rx="9" fill="url(#dog-body-deep)" />
-          <rect x="94" y="132" width="20" height="30" rx="10" fill="#8D5B20" opacity="0.4" />
-          <rect x="94" y="128" width="18" height="28" rx="9" fill="url(#dog-body-deep)" />
-        </g>
-
-        {/* Head Sphere */}
-        <circle cx="85" cy="78" r="54" fill="url(#dog-body-deep)" />
-        <circle cx="85" cy="78" r="54" fill="url(#dog-rim)" />
-        
-        {/* Soft Floppy Ears */}
-        <path d="M40,45 Q15,40 22,95 Q40,110 52,85 Z" fill="#A07030" />
-        <path d="M130,45 Q155,40 148,95 Q130,110 118,85 Z" fill="#A07030" />
-
-        {/* Snout Volume */}
-        <ellipse cx="85" cy="104" rx="26" ry="18" fill="white" opacity="0.2" />
-        <path d="M75,106 Q85,114 95,106" stroke="#3A1F0C" strokeWidth="3" fill="none" strokeLinecap="round" />
-
-        {!sleep ? (
-          <g>
-            <circle cx="68" cy="78" r="10" fill="#2A1A0A" />
-            <circle cx="65" cy="74" r="4" fill="white" opacity="0.7" />
-            <circle cx="102" cy="78" r="10" fill="#2A1A0A" />
-            <circle cx="99" cy="74" r="4" fill="white" opacity="0.7" />
-          </g>
-        ) : (
-          <path d="M60,82 Q70,88 80,82 M90,82 Q100,88 110,82" stroke="#2A1A0A" strokeWidth="4" fill="none" strokeLinecap="round" />
-        )}
-        
-        <rect x="78" y="92" width="14" height="9" rx="5" fill="#1A0E04" />
-        <DogAcc id={acc}/>
-      </g>
-    </svg>
-  );
 }
 
 /* ─── SCENE BG ───────────────────────────────────────────── */
@@ -637,7 +765,7 @@ function HungerBanner({ petName, onDismiss }: { petName: string; onDismiss: () =
   return (
     <div style={{background:"color-mix(in srgb,var(--c-red) 8%,var(--c-surface))",border:"1px solid color-mix(in srgb,var(--c-red) 25%,transparent)",borderRadius:16,padding:"13px 14px",display:"flex",alignItems:"center",gap:12,animation:"sp-hunger-banner .4s ease both",boxShadow:"0 2px 12px color-mix(in srgb,var(--c-red) 12%,transparent)"}}>
       <div style={{width:38,height:38,borderRadius:11,background:"color-mix(in srgb,var(--c-red) 15%,transparent)",border:"1px solid color-mix(in srgb,var(--c-red) 25%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:"sp-heartbeat 1.5s ease-in-out infinite"}}>
-        <Icon name="help" size={17} color="var(--c-red)"/>
+        <Icon name="paw" size={17} color="var(--c-red)"/>
       </div>
       <div style={{flex:1}}>
         <div style={{fontSize:13,fontWeight:700,color:"var(--c-red)",display:"flex",alignItems:"center",gap:5,marginBottom:2}}><Icon name="paw" size={12} color="var(--c-red)"/>Really hungry!</div>
@@ -676,32 +804,6 @@ function DecayPop({ ticks }: { ticks: number }) {
   return (
     <div style={{position:"fixed",top:72,left:"50%",transform:"translateX(-50%)",zIndex:300,background:"var(--c-red)",color:"#fff",fontSize:12,fontWeight:700,padding:"8px 16px",borderRadius:20,boxShadow:"0 4px 18px rgba(224,64,64,.45)",animation:"sp-decay-tick 2.2s ease-out forwards",pointerEvents:"none",fontFamily:"var(--font-body)",whiteSpace:"nowrap" as const,display:"flex",alignItems:"center",gap:6}}>
       <Icon name="clock" size={13} color="white"/>−{ticks} treat{ticks>1?"s":""} lost while away
-    </div>
-  );
-}
-
-/* ─── SIMULATE EXPLAINER ─────────────────────────────────── */
-function SimulateExplainer({ accentHex }: { accentHex: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div style={{marginBottom:12,borderRadius:14,border:"1px solid var(--c-border)",overflow:"hidden"}}>
-      <button onClick={() => setOpen(o => !o)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",background:"rgba(255,255,255,.03)",border:"none",cursor:"pointer",fontFamily:"var(--font-body)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}><Icon name="info" size={13} color="var(--c-text3)"/><span style={{fontSize:12,fontWeight:600,color:"var(--c-text2)"}}>How rewards &amp; test button work</span></div>
-        <svg style={{width:14,height:14,color:"var(--c-text3)",transition:"transform .2s",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      {open && (
-        <div style={{padding:"0 14px 14px",background:"rgba(255,255,255,.02)",animation:"sp-fade-up .2s ease both"}}>
-          <div style={{height:1,background:"var(--c-border)",marginBottom:12}}/>
-          {[{icon:"sparkle",label:"Complete a session",desc:"Rate your tutor after a session ends → treats queued automatically"},{icon:"book",label:"Submit a quiz",desc:"Finish any quiz pack in Study Hub → treats credited instantly"},{icon:"flame",label:"Tick a study task",desc:"Mark a task DONE in Study Planner → streak treat added"}].map(r => (
-            <div key={r.label} style={{display:"flex",gap:10,marginBottom:10,alignItems:"flex-start"}}>
-              <div style={{width:28,height:28,borderRadius:8,background:`${accentHex}18`,border:`1px solid ${accentHex}28`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}><Icon name={r.icon} size={13} color={accentHex}/></div>
-              <div><div style={{fontSize:12,fontWeight:600,color:"var(--c-text)"}}>{r.label}</div><div style={{fontSize:11,color:"var(--c-text3)",marginTop:2,lineHeight:1.45}}>{r.desc}</div></div>
-            </div>
-          ))}
-          <div style={{height:1,background:"var(--c-border)",margin:"10px 0"}}/>
-          <div style={{fontSize:11,color:"var(--c-text3)",lineHeight:1.55,background:"rgba(251,191,36,.06)",border:"1px solid rgba(251,191,36,.18)",borderRadius:10,padding:"9px 12px"}}>The <strong style={{color:"var(--c-amber)"}}>Test</strong> button simulates an activity for demo purposes.</div>
-        </div>
-      )}
     </div>
   );
 }
@@ -771,38 +873,53 @@ function ActivityLog({ log }: { log: SPLogEntry[] }) {
 }
 
 /* ─── ONBOARDING ─────────────────────────────────────────── */
+// Renders INSIDE the .sp panel — no portal, no fixed positioning.
 function Onboarding({ onDone }: { onDone: (t: PetType, n: string) => void }) {
   const [step, setStep] = useState(0);
   const [pet, setPet] = useState<PetType | null>(null);
   const [name, setName] = useState("");
+
   const FEATURES = [
     {icon:"paw",title:"Animated companion",desc:"Real-time idle, walk, and reaction states."},
     {icon:"cookie",title:"Activity rewards",desc:"Earns treats from study sessions automatically."},
     {icon:"bolt",title:"Instant reactions",desc:"Reacts to every tap, feed, and activity."},
-    {icon:"shirt",title:"15 accessories",desc:"Unlock with points — level up for free drops!"},
+    {icon:"shirt",title:"14 accessories",desc:"Unlock with points — level up for free drops!"},
   ];
   const HOW = [
     {title:"Complete any activity",desc:"The system automatically queues treats to a pending tray."},
     {title:"Tap Give Treat",desc:"Watch your companion eat from a bowl in real time."},
     {title:"Keep the bar full",desc:"Treats decay over time — study daily to keep them topped up."},
   ];
+
   return (
-    <div className="sp" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",padding:24}}>
-      <style>{KF}</style>
-      <div style={{width:"100%",maxWidth:460}}>
-        <div style={{display:"flex",gap:6,marginBottom:32,justifyContent:"center"}}>
-          {[0,1,2,3].map(i=><div key={i} style={{height:3,borderRadius:3,width:i===step?32:20,background:i<=step?"var(--c-accent)":"rgba(255,255,255,.1)",transition:"all .35s cubic-bezier(.34,1.56,.64,1)"}}/>)}
+    <div className="sp-onboarding-inner">
+      <div style={{width:"100%",maxWidth:420}}>
+        {/* Progress dots */}
+        <div style={{display:"flex",gap:6,marginBottom:28,justifyContent:"center"}}>
+          {[0,1,2,3].map(i=>(
+            <div key={i} style={{height:3,borderRadius:3,width:i===step?32:20,background:i<=step?"var(--c-accent)":"rgba(108,92,231,.18)",transition:"all .35s cubic-bezier(.34,1.56,.64,1)"}}/>
+          ))}
         </div>
-        <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:24,padding:"36px 32px",boxShadow:"var(--shadow-lg)"}}>
+
+        <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:24,padding:"32px 28px",boxShadow:"var(--shadow-lg)"}}>
+
+          {/* Step 0 — Welcome */}
           {step === 0 && (
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:24,animation:"sp-fade-up .4s ease both"}}>
-              <div style={{width:72,height:72,borderRadius:20,background:"linear-gradient(135deg,var(--c-accent),#5E4FD4)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"var(--shadow-accent)",animation:"sp-float 3s ease-in-out infinite"}}><Icon name="paw" size={32} color="white" strokeWidth={1.5}/></div>
-              <div style={{textAlign:"center"}}><h1 style={{fontSize:"1.75rem",fontFamily:"var(--font-serif)",fontStyle:"italic",color:"var(--c-text)",margin:"0 0 10px",fontWeight:400}}>Study Companion</h1><p style={{fontSize:14,color:"var(--c-text2)",lineHeight:1.65,margin:0,maxWidth:"28ch"}}>A virtual companion that grows alongside your learning progress.</p></div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,width:"100%"}}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:22,animation:"sp-fade-up .4s ease both"}}>
+              <div style={{width:68,height:68,borderRadius:20,background:"linear-gradient(135deg,var(--c-accent),#5E4FD4)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"var(--shadow-accent)",animation:"sp-float 3s ease-in-out infinite"}}>
+                <Icon name="paw" size={30} color="white" strokeWidth={1.5}/>
+              </div>
+              <div style={{textAlign:"center"}}>
+                <h1 style={{fontSize:"1.65rem",fontFamily:"var(--font-serif)",fontStyle:"italic",color:"var(--c-text)",margin:"0 0 10px",fontWeight:400}}>Study Companion</h1>
+                <p style={{fontSize:13,color:"var(--c-text2)",lineHeight:1.65,margin:0,maxWidth:"28ch"}}>A virtual companion that grows alongside your learning progress.</p>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,width:"100%"}}>
                 {FEATURES.map((f,i)=>(
-                  <div key={f.title} style={{background:"rgba(255,255,255,.04)",border:"1px solid var(--c-border)",borderRadius:14,padding:"14px 15px",animation:`sp-pop .4s ease both`,animationDelay:`${i*0.07}s`}}>
-                    <div style={{width:32,height:32,borderRadius:9,background:"rgba(124,106,255,.15)",border:"1px solid rgba(124,106,255,.2)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10}}><Icon name={f.icon} size={15} color="var(--c-accent2)"/></div>
-                    <div style={{fontSize:12,fontWeight:600,color:"var(--c-text)",marginBottom:4}}>{f.title}</div>
+                  <div key={f.title} style={{background:"rgba(108,92,231,.04)",border:"1px solid var(--c-border)",borderRadius:14,padding:"13px 14px",animation:`sp-pop .4s ease both`,animationDelay:`${i*0.07}s`}}>
+                    <div style={{width:30,height:30,borderRadius:9,background:"rgba(124,106,255,.15)",border:"1px solid rgba(124,106,255,.2)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:9}}>
+                      <Icon name={f.icon} size={14} color="var(--c-accent2)"/>
+                    </div>
+                    <div style={{fontSize:12,fontWeight:600,color:"var(--c-text)",marginBottom:3}}>{f.title}</div>
                     <div style={{fontSize:11,color:"var(--c-text3)",lineHeight:1.45}}>{f.desc}</div>
                   </div>
                 ))}
@@ -810,41 +927,84 @@ function Onboarding({ onDone }: { onDone: (t: PetType, n: string) => void }) {
               <ObBtn onClick={() => setStep(1)}>Get Started</ObBtn>
             </div>
           )}
+
+          {/* Step 1 — Choose pet */}
           {step === 1 && (
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:22,animation:"sp-fade-up .4s ease both"}}>
-              <div style={{textAlign:"center"}}><h2 style={{fontSize:"1.45rem",fontFamily:"var(--font-serif)",fontStyle:"italic",color:"var(--c-text)",margin:"0 0 8px",fontWeight:400}}>Choose your companion</h2><p style={{fontSize:13,color:"var(--c-text2)",margin:0}}>Pick one to start — switch anytime in Profile.</p></div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:20,animation:"sp-fade-up .4s ease both"}}>
+              <div style={{textAlign:"center"}}>
+                <h2 style={{fontSize:"1.4rem",fontFamily:"var(--font-serif)",fontStyle:"italic",color:"var(--c-text)",margin:"0 0 7px",fontWeight:400}}>Choose your companion</h2>
+                <p style={{fontSize:13,color:"var(--c-text2)",margin:0}}>Pick one to start — switch anytime in Profile.</p>
+              </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,width:"100%"}}>
                 {(["cat","dog"] as PetType[]).map(t => (
-                  <div key={t} onClick={()=>setPet(t)} style={{border:`1.5px solid ${pet===t?"var(--c-accent)":"var(--c-border)"}`,background:pet===t?"rgba(124,106,255,.1)":"rgba(255,255,255,.03)",borderRadius:18,padding:"16px 10px",cursor:"pointer",transition:"all .25s ease",display:"flex",flexDirection:"column",alignItems:"center",gap:8,boxShadow:pet===t?"0 0 0 4px rgba(124,106,255,.12)":"none"}}>
-                    <div style={{fontSize:11,fontWeight:600,color:pet===t?"var(--c-text)":"var(--c-text2)",textTransform:"capitalize" as const,marginTop:8}}>{t}</div>
-                    {pet===t && <div style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--c-accent2)",fontWeight:500}}><Icon name="check" size={12} color="var(--c-accent2)"/>Selected</div>}
+                  <div key={t} onClick={()=>setPet(t)}
+                    style={{border:`1.5px solid ${pet===t?"var(--c-accent)":"var(--c-border)"}`,background:pet===t?"rgba(124,106,255,.1)":"rgba(255,255,255,.03)",borderRadius:18,padding:"18px 10px",cursor:"pointer",transition:"all .25s ease",display:"flex",flexDirection:"column",alignItems:"center",gap:8,boxShadow:pet===t?"0 0 0 4px rgba(124,106,255,.12)":"none"}}>
+                    <Icon name={t} size={50} color={pet===t?"var(--c-accent)":"var(--c-text3)"} strokeWidth={1.4}/>
+                    <div style={{fontSize:12,fontWeight:600,color:pet===t?"var(--c-text)":"var(--c-text2)",textTransform:"capitalize" as const}}>{t}</div>
+                    {pet===t && (
+                      <div style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"var(--c-accent2)",fontWeight:500}}>
+                        <Icon name="check" size={12} color="var(--c-accent2)"/>Selected
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
-              <ObBtn onClick={()=>setStep(2)} disabled={!pet}>Continue</ObBtn>
+              <div style={{display:"flex",gap:8,width:"100%"}}>
+                <button onClick={()=>setStep(0)} style={{flex:"0 0 auto",padding:"12px 16px",border:"1px solid var(--c-border)",borderRadius:12,fontSize:13,fontWeight:600,cursor:"pointer",background:"var(--c-surface2)",color:"var(--c-text2)",fontFamily:"var(--font-body)"}}>Back</button>
+                <div style={{flex:1}}><ObBtn onClick={()=>setStep(2)} disabled={!pet}>Continue</ObBtn></div>
+              </div>
             </div>
           )}
+
+          {/* Step 2 — Name */}
           {step === 2 && (
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:22,animation:"sp-fade-up .4s ease both"}}>
-              <div style={{width:60,height:60,borderRadius:17,background:"rgba(124,106,255,.15)",border:"1px solid rgba(124,106,255,.2)",display:"flex",alignItems:"center",justifyContent:"center",animation:"sp-float 3s ease-in-out infinite"}}><Icon name="tag" size={26} color="var(--c-accent2)"/></div>
-              <div style={{textAlign:"center"}}><h2 style={{fontSize:"1.45rem",fontFamily:"var(--font-serif)",fontStyle:"italic",color:"var(--c-text)",margin:"0 0 8px",fontWeight:400}}>Name your companion</h2><p style={{fontSize:13,color:"var(--c-text2)",margin:0}}>Shown on your dashboard.</p></div>
-              <input value={name} onChange={e=>setName(e.target.value)} maxLength={16} placeholder="Mochi, Luna, Kopi…" style={{width:"100%",padding:"13px 18px",border:`1.5px solid ${name.trim()?"var(--c-accent)":"var(--c-border)"}`,borderRadius:12,fontSize:15,fontWeight:500,textAlign:"center",background:"rgba(255,255,255,.04)",color:"var(--c-text)",outline:"none",transition:"border-color .2s",fontFamily:"var(--font-body)",boxSizing:"border-box" as const}}/>
-              <ObBtn onClick={()=>setStep(3)} disabled={!name.trim()}>Continue</ObBtn>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:20,animation:"sp-fade-up .4s ease both"}}>
+              <div style={{width:56,height:56,borderRadius:16,background:"rgba(124,106,255,.15)",border:"1px solid rgba(124,106,255,.2)",display:"flex",alignItems:"center",justifyContent:"center",animation:"sp-float 3s ease-in-out infinite"}}>
+                <Icon name="tag" size={24} color="var(--c-accent2)"/>
+              </div>
+              <div style={{textAlign:"center"}}>
+                <h2 style={{fontSize:"1.4rem",fontFamily:"var(--font-serif)",fontStyle:"italic",color:"var(--c-text)",margin:"0 0 7px",fontWeight:400}}>Name your companion</h2>
+                <p style={{fontSize:13,color:"var(--c-text2)",margin:0}}>Shown on your dashboard.</p>
+              </div>
+              <input
+                value={name}
+                onChange={e=>setName(e.target.value)}
+                maxLength={16}
+                placeholder="Mochi, Luna, Kopi…"
+                style={{width:"100%",padding:"13px 18px",border:`1.5px solid ${name.trim()?"var(--c-accent)":"var(--c-border)"}`,borderRadius:12,fontSize:15,fontWeight:500,textAlign:"center",background:"rgba(255,255,255,.04)",color:"var(--c-text)",outline:"none",transition:"border-color .2s",fontFamily:"var(--font-body)",boxSizing:"border-box" as const}}
+              />
+              <div style={{display:"flex",gap:8,width:"100%"}}>
+                <button onClick={()=>setStep(1)} style={{flex:"0 0 auto",padding:"12px 16px",border:"1px solid var(--c-border)",borderRadius:12,fontSize:13,fontWeight:600,cursor:"pointer",background:"var(--c-surface2)",color:"var(--c-text2)",fontFamily:"var(--font-body)"}}>Back</button>
+                <div style={{flex:1}}><ObBtn onClick={()=>setStep(3)} disabled={!name.trim()}>Continue</ObBtn></div>
+              </div>
             </div>
           )}
+
+          {/* Step 3 — How it works */}
           {step === 3 && (
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:22,animation:"sp-fade-up .4s ease both"}}>
-              <div style={{width:60,height:60,borderRadius:17,background:"rgba(45,212,191,.12)",border:"1px solid rgba(45,212,191,.2)",display:"flex",alignItems:"center",justifyContent:"center",animation:"sp-heartbeat 1.6s ease-in-out infinite"}}><Icon name="check" size={26} color="var(--c-teal)"/></div>
-              <div style={{textAlign:"center"}}><h2 style={{fontSize:"1.45rem",fontFamily:"var(--font-serif)",fontStyle:"italic",color:"var(--c-text)",margin:"0 0 8px",fontWeight:400}}>All set</h2><p style={{fontSize:13,color:"var(--c-text2)",margin:0}}>Here's how to keep {name||"your companion"} happy.</p></div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:20,animation:"sp-fade-up .4s ease both"}}>
+              <div style={{width:56,height:56,borderRadius:16,background:"rgba(45,212,191,.12)",border:"1px solid rgba(45,212,191,.2)",display:"flex",alignItems:"center",justifyContent:"center",animation:"sp-heartbeat 1.6s ease-in-out infinite"}}>
+                <Icon name="check" size={24} color="var(--c-teal)"/>
+              </div>
+              <div style={{textAlign:"center"}}>
+                <h2 style={{fontSize:"1.4rem",fontFamily:"var(--font-serif)",fontStyle:"italic",color:"var(--c-text)",margin:"0 0 7px",fontWeight:400}}>All set</h2>
+                <p style={{fontSize:13,color:"var(--c-text2)",margin:0}}>Here's how to keep {name||"your companion"} happy.</p>
+              </div>
               <div style={{background:"rgba(255,255,255,.03)",border:"1px solid var(--c-border)",borderRadius:16,padding:"16px 18px",width:"100%"}}>
                 {HOW.map((h,i)=>(
                   <div key={h.title} style={{display:"flex",gap:14,marginBottom:i<HOW.length-1?14:0,textAlign:"left"}}>
-                    <div style={{width:28,height:28,borderRadius:"50%",background:"rgba(124,106,255,.15)",border:"1px solid rgba(124,106,255,.2)",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"var(--c-accent2)"}}>{i+1}</div>
-                    <div><div style={{fontSize:13,fontWeight:600,color:"var(--c-text)"}}>{h.title}</div><div style={{fontSize:11,color:"var(--c-text3)",lineHeight:1.5,marginTop:3}}>{h.desc}</div></div>
+                    <div style={{width:26,height:26,borderRadius:"50%",background:"rgba(124,106,255,.15)",border:"1px solid rgba(124,106,255,.2)",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"var(--c-accent2)"}}>{i+1}</div>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600,color:"var(--c-text)"}}>{h.title}</div>
+                      <div style={{fontSize:11,color:"var(--c-text3)",lineHeight:1.5,marginTop:3}}>{h.desc}</div>
+                    </div>
                   </div>
                 ))}
               </div>
-              <ObBtn onClick={()=>onDone(pet!,name.trim()||"Pal")}>Start Journey</ObBtn>
+              <div style={{display:"flex",gap:8,width:"100%"}}>
+                <button onClick={()=>setStep(2)} style={{flex:"0 0 auto",padding:"12px 16px",border:"1px solid var(--c-border)",borderRadius:12,fontSize:13,fontWeight:600,cursor:"pointer",background:"var(--c-surface2)",color:"var(--c-text2)",fontFamily:"var(--font-body)"}}>Back</button>
+                <div style={{flex:1}}><ObBtn onClick={()=>onDone(pet!,name.trim()||"Pal")}>Start Journey</ObBtn></div>
+              </div>
             </div>
           )}
         </div>
@@ -877,7 +1037,8 @@ export default function StudyPalPage() {
   const [decayPopTicks, setDecayPopTicks]           = useState(0);
   const [showLevelUp, setShowLevelUp]               = useState(false);
   const [newlyDroppedAcc, setNewlyDroppedAcc]       = useState<AccId | null>(null);
-  const [showGames, setShowGames]                   = useState(false); // ← mini-games
+  const [showGames, setShowGames]                   = useState(false);
+  const [showResetConfirm, setShowResetConfirm]     = useState(false);
 
   const animRef    = useRef<AnimState>("idle");
   const moodT      = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -894,60 +1055,40 @@ export default function StudyPalPage() {
   const PCOLORS = ["#7C6AFF","#A594FE","#C4BBFF","#2DD4BF","#60AEFF","#FBBF24","#34D399"];
 
   useEffect(() => {
-  let mounted = true;
-
-  async function initStudypal() {
-    const {
-      data: { session },
-    } = await supabaseBrowser.auth.getSession();
-
-    if (!mounted) return;
-    if (!session) {
-      console.log("[STUDYPAL] no session yet, skipping server sync");
-      return;
-    }
-
-    await studypalLoadFromServer();
-    studypalScheduleSync();
-  }
-
-  initStudypal();
-
-  const {
-    data: { subscription },
-  } = supabaseBrowser.auth.onAuthStateChange(async (_event, session) => {
-    if (!mounted) return;
-    if (!session) return;
-
-    await studypalLoadFromServer();
-    studypalScheduleSync();
-  });
-
-  return () => {
-    mounted = false;
-    subscription.unsubscribe();
-  };
-}, []);
-
-  // ── LOAD + DECAY ON MOUNT ───────────────────────────────────
-  useEffect(() => {
-    // Load from server first, merge with localStorage (winner = newer updatedAt)
-    studypalLoadFromServer().then((serverState) => {
-      if (serverState) {
-        const reloaded = load();
-        setS(reloaded);
+    let mounted = true;
+    async function initStudypal() {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      if (!mounted) return;
+      if (!session) return;
+      await studypalLoadFromServer();
+      if (mounted) {
+        setS(prev => {
+          const reloaded = load();
+          return { ...reloaded, pending: Math.max(prev.pending, reloaded.pending), treats: Math.max(prev.treats, reloaded.treats) };
+        });
       }
+      studypalScheduleSync();
+    }
+    initStudypal();
+    const { data: { subscription } } = supabaseBrowser.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted || !session) return;
+      await studypalLoadFromServer();
+      if (mounted) {
+        setS(prev => {
+          const reloaded = load();
+          return { ...reloaded, pending: Math.max(prev.pending, reloaded.pending), treats: Math.max(prev.treats, reloaded.treats) };
+        });
+      }
+      studypalScheduleSync();
     });
+    return () => { mounted = false; subscription.unsubscribe(); };
+  }, []);
 
+  useEffect(() => {
     const loaded = load();
     setS(loaded);
-
     const lost = studypalApplyDecayOnMount();
-    if (lost > 0) {
-      setDecayPopTicks(lost);
-      setTimeout(() => setDecayPopTicks(0), 2500);
-    }
-
+    if (lost > 0) { setDecayPopTicks(lost); setTimeout(() => setDecayPopTicks(0), 2500); }
     const lastFed = loaded.lastFedAt;
     const isHungry = !lastFed || (Date.now() - lastFed > TWO_DAYS_MS);
     if (isHungry) {
@@ -961,16 +1102,23 @@ export default function StudyPalPage() {
           .catch(() => {});
       }
     }
-
     if (loaded.treatCapReached) { setShowTreatCapBanner(true); studypalClearTreatCap(); }
     if (loaded.leveledUp && loaded.pendingDrop) { setNewlyDroppedAcc(loaded.pendingDrop as AccId); setShowLevelUp(true); studypalClearPendingDrop(); }
+    studypalLoadFromServer().then((serverState) => {
+      if (serverState) {
+        setS(prev => {
+          const reloaded = load();
+          return { ...reloaded, pending: Math.max(prev.pending, reloaded.pending), treats: Math.max(prev.treats, reloaded.treats) };
+        });
+      }
+    });
   }, []);
 
   const upd = useCallback((patch: Partial<SPState>) => {
     setS(prev => {
       const n = { ...prev, ...patch };
       save(n);
-      studypalScheduleSync(); // debounced — fires 300ms after last change
+      studypalScheduleSync();
       return n;
     });
   }, []);
@@ -1022,7 +1170,6 @@ export default function StudyPalPage() {
   useEffect(()=>{resetSleep();return()=>clearTimeout(sleepT.current!);},[]);
   useEffect(() => { resetSleep(); }, [tab]);
 
-  // ── Mood auto-dialogue every 45s of inactivity ──────────
   useEffect(() => {
     clearInterval(moodDialogT.current!);
     moodDialogT.current = setInterval(() => {
@@ -1057,12 +1204,13 @@ export default function StudyPalPage() {
     const entry: SPLogEntry = {activityId:id as any,activityName:a.name,xp:a.xp,treats:a.treats,timestamp:Date.now()};
     const newLog = [entry,...(S.activityLog||[])].slice(0,10);
     upd({ xp:newXP, pending:S.pending+a.treats, points:S.points+a.xp, activityLog:newLog });
+    setTab("feed");
     triggerAnim("excited",1800);triggerSpeech(`+${a.xp} XP`);
     spawnParticles();popXP(a.xp);
     if (newLevel > prevLevel) {
       setTimeout(() => {
         const ownedNow = S.owned as AccId[];
-        const droppable = (["bow","headband","glasses","hat","cap","scarf","ribbon","sunglasses","earring","monocle","halo","bandana","wizard","crown"] as AccId[]).filter(id=>!ownedNow.includes(id));
+        const droppable = (["bow","headband","glasses","hat","cap","scarf","ribbon","earring","monocle","halo","bandana","wizard","crown"] as AccId[]).filter(id=>!ownedNow.includes(id));
         const drop: AccId | null = droppable.length>0 ? droppable[Math.floor(Math.random()*droppable.length)] : null;
         if (drop) { setNewlyDroppedAcc(drop); upd({ owned:[...ownedNow,drop] }); }
         setShowLevelUp(true);
@@ -1094,18 +1242,20 @@ export default function StudyPalPage() {
     setShowTreatCapBanner(false);
   }
 
-  if (!S.onboarded) return <Onboarding onDone={(t,n)=>{const ns={...def(),petType:t,petName:n,treats:8,onboarded:true,lastFedAt:Date.now(),lastDecayedAt:Date.now()};setS(ns);save(ns);}}/>;
+  function buyAcc(a: typeof ACCS[0]) {
+    if (S.owned.includes(a.id)){upd({acc:a.id});triggerSpeech("Looking sharp!");return;}
+    if (S.points>=a.cost){upd({points:S.points-a.cost,owned:[...S.owned,a.id],acc:a.id});triggerSpeech("New look!");triggerAnim("happy",2000);spawnParticles();}
+  }
 
+  // ── Always render inside .sp so onboarding sits inside the panel ──
   const li=getLvl(S.xp),lvl=LEVELS[li],nxt=LEVELS[li+1];
   const xpPct=nxt?Math.round(((S.xp-lvl.xp)/(nxt.xp-lvl.xp))*100):100;
   const tPct=Math.round((Math.min(S.treats,TREATS_MAX)/TREATS_MAX)*100);
   const hungry=S.treats<3;
   const mood = computeMood(S);
-
   const accentColor=S.petType==="cat"?"var(--c-accent)":"var(--c-dog)";
   const accentHex=S.petType==="cat"?"#7C6AFF":"#60AEFF";
   const PetComp=S.petType==="cat"?CatSVG:DogSVG;
-
   const statusMsg: Record<AnimState,string>={walk:"Strolling around",eat:"Having a treat",sleep:"Resting",jump:"Jumping!",meow:"Meow!",bark:"Woof!",happy:"Happy!",excited:"Excited!",idle:"Tap to interact"};
   const droppedAccName = newlyDroppedAcc ? (ACCS.find(a=>a.id===newlyDroppedAcc)?.name ?? "") : "";
 
@@ -1113,362 +1263,336 @@ export default function StudyPalPage() {
     <div className="sp">
       <style>{KF}</style>
 
-      {/* Modals */}
-      {showLevelUp && (
-        <LevelUpModal
-          levelName={LEVELS[getLvl(S.xp)].name}
-          droppedAcc={newlyDroppedAcc}
-          accName={droppedAccName}
-          accentHex={accentHex}
-          onClose={() => { setShowLevelUp(false); setNewlyDroppedAcc(null); }}
-        />
-      )}
+      {/* ── If not onboarded, show onboarding inside the panel ── */}
+      {!S.onboarded ? (
+        <Onboarding onDone={(t, n) => {
+          const ns = { ...def(), petType: t, petName: n, treats: 8, onboarded: true, lastFedAt: Date.now(), lastDecayedAt: Date.now() };
+          setS(ns);
+          save(ns);
+        }}/>
+      ) : (
+        <>
+          {/* Level-up modal — portalled so it covers the FloatingWidget panel */}
+          {showLevelUp && createPortal(
+            <LevelUpModal
+              levelName={LEVELS[getLvl(S.xp)].name}
+              droppedAcc={newlyDroppedAcc}
+              accName={droppedAccName}
+              accentHex={accentHex}
+              onClose={() => { setShowLevelUp(false); setNewlyDroppedAcc(null); }}
+            />,
+            document.body
+          )}
 
-      {/* ── Mini-games modal ── */}
-      {showGames && (
-        <MiniGamesModal
-          open={showGames}
-          treats={S.treats}
-          accentHex={accentHex}
-          petName={S.petName}
-          onClose={() => setShowGames(false)}
-          onReward={(delta, type) => {
-            if (type === "treats") {
-              upd({ treats: Math.max(0, S.treats - delta) });
-            } else {
-              upd({ xp: S.xp + delta, points: S.points + delta });
-              triggerAnim(delta >= 8 ? "excited" : "happy", 2400);
-              triggerSpeech(delta >= 8 ? "Zoomies!" : "Yay!");
-              spawnParticles();
-              popXP(delta);
-            }
-          }}
-        />
-      )}
+          {showGames && (
+            <MiniGamesModal
+              open={showGames}
+              treats={S.treats}
+              accentHex={accentHex}
+              petName={S.petName}
+              onClose={() => setShowGames(false)}
+              onReward={(delta, type) => {
+                if (type === "treats") {
+                  upd({ treats: Math.max(0, S.treats - delta) });
+                } else {
+                  upd({ xp: S.xp + delta, points: S.points + delta });
+                  triggerAnim(delta >= 8 ? "excited" : "happy", 2400);
+                  triggerSpeech(delta >= 8 ? "Zoomies!" : "Yay!");
+                  spawnParticles();
+                  popXP(delta);
+                }
+              }}
+            />
+          )}
 
-      {decayPopTicks > 0 && <DecayPop ticks={decayPopTicks}/>}
+          {decayPopTicks > 0 && <DecayPop ticks={decayPopTicks}/>}
 
-      {/* Header */}
-      <header style={{background:"color-mix(in srgb,var(--c-surface) 88%,transparent)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",borderBottom:"1px solid var(--c-border)",position:"sticky",top:0,zIndex:50}}>
-        <div style={{height:2,background:`linear-gradient(90deg,${accentHex}00,${accentHex},${accentHex}00)`}}/>
-        <div style={{maxWidth:650,margin:"0 auto",padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-          <div style={{display:"flex",alignItems:"center",gap:11}}>
-            <div style={{position:"relative",flexShrink:0}}>
-              <div style={{width:42,height:42,borderRadius:13,background:`linear-gradient(140deg,${accentHex} 0%,${S.petType==="cat"?"#5E4FD4":"#1A6FC4"} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${accentHex}55`}}>
-                <Icon name={S.petType} size={21} color="white" strokeWidth={1.6}/>
-              </div>
-              <div style={{position:"absolute",bottom:-1,right:-1,width:11,height:11,borderRadius:"50%",background:"var(--c-green)",border:"2px solid var(--c-bg)",animation:"sp-heartbeat 3s ease-in-out infinite"}}/>
-            </div>
-            <div style={{minWidth:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" as const}}>
-                <span style={{fontSize:15,fontWeight:700,color:"var(--c-text)",fontFamily:"var(--font-serif)",fontStyle:"italic",lineHeight:1.1}}>{S.petName}</span>
-                <span style={{fontSize:10,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase" as const,background:`${accentHex}22`,color:accentHex,padding:"2px 8px",borderRadius:20,border:`1px solid ${accentHex}38`}}>{lvl.name}</span>
-                <span style={{fontSize:11}}>{mood.emoji}</span>
-                {(S.streakCount??0)>0 && (
-                  <span style={{fontSize:10,fontWeight:700,background:"rgba(229,57,53,.12)",color:"var(--c-red)",padding:"2px 8px",borderRadius:20,border:"1px solid rgba(229,57,53,.22)",display:"flex",alignItems:"center",gap:3}}>
-                    <Icon name="flame" size={10} color="var(--c-red)"/>{S.streakCount}d
-                  </span>
-                )}
-              </div>
-              <div style={{marginTop:5,display:"flex",alignItems:"center",gap:7}}>
-                <div style={{width:88,height:4,borderRadius:4,background:"var(--c-border2)",overflow:"hidden",flexShrink:0}}>
-                  <div style={{height:"100%",borderRadius:4,background:`linear-gradient(90deg,${accentHex},${accentHex}BB)`,width:`${xpPct}%`,transition:"width .9s cubic-bezier(.34,1.56,.64,1)"}}/>
+          {/* Reset confirm — portalled so it covers the FloatingWidget panel */}
+          {showResetConfirm && createPortal(
+            <div style={{position:"fixed",top:0,left:0,width:"100vw",height:"100vh",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:24,background:"rgba(0,0,0,.55)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)"}}>
+              <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:24,padding:"28px 24px 24px",maxWidth:320,width:"100%",boxShadow:"var(--shadow-lg)",animation:"sp-pop .3s cubic-bezier(.34,1.56,.64,1) both",fontFamily:"var(--font-body)"}}>
+                <div style={{width:48,height:48,borderRadius:14,background:"rgba(229,57,53,.12)",border:"1px solid rgba(229,57,53,.22)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
+                  <Icon name="refresh" size={22} color="var(--c-red)"/>
                 </div>
-                <span style={{fontSize:10,color:"var(--c-text3)",fontWeight:500,whiteSpace:"nowrap" as const}}>{S.xp}{nxt?`/${nxt.xp}`:""} XP</span>
-              </div>
-            </div>
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:5,background:"color-mix(in srgb,var(--c-amber) 12%,transparent)",color:"var(--c-amber)",fontSize:14,fontWeight:700,padding:"7px 14px",borderRadius:20,border:"1px solid color-mix(in srgb,var(--c-amber) 28%,transparent)",flexShrink:0,boxShadow:"0 2px 8px rgba(214,128,0,.12)"}}>
-            <Icon name="coins" size={14} color="var(--c-amber)"/>{S.points}
-          </div>
-        </div>
-      </header>
-
-      {/* Content */}
-      <div className="sp-inner">
-
-        {/* Banners */}
-        {(showHungerBanner || showTreatCapBanner) && (
-          <div style={{padding:"14px 16px 0",display:"flex",flexDirection:"column",gap:8}}>
-            {showHungerBanner && <HungerBanner petName={S.petName} onDismiss={()=>setShowHungerBanner(false)}/>}
-            {showTreatCapBanner && <TreatCapBanner petName={S.petName} onBurn={burnTreats} onDismiss={()=>{setShowTreatCapBanner(false);studypalClearTreatCap();}}/>}
-          </div>
-        )}
-
-        {S.pending > 0 && !showBowl && tab !== "feed" && (
-          <div style={{margin:"14px 16px 0",background:"color-mix(in srgb,var(--c-accent) 10%,var(--c-surface))",border:"1px solid color-mix(in srgb,var(--c-accent) 25%,transparent)",borderRadius:16,padding:"12px 15px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",boxShadow:"var(--shadow-sm)",transition:"transform .15s ease"}} onClick={()=>setTab("feed")} className="sp-card-hover">
-            <div style={{width:36,height:36,borderRadius:10,background:"color-mix(in srgb,var(--c-accent) 18%,transparent)",border:"1px solid color-mix(in srgb,var(--c-accent) 28%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:"sp-float 1.8s ease-in-out infinite"}}><Icon name="cookie" size={16} color="var(--c-accent2)"/></div>
-            <div style={{flex:1}}>
-              <div style={{fontSize:13,fontWeight:600,color:"var(--c-text)"}}>{S.pending} treats waiting</div>
-              <div style={{fontSize:11,color:"var(--c-text3)",marginTop:2}}>Tap to feed {S.petName}</div>
-            </div>
-            <Icon name="arrow-r" size={16} color="var(--c-text3)"/>
-          </div>
-        )}
-
-        {/* Arena card */}
-        <div style={{margin:"14px 16px 0",background:"var(--c-surface)",borderRadius:24,border:"1px solid var(--c-border)",overflow:"hidden",boxShadow:"var(--shadow-md)"}}>
-          <div style={{height:224,position:"relative",overflow:"hidden",background:`linear-gradient(180deg,color-mix(in srgb,${accentHex} 8%,var(--c-surface)) 0%,var(--c-surface) 100%)`}}>
-            <SceneBg petType={S.petType}/>
-            <div style={{position:"absolute",bottom:16,...(walking?{animation:"sp-walk-x 9s linear forwards",left:-180,width:170}:{left:"50%",transform:"translateX(-50%)"})}}>
-              <div style={{position:"relative",width:170,height:175}}>
-                {speech && <div style={{position:"absolute",top:-14,right:-18,background:accentHex,color:"#fff",fontSize:12,fontWeight:600,padding:"7px 14px",borderRadius:"16px 16px 16px 3px",whiteSpace:"nowrap" as const,animation:"sp-speech .3s cubic-bezier(.34,1.56,.64,1)",zIndex:30,pointerEvents:"none",fontFamily:"var(--font-body)",boxShadow:`0 4px 16px ${accentHex}44`}}>{speech}</div>}
-                {anim==="sleep" && <div style={{position:"absolute",top:4,right:2,pointerEvents:"none"}}><div style={{position:"absolute",top:0,right:0,fontSize:13,fontWeight:700,color:accentHex,animation:"sp-zzz1 2.4s ease-out infinite",fontFamily:"var(--font-body)"}}>z</div><div style={{position:"absolute",top:-16,right:12,fontSize:18,fontWeight:700,color:accentHex,animation:"sp-zzz2 2.4s ease-out infinite",animationDelay:".8s",fontFamily:"var(--font-body)"}}>Z</div></div>}
-                {["happy","excited"].includes(anim) && <div style={{position:"absolute",inset:-12,borderRadius:"50%",border:`2px solid ${accentHex}40`,animation:"sp-glow 2s ease-in-out infinite",pointerEvents:"none"}}/>}
-                {xpPops.map(p=>(
-                  <div key={p.id} style={{position:"absolute",inset:0,pointerEvents:"none",zIndex:50}}>
-                    <div style={{position:"absolute",top:-10,left:"50%",transform:"translateX(-50%)",fontSize:16,fontWeight:700,color:"#fff",background:accentHex,padding:"4px 11px",borderRadius:20,boxShadow:`0 2px 14px ${accentHex}80`,animation:"sp-xp 1.2s cubic-bezier(.2,1.4,.5,1) forwards",fontFamily:"var(--font-body)",whiteSpace:"nowrap" as const,display:"flex",alignItems:"center",gap:4}}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="white"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>+{p.v} XP
-                    </div>
-                    <div style={{position:"absolute",top:14,left:"calc(50% - 42px)",fontSize:11,fontWeight:700,color:accentHex,animation:"sp-xp2 1.3s ease-out .08s forwards",fontFamily:"var(--font-body)",opacity:0,whiteSpace:"nowrap" as const}}>+{p.v}</div>
-                    <div style={{position:"absolute",top:18,left:"calc(50% + 26px)",fontSize:10,fontWeight:600,color:accentHex,animation:"sp-xp2 1.1s ease-out .18s forwards",fontFamily:"var(--font-body)",opacity:0,whiteSpace:"nowrap" as const}}>XP</div>
-                  </div>
-                ))}
-                <PetComp anim={anim} acc={S.acc} onClick={onPetClick} mood={mood.tier}/>
-                {particles.map(p=><div key={p.id} style={{position:"absolute",left:`${p.x}%`,top:`${p.y}%`,width:p.s,height:p.s,borderRadius:"50%",background:p.c,pointerEvents:"none",//@ts-ignore
-                "--dx":`${(p.x-50)*1.1}px`,"--dy":`${(p.y-42)*.9}px`,animation:"sp-burst .7s ease-out forwards",zIndex:40}}/>)}
-                {treats.map(t=><div key={t.id} style={{position:"absolute",left:t.x,top:0,animation:"sp-treat .7s ease-out forwards",zIndex:38}}><svg width="13" height="13" viewBox="0 0 13 13"><circle cx="6.5" cy="6.5" r="6.5" fill={accentHex}/><circle cx="6.5" cy="6.5" r="4" fill="#C4BBFF"/></svg></div>)}
-                {showBowl && <div style={{position:"absolute",bottom:8,right:8}}><svg width="58" height="38" viewBox="0 0 58 38"><ellipse cx="29" cy="30" rx="24" ry="7" fill={`${accentHex}18`} stroke={`${accentHex}40`} strokeWidth="1.5"/><circle cx="20" cy="24" r="4" fill={accentHex}/><circle cx="30" cy="21" r="4.5" fill={accentHex}/><circle cx="38" cy="25" r="3" fill="#C4BBFF"/></svg></div>}
-              </div>
-            </div>
-            <div style={{position:"absolute",bottom:0,left:0,right:0,display:"flex",justifyContent:"center",padding:"0 0 10px"}}><div style={{fontSize:10,fontWeight:500,color:"var(--c-text3)",letterSpacing:".06em",textTransform:"uppercase" as const}}>{statusMsg[anim]||"Tap to interact"}</div></div>
-          </div>
-
-          {/* Stats */}
-          <div style={{padding:"18px 20px 0"}}>
-            <StatBar label="Experience" val={`${S.xp} XP${nxt?` / ${nxt.xp}`:" · Max"}`} pct={xpPct} accent={accentHex} icon="star" flash={xpPops.length>0}/>
-            <StatBar label="Treat level" val={`${S.treats} / ${TREATS_MAX}`} pct={tPct} accent={hungry?"#F87171":accentHex} icon="cookie" flash={false}/>
-          </div>
-
-          {/* Status pills + Play button */}
-          <div style={{padding:"10px 18px 18px"}}>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <div style={{background:mood.bg,border:`1px solid ${mood.border}`,borderRadius:14,padding:"11px 14px",display:"flex",alignItems:"center",gap:9,transition:"all .3s ease"}}>
-                <div style={{width:30,height:30,borderRadius:9,background:`${mood.color}20`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16,lineHeight:1}}>
-                  {mood.emoji}
+                <div style={{textAlign:"center",marginBottom:20}}>
+                  <div style={{fontSize:"1.15rem",fontFamily:"var(--font-serif)",fontStyle:"italic",fontWeight:400,color:"var(--c-text)",marginBottom:8}}>Reset all progress?</div>
+                  <div style={{fontSize:13,color:"var(--c-text2)",lineHeight:1.55}}>This will wipe your XP, treats, points, and accessories. This can't be undone.</div>
                 </div>
-                <div>
-                  <div style={{fontSize:12,fontWeight:700,color:mood.color}}>{mood.label}</div>
-                  <div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>{mood.tier==="starving"?"Feed me!":mood.tier==="hungry"?"Getting hungry":mood.tier==="ecstatic"?"On a roll!":"All good"}</div>
-                </div>
-              </div>
-              <div style={{background:"var(--c-surface2)",border:"1px solid var(--c-border)",borderRadius:14,padding:"11px 14px",display:"flex",alignItems:"center",gap:9}}>
-                {(S.streakCount??0)>0 ? (<>
-                  <div style={{width:30,height:30,borderRadius:9,background:"color-mix(in srgb,var(--c-red) 12%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <Icon name="flame" size={16} color="var(--c-red)"/>
-                  </div>
-                  <div><div style={{fontSize:12,fontWeight:700,color:"var(--c-red)"}}>{S.streakCount}-day streak</div><div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>Keep it up!</div></div>
-                </>) : (<>
-                  <div style={{width:30,height:30,borderRadius:9,background:"color-mix(in srgb,var(--c-accent) 12%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <Icon name="zap" size={16} color="var(--c-accent2)"/>
-                  </div>
-                  <div><div style={{fontSize:12,fontWeight:700,color:"var(--c-accent2)"}}>{S.xp} XP</div><div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>{lvl.name}{nxt?` → ${nxt.name}`:" · Max"}</div></div>
-                </>)}
-              </div>
-            </div>
-
-            {/* ── Play mini-games button ── */}
-            <button
-              onClick={() => setShowGames(true)}
-              style={{marginTop:10,width:"100%",padding:"10px 0",borderRadius:13,fontSize:12,fontWeight:700,cursor:"pointer",background:`${accentHex}14`,color:accentHex,border:`1px solid ${accentHex}30`,display:"flex",alignItems:"center",justifyContent:"center",gap:7,fontFamily:"var(--font-body)",transition:"all .18s ease"}}
-              onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.background=accentHex;el.style.color="#fff";el.style.boxShadow=`0 4px 16px ${accentHex}40`;}}
-              onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.background=`${accentHex}14`;el.style.color=accentHex;el.style.boxShadow="none";}}
-            >
-              <Icon name="gamepad" size={14} color="currentColor"/>
-              Play mini-games · burn treats
-              <span style={{fontSize:10,opacity:.7,fontWeight:500}}>({S.treats} treats)</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div style={{display:"flex",margin:"12px 16px 0",background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:16,padding:4,gap:3,boxShadow:"var(--shadow-xs)"}}>
-          {([["feed","Rewards","trophy"],["wardrobe","Wardrobe","shirt"],["about","Profile","user"]] as [TabId,string,string][]).map(([t,label,icon])=>(
-            <button key={t} onClick={()=>setTab(t)} className={`sp-tab ${tab===t?"active":"inactive"}`}>
-              <Icon name={icon} size={13} color={tab===t?"white":"var(--c-text3)"}/>
-              {label}
-              {t==="wardrobe" && newlyDroppedAcc && !showLevelUp && (
-                <div style={{position:"absolute",top:3,right:6,width:7,height:7,borderRadius:"50%",background:"var(--c-green)",border:"1.5px solid var(--c-surface)",animation:"sp-heartbeat 2s ease-in-out infinite"}}/>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* ── REWARDS TAB ── */}
-        {tab==="feed" && (
-          <div style={{margin:"12px 16px 0"}}>
-            {S.pending>0 && (
-              <div style={{background:"color-mix(in srgb,var(--c-accent) 9%,var(--c-surface))",border:"1px solid color-mix(in srgb,var(--c-accent) 24%,transparent)",borderRadius:18,padding:"14px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:14,boxShadow:"var(--shadow-sm)"}}>
-                <div style={{width:44,height:44,borderRadius:12,background:"color-mix(in srgb,var(--c-accent) 16%,transparent)",border:"1px solid color-mix(in srgb,var(--c-accent) 26%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:"sp-float 1.8s ease-in-out infinite"}}><Icon name="cookie" size={19} color="var(--c-accent2)"/></div>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:14,fontWeight:700,color:"var(--c-text)"}}>{S.pending} treats pending</div>
-                  <div style={{fontSize:11,color:"var(--c-text3)",marginTop:2}}>{S.petName} is waiting to be fed</div>
-                </div>
-                <button onClick={()=>feedNow(S.pending)} style={{background:`linear-gradient(135deg,var(--c-accent),${S.petType==="cat"?"#5E4FD4":"#1A6FC4"})`,color:"#fff",border:"none",borderRadius:11,padding:"10px 16px",fontSize:12,fontWeight:700,fontFamily:"var(--font-body)",cursor:"pointer",flexShrink:0,boxShadow:"var(--shadow-accent)",whiteSpace:"nowrap" as const,display:"flex",alignItems:"center",gap:6}}><Icon name="cookie" size={13} color="white"/>Give Treat</button>
-              </div>
-            )}
-            <div style={{fontSize:10,fontWeight:600,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const,marginBottom:10,paddingLeft:2}}>Activity Rewards</div>
-            <SimulateExplainer accentHex={accentHex}/>
-            <PointsExplainer/>
-            <ActivityLog log={S.activityLog||[]}/>
-            {ACTIVITIES.map((a,i)=>{
-              const colors: Record<string,{bg:string,icon:string,border:string}> = {
-                quiz:{bg:"rgba(107,88,240,.12)",icon:"var(--c-accent2)",border:"rgba(107,88,240,.2)"},
-                streak:{bg:"rgba(224,64,64,.10)",icon:"var(--c-red)",border:"rgba(224,64,64,.18)"},
-                booking:{bg:"rgba(13,184,164,.10)",icon:"var(--c-teal)",border:"rgba(13,184,164,.18)"},
-                session:{bg:"rgba(22,169,122,.10)",icon:"var(--c-green)",border:"rgba(22,169,122,.18)"},
-                sos:{bg:"rgba(196,121,0,.10)",icon:"var(--c-amber)",border:"rgba(196,121,0,.18)"},
-                badge:{bg:"rgba(251,191,36,.10)",icon:"var(--c-amber)",border:"rgba(251,191,36,.20)"},
-              };
-              const col = colors[a.id] || colors.quiz;
-              return (
-                <div key={a.id} style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:16,padding:"13px 15px",marginBottom:7,display:"flex",alignItems:"center",gap:12,animation:`sp-pop .35s ease both`,animationDelay:`${i*.05}s`,transition:"border-color .18s,transform .18s,box-shadow .18s"}}
-                  onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="translateY(-1px)";el.style.boxShadow="var(--shadow-sm)";el.style.borderColor="var(--c-border2)";}}
-                  onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.transform="";el.style.boxShadow="";el.style.borderColor="";}}>
-                  <div style={{width:40,height:40,borderRadius:12,background:col.bg,border:`1px solid ${col.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <ActivityIcon id={a.id} size={17} color={col.icon}/>
-                  </div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:13,fontWeight:600,color:"var(--c-text)"}}>{a.name}</div>
-                    <div style={{fontSize:11,marginTop:4,display:"flex",gap:6}}>
-                      <span style={{background:"color-mix(in srgb,var(--c-accent) 13%,transparent)",color:"var(--c-accent2)",padding:"2px 8px",borderRadius:20,fontWeight:700,display:"flex",alignItems:"center",gap:3,border:"1px solid color-mix(in srgb,var(--c-accent) 22%,transparent)"}}><Icon name="zap" size={9} color="var(--c-accent2)"/>+{a.xp} XP</span>
-                      <span style={{background:`${col.bg}`,color:col.icon,padding:"2px 8px",borderRadius:20,fontWeight:600,display:"flex",alignItems:"center",gap:3,border:`1px solid ${col.border}`}}><Icon name="cookie" size={9} color={col.icon}/>+{a.treats}</span>
-                    </div>
-                  </div>
-                  <button onClick={()=>triggerActivity(a.id)} style={{background:`linear-gradient(135deg,${accentHex}18,${accentHex}08)`,color:accentHex,border:`1px solid ${accentHex}30`,borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,fontFamily:"var(--font-body)",cursor:"pointer",transition:"all .18s ease",whiteSpace:"nowrap" as const,letterSpacing:".01em"}}
-                    onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.background=accentHex;el.style.color="#fff";}}
-                    onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.background="";el.style.color=accentHex;}}>
-                    Test
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <button onClick={()=>setShowResetConfirm(false)}
+                    style={{padding:"12px 0",border:"1px solid var(--c-border)",borderRadius:12,fontSize:13,fontWeight:600,cursor:"pointer",background:"var(--c-surface2)",color:"var(--c-text2)",fontFamily:"var(--font-body)",transition:"all .15s ease"}}
+                    onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="var(--c-surface3)";}}
+                    onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background="var(--c-surface2)";}}>
+                    Cancel
+                  </button>
+                  <button onClick={()=>{const n=def();n.onboarded=false;setS(n);save(n);setShowResetConfirm(false);}}
+                    style={{padding:"12px 0",border:"none",borderRadius:12,fontSize:13,fontWeight:700,cursor:"pointer",background:"var(--c-red)",color:"#fff",fontFamily:"var(--font-body)",boxShadow:"0 4px 14px rgba(229,57,53,.35)",transition:"all .15s ease"}}
+                    onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.opacity=".88";}}
+                    onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.opacity="1";}}>
+                    Reset
                   </button>
                 </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* ── WARDROBE TAB ── */}
-        {tab==="wardrobe" && (
-          <div style={{margin:"12px 16px 0"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <div>
-                <div style={{fontSize:14,fontWeight:700,color:"var(--c-text)"}}>Wardrobe</div>
-                <div style={{fontSize:11,color:"var(--c-text3)",marginTop:1}}>{ACCS.length-1} accessories available</div>
               </div>
-              <div style={{background:"color-mix(in srgb,var(--c-amber) 12%,var(--c-surface))",color:"var(--c-amber)",fontSize:13,fontWeight:700,padding:"7px 14px",borderRadius:20,border:"1px solid color-mix(in srgb,var(--c-amber) 28%,transparent)",display:"flex",alignItems:"center",gap:5,boxShadow:"0 2px 8px color-mix(in srgb,var(--c-amber) 12%,transparent)"}}><Icon name="coins" size={13} color="var(--c-amber)"/>{S.points}</div>
+            </div>,
+            document.body
+          )}
+
+          {/* ── HEADER ── */}
+          <header style={{background:"color-mix(in srgb,var(--c-surface) 88%,transparent)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",borderBottom:"1px solid var(--c-border)",position:"sticky",top:0,zIndex:50}}>
+            <div style={{height:2,background:`linear-gradient(90deg,${accentHex}00,${accentHex},${accentHex}00)`}}/>
+            <div style={{maxWidth:650,margin:"0 auto",padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:11}}>
+                <div style={{position:"relative",flexShrink:0}}>
+                  <div style={{width:42,height:42,borderRadius:13,background:`linear-gradient(140deg,${accentHex} 0%,${S.petType==="cat"?"#5E4FD4":"#1A6FC4"} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 3px 14px ${accentHex}55`}}>
+                    <Icon name={S.petType} size={24} color="white" strokeWidth={1.6}/>
+                  </div>
+                  <div style={{position:"absolute",bottom:-1,right:-1,width:11,height:11,borderRadius:"50%",background:"var(--c-green)",border:"2px solid var(--c-bg)",animation:"sp-heartbeat 3s ease-in-out infinite"}}/>
+                </div>
+                <div style={{minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" as const}}>
+                    <span style={{fontSize:15,fontWeight:700,color:"var(--c-text)",fontFamily:"var(--font-serif)",fontStyle:"italic",lineHeight:1.1}}>{S.petName}</span>
+                    <span style={{fontSize:10,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase" as const,background:`${accentHex}22`,color:accentHex,padding:"2px 8px",borderRadius:20,border:`1px solid ${accentHex}38`}}>{lvl.name}</span>
+                    <span style={{fontSize:11}}>{mood.emoji}</span>
+                    {(S.streakCount??0)>0 && (
+                      <span style={{fontSize:10,fontWeight:700,background:"rgba(229,57,53,.12)",color:"var(--c-red)",padding:"2px 8px",borderRadius:20,border:"1px solid rgba(229,57,53,.22)",display:"flex",alignItems:"center",gap:3}}>
+                        <Icon name="flame" size={10} color="var(--c-red)"/>{S.streakCount}d
+                      </span>
+                    )}
+                  </div>
+                  <div style={{marginTop:5,display:"flex",alignItems:"center",gap:7}}>
+                    <div style={{width:88,height:4,borderRadius:4,background:"var(--c-border2)",overflow:"hidden",flexShrink:0}}>
+                      <div style={{height:"100%",borderRadius:4,background:`linear-gradient(90deg,${accentHex},${accentHex}BB)`,width:`${xpPct}%`,transition:"width .9s cubic-bezier(.34,1.56,.64,1)"}}/>
+                    </div>
+                    <span style={{fontSize:10,color:"var(--c-text3)",fontWeight:500,whiteSpace:"nowrap" as const}}>{S.xp}{nxt?`/${nxt.xp}`:""} XP</span>
+                  </div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:5,background:"color-mix(in srgb,var(--c-amber) 12%,transparent)",color:"var(--c-amber)",fontSize:14,fontWeight:700,padding:"7px 14px",borderRadius:20,border:"1px solid color-mix(in srgb,var(--c-amber) 28%,transparent)",flexShrink:0,boxShadow:"0 2px 8px rgba(214,128,0,.12)"}}>
+                <Icon name="coins" size={14} color="var(--c-amber)"/>{S.points}
+              </div>
             </div>
-            <div style={{marginBottom:12,padding:"10px 13px",background:"color-mix(in srgb,var(--c-accent) 6%,var(--c-surface))",border:"1px solid var(--c-border)",borderRadius:12,fontSize:11,color:"var(--c-text2)",lineHeight:1.55,display:"flex",alignItems:"flex-start",gap:8}}>
-              <span style={{flexShrink:0,marginTop:1}}><Icon name="info" size={13} color="var(--c-accent3)"/></span>
-              Earn points from sessions, quizzes &amp; tasks. Level up for free drops! Tap to equip or buy.
+          </header>
+
+          <div className="sp-inner">
+            {(showHungerBanner || showTreatCapBanner) && (
+              <div style={{padding:"14px 16px 0",display:"flex",flexDirection:"column",gap:8}}>
+                {showHungerBanner && <HungerBanner petName={S.petName} onDismiss={()=>setShowHungerBanner(false)}/>}
+                {showTreatCapBanner && <TreatCapBanner petName={S.petName} onBurn={burnTreats} onDismiss={()=>{setShowTreatCapBanner(false);studypalClearTreatCap();}}/>}
+              </div>
+            )}
+
+            {S.pending > 0 && !showBowl && tab !== "feed" && (
+              <div style={{margin:"14px 16px 0",background:"color-mix(in srgb,var(--c-accent) 10%,var(--c-surface))",border:"1px solid color-mix(in srgb,var(--c-accent) 25%,transparent)",borderRadius:16,padding:"12px 15px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",boxShadow:"var(--shadow-sm)",transition:"transform .15s ease"}} onClick={()=>setTab("feed")} className="sp-card-hover">
+                <div style={{width:36,height:36,borderRadius:10,background:"color-mix(in srgb,var(--c-accent) 18%,transparent)",border:"1px solid color-mix(in srgb,var(--c-accent) 28%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:"sp-float 1.8s ease-in-out infinite"}}><Icon name="cookie" size={16} color="var(--c-accent2)"/></div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:600,color:"var(--c-text)"}}>{S.pending} treats waiting</div>
+                  <div style={{fontSize:11,color:"var(--c-text3)",marginTop:2}}>Tap to feed {S.petName}</div>
+                </div>
+                <Icon name="arrow-r" size={16} color="var(--c-text3)"/>
+              </div>
+            )}
+
+            {/* Arena card */}
+            <div style={{margin:"14px 16px 0",background:"var(--c-surface)",borderRadius:24,border:"1px solid var(--c-border)",overflow:"hidden",boxShadow:"var(--shadow-md)"}}>
+              <div style={{height:224,position:"relative",overflow:"hidden",background:`linear-gradient(180deg,color-mix(in srgb,${accentHex} 8%,var(--c-surface)) 0%,var(--c-surface) 100%)`}}>
+                <SceneBg petType={S.petType}/>
+                <div style={{position:"absolute",bottom:16,...(walking?{animation:"sp-walk-x 9s linear forwards",left:-180,width:170}:{left:"50%",transform:"translateX(-50%)"})}}>
+                  <div style={{position:"relative",width:170,height:175}}>
+                    {speech && <div style={{position:"absolute",top:-14,right:-18,background:accentHex,color:"#fff",fontSize:12,fontWeight:600,padding:"7px 14px",borderRadius:"16px 16px 16px 3px",whiteSpace:"nowrap" as const,animation:"sp-speech .3s cubic-bezier(.34,1.56,.64,1)",zIndex:30,pointerEvents:"none",fontFamily:"var(--font-body)",boxShadow:`0 4px 16px ${accentHex}44`}}>{speech}</div>}
+                    {anim==="sleep" && <div style={{position:"absolute",top:4,right:2,pointerEvents:"none"}}><div style={{position:"absolute",top:0,right:0,fontSize:13,fontWeight:700,color:accentHex,animation:"sp-zzz1 2.4s ease-out infinite",fontFamily:"var(--font-body)"}}>z</div><div style={{position:"absolute",top:-16,right:12,fontSize:18,fontWeight:700,color:accentHex,animation:"sp-zzz2 2.4s ease-out infinite",animationDelay:".8s",fontFamily:"var(--font-body)"}}>Z</div></div>}
+                    {["happy","excited"].includes(anim) && <div style={{position:"absolute",inset:-12,borderRadius:"50%",border:`2px solid ${accentHex}40`,animation:"sp-glow 2s ease-in-out infinite",pointerEvents:"none"}}/>}
+                    {xpPops.map(p=>(
+                      <div key={p.id} style={{position:"absolute",inset:0,pointerEvents:"none",zIndex:50}}>
+                        <div style={{position:"absolute",top:-10,left:"50%",transform:"translateX(-50%)",fontSize:16,fontWeight:700,color:"#fff",background:accentHex,padding:"4px 11px",borderRadius:20,boxShadow:`0 2px 14px ${accentHex}80`,animation:"sp-xp 1.2s cubic-bezier(.2,1.4,.5,1) forwards",fontFamily:"var(--font-body)",whiteSpace:"nowrap" as const,display:"flex",alignItems:"center",gap:4}}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="white"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>+{p.v} XP
+                        </div>
+                        <div style={{position:"absolute",top:14,left:"calc(50% - 42px)",fontSize:11,fontWeight:700,color:accentHex,animation:"sp-xp2 1.3s ease-out .08s forwards",fontFamily:"var(--font-body)",opacity:0,whiteSpace:"nowrap" as const}}>+{p.v}</div>
+                        <div style={{position:"absolute",top:18,left:"calc(50% + 26px)",fontSize:10,fontWeight:600,color:accentHex,animation:"sp-xp2 1.1s ease-out .18s forwards",fontFamily:"var(--font-body)",opacity:0,whiteSpace:"nowrap" as const}}>XP</div>
+                      </div>
+                    ))}
+                    <PetComp anim={anim} acc={S.acc} onClick={onPetClick} mood={mood.tier}/>
+                    {particles.map(p=><div key={p.id} style={{position:"absolute",left:`${p.x}%`,top:`${p.y}%`,width:p.s,height:p.s,borderRadius:"50%",background:p.c,pointerEvents:"none",//@ts-ignore
+                    "--dx":`${(p.x-50)*1.1}px`,"--dy":`${(p.y-42)*.9}px`,animation:"sp-burst .7s ease-out forwards",zIndex:40}}/>)}
+                    {treats.map(t=><div key={t.id} style={{position:"absolute",left:t.x,top:0,animation:"sp-treat .7s ease-out forwards",zIndex:38}}><svg width="13" height="13" viewBox="0 0 13 13"><circle cx="6.5" cy="6.5" r="6.5" fill={accentHex}/><circle cx="6.5" cy="6.5" r="4" fill="#C4BBFF"/></svg></div>)}
+                    {showBowl && <div style={{position:"absolute",bottom:8,right:8}}><svg width="58" height="38" viewBox="0 0 58 38"><ellipse cx="29" cy="30" rx="24" ry="7" fill={`${accentHex}18`} stroke={`${accentHex}40`} strokeWidth="1.5"/><circle cx="20" cy="24" r="4" fill={accentHex}/><circle cx="30" cy="21" r="4.5" fill={accentHex}/><circle cx="38" cy="25" r="3" fill="#C4BBFF"/></svg></div>}
+                  </div>
+                </div>
+                <div style={{position:"absolute",bottom:0,left:0,right:0,display:"flex",justifyContent:"center",padding:"0 0 10px"}}><div style={{fontSize:10,fontWeight:500,color:"var(--c-text3)",letterSpacing:".06em",textTransform:"uppercase" as const}}>{statusMsg[anim]||"Tap to interact"}</div></div>
+              </div>
+
+              <div style={{padding:"18px 20px 0"}}>
+                <StatBar label="Experience" val={`${S.xp} XP${nxt?` / ${nxt.xp}`:" · Max"}`} pct={xpPct} accent={accentHex} icon="star" flash={xpPops.length>0}/>
+                <StatBar label="Treat level" val={`${S.treats} / ${TREATS_MAX}`} pct={tPct} accent={hungry?"#F87171":accentHex} icon="cookie" flash={false}/>
+              </div>
+
+              <div style={{padding:"10px 18px 18px"}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <div style={{background:mood.bg,border:`1px solid ${mood.border}`,borderRadius:14,padding:"11px 14px",display:"flex",alignItems:"center",gap:9,transition:"all .3s ease"}}>
+                    <div style={{width:30,height:30,borderRadius:9,background:`${mood.color}20`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16,lineHeight:1}}>{mood.emoji}</div>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:700,color:mood.color}}>{mood.label}</div>
+                      <div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>{mood.tier==="starving"?"Feed me!":mood.tier==="hungry"?"Getting hungry":mood.tier==="ecstatic"?"On a roll!":"All good"}</div>
+                    </div>
+                  </div>
+                  <div style={{background:"var(--c-surface2)",border:"1px solid var(--c-border)",borderRadius:14,padding:"11px 14px",display:"flex",alignItems:"center",gap:9}}>
+                    {(S.streakCount??0)>0 ? (<>
+                      <div style={{width:30,height:30,borderRadius:9,background:"color-mix(in srgb,var(--c-red) 12%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="flame" size={16} color="var(--c-red)"/></div>
+                      <div><div style={{fontSize:12,fontWeight:700,color:"var(--c-red)"}}>{S.streakCount}-day streak</div><div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>Keep it up!</div></div>
+                    </>) : (<>
+                      <div style={{width:30,height:30,borderRadius:9,background:"color-mix(in srgb,var(--c-accent) 12%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="zap" size={16} color="var(--c-accent2)"/></div>
+                      <div><div style={{fontSize:12,fontWeight:700,color:"var(--c-accent2)"}}>{S.xp} XP</div><div style={{fontSize:10,color:"var(--c-text3)",marginTop:1}}>{lvl.name}{nxt?` → ${nxt.name}`:" · Max"}</div></div>
+                    </>)}
+                  </div>
+                </div>
+                <button onClick={()=>setShowGames(true)} style={{marginTop:10,width:"100%",padding:"10px 0",borderRadius:13,fontSize:12,fontWeight:700,cursor:"pointer",background:`${accentHex}14`,color:accentHex,border:`1px solid ${accentHex}30`,display:"flex",alignItems:"center",justifyContent:"center",gap:7,fontFamily:"var(--font-body)",transition:"all .18s ease"}}
+                  onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.background=accentHex;el.style.color="#fff";el.style.boxShadow=`0 4px 16px ${accentHex}40`;}}
+                  onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.background=`${accentHex}14`;el.style.color=accentHex;el.style.boxShadow="none";}}>
+                  <Icon name="gamepad" size={14} color="currentColor"/>Play mini-games · burn treats
+                  <span style={{fontSize:10,opacity:.7,fontWeight:500}}>({S.treats} treats)</span>
+                </button>
+              </div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-              {ACCS.map(a=>(
-                <AccessoryCard key={a.id} acc={a} owned={S.owned.includes(a.id)} active={S.acc===a.id} canBuy={S.points>=a.cost} accentColor={accentHex} isNew={a.id===newlyDroppedAcc} onClick={()=>buyAcc(a)}/>
+
+            {/* Tabs */}
+            <div style={{display:"flex",margin:"12px 16px 0",background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:16,padding:4,gap:3,boxShadow:"var(--shadow-xs)"}}>
+              {([["feed","Rewards","trophy"],["wardrobe","Wardrobe","shirt"],["about","Profile","user"]] as [TabId,string,string][]).map(([t,label,icon])=>(
+                <button key={t} onClick={()=>setTab(t)} className={`sp-tab ${tab===t?"active":"inactive"}`}>
+                  <Icon name={icon} size={13} color={tab===t?"white":"var(--c-text3)"}/>
+                  {label}
+                  {t==="wardrobe" && newlyDroppedAcc && !showLevelUp && (
+                    <div style={{position:"absolute",top:3,right:6,width:7,height:7,borderRadius:"50%",background:"var(--c-green)",border:"1.5px solid var(--c-surface)",animation:"sp-heartbeat 2s ease-in-out infinite"}}/>
+                  )}
+                </button>
               ))}
             </div>
-          </div>
-        )}
 
-        {/* ── ABOUT TAB ── */}
-        {tab==="about" && (
-          <div style={{margin:"12px 16px 0",display:"flex",flexDirection:"column",gap:10}}>
-            <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:20,padding:"16px",boxShadow:"var(--shadow-sm)"}}>
-              <div style={{fontSize:10,fontWeight:700,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const,marginBottom:12}}>Companion</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                {(["cat","dog"] as PetType[]).map(t=>{
-                  const sel = S.petType===t;
-                  const tHex = t==="cat"?"#8474F8":"#3A8FE0";
-                  return (
-                    <div key={t} onClick={()=>{upd({petType:t});triggerSpeech(t==="cat"?"Meow!":"Woof!");triggerAnim("happy",2000);spawnParticles();}}
-                      style={{border:`1.5px solid ${sel?tHex:"var(--c-border)"}`,background:sel?`color-mix(in srgb,${tHex} 10%,var(--c-surface2))`:"var(--c-surface2)",borderRadius:14,padding:"16px 12px",textAlign:"center" as const,cursor:"pointer",transition:"all .22s cubic-bezier(.34,1.56,.64,1)",boxShadow:sel?`0 4px 16px ${tHex}25`:"none"}}>
-                      <div style={{display:"flex",justifyContent:"center",marginBottom:8}}>
-                        <div style={{width:44,height:44,borderRadius:13,background:sel?`color-mix(in srgb,${tHex} 18%,transparent)`:"var(--c-surface3)",border:`1px solid ${sel?tHex+"40":"var(--c-border)"}`,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .22s ease"}}>
-                          <Icon name={t} size={22} color={sel?tHex:"var(--c-text3)"} strokeWidth={1.5}/>
-                        </div>
-                      </div>
-                      <div style={{fontSize:13,fontWeight:700,color:sel?"var(--c-text)":"var(--c-text3)",textTransform:"capitalize" as const}}>{t}</div>
-                      {sel && <div style={{fontSize:10,color:tHex,fontWeight:600,marginTop:2}}>Selected</div>}
+            {/* ── REWARDS TAB ── */}
+            {tab==="feed" && (
+              <div style={{margin:"12px 16px 0"}}>
+                {S.pending>0 && (
+                  <div style={{background:"color-mix(in srgb,var(--c-accent) 9%,var(--c-surface))",border:"1px solid color-mix(in srgb,var(--c-accent) 24%,transparent)",borderRadius:18,padding:"14px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:14,boxShadow:"var(--shadow-sm)"}}>
+                    <div style={{width:44,height:44,borderRadius:12,background:"color-mix(in srgb,var(--c-accent) 16%,transparent)",border:"1px solid color-mix(in srgb,var(--c-accent) 26%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:"sp-float 1.8s ease-in-out infinite"}}><Icon name="cookie" size={19} color="var(--c-accent2)"/></div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:14,fontWeight:700,color:"var(--c-text)"}}>{S.pending} treats pending</div>
+                      <div style={{fontSize:11,color:"var(--c-text3)",marginTop:2}}>{S.petName} is waiting to be fed</div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:20,padding:"16px",boxShadow:"var(--shadow-sm)"}}>
-              <div style={{fontSize:10,fontWeight:700,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const,marginBottom:12}}>Stats</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                {[
-                  {v:S.xp,l:"Total XP",icon:"zap",c:accentHex,bg:`${accentHex}12`},
-                  {v:S.treats,l:"Treats",icon:"cookie",c:"var(--c-teal)",bg:"rgba(13,184,164,.10)"},
-                  {v:S.points,l:"Points",icon:"coins",c:"var(--c-amber)",bg:"rgba(196,121,0,.10)"},
-                  {v:S.owned.length-1,l:"Accessories",icon:"shirt",c:"var(--c-green)",bg:"rgba(22,169,122,.10)"},
-                  {v:S.streakCount??0,l:"Day streak",icon:"flame",c:"var(--c-red)",bg:"rgba(224,64,64,.10)"},
-                  {v:S.activityLog?.length??0,l:"Activities",icon:"history",c:"var(--c-accent2)",bg:`${accentHex}10`},
-                ].map(x=>(
-                  <div key={x.l} style={{background:x.bg,border:"1px solid var(--c-border)",borderRadius:14,padding:"12px 13px"}}>
-                    <div style={{width:26,height:26,borderRadius:8,background:"rgba(255,255,255,.08)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:7,border:"1px solid rgba(255,255,255,.06)"}}>
-                      <Icon name={x.icon} size={13} color={x.c}/>
-                    </div>
-                    <div style={{fontSize:24,fontWeight:700,color:x.c,fontFamily:"var(--font-serif)",fontStyle:"italic",lineHeight:1}}>{x.v}</div>
-                    <div style={{fontSize:9,fontWeight:700,color:"var(--c-text3)",marginTop:4,textTransform:"uppercase" as const,letterSpacing:".06em"}}>{x.l}</div>
+                    <button onClick={()=>feedNow(S.pending)} style={{background:`linear-gradient(135deg,var(--c-accent),${S.petType==="cat"?"#5E4FD4":"#1A6FC4"})`,color:"#fff",border:"none",borderRadius:11,padding:"10px 16px",fontSize:12,fontWeight:700,fontFamily:"var(--font-body)",cursor:"pointer",flexShrink:0,boxShadow:"var(--shadow-accent)",whiteSpace:"nowrap" as const,display:"flex",alignItems:"center",gap:6}}><Icon name="cookie" size={13} color="white"/>Give Treat</button>
                   </div>
-                ))}
+                )}
+                <div style={{fontSize:10,fontWeight:600,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const,marginBottom:10,paddingLeft:2}}>Activity Rewards</div>
+                <PointsExplainer/>
+                <ActivityLog log={S.activityLog||[]}/>
               </div>
-            </div>
+            )}
 
-            {S.lastFedAt && (
-              <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:14,padding:"13px 16px",display:"flex",alignItems:"center",gap:11}}>
-                <div style={{width:34,height:34,borderRadius:10,background:"var(--c-surface2)",border:"1px solid var(--c-border)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <Icon name="clock" size={15} color="var(--c-text3)"/>
+            {/* ── WARDROBE TAB ── */}
+            {tab==="wardrobe" && (
+              <div style={{margin:"12px 16px 0"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:700,color:"var(--c-text)"}}>Wardrobe</div>
+                    <div style={{fontSize:11,color:"var(--c-text3)",marginTop:1}}>{ACCS.length-1} accessories available</div>
+                  </div>
+                  <div style={{background:"color-mix(in srgb,var(--c-amber) 12%,var(--c-surface))",color:"var(--c-amber)",fontSize:13,fontWeight:700,padding:"7px 14px",borderRadius:20,border:"1px solid color-mix(in srgb,var(--c-amber) 28%,transparent)",display:"flex",alignItems:"center",gap:5}}><Icon name="coins" size={13} color="var(--c-amber)"/>{S.points}</div>
                 </div>
-                <div>
-                  <div style={{fontSize:11,fontWeight:700,color:"var(--c-text2)"}}>Last fed</div>
-                  <div style={{fontSize:11,color:"var(--c-text3)",marginTop:1}}>{fmtRelTime(Date.now()-S.lastFedAt)}</div>
+                <div style={{marginBottom:12,padding:"10px 13px",background:"color-mix(in srgb,var(--c-accent) 6%,var(--c-surface))",border:"1px solid var(--c-border)",borderRadius:12,fontSize:11,color:"var(--c-text2)",lineHeight:1.55,display:"flex",alignItems:"flex-start",gap:8}}>
+                  <span style={{flexShrink:0,marginTop:1}}><Icon name="info" size={13} color="var(--c-accent3)"/></span>
+                  Earn points from sessions, quizzes &amp; tasks. Level up for free drops! Tap to equip or buy.
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                  {ACCS.map(a=>(<AccessoryCard key={a.id} acc={a} owned={S.owned.includes(a.id)} active={S.acc===a.id} canBuy={S.points>=a.cost} accentColor={accentHex} isNew={a.id===newlyDroppedAcc} onClick={()=>buyAcc(a)}/>))}
                 </div>
               </div>
             )}
 
-            <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:20,padding:"16px",boxShadow:"var(--shadow-sm)"}}>
-              <div style={{fontSize:10,fontWeight:700,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const,marginBottom:12}}>Level Progression</div>
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {LEVELS.map((l,i)=>{
-                  const done=S.xp>=l.xp, curr=i===li;
-                  return (
-                    <div key={l.name} style={{display:"flex",alignItems:"center",gap:11,padding:"9px 12px",borderRadius:12,background:curr?`color-mix(in srgb,${accentHex} 8%,var(--c-surface2))`:done?"color-mix(in srgb,var(--c-green) 5%,var(--c-surface2))":"transparent",border:`1px solid ${curr?accentHex+"30":done?"color-mix(in srgb,var(--c-green) 15%,transparent)":"transparent"}`,transition:"all .2s ease",opacity:done||curr?1:.35}}>
-                      <div style={{width:30,height:30,borderRadius:9,background:curr?`${accentHex}20`:done?"color-mix(in srgb,var(--c-green) 12%,transparent)":"var(--c-surface3)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:`1px solid ${curr?accentHex:done?"color-mix(in srgb,var(--c-green) 25%,transparent)":"var(--c-border)"}`}}>
-                        <LevelIcon icon={l.icon} size={13}/>
-                      </div>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:13,fontWeight:curr?700:500,color:curr?"var(--c-text)":"var(--c-text2)",display:"flex",alignItems:"center",gap:6}}>
-                          {l.name}
-                          {curr && <span style={{fontSize:9,background:accentHex,color:"#fff",padding:"2px 7px",borderRadius:20,fontWeight:700,letterSpacing:".04em"}}>NOW</span>}
+            {/* ── PROFILE TAB ── */}
+            {tab==="about" && (
+              <div style={{margin:"12px 16px 0",display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:20,padding:"16px",boxShadow:"var(--shadow-sm)"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const,marginBottom:12}}>Companion</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    {(["cat","dog"] as PetType[]).map(t=>{
+                      const sel=S.petType===t, tHex=t==="cat"?"#8474F8":"#3A8FE0";
+                      return (
+                        <div key={t} onClick={()=>{upd({petType:t});triggerSpeech(t==="cat"?"Meow!":"Woof!");triggerAnim("happy",2000);spawnParticles();}}
+                          style={{border:`1.5px solid ${sel?tHex:"var(--c-border)"}`,background:sel?`color-mix(in srgb,${tHex} 10%,var(--c-surface2))`:"var(--c-surface2)",borderRadius:14,padding:"16px 12px",textAlign:"center" as const,cursor:"pointer",transition:"all .22s cubic-bezier(.34,1.56,.64,1)",boxShadow:sel?`0 4px 16px ${tHex}25`:"none"}}>
+                          <div style={{display:"flex",justifyContent:"center",marginBottom:8}}>
+                            <div style={{width:44,height:44,borderRadius:13,background:sel?`color-mix(in srgb,${tHex} 18%,transparent)`:"var(--c-surface3)",border:`1px solid ${sel?tHex+"40":"var(--c-border)"}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                              <Icon name={t} size={26} color={sel?tHex:"var(--c-text3)"} strokeWidth={1.6}/>
+                            </div>
+                          </div>
+                          <div style={{fontSize:13,fontWeight:700,color:sel?"var(--c-text)":"var(--c-text3)",textTransform:"capitalize" as const}}>{t}</div>
+                          {sel && <div style={{fontSize:10,color:tHex,fontWeight:600,marginTop:2}}>Selected</div>}
                         </div>
-                        <div style={{fontSize:11,color:"var(--c-text3)",marginTop:1}}>{l.xp} XP{i>0&&i<LEVELS.length-1&&<span style={{display:"inline-flex",alignItems:"center",gap:2,marginLeft:4,opacity:.7}}> · <Icon name="gift" size={10} color="var(--c-text3)"/>drop</span>}</div>
-                      </div>
-                      {done&&!curr && (
-                        <div style={{width:22,height:22,borderRadius:"50%",background:"color-mix(in srgb,var(--c-green) 15%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid color-mix(in srgb,var(--c-green) 25%,transparent)"}}>
-                          <Icon name="check" size={12} color="var(--c-green)"/>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                      );
+                    })}
+                  </div>
+                </div>
 
-            <button onClick={()=>{if(confirm("Reset all progress?")){const n=def();n.onboarded=false;setS(n);save(n);}}}
-              style={{background:"var(--c-surface)",color:"var(--c-text3)",border:"1px solid var(--c-border)",borderRadius:14,padding:"13px",fontSize:12,fontWeight:600,fontFamily:"var(--font-body)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .18s ease",marginBottom:4}}
-              onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.background="var(--c-surface2)";el.style.borderColor="var(--c-border2)";}}
-              onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.background="var(--c-surface)";el.style.borderColor="var(--c-border)";}}>
-              <Icon name="refresh" size={13} color="var(--c-text3)"/>Reset all progress
-            </button>
+                <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:20,padding:"16px",boxShadow:"var(--shadow-sm)"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const,marginBottom:12}}>Stats</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    {[
+                      {v:S.xp,l:"Total XP",icon:"zap",c:accentHex,bg:`${accentHex}12`},
+                      {v:S.treats,l:"Treats",icon:"cookie",c:"var(--c-teal)",bg:"rgba(13,184,164,.10)"},
+                      {v:S.points,l:"Points",icon:"coins",c:"var(--c-amber)",bg:"rgba(196,121,0,.10)"},
+                      {v:S.owned.length-1,l:"Accessories",icon:"shirt",c:"var(--c-green)",bg:"rgba(22,169,122,.10)"},
+                      {v:S.streakCount??0,l:"Day streak",icon:"flame",c:"var(--c-red)",bg:"rgba(224,64,64,.10)"},
+                      {v:S.activityLog?.length??0,l:"Activities",icon:"history",c:"var(--c-accent2)",bg:`${accentHex}10`},
+                    ].map(x=>(
+                      <div key={x.l} style={{background:x.bg,border:"1px solid var(--c-border)",borderRadius:14,padding:"12px 13px"}}>
+                        <div style={{width:26,height:26,borderRadius:8,background:"rgba(255,255,255,.08)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:7,border:"1px solid rgba(255,255,255,.06)"}}><Icon name={x.icon} size={13} color={x.c}/></div>
+                        <div style={{fontSize:24,fontWeight:700,color:x.c,fontFamily:"var(--font-serif)",fontStyle:"italic",lineHeight:1}}>{x.v}</div>
+                        <div style={{fontSize:9,fontWeight:700,color:"var(--c-text3)",marginTop:4,textTransform:"uppercase" as const,letterSpacing:".06em"}}>{x.l}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {S.lastFedAt && (
+                  <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:14,padding:"13px 16px",display:"flex",alignItems:"center",gap:11}}>
+                    <div style={{width:34,height:34,borderRadius:10,background:"var(--c-surface2)",border:"1px solid var(--c-border)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon name="clock" size={15} color="var(--c-text3)"/></div>
+                    <div>
+                      <div style={{fontSize:11,fontWeight:700,color:"var(--c-text2)"}}>Last fed</div>
+                      <div style={{fontSize:11,color:"var(--c-text3)",marginTop:1}}>{fmtRelTime(Date.now()-S.lastFedAt)}</div>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{background:"var(--c-surface)",border:"1px solid var(--c-border)",borderRadius:20,padding:"16px",boxShadow:"var(--shadow-sm)"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"var(--c-text3)",letterSpacing:".08em",textTransform:"uppercase" as const,marginBottom:12}}>Level Progression</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {LEVELS.map((l,i)=>{
+                      const done=S.xp>=l.xp, curr=i===li;
+                      return (
+                        <div key={l.name} style={{display:"flex",alignItems:"center",gap:11,padding:"9px 12px",borderRadius:12,background:curr?`color-mix(in srgb,${accentHex} 8%,var(--c-surface2))`:done?"color-mix(in srgb,var(--c-green) 5%,var(--c-surface2))":"transparent",border:`1px solid ${curr?accentHex+"30":done?"color-mix(in srgb,var(--c-green) 15%,transparent)":"transparent"}`,transition:"all .2s ease",opacity:done||curr?1:.35}}>
+                          <div style={{width:30,height:30,borderRadius:9,background:curr?`${accentHex}20`:done?"color-mix(in srgb,var(--c-green) 12%,transparent)":"var(--c-surface3)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:`1px solid ${curr?accentHex:done?"color-mix(in srgb,var(--c-green) 25%,transparent)":"var(--c-border)"}`}}>
+                            <LevelIcon icon={l.icon} size={13}/>
+                          </div>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:13,fontWeight:curr?700:500,color:curr?"var(--c-text)":"var(--c-text2)",display:"flex",alignItems:"center",gap:6}}>
+                              {l.name}{curr && <span style={{fontSize:9,background:accentHex,color:"#fff",padding:"2px 7px",borderRadius:20,fontWeight:700,letterSpacing:".04em"}}>NOW</span>}
+                            </div>
+                            <div style={{fontSize:11,color:"var(--c-text3)",marginTop:1}}>{l.xp} XP{i>0&&i<LEVELS.length-1&&<span style={{display:"inline-flex",alignItems:"center",gap:2,marginLeft:4,opacity:.7}}> · <Icon name="gift" size={10} color="var(--c-text3)"/>drop</span>}</div>
+                          </div>
+                          {done&&!curr && <div style={{width:22,height:22,borderRadius:"50%",background:"color-mix(in srgb,var(--c-green) 15%,transparent)",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid color-mix(in srgb,var(--c-green) 25%,transparent)"}}><Icon name="check" size={12} color="var(--c-green)"/></div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <button onClick={()=>setShowResetConfirm(true)}
+                  style={{background:"var(--c-surface)",color:"var(--c-text3)",border:"1px solid var(--c-border)",borderRadius:14,padding:"13px",fontSize:12,fontWeight:600,fontFamily:"var(--font-body)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .18s ease",marginBottom:4}}
+                  onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.background="var(--c-surface2)";el.style.borderColor="var(--c-border2)";}}
+                  onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.background="var(--c-surface)";el.style.borderColor="var(--c-border)";}}>
+                  <Icon name="refresh" size={13} color="var(--c-text3)"/>Reset all progress
+                </button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
-
-  function buyAcc(a: typeof ACCS[0]) {
-    if (S.owned.includes(a.id)){upd({acc:a.id});triggerSpeech("Looking sharp!");return;}
-    if (S.points>=a.cost){upd({points:S.points-a.cost,owned:[...S.owned,a.id],acc:a.id});triggerSpeech("New look!");triggerAnim("happy",2000);spawnParticles();}
-  }
 }
