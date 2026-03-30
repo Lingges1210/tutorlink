@@ -11,6 +11,12 @@ import {
 import { createBrowserClient } from "@supabase/ssr";
 import { StudyBackground } from "@/components/FloatingParticles";
 
+// ✅ FIX: Move client outside component to avoid re-creating on every upload
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
 type StudySubj = { id: string; name: string; materialCount?: number };
 
 export default function StudyUpload() {
@@ -48,8 +54,9 @@ export default function StudyUpload() {
       setNewSubject(""); await loadSubjects();
       const newId = d?.subject?.id;
       if (newId) setStudySubjectId(newId);
-    } catch (e: any) { setErr(e?.message || "Failed to create subject"); }
-    finally { setSubjectBusy(false); }
+    } catch (e: any) {
+      setErr(e?.message || "Failed to create subject");
+    } finally { setSubjectBusy(false); }
   }
 
   useEffect(() => { loadSubjects(); }, []);
@@ -57,26 +64,39 @@ export default function StudyUpload() {
   async function uploadPdf(file: File) {
     setErr(null); setPdfUploading(true);
     try {
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-      const { data: authData, error: authErr } = await supabase.auth.getUser();
-      const uid = authData?.user?.id;
-      if (authErr || !uid) throw new Error("Not logged in");
+      // ✅ FIX: getSession() reads from localStorage, much faster than getUser() which makes a network request
+      const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+      const uid = sessionData?.session?.user?.id;
+      if (sessionErr || !uid) throw new Error("Not logged in");
+
       const safeName = file.name.replace(/[^\w.\-() ]+/g, "_");
       const objectPath = `${uid}/${Date.now()}-${safeName}`;
-      const up = await supabase.storage.from("study-materials").upload(objectPath, file, { contentType: "application/pdf", upsert: false });
+
+      const up = await supabase.storage.from("study-materials").upload(objectPath, file, {
+        contentType: "application/pdf",
+        upsert: false,
+      });
       if (up.error) throw new Error(up.error.message);
+
       const r = await fetch("/api/study/materials/upload-pdf", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title || file.name, objectPath, fileName: file.name, studySubjectId: studySubjectId || null }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title || file.name,
+          objectPath,
+          fileName: file.name,
+          studySubjectId: studySubjectId || null,
+        }),
       });
       const d = await r.json().catch(() => null);
       if (!r.ok || !d?.ok) throw new Error(d?.error || "PDF extract failed");
+
       router.push(`/study/hub/${d.materialId}`);
-    } catch (e: any) { setErr(e?.message || "PDF upload failed"); }
-    finally { setPdfUploading(false); }
+    } catch (e: any) {
+      setErr(e?.message || "PDF upload failed");
+    } finally {
+      setPdfUploading(false);
+    }
   }
 
   async function create() {
