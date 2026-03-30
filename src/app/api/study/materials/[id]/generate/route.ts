@@ -24,7 +24,7 @@ function clampInt(n: unknown, min: number, max: number, fallback: number) {
   return Math.min(max, Math.max(min, Math.floor(x)));
 }
 
-function chunkText(text: string, maxChars = 60000): string {
+function chunkText(text: string, maxChars = 12000): string {
   return text.slice(0, maxChars);
 }
 
@@ -58,7 +58,7 @@ async function generateSummaryAndConcepts(rawText: string) {
 2. CONCEPTS (exactly 20 key terms or topics from the material)
 
 STUDY MATERIAL:
-${chunkText(rawText, 60000)}
+${chunkText(rawText, 12000)}
 
 Respond with ONLY this JSON (no extra text, no code fences):
 {
@@ -98,7 +98,7 @@ Rules for quiz:
 - Cover different topics spread throughout the material
 
 STUDY MATERIAL:
-${chunkText(rawText, 60000)}
+${chunkText(rawText, 8000)}
 
 Respond with ONLY this JSON (no extra text, no code fences):
 {

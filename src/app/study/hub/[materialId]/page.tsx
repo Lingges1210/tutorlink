@@ -9,6 +9,76 @@ import {
 } from "lucide-react";
 import { StudyBackground } from "@/components/FloatingParticles";
 
+const STEPS = [
+  { label: "Reading your material",     title: "Reading your material…",    sub: "Analysing structure and key topics",           pct: 15 },
+  { label: "Generating summary",        title: "Generating summary…",       sub: "Distilling the most important ideas",          pct: 40 },
+  { label: "Building flashcards",       title: "Building flashcards…",      sub: "Creating Q&A pairs for active recall",         pct: 68 },
+  { label: "Creating quiz questions",   title: "Creating quiz questions…",  sub: "Writing multiple choice with explanations",    pct: 90 },
+];
+
+// Timings match your real ~4.5s generation time
+const STEP_TIMINGS = [0, 8000, 18000, 32000];
+
+function GeneratingOverlay() {
+  const [stepIdx, setStepIdx] = useState(0);
+
+  useEffect(() => {
+    const timers = STEP_TIMINGS.map((ms, i) =>
+      setTimeout(() => setStepIdx(i), ms)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  const step = STEPS[stepIdx];
+
+  return (
+    <div className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl"
+      style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(6px)" }}>
+      <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-7 w-80 text-center shadow-xl">
+        {/* Spinner */}
+        <div className="mx-auto mb-4 h-12 w-12 rounded-full flex items-center justify-center"
+          style={{ background: "rgba(139,92,246,0.08)", border: "1.5px solid rgba(139,92,246,0.3)" }}>
+          <div className="h-5 w-5 rounded-full border-2 border-t-violet-400 border-violet-400/20 animate-spin" />
+        </div>
+
+        {/* Title + sub */}
+        <p className="text-sm font-semibold text-[rgb(var(--fg))] mb-1">{step.title}</p>
+        <p className="text-xs text-[rgb(var(--muted))] mb-5">{step.sub}</p>
+
+        {/* Steps */}
+        <ul className="space-y-2.5 text-left mb-5">
+          {STEPS.map((s, i) => {
+            const done   = i < stepIdx;
+            const active = i === stepIdx;
+            return (
+              <li key={i} className="flex items-center gap-2.5 text-xs">
+                <span className={`h-5 w-5 rounded-full shrink-0 flex items-center justify-center text-[10px] font-semibold border transition-all duration-300
+                  ${done   ? "border-violet-400/60 bg-violet-500/10 text-violet-400"
+                  : active ? "border-violet-400 bg-violet-500/12 text-violet-400 animate-pulse"
+                           : "border-[rgb(var(--border))] bg-[rgb(var(--card2))] text-[rgb(var(--muted2))]"}`}>
+                  {done ? "✓" : i + 1}
+                </span>
+                <span className={`transition-colors duration-300 ${active ? "text-[rgb(var(--fg))] font-medium" : "text-[rgb(var(--muted))]"}`}>
+                  {s.label}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+
+        {/* Progress bar */}
+        <div className="h-1 w-full rounded-full overflow-hidden bg-[rgb(var(--card2))]">
+          <div className="h-full rounded-full transition-all duration-700 ease-out"
+            style={{
+              width: `${step.pct}%`,
+              background: "linear-gradient(90deg, rgb(139,92,246), rgb(217,70,239))",
+            }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MaterialPage({ params }: { params: Promise<{ materialId: string }> }) {
   const { materialId } = use(params);
 
@@ -63,6 +133,10 @@ export default function MaterialPage({ params }: { params: Promise<{ materialId:
 
           {/* Main card */}
           <div className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card)/0.65)] dark:bg-[rgb(var(--card)/0.5)] backdrop-blur-sm overflow-hidden shadow-sm">
+            
+            {/* Shows only while generating */}
+            {generating && <GeneratingOverlay />}
+            
             <div className="p-6 sm:p-8">
               {/* Badge */}
               <div className="inline-flex items-center gap-1.5 rounded-full border border-[rgb(var(--primary))/0.25] bg-[rgb(var(--primary))/0.08] px-3 py-1 text-xs text-[rgb(var(--primary))] mb-4 font-medium">
