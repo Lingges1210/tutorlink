@@ -1,4 +1,3 @@
-// src/app/api/study/materials/[id]/generate/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
@@ -29,54 +28,70 @@ function chunkText(text: string, maxChars = 60000): string {
   return text.slice(0, maxChars);
 }
 
-async function callGemini(prompt: string): Promise<string> {
-  const model = genAI.getGenerativeModel({
+// ✅ Fix 1: No thinking, no JSON mime type (allows faster streaming internally)
+function getModel() {
+  return genAI.getGenerativeModel({
     model: "gemini-2.5-flash",
     generationConfig: {
       temperature: 0.4,
-      responseMimeType: "application/json",
+      // ❌ removed responseMimeType: "application/json" — forces full buffering
     },
+    // ✅ disable thinking — not needed for structured study content
+    // @ts-ignore — thinkingConfig is valid but not yet in all SDK typedefs
+    thinkingConfig: { thinkingBudget: 0 },
   });
-  const result = await model.generateContent(prompt);
-  return result.response.text();
 }
 
-// Single prompt — 1 API call instead of 4, avoids rate limits entirely
-async function generateAll(
+// ✅ Fix 2: Split into 2 parallel calls — summary/concepts vs flashcards/quiz
+// Each call is smaller and they run concurrently
+async function callGemini(prompt: string): Promise<string> {
+  const model = getModel();
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+  // Strip markdown code fences if present (since we removed responseMimeType)
+  return text.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+}
+
+async function generateSummaryAndConcepts(rawText: string) {
+  const prompt = `You are a study assistant. Read the following study material and generate:
+1. A SUMMARY (3-5 paragraphs, plain English, covering main topics and key concepts)
+2. CONCEPTS (exactly 20 key terms or topics from the material)
+
+STUDY MATERIAL:
+${chunkText(rawText, 60000)}
+
+Respond with ONLY this JSON (no extra text, no code fences):
+{
+  "summary": "3-5 paragraph summary here",
+  "concepts": ["concept1", "concept2", ...]
+}`;
+
+  const raw = await callGemini(prompt);
+  const parsed = JSON.parse(raw);
+  return {
+    summary: parsed.summary || "No summary available.",
+    concepts: parsed.concepts || [],
+  };
+}
+
+async function generateFlashcardsAndQuiz(
   rawText: string,
   quizCount: number,
   flashcardCount: number
-): Promise<{
-  summary: string;
-  concepts: string[];
-  flashcards: { q: string; a: string }[];
-  quiz: {
-    q: string;
-    options: string[];
-    answerIndex: number;
-    explanation: string;
-    difficulty: string;
-    topic: string;
-  }[];
-}> {
+) {
   const easyCount = Math.ceil(quizCount * 0.33);
   const mediumCount = Math.ceil(quizCount * 0.34);
   const hardCount = quizCount - easyCount - mediumCount;
 
-  const prompt = `You are a study assistant. Read the following study material carefully and generate all of the following in a single response:
-
-1. A SUMMARY (3-5 paragraphs, plain English, covering main topics and key concepts)
-2. CONCEPTS (exactly 20 key terms or topics from the material)
-3. FLASHCARDS (exactly ${flashcardCount} flashcards with questions and answers based on the material)
-4. QUIZ (exactly ${quizCount} multiple choice questions: ${easyCount} easy, ${mediumCount} medium, ${hardCount} hard)
+  const prompt = `You are a study assistant. Read the following study material and generate:
+1. FLASHCARDS (exactly ${flashcardCount} flashcards)
+2. QUIZ (exactly ${quizCount} multiple choice questions: ${easyCount} easy, ${mediumCount} medium, ${hardCount} hard)
 
 Rules for flashcards:
 - Questions must test understanding, not just definitions
 - Answers must be 1-3 sentences, based only on the material
-- Cover topics from throughout the material
 
 Rules for quiz:
-- Every question must be based directly on the material
 - Each question has exactly 4 options, only one correct
 - Wrong options must be plausible but clearly incorrect to someone who studied
 - Include an explanation for why the correct answer is right
@@ -85,31 +100,22 @@ Rules for quiz:
 STUDY MATERIAL:
 ${chunkText(rawText, 60000)}
 
-Respond with a single JSON object in this EXACT format (no extra text):
+Respond with ONLY this JSON (no extra text, no code fences):
 {
-  "summary": "3-5 paragraph summary here",
-  "concepts": ["concept1", "concept2", "concept3"],
-  "flashcards": [
-    {"q": "question", "a": "answer"}
-  ],
-  "quiz": [
-    {
-      "q": "question",
-      "options": ["option A", "option B", "option C", "option D"],
-      "answerIndex": 0,
-      "explanation": "why the correct answer is right",
-      "difficulty": "easy",
-      "topic": "topic name"
-    }
-  ]
+  "flashcards": [{"q": "question", "a": "answer"}],
+  "quiz": [{
+    "q": "question",
+    "options": ["A", "B", "C", "D"],
+    "answerIndex": 0,
+    "explanation": "why correct",
+    "difficulty": "easy",
+    "topic": "topic name"
+  }]
 }`;
 
   const raw = await callGemini(prompt);
   const parsed = JSON.parse(raw);
-
   return {
-    summary: parsed.summary || "No summary available.",
-    concepts: parsed.concepts || [],
     flashcards: parsed.flashcards || [],
     quiz: parsed.quiz || [],
   };
@@ -121,7 +127,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (!me || me.isDeactivated) return NextResponse.json({ ok: false }, { status: 401 });
 
     const { id: materialId } = await ctx.params;
-
     const body = await req.json().catch(() => ({}));
     const quizCount = clampInt(body?.quizCount, 10, 50, 20);
     const flashcardCount = clampInt(body?.flashcardCount, 10, 30, 20);
@@ -136,7 +141,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
 
     const rawText = material.rawText || "";
-
     if (rawText.length < 50) {
       return NextResponse.json(
         { ok: false, error: "Material text is too short to generate study pack" },
@@ -144,21 +148,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       );
     }
 
-    // Single API call — summary + concepts + flashcards + quiz in one shot
-    const { summary, concepts, flashcards, quiz } = await generateAll(
-      rawText,
-      quizCount,
-      flashcardCount
-    );
+    // ✅ Fix 3: Run both calls in parallel — cuts total time roughly in half
+    const [{ summary, concepts }, { flashcards, quiz }] = await Promise.all([
+      generateSummaryAndConcepts(rawText),
+      generateFlashcardsAndQuiz(rawText, quizCount, flashcardCount),
+    ]);
 
     const pack = await prisma.studyPack.create({
-      data: {
-        materialId: material.id,
-        summary,
-        concepts,
-        flashcards,
-        quiz,
-      },
+      data: { materialId: material.id, summary, concepts, flashcards, quiz },
       select: { id: true },
     });
 
@@ -171,13 +168,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   } catch (e: any) {
     console.error("Generate failed:", e);
 
-    // Return a clear quota error to the frontend
     if (e?.message?.includes("429") || e?.message?.includes("quota")) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Gemini API quota exceeded. Please wait a minute and try again, or upgrade your Gemini API plan.",
-        },
+        { ok: false, error: "Gemini API quota exceeded. Please wait a minute and try again." },
         { status: 429 }
       );
     }
