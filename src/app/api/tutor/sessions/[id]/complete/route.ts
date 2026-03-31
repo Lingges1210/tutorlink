@@ -5,22 +5,19 @@ import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
 import { seedBadgesOnce } from "@/lib/gamification/badges";
 import { GAMIFICATION_RULES } from "@/lib/gamification/rules";
 import { notify } from "@/lib/notify";
-import { queueStudypalReward } from "@/lib/studypalServerReward"; // ← NEW
+import { queueStudypalReward } from "@/lib/studypalServerReward";
 
 async function triggerAllocator() {
   const appUrl = process.env.APP_URL;
   const secret = process.env.ALLOCATOR_SECRET;
   if (!appUrl || !secret) return;
-
   try {
     await fetch(`${appUrl}/api/sessions/allocate`, {
       method: "POST",
       headers: { "x-allocator-secret": secret },
       cache: "no-store",
     });
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
 function normalizeTopicLabel(s: string) {
@@ -50,9 +47,7 @@ async function awardPointsInTx(
     applyDouble = true,
   } = args;
 
-  if (!userId || amount <= 0) {
-    return { ok: false, skipped: true };
-  }
+  if (!userId || amount <= 0) return { ok: false, skipped: true };
 
   const now = new Date();
 
@@ -67,9 +62,7 @@ async function awardPointsInTx(
       where: { userId, sessionId, description, type },
       select: { id: true },
     });
-    if (existing) {
-      return { ok: true, skipped: true, multiplier: 1, finalAmount: 0 };
-    }
+    if (existing) return { ok: true, skipped: true, multiplier: 1, finalAmount: 0 };
   }
 
   let multiplier = 1;
@@ -77,21 +70,13 @@ async function awardPointsInTx(
   if (applyDouble) {
     const u = await tx.user.findUnique({
       where: { id: userId },
-      select: {
-        multiplierUntil: true,
-        activeMultiplierKey: true,
-        boostUntil: true,
-      },
+      select: { multiplierUntil: true, activeMultiplierKey: true, boostUntil: true },
     });
 
     if (u?.multiplierUntil && u.multiplierUntil > now && u.activeMultiplierKey) {
       switch (u.activeMultiplierKey) {
-        case "POINTS_SURGE_6H":
-          multiplier = 5;
-          break;
-        case "COMBO_MULTIPLIER_24H":
-          multiplier = 2;
-          break;
+        case "POINTS_SURGE_6H": multiplier = 5; break;
+        case "COMBO_MULTIPLIER_24H": multiplier = 2; break;
         case "FIRST_ACTION_BONUS_7D": {
           const todayStart = new Date(now);
           todayStart.setHours(0, 0, 0, 0);
@@ -107,11 +92,8 @@ async function awardPointsInTx(
           multiplier = (day === 0 || day === 6) ? 3 : 1;
           break;
         }
-        case "CATCHUP_BOOST_48H":
-          multiplier = 2;
-          break;
-        default:
-          multiplier = 1;
+        case "CATCHUP_BOOST_48H": multiplier = 2; break;
+        default: multiplier = 1;
       }
     }
   }
@@ -123,9 +105,7 @@ async function awardPointsInTx(
       userId,
       type,
       amount: finalAmount,
-      description: multiplier > 1
-        ? `${description} (${multiplier}x multiplier)`
-        : description,
+      description: multiplier > 1 ? `${description} (${multiplier}x multiplier)` : description,
       sessionId: sessionId ?? null,
     },
   });
@@ -152,6 +132,26 @@ export async function POST(
     .filter(Boolean)
     .slice(0, 12);
 
+  // ── Parse confidence scores ──────────────────────────────────────────────
+  const confidenceBefore =
+    typeof body?.confidenceBefore === "number" &&
+    Number.isInteger(body.confidenceBefore) &&
+    body.confidenceBefore >= 0 &&
+    body.confidenceBefore <= 10
+      ? body.confidenceBefore
+      : 0;
+
+  const confidenceAfter =
+    typeof body?.confidenceAfter === "number" &&
+    Number.isInteger(body.confidenceAfter) &&
+    body.confidenceAfter >= 0 &&
+    body.confidenceAfter <= 10
+      ? body.confidenceAfter
+      : 0;
+
+  const nextSteps =
+    typeof body?.nextSteps === "string" ? body.nextSteps.trim() || null : null;
+
   if (!summary) {
     return NextResponse.json(
       { message: "Session summary is required." },
@@ -167,9 +167,7 @@ export async function POST(
   }
 
   const supabase = await supabaseServerComponent();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
 
   if (!user?.email) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
@@ -225,50 +223,196 @@ export async function POST(
     );
   }
 
-  const start = new Date(session.scheduledAt);
-
-  if (new Date() < start) {
+  if (new Date() < new Date(session.scheduledAt)) {
     return NextResponse.json(
       { message: "You can complete this after the session starts." },
       { status: 409 }
     );
   }
 
-  try {
-    await seedBadgesOnce();
-  } catch {}
+  try { await seedBadgesOnce(); } catch {}
 
-  try {
+try {
     await prisma.$transaction(async (tx) => {
+      // 1. Mark session completed
       await tx.session.update({
         where: { id: session.id },
         data: { status: "COMPLETED", completedAt: new Date() },
       });
 
-      const studentId = session.studentId ?? null;
+      // 2. Upsert all Topic records in parallel
+      const topicIds: string[] = await Promise.all(
+        topics.map(async (label) => {
+          const topic = await tx.topic.upsert({
+            where: {
+              subjectId_name: { subjectId: session.subjectId, name: label },
+            },
+            create: { subjectId: session.subjectId, name: label },
+            update: {},
+            select: { id: true },
+          });
+          return topic.id;
+        })
+      );
 
-      if (studentId) {
-        await awardPointsInTx(tx, {
-          userId: studentId,
-          amount: GAMIFICATION_RULES.student.sessionCompleted,
-          description: "Session completed",
+      // 3. Create SessionCompletion with linked SessionTopics
+      await tx.sessionCompletion.create({
+        data: {
           sessionId: session.id,
-          type: "EARN",
-        });
-      }
+          summary,
+          confidenceBefore,
+          confidenceAfter,
+          nextSteps,
+          topics: {
+            create: topicIds.map((topicId) => ({ topicId })),
+          },
+        },
+        select: { id: true },
+      });
 
-      const tutorId = session.tutorId ?? null;
+      const studentId = session.studentId;
+      const tutorId = session.tutorId;
       if (!tutorId) throw new Error("Missing tutorId");
 
-      await awardPointsInTx(tx, {
-        userId: tutorId,
-        amount: GAMIFICATION_RULES.tutor.sessionCompleted,
-        description: "Tutored a session",
-        sessionId: session.id,
-        type: "EARN",
-      });
+      // 4. All remaining reads in parallel
+      const [existingProgress, studentWallet, tutorWallet, studentPointsCheck, tutorPointsCheck] =
+        await Promise.all([
+          studentId
+            ? tx.studentSubjectProgress.findUnique({
+                where: {
+                  studentId_subjectId: { studentId, subjectId: session.subjectId },
+                },
+                select: { totalSessions: true, avgConfGain: true },
+              })
+            : Promise.resolve(null),
+          studentId
+            ? tx.pointsWallet.findUnique({ where: { userId: studentId }, select: { userId: true } })
+            : Promise.resolve(null),
+          tx.pointsWallet.findUnique({ where: { userId: tutorId }, select: { userId: true } }),
+          studentId
+            ? tx.pointsTransaction.findFirst({
+                where: { userId: studentId, sessionId: session.id, description: "Session completed" },
+                select: { id: true },
+              })
+            : Promise.resolve(null),
+          tx.pointsTransaction.findFirst({
+            where: { userId: tutorId, sessionId: session.id, description: "Tutored a session" },
+            select: { id: true },
+          }),
+        ]);
+
+      // 5. All writes in parallel
+      const writes: Promise<any>[] = [];
+
+      if (studentId) {
+        const gain = confidenceAfter - confidenceBefore;
+
+        // Subject progress
+        if (!existingProgress) {
+          writes.push(
+            tx.studentSubjectProgress.create({
+              data: {
+                studentId,
+                subjectId: session.subjectId,
+                totalSessions: 1,
+                totalMinutes: session.durationMin ?? 0,
+                avgConfGain: gain,
+                lastSessionAt: new Date(),
+              },
+            })
+          );
+        } else {
+          const newCount = existingProgress.totalSessions + 1;
+          const newAvg =
+            (existingProgress.avgConfGain * existingProgress.totalSessions + gain) / newCount;
+          writes.push(
+            tx.studentSubjectProgress.update({
+              where: {
+                studentId_subjectId: { studentId, subjectId: session.subjectId },
+              },
+              data: {
+                totalSessions: newCount,
+                totalMinutes: { increment: session.durationMin ?? 0 },
+                avgConfGain: newAvg,
+                lastSessionAt: new Date(),
+              },
+            })
+          );
+        }
+
+        // Topic progress
+        for (const topicId of topicIds) {
+          writes.push(
+            tx.studentTopicProgress.upsert({
+              where: { studentId_topicId: { studentId, topicId } },
+              create: {
+                studentId,
+                subjectId: session.subjectId,
+                topicId,
+                timesCovered: 1,
+                lastCoveredAt: new Date(),
+              },
+              update: {
+                timesCovered: { increment: 1 },
+                lastCoveredAt: new Date(),
+              },
+            })
+          );
+        }
+
+        // Student wallet + points
+        if (!studentWallet) {
+          writes.push(tx.pointsWallet.create({ data: { userId: studentId, total: 0 } }));
+        }
+        if (!studentPointsCheck) {
+          const amt = GAMIFICATION_RULES.student.sessionCompleted;
+          writes.push(
+            tx.pointsTransaction.create({
+              data: {
+                userId: studentId,
+                type: "EARN",
+                amount: amt,
+                description: "Session completed",
+                sessionId: session.id,
+              },
+            }),
+            tx.pointsWallet.update({
+              where: { userId: studentId },
+              data: { total: { increment: amt } },
+            })
+          );
+        }
+      }
+
+      // Tutor wallet + points
+      if (!tutorWallet) {
+        writes.push(tx.pointsWallet.create({ data: { userId: tutorId, total: 0 } }));
+      }
+      if (!tutorPointsCheck) {
+        const amt = GAMIFICATION_RULES.tutor.sessionCompleted;
+        writes.push(
+          tx.pointsTransaction.create({
+            data: {
+              userId: tutorId,
+              type: "EARN",
+              amount: amt,
+              description: "Tutored a session",
+              sessionId: session.id,
+            },
+          }),
+          tx.pointsWallet.update({
+            where: { userId: tutorId },
+            data: { total: { increment: amt } },
+          })
+        );
+      }
+
+      await Promise.all(writes);
+    }, {
+      timeout: 20000,
     });
-  } catch {
+  } catch (err) {
+    console.error("[complete] transaction failed:", err);
     return NextResponse.json(
       { message: "Unable to save completion details." },
       { status: 500 }
@@ -277,7 +421,6 @@ export async function POST(
 
   await triggerAllocator();
 
-  // ── StudyPal: queue session reward for student ── NEW
   if (session.studentId) {
     await queueStudypalReward(session.studentId, "session");
   }
@@ -292,9 +435,7 @@ export async function POST(
         body: "Your session has ended. Take a moment to rate your tutor.",
         data: { sessionId: session.id },
       });
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
   return NextResponse.json({
