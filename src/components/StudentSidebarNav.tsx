@@ -14,6 +14,7 @@ import {
   Trophy,
   Gift,
   Shield,
+  Award,
 } from "lucide-react";
 
 export type SidebarIconKey =
@@ -27,7 +28,8 @@ export type SidebarIconKey =
   | "progress"
   | "trophy"
   | "gift"
-  | "shield";
+  | "shield"
+  | "award";
 
 export type SidebarItem =
   | {
@@ -56,6 +58,7 @@ const ICONS: Record<SidebarIconKey, React.ElementType> = {
   trophy: Trophy,
   gift: Gift,
   shield: Shield,
+  award: Award,
 };
 
 export default function StudentSidebarNav({

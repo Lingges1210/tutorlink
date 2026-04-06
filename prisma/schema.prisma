@@ -89,6 +89,7 @@ model User {
   reportsSubmitted          UserReport[]             @relation("UserReportReporter")
   reportsReviewedAdmin      UserReport[]             @relation("UserReportReviewedByAdmin")
   roleAssignments           UserRoleAssignment[]
+  certificates              Certificate[]
 
   @@schema("public")
 }
@@ -186,6 +187,7 @@ model Session {
   review                 SessionReview?
   surveyResponse         SurveyResponse?
   userReports            UserReport[]
+   certificates          Certificate[]
 
   @@index([studentId, status])
   @@index([tutorId, status])
@@ -952,6 +954,30 @@ enum UserReportPriority {
   MEDIUM
   HIGH
   URGENT
+
+  @@schema("public")
+}
+
+model Certificate {
+  id        String      @id @default(cuid())
+  userId    String
+  type      CertType
+  title     String
+  issuedAt  DateTime    @default(now())
+  sessionId String?
+  metadata  Json?
+  pdfUrl    String?
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session   Session?    @relation(fields: [sessionId], references: [id])
+
+  @@index([userId])
+  @@schema("public")
+}
+
+enum CertType {
+  SESSION_COMPLETION
+  TUTOR_MILESTONE
+  TUTOR_APPROVAL
 
   @@schema("public")
 }

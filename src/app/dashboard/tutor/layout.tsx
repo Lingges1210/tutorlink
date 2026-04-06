@@ -42,6 +42,12 @@ export default async function TutorLayout({ children }: { children: React.ReactN
       label: "Sessions",
       icon: "calendar",
     },
+    {
+      type: "link",
+      href: "/dashboard/tutor/certificates",
+      label: "Certificates",
+      icon: "award",       
+    },
   ];
 
   const mobileItems: SidebarItem[] = [
