@@ -11,7 +11,6 @@ import {
 import { createBrowserClient } from "@supabase/ssr";
 import { StudyBackground } from "@/components/FloatingParticles";
 
-// ✅ FIX: Move client outside component to avoid re-creating on every upload
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -64,7 +63,6 @@ export default function StudyUpload() {
   async function uploadPdf(file: File) {
     setErr(null); setPdfUploading(true);
     try {
-      // ✅ FIX: getSession() reads from localStorage, much faster than getUser() which makes a network request
       const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
       const uid = sessionData?.session?.user?.id;
       if (sessionErr || !uid) throw new Error("Not logged in");
@@ -91,7 +89,8 @@ export default function StudyUpload() {
       const d = await r.json().catch(() => null);
       if (!r.ok || !d?.ok) throw new Error(d?.error || "PDF extract failed");
 
-      router.push(`/study/hub/${d.materialId}`);
+      // Return to hub — user can preview the file from there
+      router.push("/study/hub");
     } catch (e: any) {
       setErr(e?.message || "PDF upload failed");
     } finally {
@@ -108,7 +107,8 @@ export default function StudyUpload() {
     const d = await r.json().catch(() => null);
     setLoading(false);
     if (!d?.ok) { setErr(d?.error ?? "Failed to save"); return; }
-    router.push(`/study/hub/${d.materialId}`);
+    // Return to hub — user can preview the file from there
+    router.push("/study/hub");
   }
 
   const isBusy = loading || pdfUploading;

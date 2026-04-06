@@ -27,6 +27,63 @@ function getAdminSupabase() {
   return createClient(url, service, { auth: { persistSession: false } });
 }
 
+// ── NEW: GET /api/study/materials/[id] ───────────────────────
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const me = await getMe();
+    if (!me) return NextResponse.json({ ok: false }, { status: 401 });
+
+    const { id } = await ctx.params;
+
+    const material = await prisma.studyMaterial.findFirst({
+      where: { id, userId: me.id },
+      select: {
+        id: true,
+        title: true,
+        rawText: true,
+        objectPath: true,
+        fileName: true,
+        studySubjectId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!material) {
+      return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+    }
+
+    // Generate a signed URL if this material has a stored PDF
+    let fileUrl: string | null = null;
+    if (material.objectPath) {
+      const admin = getAdminSupabase();
+      if (admin) {
+        const { data } = await admin.storage
+          .from("study-materials")
+          .createSignedUrl(material.objectPath, 60 * 60); // 1 hour
+        fileUrl = data?.signedUrl ?? null;
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      material: {
+        id: material.id,
+        title: material.title,
+        content: material.rawText ?? null,
+        fileUrl,
+        fileType: fileUrl ? "application/pdf" : null,
+        studySubjectId: material.studySubjectId,
+        createdAt: material.createdAt,
+        updatedAt: material.updatedAt,
+      },
+    });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e?.message || "Failed" }, { status: 500 });
+  }
+}
+
+// ── PATCH /api/study/materials/[id] ─────────────────────────
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const me = await getMe();
@@ -55,6 +112,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
 }
 
+// ── DELETE /api/study/materials/[id] ────────────────────────
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const me = await getMe();
@@ -62,7 +120,6 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
 
     const { id } = await ctx.params;
 
-    // Get info before delete
     const material = await prisma.studyMaterial.findFirst({
       where: { id, userId: me.id },
       select: { id: true, objectPath: true, studySubjectId: true },
@@ -72,10 +129,8 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
       return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
     }
 
-    // delete material row first
     await prisma.studyMaterial.delete({ where: { id: material.id } });
 
-    // remove storage file if PDF
     if (material.objectPath) {
       const admin = getAdminSupabase();
       if (admin) {
@@ -83,24 +138,17 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
       }
     }
 
-    // auto-delete empty subject
     let subjectDeleted = false;
-
     if (material.studySubjectId) {
       const remaining = await prisma.studyMaterial.count({
-        where: {
-          userId: me.id,
-          studySubjectId: material.studySubjectId,
-        },
+        where: { userId: me.id, studySubjectId: material.studySubjectId },
       });
-
       if (remaining === 0) {
         await prisma.studySubject.deleteMany({
           where: { id: material.studySubjectId, userId: me.id },
         });
         subjectDeleted = true;
       } else {
-        // optional: keep subject "fresh" ordering
         await prisma.studySubject.updateMany({
           where: { id: material.studySubjectId, userId: me.id },
           data: { updatedAt: new Date() },
