@@ -1,13 +1,10 @@
 // lib/certificates/generatePdf.ts
 //
 // Uses Puppeteer to render the certificate HTML template to a high-quality PDF.
-// Install: npm install puppeteer
-// For Vercel Edge/Serverless: use `puppeteer-core` + `@sparticuz/chromium` instead.
-//
-// Alternative: replace the puppeteer block with @react-pdf/renderer if you
-// prefer a pure-JS approach (no headless Chrome needed).
+// For Vercel Serverless: use `puppeteer-core` + `@sparticuz/chromium`.
 
-import puppeteer from "puppeteer";
+import chromium from "@sparticuz/chromium";
+import puppeteer from "puppeteer-core";
 
 interface CertMeta {
   tutorName: string;
@@ -25,6 +22,7 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
     month: "long",
     day: "numeric",
   });
+
   const rating =
     meta.ratingCount > 0 ? Number(meta.rating).toFixed(1) + " / 5.0" : "—";
 
@@ -69,7 +67,6 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
     align-items: center;
   }
 
-  /* Corner ornaments */
   .corner {
     position: absolute;
     width: 22px;
@@ -82,7 +79,6 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
   .bl { bottom: 10px; left: 10px; border-width: 0 0 1.5px 1.5px; }
   .br { bottom: 10px; right: 10px; border-width: 0 1.5px 1.5px 0; }
 
-  /* Typography */
   .org {
     font-family: 'Cinzel', serif;
     font-size: 9pt;
@@ -91,6 +87,7 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
     text-transform: uppercase;
     margin-bottom: 7px;
   }
+
   .cert-title {
     font-family: 'Cinzel', serif;
     font-size: 22pt;
@@ -99,6 +96,7 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
     letter-spacing: 0.05em;
     margin-bottom: 3px;
   }
+
   .cert-subtitle {
     font-family: 'Cormorant Garamond', serif;
     font-style: italic;
@@ -131,13 +129,13 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
     width: 100%;
   }
 
-  /* Stats */
   .stats-row {
     display: flex;
     gap: 14px;
     justify-content: center;
     margin: 6px 0 14px;
   }
+
   .stat-box {
     background: rgba(184,154,90,0.07);
     border: 1px solid #d8b87a;
@@ -145,6 +143,7 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
     text-align: center;
     min-width: 76px;
   }
+
   .stat-val {
     display: block;
     font-family: 'Cinzel', serif;
@@ -154,6 +153,7 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
     line-height: 1;
     margin-bottom: 4px;
   }
+
   .stat-lbl {
     font-family: 'Cormorant Garamond', serif;
     font-size: 8pt;
@@ -162,7 +162,6 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
     text-transform: uppercase;
   }
 
-  /* Footer */
   .footer {
     display: flex;
     justify-content: space-between;
@@ -173,13 +172,18 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
     border-top: 0.5px solid #d8b87a;
   }
 
-  .sig-block { flex: 1; text-align: center; }
+  .sig-block {
+    flex: 1;
+    text-align: center;
+  }
+
   .sig-line {
     width: 120px;
     height: 1px;
     background: #c8a84a;
     margin: 0 auto 5px;
   }
+
   .sig-name {
     font-family: 'Cormorant Garamond', serif;
     font-size: 11pt;
@@ -187,6 +191,7 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
     color: #4a3820;
     margin-bottom: 2px;
   }
+
   .sig-role {
     font-family: 'Cormorant Garamond', serif;
     font-size: 8pt;
@@ -214,10 +219,8 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
     <div class="corner bl"></div>
     <div class="corner br"></div>
 
-    <!-- Header -->
     <p class="org">TutorLink Platform</p>
 
-    <!-- Monogram -->
     <svg width="44" height="44" viewBox="0 0 44 44" style="margin-bottom:8px">
       <circle cx="22" cy="22" r="20.5" stroke="#c8a84a" stroke-width="1" fill="none"/>
       <circle cx="22" cy="22" r="15.5" stroke="#c8a84a" stroke-width="0.5" fill="none"/>
@@ -227,12 +230,10 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
     <h1 class="cert-title">Certificate of Achievement</h1>
     <p class="cert-subtitle">in Tutoring Excellence</p>
 
-    <!-- Decorative divider -->
     <svg width="480" height="14" viewBox="0 0 480 14" style="margin:2px 0">
       <line x1="0" y1="7" x2="215" y2="7" stroke="#c8a84a" stroke-width="0.8"/>
       <polygon points="218,7 228,3 238,7 228,11" fill="#c8a84a"/>
       <polygon points="242,7 233,4 233,10" fill="#c8a84a"/>
-      <!-- centre star -->
       <polygon points="240,2 242.2,8.5 249,8.5 243.6,12.2 245.8,18.8 240,15.1 234.2,18.8 236.4,12.2 231,8.5 237.8,8.5" fill="none" stroke="#c8a84a" stroke-width="0.9" stroke-linejoin="round" transform="translate(0,-5)"/>
       <polygon points="242,7 251,3 261,7 251,11" fill="#c8a84a"/>
       <line x1="264" y1="7" x2="480" y2="7" stroke="#c8a84a" stroke-width="0.8"/>
@@ -248,7 +249,6 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
       having successfully achieved the following milestones:
     </p>
 
-    <!-- Stats -->
     <div class="stats-row">
       <div class="stat-box">
         <span class="stat-val">${meta.sessionsCompleted}</span>
@@ -264,9 +264,7 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
       </div>
     </div>
 
-    <!-- Footer -->
     <div class="footer">
-      <!-- Left signature -->
       <div class="sig-block">
         <svg width="110" height="28" viewBox="0 0 110 28" style="display:block;margin:0 auto 3px">
           <path d="M8,22 C18,7 26,5 34,15 C40,23 48,9 58,13 C66,17 72,7 82,11 C92,15 96,9 104,17"
@@ -277,7 +275,6 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
         <p class="sig-role">Director of Education</p>
       </div>
 
-      <!-- Seal -->
       <div style="text-align:center">
         <svg width="88" height="88" viewBox="0 0 88 88">
           <circle cx="44" cy="44" r="40" fill="rgba(184,154,90,0.06)" stroke="#c8a84a" stroke-width="1"/>
@@ -293,7 +290,6 @@ function buildCertificateHtml(meta: CertMeta, certNumber: string): string {
         </svg>
       </div>
 
-      <!-- Right signature -->
       <div class="sig-block">
         <svg width="110" height="28" viewBox="0 0 110 28" style="display:block;margin:0 auto 3px">
           <path d="M6,20 C14,9 20,8 28,17 C34,25 42,9 52,13 C60,17 68,9 80,15 C90,21 96,8 105,16"
@@ -331,17 +327,16 @@ export async function generateCertificatePdf(
   const html = buildCertificateHtml(meta, certNo);
 
   const browser = await puppeteer.launch({
+    args: chromium.args,
+    executablePath: await chromium.executablePath(),
     headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
 
   try {
     const page = await browser.newPage();
 
-    // Wait for Google Fonts to load
     await page.setContent(html, { waitUntil: "networkidle0" });
 
-    // A4 landscape
     const pdf = await page.pdf({
       format: "A4",
       landscape: true,
@@ -354,19 +349,3 @@ export async function generateCertificatePdf(
     await browser.close();
   }
 }
-
-// ─── Vercel Serverless variant (swap in when deploying to Vercel) ────────────
-//
-// import chromium from "@sparticuz/chromium";
-// import puppeteer from "puppeteer-core";
-//
-// export async function generateCertificatePdf(meta, certNumber?) {
-//   const executablePath = await chromium.executablePath();
-//   const browser = await puppeteer.launch({
-//     args: chromium.args,
-//     defaultViewport: chromium.defaultViewport,
-//     executablePath,
-//     headless: chromium.headless,
-//   });
-//   // ... rest same as above
-// }
