@@ -145,7 +145,7 @@ export async function generateCertificatePdf(data: {
   const logoRuleY = logoTopY - 68; // rule drawn below logo block
 
   try {
-    const logoBytes = fs.readFileSync(path.join(process.cwd(), "public", "logo.png"));
+    const logoBytes = fs.readFileSync(path.join(process.cwd(), "public", "logo1.png"));
     const logo = await doc.embedPng(logoBytes);
     // Scale logo to fit width but cap height at 42px so it stays compact
     const lW = Math.min(116, lw);
