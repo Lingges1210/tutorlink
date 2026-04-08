@@ -78,95 +78,19 @@ function injectStyles() {
     .sc-dropdown-item:hover { background: rgba(var(--primary),.1) !important; }
     .sc-toggle:hover { opacity: .88; }
     .sc-rec-btn:hover { background: rgba(239,68,68,.18) !important; border-color: rgba(239,68,68,.5) !important; }
-
-    /* ── Hide LiveKit's built-in Leave button — we render our own ── */
     .lk-disconnect-button { display: none !important; }
-
-   /* =========================
-   LIGHT MODE
-========================= */
-html:not(.dark) .lk-control-bar {
-  gap: 6px !important;
-  background: transparent !important;
-}
-
-html:not(.dark) .lk-button {
-  background: rgba(0,0,0,0.04) !important;
-  border: 1px solid rgba(0,0,0,0.12) !important;
-  color: rgba(0,0,0,0.72) !important;
-  border-radius: 10px !important;
-  font-size: 13px !important;
-  font-weight: 500 !important;
-  padding: 8px 12px !important;
-}
-
-html:not(.dark) .lk-button:hover {
-  background: rgba(0,0,0,0.08) !important;
-}
-
-html:not(.dark) .lk-button[aria-pressed="true"],
-html:not(.dark) .lk-button[data-lk-enabled="true"] {
-  background: rgba(0,0,0,0.10) !important;
-}
-
-html:not(.dark) .lk-button svg,
-html:not(.dark) .lk-button span {
-  color: rgba(0,0,0,0.72) !important;
-  stroke: rgba(0,0,0,0.72) !important;
-}
-
-/* =========================
-   DARK MODE
-========================= */
-html.dark .lk-control-bar {
-  gap: 6px !important;
-  background: transparent !important;
-}
-
-html.dark .lk-button {
-  background: rgba(255,255,255,0.06) !important;
-  border: 1px solid rgba(255,255,255,0.12) !important;
-  color: rgba(255,255,255,0.82) !important;
-  border-radius: 10px !important;
-  font-size: 13px !important;
-  font-weight: 500 !important;
-  padding: 8px 12px !important;
-}
-
-html.dark .lk-button:hover {
-  background: rgba(255,255,255,0.12) !important;
-}
-
-html.dark .lk-button[aria-pressed="true"],
-html.dark .lk-button[data-lk-enabled="true"] {
-  background: rgba(255,255,255,0.14) !important;
-}
-
-html.dark .lk-button svg,
-html.dark .lk-button span {
-  color: rgba(255,255,255,0.82) !important;
-  stroke: rgba(255,255,255,0.82) !important;
-}
-
-/* Device dropdown popups */
-html.dark .lk-device-menu,
-html.dark .lk-device-menu * {
-  background: #1c1c1e !important;
-  color: rgba(255,255,255,0.82) !important;
-  border-color: rgba(255,255,255,0.10) !important;
-}
-
-html:not(.dark) .lk-device-menu,
-html:not(.dark) .lk-device-menu * {
-  background: #ffffff !important;
-  color: rgba(0,0,0,0.78) !important;
-  border-color: rgba(0,0,0,0.10) !important;
-}
-
-/* Hide built-in leave button */
-.lk-disconnect-button {
-  display: none !important;
-}
+    html:not(.dark) .lk-control-bar { gap: 6px !important; background: transparent !important; }
+    html:not(.dark) .lk-button { background: rgba(0,0,0,0.04) !important; border: 1px solid rgba(0,0,0,0.12) !important; color: rgba(0,0,0,0.72) !important; border-radius: 10px !important; font-size: 13px !important; font-weight: 500 !important; padding: 8px 12px !important; }
+    html:not(.dark) .lk-button:hover { background: rgba(0,0,0,0.08) !important; }
+    html:not(.dark) .lk-button[aria-pressed="true"], html:not(.dark) .lk-button[data-lk-enabled="true"] { background: rgba(0,0,0,0.10) !important; }
+    html:not(.dark) .lk-button svg, html:not(.dark) .lk-button span { color: rgba(0,0,0,0.72) !important; stroke: rgba(0,0,0,0.72) !important; }
+    html.dark .lk-control-bar { gap: 6px !important; background: transparent !important; }
+    html.dark .lk-button { background: rgba(255,255,255,0.06) !important; border: 1px solid rgba(255,255,255,0.12) !important; color: rgba(255,255,255,0.82) !important; border-radius: 10px !important; font-size: 13px !important; font-weight: 500 !important; padding: 8px 12px !important; }
+    html.dark .lk-button:hover { background: rgba(255,255,255,0.12) !important; }
+    html.dark .lk-button[aria-pressed="true"], html.dark .lk-button[data-lk-enabled="true"] { background: rgba(255,255,255,0.14) !important; }
+    html.dark .lk-button svg, html.dark .lk-button span { color: rgba(255,255,255,0.82) !important; stroke: rgba(255,255,255,0.82) !important; }
+    html.dark .lk-device-menu, html.dark .lk-device-menu * { background: #1c1c1e !important; color: rgba(255,255,255,0.82) !important; border-color: rgba(255,255,255,0.10) !important; }
+    html:not(.dark) .lk-device-menu, html:not(.dark) .lk-device-menu * { background: #ffffff !important; color: rgba(0,0,0,0.78) !important; border-color: rgba(0,0,0,0.10) !important; }
   `;
   document.head.appendChild(el);
 }
@@ -351,11 +275,234 @@ function useCallTimer(active: boolean) {
   return fmt(elapsed);
 }
 
-// ─── useAutoRecording ─────────────────────────────────────────────────────────
-// Records directly from LiveKit room tracks — no screen-share prompt needed.
-// Must be used inside a <LiveKitRoom> so useRoomContext() works.
+// ─── helpers ──────────────────────────────────────────────────────────────────
 
-function useAutoRecording() {
+function fmtTime(s: number) {
+  return `${Math.floor(s / 60).toString().padStart(2, "0")}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
+}
+
+// ─── PDF generator ────────────────────────────────────────────────────────────
+
+async function downloadPDF(
+  content: string,
+  filename: string,
+  title: string,
+  sessionId: string,
+  type: "transcript" | "summary"
+) {
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  const contentW = pageW - margin * 2;
+  const now = new Date().toLocaleString();
+
+  // ── Purple header bar ──
+  doc.setFillColor(109, 40, 217); // purple-700
+  doc.rect(0, 0, pageW, 28, "F");
+
+  // ── TutorLink wordmark ──
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.text("TutorLink", margin, 12);
+
+  // ── Subtitle in header ──
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(type === "transcript" ? "Session Transcript" : "Session Summary", margin, 19);
+
+  // ── Date top-right in header ──
+  doc.setFontSize(8);
+  doc.text(now, pageW - margin, 12, { align: "right" });
+  doc.text(`Session ID: ${sessionId.slice(0, 8)}…`, pageW - margin, 19, { align: "right" });
+
+  // ── Thin accent line below header ──
+  doc.setFillColor(167, 139, 250); // purple-400
+  doc.rect(0, 28, pageW, 1.5, "F");
+
+  let y = 40;
+
+  // ── Document title ──
+  doc.setTextColor(30, 30, 30);
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text(title, margin, y);
+  y += 10;
+
+  // ── Divider ──
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.4);
+  doc.line(margin, y, pageW - margin, y);
+  y += 8;
+
+  if (type === "summary") {
+    // ── Summary: parse ## sections and render with styled headers ──
+    const lines = content.split("\n");
+
+    for (const line of lines) {
+      if (y > pageH - 25) {
+        doc.addPage();
+        drawPageHeader(doc, pageW, pageH, margin, sessionId, now);
+        y = 25;
+      }
+
+      if (line.startsWith("## ")) {
+        // Section heading
+        y += 4;
+        doc.setFillColor(245, 243, 255); // purple-50
+        doc.setDrawColor(167, 139, 250);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(margin, y - 5, contentW, 9, 2, 2, "FD");
+        doc.setTextColor(109, 40, 217);
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.text(line.replace("## ", ""), margin + 3, y + 1);
+        y += 10;
+      } else if (line.startsWith("- ") || line.startsWith("• ")) {
+        // Bullet point
+        doc.setTextColor(50, 50, 50);
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        const bulletText = line.replace(/^[-•]\s/, "");
+        const wrapped = doc.splitTextToSize(`• ${bulletText}`, contentW - 6);
+        for (const wl of wrapped) {
+          if (y > pageH - 25) {
+            doc.addPage();
+            drawPageHeader(doc, pageW, pageH, margin, sessionId, now);
+            y = 25;
+          }
+          doc.text(wl, margin + 4, y);
+          y += 5.5;
+        }
+      } else if (line.trim() === "") {
+        y += 3;
+      } else {
+        // Normal paragraph text
+        doc.setTextColor(50, 50, 50);
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        const wrapped = doc.splitTextToSize(line, contentW);
+        for (const wl of wrapped) {
+          if (y > pageH - 25) {
+            doc.addPage();
+            drawPageHeader(doc, pageW, pageH, margin, sessionId, now);
+            y = 25;
+          }
+          doc.text(wl, margin, y);
+          y += 5.5;
+        }
+      }
+    }
+  } else {
+    // ── Transcript: timestamp + text rows ──
+    const entries = content.split("\n").filter(Boolean);
+
+    for (const entry of entries) {
+      if (y > pageH - 25) {
+        doc.addPage();
+        drawPageHeader(doc, pageW, pageH, margin, sessionId, now);
+        y = 25;
+      }
+
+      const match = entry.match(/^\[(\d{2}:\d{2})\]\s(.+)$/);
+      if (match) {
+        const [, ts, text] = match;
+
+        // Timestamp badge
+        doc.setFillColor(237, 233, 254); // purple-100
+        doc.setDrawColor(196, 181, 253); // purple-300
+        doc.setLineWidth(0.2);
+        doc.roundedRect(margin, y - 4, 16, 6, 1.5, 1.5, "FD");
+        doc.setTextColor(109, 40, 217);
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "bold");
+        doc.text(ts, margin + 8, y, { align: "center" });
+
+        // Transcript text
+        doc.setTextColor(40, 40, 40);
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        const wrapped = doc.splitTextToSize(text, contentW - 22);
+        doc.text(wrapped[0], margin + 20, y);
+        y += 6;
+
+        for (let i = 1; i < wrapped.length; i++) {
+          if (y > pageH - 25) {
+            doc.addPage();
+            drawPageHeader(doc, pageW, pageH, margin, sessionId, now);
+            y = 25;
+          }
+          doc.text(wrapped[i], margin + 20, y);
+          y += 5.5;
+        }
+        y += 1.5;
+      } else {
+        // Fallback plain text
+        doc.setTextColor(40, 40, 40);
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        const wrapped = doc.splitTextToSize(entry, contentW);
+        for (const wl of wrapped) {
+          if (y > pageH - 25) {
+            doc.addPage();
+            drawPageHeader(doc, pageW, pageH, margin, sessionId, now);
+            y = 25;
+          }
+          doc.text(wl, margin, y);
+          y += 5.5;
+        }
+        y += 1.5;
+      }
+    }
+  }
+
+  // ── Footer on every page ──
+  const totalPages = (doc.internal as unknown as { getNumberOfPages: () => number }).getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFillColor(248, 247, 255);
+    doc.rect(0, pageH - 12, pageW, 12, "F");
+    doc.setDrawColor(220, 215, 250);
+    doc.setLineWidth(0.3);
+    doc.line(0, pageH - 12, pageW, pageH - 12);
+    doc.setTextColor(150, 130, 200);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text("Generated by TutorLink · tutorlink.app", margin, pageH - 5);
+    doc.text(`Page ${i} of ${totalPages}`, pageW - margin, pageH - 5, { align: "right" });
+  }
+
+  doc.save(filename);
+}
+
+// ── Continuation header for extra pages ──
+function drawPageHeader(
+  doc: import("jspdf").jsPDF,
+  pageW: number,
+  _pageH: number,
+  margin: number,
+  sessionId: string,
+  now: string
+) {
+  doc.setFillColor(109, 40, 217);
+  doc.rect(0, 0, pageW, 14, "F");
+  doc.setFillColor(167, 139, 250);
+  doc.rect(0, 14, pageW, 1, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.text("TutorLink", margin, 9);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.text(`Session ${sessionId.slice(0, 8)}… · ${now}`, pageW - margin, 9, { align: "right" });
+}
+
+// ─── useAutoRecording ─────────────────────────────────────────────────────────
+
+function useAutoRecording(sessionId: string) {
   const room = useRoomContext();
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -372,7 +519,6 @@ function useAutoRecording() {
 
   const startRecording = useCallback(() => {
     try {
-      // Collect all published audio + video tracks from all participants
       const audioTracks: MediaStreamTrack[] = [];
       const videoTracks: MediaStreamTrack[] = [];
 
@@ -387,7 +533,6 @@ function useAutoRecording() {
 
       if (audioTracks.length === 0 && videoTracks.length === 0) return;
 
-      // Use AudioContext to mix all audio tracks into one destination
       const audioCtx = new AudioContext();
       const destination = audioCtx.createMediaStreamDestination();
       for (const track of audioTracks) {
@@ -395,7 +540,6 @@ function useAutoRecording() {
         src.connect(destination);
       }
 
-      // Take the first video track (local or remote) for the recording
       const combinedTracks: MediaStreamTrack[] = [...destination.stream.getAudioTracks()];
       if (videoTracks[0]) combinedTracks.push(videoTracks[0]);
 
@@ -415,21 +559,82 @@ function useAutoRecording() {
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
 
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         audioCtx.close();
         if (chunksRef.current.length === 0) return;
+
         const blob = new Blob(chunksRef.current, { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `session-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-")}.webm`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+
+        // 1. Download recording .webm
+        const recUrl = URL.createObjectURL(blob);
+        const recA = document.createElement("a");
+        recA.href = recUrl;
+        recA.download = `session-${timestamp}.webm`;
+        document.body.appendChild(recA);
+        recA.click();
+        document.body.removeChild(recA);
+        setTimeout(() => URL.revokeObjectURL(recUrl), 5000);
+
         setRecording(false);
         setElapsed(0);
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+
+        // 2. Transcribe via Groq Whisper
+        try {
+          const fd = new FormData();
+          fd.append("sessionId", sessionId);
+          fd.append("audio", blob, "recording.webm");
+          const res = await fetch("/api/transcribe", { method: "POST", body: fd });
+
+          if (res.ok) {
+            const data = await res.json();
+            const transcript = data.transcript;
+
+            if (transcript) {
+              const segments = transcript.segments ?? [];
+              const transcriptText = segments.length > 0
+                ? segments.map((seg: { start: number; end: number; text: string }) =>
+                    `[${fmtTime(seg.start)}] ${seg.text.trim()}`
+                  ).join("\n")
+                : transcript.text;
+
+              // 3. Download transcript PDF
+              await downloadPDF(
+                transcriptText,
+                `transcript-${timestamp}.pdf`,
+                "Session Transcript",
+                sessionId,
+                "transcript"
+              );
+
+              // 4. AI summary via Groq
+              try {
+                const summaryRes = await fetch("/api/summarize", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ transcript: transcriptText, sessionId }),
+                });
+
+                if (summaryRes.ok) {
+                  const summaryData = await summaryRes.json();
+                  // 5. Download summary PDF
+                  await downloadPDF(
+                    summaryData.summary,
+                    `summary-${timestamp}.pdf`,
+                    "Session Summary",
+                    sessionId,
+                    "summary"
+                  );
+                }
+              } catch (err) {
+                console.error("[useAutoRecording] summary failed:", err);
+              }
+            }
+          }
+        } catch (err) {
+          console.error("[useAutoRecording] transcription failed:", err);
+        }
       };
 
       recorder.start(500);
@@ -438,7 +643,7 @@ function useAutoRecording() {
       setElapsed(0);
       timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
     } catch { /* silent */ }
-  }, [room]);
+  }, [room, sessionId]);
 
   useEffect(() => () => stopRecording(), [stopRecording]);
 
@@ -448,10 +653,9 @@ function useAutoRecording() {
 }
 
 // ─── RecordingControls ────────────────────────────────────────────────────────
-// Separate component so it lives inside LiveKitRoom and can use useRoomContext
 
-function RecordingControls({ isDark }: { isDark: boolean }) {
-  const { recording, recordingTime, startRecording, stopRecording } = useAutoRecording();
+function RecordingControls({ isDark, sessionId }: { isDark: boolean; sessionId: string }) {
+  const { recording, recordingTime, startRecording, stopRecording } = useAutoRecording(sessionId);
   return (
     <button
       aria-label={recording ? "Stop recording" : "Record session"}
@@ -637,7 +841,6 @@ function PreviewVideo({ stream, camEnabled, privacyMode, isDark }: { stream: Med
       {stream && camEnabled ? (
         <>
           <video ref={videoRef} autoPlay muted playsInline style={{ width:"100%", height:"100%", objectFit:"cover", transform:"scaleX(-1)" }} />
-          {/* Privacy mode: overlay on top, not blurring the video element itself */}
           {privacyMode && (
             <div style={{ position:"absolute", inset:0, backdropFilter:"blur(20px) brightness(0.6)", background:"rgba(0,0,0,0.35)", display:"flex", alignItems:"center", justifyContent:"center" }}>
               <div style={{ padding:"5px 12px", borderRadius:99, background:"rgba(0,0,0,0.5)", fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.8)" }}>
@@ -731,13 +934,17 @@ function JoinNotification({ onJoined }: { onJoined: (name: string) => void }) {
   return null;
 }
 
+// ─── LeaveDialog ─────────────────────────────────────────────────────────────
+
 function LeaveDialog({ open, onConfirm, onCancel, isDark }: { open: boolean; onConfirm: () => void; onCancel: () => void; isDark: boolean }) {
   useEffect(() => {
     if (!open) return;
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); if (e.key === "Enter") onConfirm(); };
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [open, onCancel, onConfirm]);
+  }, [open, onCancel]);
   if (!open) return null;
   return (
     <div role="dialog" aria-modal="true" style={{ position:"absolute", inset:0, zIndex:50, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.55)", backdropFilter:"blur(6px)", borderRadius:23, animation:"sc-fadein .18s ease both" }}>
@@ -813,18 +1020,16 @@ export default function SessionCallEmbed({ sessionId, onLeave }: Props) {
 
   useEffect(() => () => { if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current); }, []);
 
-  // ── Fix 2: call onLeave FIRST so navigation happens, then reset state ──────
   const handleLeave = useCallback(() => {
     setShowLeaveDialog(false);
-    onLeave?.();
     reset();
+    onLeave?.();
   }, [reset, onLeave]);
 
   const { count, start: startCountdown, cancel: cancelCountdown } = useCountdown(
     useCallback(() => { media.stopPreview(); join(); }, [join, media])
   );
 
-  /* ─── Missing env var ─── */
   if (!livekitUrl) {
     return (
       <div style={gradientBorder}>
@@ -839,7 +1044,6 @@ export default function SessionCallEmbed({ sessionId, onLeave }: Props) {
     );
   }
 
-  /* ─── Active call ─── */
   if (started && token && livekitUrl) {
     return (
       <div style={gradientBorder}>
@@ -884,17 +1088,12 @@ export default function SessionCallEmbed({ sessionId, onLeave }: Props) {
                 <RoomAudioRenderer />
                 <StartAudio label="Click to allow audio playback" />
 
-                {/* Control bar row — explicit bg so it works in light + dark mode */}
                 <div style={{ borderTop: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.07)", padding:"8px 10px", background: isDark ? "rgba(20,20,22,0.95)" : "rgba(255,255,255,0.97)", display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-                  {/* LiveKit ControlBar — shrinks to fit */}
                   <div style={{ flex:"1 1 auto", minWidth:0 }}>
                     <ControlBar controls={{ leave: false }} />
                   </div>
-
-                  {/* Record + Leave — always visible, never hidden */}
                   <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
-                    <RecordingControls isDark={isDark} />
-
+                    <RecordingControls isDark={isDark} sessionId={sessionId} />
                     <button
                       aria-label="Leave call"
                       className="sc-leave-btn"
@@ -913,7 +1112,6 @@ export default function SessionCallEmbed({ sessionId, onLeave }: Props) {
     );
   }
 
-  /* ─── Pre-join screen ─── */
   return (
     <div style={gradientBorder}>
       <div style={{ ...innerCard, position:"relative" }}>
@@ -933,8 +1131,6 @@ export default function SessionCallEmbed({ sessionId, onLeave }: Props) {
         <div style={{ height:3, background:"linear-gradient(90deg, rgb(var(--primary)) 0%, rgba(var(--primary),.35) 60%, transparent 100%)" }} />
 
         <div style={{ padding:"22px 22px 20px", display:"flex", gap:22, flexWrap:"wrap" }}>
-
-          {/* Left: preview + controls */}
           <div style={{ flex:"1 1 220px", minWidth:0, display:"flex", flexDirection:"column", gap:12 }}>
             <PreviewVideo stream={media.stream} camEnabled={media.camEnabled} privacyMode={media.privacyMode} isDark={isDark} />
 
@@ -967,7 +1163,6 @@ export default function SessionCallEmbed({ sessionId, onLeave }: Props) {
             )}
           </div>
 
-          {/* Right: info + toggles + join */}
           <div style={{ flex:"1 1 200px", minWidth:0, display:"flex", flexDirection:"column", gap:14 }}>
             <div style={{ display:"flex", alignItems:"flex-start", gap:13 }}>
               <div style={{ position:"relative", flexShrink:0 }}>
