@@ -8,6 +8,7 @@ import AvatarWithBorder from "./AvatarWithBorder";
 import {
   User, LayoutDashboard, CalendarClock, ChevronDown,
   Trophy, TrendingUp, Gift, Shield, ShieldOff, Sparkles, Lock,
+  BookOpen,
 } from "lucide-react";
 
 type Props = {
@@ -133,6 +134,7 @@ export default function UserMenuClient({
             <MenuItem href="/dashboard/student"                          onClick={() => setOpen(false)} icon={<LayoutDashboard size={13} />} label="Dashboard" />
             <MenuItem href="/dashboard/student/profile"                  onClick={() => setOpen(false)} icon={<User size={13} />}           label="Profile" />
             <MenuItem href="/dashboard/student/progress"                 onClick={() => setOpen(false)} icon={<TrendingUp size={13} />}     label="Progress" />
+            <MenuItem href="/dashboard/student/journal"                   onClick={() => setOpen(false)} icon={<BookOpen size={13} />} label="My Space" />
             <MenuItem href="/dashboard/student/achievements"             onClick={() => setOpen(false)} icon={<Trophy size={13} />}         label="Achievements" />
             <MenuItem href="/dashboard/student/rewards"                  onClick={() => setOpen(false)} icon={<Gift size={13} />}           label="Rewards Shop" />
             <SectionLabel>Bookings</SectionLabel>

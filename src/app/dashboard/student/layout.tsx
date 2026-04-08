@@ -43,6 +43,12 @@ export default async function StudentLayout({
           },
           {
             type: "link",
+            href: "/dashboard/student/journal",
+            label: "My Space",
+            icon: "bookopen",
+          },
+          {
+            type: "link",
             href: "/dashboard/student/achievements",
             label: "Achievements",
             icon: "trophy",
@@ -149,6 +155,12 @@ export default async function StudentLayout({
             label: "Progress",
             icon: "progress",
           },
+          {
+          type: "link",
+          href: "/dashboard/student/journal",
+          label: "My Space",
+          icon: "bookopen",
+          },  
           {
             type: "link",
             href: "/dashboard/student/achievements",
