@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import ConstellationSky from "@/components/ConstellationSky";
 
 type Mood = "grateful" | "motivated" | "meh" | "tired" | "stressed" | "anxious" | "low";
 type RitualKey = "burn" | "freeze" | "shred" | "dragon" | "ocean" | "space";
@@ -997,6 +998,16 @@ export default function JournalPage() {
             </div>
           </div>
         </div>
+
+        {/* ── Constellation Sky ── ADD THIS HERE ── */}
+        {entries.length > 0 && (
+          <div style={{ marginBottom: "2rem" }}>
+            <p style={{ fontSize: 12, ...css.muted, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              ✦ Your constellation sky
+            </p>
+            <ConstellationSky entries={entries} />
+          </div>
+        )}
 
         {/* ── Tabs ── */}
         <div style={{ marginBottom: "2rem" }}>
