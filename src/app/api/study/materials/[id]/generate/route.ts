@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import Groq from "groq-sdk";
 import { prisma } from "@/lib/prisma";
 import { supabaseServerComponent } from "@/lib/supabaseServerComponent";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const runtime = "nodejs";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const MODEL = "llama-3.3-70b-versatile";
 
 async function getMe() {
   const supabase = await supabaseServerComponent();
@@ -28,45 +29,42 @@ function chunkText(text: string, maxChars = 12000): string {
   return text.slice(0, maxChars);
 }
 
-// ✅ Fix 1: No thinking, no JSON mime type (allows faster streaming internally)
-function getModel() {
-  return genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    generationConfig: {
-      temperature: 0.4,
-      // ❌ removed responseMimeType: "application/json" — forces full buffering
-    },
-    // ✅ disable thinking — not needed for structured study content
-    // @ts-ignore — thinkingConfig is valid but not yet in all SDK typedefs
-    thinkingConfig: { thinkingBudget: 0 },
+async function callGroq(prompt: string): Promise<string> {
+  const completion = await groq.chat.completions.create({
+    model: MODEL,
+    temperature: 0.4,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a study assistant. Always respond with valid JSON only — no extra text, no markdown code fences.",
+      },
+      { role: "user", content: prompt },
+    ],
   });
-}
-
-// ✅ Fix 2: Split into 2 parallel calls — summary/concepts vs flashcards/quiz
-// Each call is smaller and they run concurrently
-async function callGemini(prompt: string): Promise<string> {
-  const model = getModel();
-  const result = await model.generateContent(prompt);
-  const text = result.response.text();
-  // Strip markdown code fences if present (since we removed responseMimeType)
-  return text.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+  const text = completion.choices[0]?.message?.content ?? "";
+  // Strip opening fence (with or without language tag) and closing fence
+  return text
+    .replace(/^```[a-z]*\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
 }
 
 async function generateSummaryAndConcepts(rawText: string) {
-  const prompt = `You are a study assistant. Read the following study material and generate:
+  const prompt = `Read the following study material and generate:
 1. A SUMMARY (3-5 paragraphs, plain English, covering main topics and key concepts)
 2. CONCEPTS (exactly 20 key terms or topics from the material)
 
 STUDY MATERIAL:
 ${chunkText(rawText, 12000)}
 
-Respond with ONLY this JSON (no extra text, no code fences):
+Respond with ONLY this JSON:
 {
   "summary": "3-5 paragraph summary here",
   "concepts": ["concept1", "concept2", ...]
 }`;
 
-  const raw = await callGemini(prompt);
+  const raw = await callGroq(prompt);
   const parsed = JSON.parse(raw);
   return {
     summary: parsed.summary || "No summary available.",
@@ -83,7 +81,7 @@ async function generateFlashcardsAndQuiz(
   const mediumCount = Math.ceil(quizCount * 0.34);
   const hardCount = quizCount - easyCount - mediumCount;
 
-  const prompt = `You are a study assistant. Read the following study material and generate:
+  const prompt = `Read the following study material and generate:
 1. FLASHCARDS (exactly ${flashcardCount} flashcards)
 2. QUIZ (exactly ${quizCount} multiple choice questions: ${easyCount} easy, ${mediumCount} medium, ${hardCount} hard)
 
@@ -100,7 +98,7 @@ Rules for quiz:
 STUDY MATERIAL:
 ${chunkText(rawText, 8000)}
 
-Respond with ONLY this JSON (no extra text, no code fences):
+Respond with ONLY this JSON:
 {
   "flashcards": [{"q": "question", "a": "answer"}],
   "quiz": [{
@@ -113,7 +111,7 @@ Respond with ONLY this JSON (no extra text, no code fences):
   }]
 }`;
 
-  const raw = await callGemini(prompt);
+  const raw = await callGroq(prompt);
   const parsed = JSON.parse(raw);
   return {
     flashcards: parsed.flashcards || [],
@@ -148,7 +146,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       );
     }
 
-    // ✅ Fix 3: Run both calls in parallel — cuts total time roughly in half
     const [{ summary, concepts }, { flashcards, quiz }] = await Promise.all([
       generateSummaryAndConcepts(rawText),
       generateFlashcardsAndQuiz(rawText, quizCount, flashcardCount),
@@ -168,9 +165,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   } catch (e: any) {
     console.error("Generate failed:", e);
 
-    if (e?.message?.includes("429") || e?.message?.includes("quota")) {
+    if (e?.status === 429 || String(e?.message ?? "").includes("429")) {
       return NextResponse.json(
-        { ok: false, error: "Gemini API quota exceeded. Please wait a minute and try again." },
+        { ok: false, error: "Too many requests. Please wait a moment and try again." },
         { status: 429 }
       );
     }
