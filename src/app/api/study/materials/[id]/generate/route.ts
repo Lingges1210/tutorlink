@@ -43,10 +43,16 @@ async function callGroq(prompt: string): Promise<string> {
     ],
   });
   const text = completion.choices[0]?.message?.content ?? "";
-  // Strip opening fence (with or without language tag) and closing fence
   return text
     .replace(/^```[a-z]*\s*/i, "")
     .replace(/\s*```$/i, "")
+    .replace(/[\u0000-\u001F\u007F]/g, (ch) => {
+      // Preserve legitimate JSON whitespace control chars, escape the rest
+      if (ch === "\n") return "\\n";
+      if (ch === "\r") return "\\r";
+      if (ch === "\t") return "\\t";
+      return "";
+    })
     .trim();
 }
 
