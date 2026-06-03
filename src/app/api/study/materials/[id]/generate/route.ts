@@ -43,17 +43,21 @@ async function callGroq(prompt: string): Promise<string> {
     ],
   });
   const text = completion.choices[0]?.message?.content ?? "";
-  return text
-    .replace(/^```[a-z]*\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .replace(/[\u0000-\u001F\u007F]/g, (ch) => {
-      // Preserve legitimate JSON whitespace control chars, escape the rest
-      if (ch === "\n") return "\\n";
-      if (ch === "\r") return "\\r";
-      if (ch === "\t") return "\\t";
-      return "";
-    })
+
+  const stripped = text
+    .replace(/^```[a-z]*\n?/i, "")
+    .replace(/\n?```$/i, "")
     .trim();
+
+  // Escape literal newlines/tabs inside JSON string values only
+  const fixed = stripped.replace(/"((?:[^"\\]|\\.)*)"/g, (match) =>
+  match
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t")
+);
+
+  return fixed;
 }
 
 async function generateSummaryAndConcepts(rawText: string) {
